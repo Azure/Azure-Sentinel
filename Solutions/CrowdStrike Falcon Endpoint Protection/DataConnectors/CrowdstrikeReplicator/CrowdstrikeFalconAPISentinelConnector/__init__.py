@@ -1,176 +1,161 @@
-import boto3
-import json
-import datetime
-from botocore.config import Config as BotoCoreConfig
-import tempfile
+import asyncio
 import os
-import gzip
-import time
-import base64
-import hashlib
-import hmac
-import requests
-import threading
-import azure.functions as func
-import logging
+import sys
+import asyncio
+import json
+from botocore.config import Config as BotoCoreConfig
+from aiobotocore.session import get_session
+from gzip_stream import AsyncGZIPDecompressedStream
 import re
+from .sentinel_connector_async import AzureSentinelConnectorAsync
+import time
+import aiohttp
+import logging
+import azure.functions as func
 
-customer_id = os.environ['WorkspaceID'] 
-shared_key = os.environ['WorkspaceKey']
-log_type = "CrowdstrikeReplicatorLogs"
+WORKSPACE_ID = os.environ['WorkspaceID']
+SHARED_KEY = os.environ['WorkspaceKey']
+LOG_TYPE = "CrowdstrikeReplicatorLogs"
 AWS_KEY = os.environ['AWS_KEY']
 AWS_SECRET = os.environ['AWS_SECRET']
 AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
 QUEUE_URL = os.environ['QUEUE_URL']
-VISIBILITY_TIMEOUT = 60
-temp_dir = tempfile.TemporaryDirectory()
+VISIBILITY_TIMEOUT = 1800
+LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
 
-if 'logAnalyticsUri' in os.environ:
-   logAnalyticsUri = os.environ['logAnalyticsUri']
-   pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
-   match = re.match(pattern,str(logAnalyticsUri))
-   if not match:
-       raise Exception("Invalid Log Analytics Uri.")
-else:
-    logAnalyticsUri = "https://" + customer_id + ".ods.opinsights.azure.com"
+# Defines how many files can be processed simultaneously
+MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 20))
 
-def get_sqs_messages():
+# Defines max number of events that can be sent in one request to Azure Sentinel
+MAX_BUCKET_SIZE = int(os.environ.get('EventsBucketSize', 2000))
+
+LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
+if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
+    LOG_ANALYTICS_URI = 'https://' + WORKSPACE_ID + '.ods.opinsights.azure.com'
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern, str(LOG_ANALYTICS_URI))
+if not match:
+    raise Exception("Invalid Log Analytics Uri.")
+
+def _create_sqs_client():
+    sqs_session = get_session()
+    return sqs_session.create_client(
+                                    'sqs', 
+                                    region_name=AWS_REGION_NAME,
+                                    aws_access_key_id=AWS_KEY, 
+                                    aws_secret_access_key=AWS_SECRET
+                                    )
+
+def _create_s3_client():
+    s3_session = get_session()
+    boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME)
+    return s3_session.create_client(
+                                    's3',
+                                    region_name=AWS_REGION_NAME,
+                                    aws_access_key_id=AWS_KEY,
+                                    aws_secret_access_key=AWS_SECRET,
+                                    config=boto_config
+                                    )
+
+def customize_event(line):
+    element = json.loads(line)
+    # Ingesting only the fields required
+    required_fileds = [
+                        "timestamp", "aip", "aid", "EventType", "LogonType", "HostProcessType", "UserPrincipal", "DomainName",
+                        "RemoteAddressIP", "ConnectionDirection", "TargetFileName", "LocalAddressIP4", "IsOnRemovableDisk",
+                        "UserPrincipal", "UserIsAdmin", "LogonTime", "LogonDomain", "RemoteAccount", "UserId", "Prevalence",
+                        "CurrentProcess", "ConnectionDirection", "event_simpleName", "TargetProcessId", "ProcessStartTime",
+                        "UserName", "DeviceProductId", "TargetSHA256HashData", "SHA256HashData", "MD5HashData", "TargetDirectoryName",
+                        "TargetFileName", "FirewallRule", "TaskName", "TaskExecCommand", "TargetAddress", "TargetProcessId",
+                        "SourceFileName", "RegObjectName", "RegValueName", "ServiceObjectName", "RegistryPath", "RawProcessId",
+                        "event_platform", "CommandLine", "ParentProcessId", "ParentCommandLine", "ParentBaseFileName",
+                        "GrandParentBaseFileName", "RemotePort", "VolumeDeviceType", "VolumeName", "ClientComputerName", "ProductId"
+                    ]
+    required_fields_data = {}
+    custom_fields_data = {}
+    for key, value in element.items():
+        if key in required_fileds:
+            required_fields_data[key] = value
+        else:
+            custom_fields_data[key] = value
+    event = required_fields_data
+    custom_fields_data_text = str(json.dumps(custom_fields_data))
+    if custom_fields_data_text != "{}":
+        event["custom_fields_message"] = custom_fields_data_text
+    return event
+
+async def main(mytimer: func.TimerRequest):
+    script_start_time = int(time.time())
     logging.info("Creating SQS connection")
-    sqs = boto3.resource('sqs', region_name=AWS_REGION_NAME, aws_access_key_id=AWS_KEY, aws_secret_access_key=AWS_SECRET)
-    queue = sqs.Queue(url=QUEUE_URL)
-    logging.info("Queue connected")
-    for msg in queue.receive_messages(VisibilityTimeout=VISIBILITY_TIMEOUT):
-        msg_body = json.loads(msg.body)
-        ts = datetime.datetime.utcfromtimestamp(msg_body['timestamp'] / 1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        logging.info("Start processing bucket {0}: {1} files with total size {2}, bucket timestamp: {3}".format(msg_body['bucket'],msg_body['fileCount'],msg_body['totalSize'],ts))
-        if "files" in msg_body:
-            if download_message_files(msg_body) is True:
-                msg.delete()
+    async with _create_sqs_client() as client:
+        async with aiohttp.ClientSession() as session:
+            logging.info('Trying to check messages off the queue...')
+            try:
+                response = await client.receive_message(
+                    QueueUrl=QUEUE_URL,
+                    WaitTimeSeconds=2,
+                    VisibilityTimeout=VISIBILITY_TIMEOUT
+                )
+                if 'Messages' in response:
+                    for msg in response['Messages']:
+                        body_obj = json.loads(msg["Body"])
+                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
+                        await download_message_files(body_obj, session)
+                        logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
+                        try:
+                            await client.delete_message(
+                                QueueUrl=QUEUE_URL,
+                                ReceiptHandle=msg['ReceiptHandle']
+                            )
+                        except Exception as e:
+                            logging.error("Error during deleting message with MessageId {} from queue. Bucket: {}. Path prefix: {}. Error: {}".format(msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"], e))
+                else:
+                    logging.info('No messages in queue. Re-trying to check...')
+            except KeyboardInterrupt:
+                pass
 
-def process_message_files():
-    for file in files_for_handling:
-        process_file(file)
+async def process_file(bucket, s3_path, client, semaphore, session):
+    async with semaphore:
+        total_events = 0
+        logging.info("Start processing file {}".format(s3_path))
+        sentinel = AzureSentinelConnectorAsync(
+                                                session,
+                                                LOG_ANALYTICS_URI,
+                                                WORKSPACE_ID,
+                                                SHARED_KEY,
+                                                LOG_TYPE, 
+                                                queue_size=MAX_BUCKET_SIZE
+                                                )
+        response = await client.get_object(Bucket=bucket, Key=s3_path)
+        s = ''
+        async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
+            s += decompressed_chunk.decode(errors='ignore')
+            lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+            for n, line in enumerate(lines):
+                if n < len(lines) - 1:
+                    if line:
+                        try:
+                            event = customize_event(line)
+                        except ValueError as e:
+                            logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                            raise e
+                        await sentinel.send(event)
+            s = line
+        if s:
+            try:
+                event = customize_event(line)
+            except ValueError as e:
+                logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                raise e
+            await sentinel.send(event)
+        await sentinel.flush()
+        total_events += sentinel.successfull_sent_events_number
+        logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
 
-def download_message_files(msg):
-    try:
-        msg_output_path = os.path.join(temp_dir.name, msg['pathPrefix'])
-        if not os.path.exists(msg_output_path):
-            os.makedirs(msg_output_path)
+async def download_message_files(msg, session):
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSING_FILES)
+    async with _create_s3_client() as client:
+        cors = []
         for s3_file in msg['files']:
-            s3_path = s3_file['path']
-            local_path = os.path.join(temp_dir.name, s3_path)
-            logging.info("Start downloading file {}".format(s3_path))
-            s3_client.download_file(msg['bucket'], s3_path, local_path)
-            if check_damaged_archive(local_path) is True:
-                logging.info("File {} successfully downloaded.".format(s3_path))
-                files_for_handling.append(local_path)
-            else:
-                logging.warn("File {} damaged. Unpack ERROR.".format(s3_path))
-        return True
-    except Exception as ex:
-        logging.error("Exception in downloading file from S3. Msg: {0}".format(str(ex)))
-        return False
-
-def check_damaged_archive(file_path):
-    chunksize = 1024*1024  # 10 Mbytes
-    with gzip.open(file_path, 'rb') as f:
-        try:
-            while f.read(chunksize) != '':
-                return True
-        except:
-            return False
-
-def process_file(file_path):
-    global processed_messages_success, processed_messages_failed
-    processed_messages_success = 0
-    processed_messages_failed = 0
-    size = 1024*1024
-    # unzip archive to temp file
-    out_tmp_file_path = file_path.replace(".gz", ".tmp")
-    with gzip.open(file_path, 'rb') as f_in:
-        with open(out_tmp_file_path, 'wb') as f_out:
-            while True:
-                data = f_in.read(size)
-                if not data:
-                    break
-                f_out.write(data)
-    os.remove(file_path)
-    threads = []
-    with open(out_tmp_file_path) as file_handler:
-        for data_chunk in split_chunks(file_handler):
-            chunk_size = len(data_chunk)
-            logging.info("Processing data chunk of file {} with {} events.".format(out_tmp_file_path, chunk_size))
-            data = json.dumps(data_chunk)
-            t = threading.Thread(target=post_data, args=(data, chunk_size))
-            threads.append(t)
-            t.start()
-    for t in threads:
-        t.join()
-    logging.info("File {} processed. {} events - successfully, {} events - failed.".format(file_path, processed_messages_success,processed_messages_failed))
-    os.remove(out_tmp_file_path)
-
-def split_chunks(file_handler, chunk_size=15000):
-    chunk = []
-    for line in file_handler:
-        chunk.append(json.loads(line))
-        if len(chunk) == chunk_size:
-            yield chunk
-            chunk = []
-    if chunk:
-        yield chunk
-
-def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
-    x_headers = 'x-ms-date:' + date
-    string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-    bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-    decoded_key = base64.b64decode(shared_key)
-    encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
-    authorization = "SharedKey {}:{}".format(customer_id,encoded_hash)
-    return authorization
-
-def post_data(body,chunk_count):
-    global processed_messages_success, processed_messages_failed
-    method = 'POST'
-    content_type = 'application/json'
-    resource = '/api/logs'
-    rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
-    content_length = len(body)
-    signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    uri = logAnalyticsUri + resource + "?api-version=2016-04-01"
-    headers = {
-        'content-type': content_type,
-        'Authorization': signature,
-        'Log-Type': log_type,
-        'x-ms-date': rfc1123date
-    }
-    response = requests.post(uri,data=body, headers=headers)
-    if (response.status_code >= 200 and response.status_code <= 299):
-        processed_messages_success = processed_messages_success + chunk_count
-        logging.info("Chunk with {} events was processed and uploaded to Azure".format(chunk_count))
-    else:
-        processed_messages_failed = processed_messages_failed + chunk_count
-        logging.warn("Problem with uploading to Azure. Response code: {}".format(response.status_code))
-
-def cb_rename_tmp_to_json(file_path, file_size, lines_count):
-    out_file_name = file_path.replace(".tmp", ".json")
-    os.rename(file_path, out_file_name)
-
-def create_s3_client():
-    try:
-        boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME)
-        return boto3.client('s3', region_name=AWS_REGION_NAME, aws_access_key_id=AWS_KEY, aws_secret_access_key=AWS_SECRET, config=boto_config)
-    except Exception as ex:
-        logging.error("Connect to S3 exception. Msg: {0}".format(str(ex)))
-        return None
-
-s3_client = create_s3_client()
-
-def main(mytimer: func.TimerRequest)  -> None:
-    if mytimer.past_due:
-        logging.info('The timer is past due!')
-    logging.info('Starting program')
-    logging.info(logAnalyticsUri)
-    global files_for_handling
-    files_for_handling = []
-    get_sqs_messages()
-    process_message_files()
+            cors.append(process_file(msg['bucket'], s3_file['path'], client, semaphore, session))
+        await asyncio.gather(*cors)

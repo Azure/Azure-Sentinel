@@ -480,5 +480,5 @@ You can view and manage Illusive playbooks as well as review playbook run histor
 
 Sample playbook history (incident response):
         <p align="center">  
-         <img src="./Images/playbook-history-incident-response.png"> </a>
+         <img src="./Images/playbook-history-incident-response.PNG"> </a>
         </p>

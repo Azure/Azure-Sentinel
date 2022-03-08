@@ -1,6 +1,6 @@
 Parser:
   Title: ASIM Sysmon/Linux File Created (Event Id 11) File Event Parser
-  Version: '0.1'
+  Version: '0.2'
   LastUpdated: July 27, 2021
 Product:
   Name: Microsoft Linux Sysmon
@@ -9,11 +9,11 @@ Normalization:
   Version: '0.1.0'
 References:
 - Title: ASIM File Schema
-  Link: https://aka.ms/AzSentinelFileEventDoc
+  Link: https://aka.ms/ASimFileEventDoc
 - Title: ASIM
-  Link: https://aka.ms/AzSentinelNormalization
+  Link: https://aka.ms/AboutASIM
 Description: |
-  This is a Query Parser that is used to map Microsoft Linux Sysmon Event id 11 (Event) to the Azure Sentinel Information Model FileEvent schema.
+  This is a Query Parser that is used to map Microsoft Linux Sysmon Event id 11 (Event) to the Advanced Security Information Model FileEvent schema.
 ParserName: vimFileEventLinuxSysmonFileCreated
 ParserQuery: |
   Syslog
@@ -28,8 +28,8 @@ ParserQuery: |
     '<Data Name="ProcessId">'msgProcessId:string'</Data>'
     '<Data Name="Image">'msgImage:string'</Data>'
     '<Data Name="TargetFilename">'msgTargetFileName:string'</Data>'
-    '<Data Name="CreationUtcTime">'msgCreationUtcTime:datetime'</Data>'
-    *
+    '<Data Name="CreationUtcTime">'msgCreationUtcTime:datetime'</Data>'*
+  | parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>'*
   | extend
       EventCount=int(1)
     , EventStartTime =TimeGenerated 
@@ -37,15 +37,15 @@ ParserQuery: |
     , EventType = 'FileCreated'
     , EventResult ='Success'
     , EventOriginalType ='11' 
-    , EventProduct='Sysmon For Linux'
+    , EventProduct='Sysmon for Linux'
     , EventProductVersion='v13.22'
     , EventVendor ='Microsoft'
     , EventSchemaVersion ='0.1.0'
     , DvcOs = 'Linux'
     , TargetFilePathType='Unix'
+    , ActorUserType = iff(isnotempty(ActorUsername),'Simple', '') // make sure user type is okay
   | project-rename
-      EventMessage=SyslogMessage
-    ,  DvcHostname=Computer
+      DvcHostname=Computer
     , EventOriginalUid=msgEventRecordID
     , ActingProcessName =msgImage
     , ActingProcessId=msgProcessId
@@ -56,5 +56,6 @@ ParserQuery: |
   | extend
       Process=ActingProcessName
       , FilePath=TargetFilePath
-      , Dvc =DvcHostname
-      
+      , Dvc = DvcHostname
+      , User = ActorUsername
+  | project-away SyslogMessage

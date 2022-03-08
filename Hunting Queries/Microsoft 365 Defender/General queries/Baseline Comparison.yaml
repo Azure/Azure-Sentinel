@@ -1,0 +1,279 @@
+id: 4d17ae75-87e8-4272-9aec-16448b1430bc
+name: Baseline Comparison
+description: |
+  Baseline Comparison.
+  Author: miflower.
+  The purpose of this query is to perform a comparison between "known good" machines and suspected bad machines.
+  The original concept for this query was born due to reapplying the same 'whitelist' filters over and over.
+  It brings deltas between a baseline and another machine quickly to the analyst's view.
+  This query supports multiple suspected bad machines and multiple "known good" machines.
+  It also supports providing a timeframe for how far back in time to build a baseline as well as how far back in time to evaluate the suspected bad machines.
+  Each of the links provided by DeviceId/DeviceName will go to the most recent entry for whatever entity is listed.
+  Average results for the pre-defined settings below with a single good host and a single bad host on a 'huge' tenant (300k+ machines):.
+  Compute Time: ~10-20 seconds.
+  Result Set Size: ~500 rows.
+  The workflow is as follows:.
+  1. Establish Variables that are editable on a per-query basis.
+  2. Define functions for reuse.
+  3. Calculate DeviceIds for all machines in scope.
+  4. Derive deltas using the aforementioned functions.
+  5. Union together all results into a single view.
+  The following datasets are returned:.
+  1. Alerts on the suspected bad machines (ignores known good machines, because...they're alerts, additional data has the triggered file).
+  2. Connected Networks (from DeviceNetworkInfo table, additional data has full Connected Network details).
+  3. File Creations (disabled by default due to volume, enable at your own risk, additional data has initiating processes).
+  4. Image Loads (disabled by default due to volume, enable at your own risk, additional data has initiating processes).
+  5. Logon (derived from DeviceLogonEvents for the unique users logged on, additional data has logon types).
+  6. Network communication (grouped by 2nd level-domain, ie 'microsoft.com' in 'www.microsoft.com' and 'web.microsoft.com', additional data has the full list of URLs).
+  7. Process creation (additional data has the full paths of the files).
+  8. Powershell Commands (grouped by the cmdlet that was ran, additional data has the processes that ran the cmdlet).
+  9. Reigstry Events (disabled by default due to volume, grouped by the registry key, additional data has the value data).
+  10. Raw IP Connection Events (additional data has the initiating processes).
+  List of "known good" hosts - populate with your baseline, must be FQDNs.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceInfo
+  - DeviceNetworkEvents
+  - DeviceProcessEvents
+  - DeviceEvents
+  - DeviceFileEvents
+  - DeviceLogonEvents
+  - DeviceRegistryEvents
+  - DeviceNetworkInfo
+  - DeviceImageLoadEvents
+  - AlertInfo
+  - AlertEvidence
+query: |
+  let GoodHosts=pack_array('supposedlygoodhost.mydomain','ithinkitsgoodserver.mydomain');
+  // List of suspected bad hosts - populate with bad machines, must be FQDNs
+  let SuspectedBadHosts=pack_array('compromisedhost.mydomain', 'lateralmovementhost.mydomain');
+  // How far back should the baseline be built from?
+  let GoodTimeRange=30d;
+  // How far back should the bad machines be looked at?
+  let SuspectedBadTimeRange=30d;
+  // Comment return sets that you do not want returned, by default file creation and image loads and registry events are disabled
+  let ReturnSets=pack_array(
+      'Alert',
+      'Connected Networks',
+  //    'File Creation'
+  //    'Image Loads',
+      'Logon',
+      'Network Communication',
+      'Process Creation',
+      'PowerShell Command',
+  //    'Registry Event'
+      'Raw IP Communication'
+  );
+  // -------------End of variables, changing below this line will change query logic----------
+  // Function to get a mapping of machine IDs given a list of computer names
+  let GetDeviceId=(InDeviceName: dynamic) {
+      DeviceInfo
+      | where DeviceName in~ (InDeviceName)
+      | distinct DeviceName, DeviceId
+  };
+  // Function to consolidate all machine IDs into a single set
+  let ConsolidateDeviceId=(T:(DeviceId: string)) {
+      T
+      | summarize makeset(DeviceId)
+  };
+  // Function to get network communications given a list of computer names and how far back to look
+  let GetNetworkEvents=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceNetworkEvents
+      | where "Network Communication" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      | where isnotempty(RemoteUrl)
+      | summarize Timestamp=max(Timestamp), count() by RemoteUrl, DeviceId
+      | extend UrlSplit=split(RemoteUrl, ".") // Split the levels of the URL
+      // If there is only one level (for an internal communication that uses your DNS search suffix), then only use that level
+      // Otherwise combine the top two levels and use those as the URLRoot
+      | extend UrlRoot=iff(UrlSplit[-2] == "", UrlSplit[0], strcat(tostring(UrlSplit[-2]), ".", tostring(UrlSplit[-1])))
+      | summarize Timestamp=max(Timestamp), Count=sum(count_), AdditionalData=makeset(RemoteUrl, 5) by UrlRoot, DeviceId
+      | project Timestamp, Entity=UrlRoot, Count, AdditionalData=tostring(AdditionalData), DeviceId, DataType="Network Communication"
+  };
+  // Function to get process creates given a list of computer names and how far back to look
+  let GetProcessCreates=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceProcessEvents
+      | where "Process Creation" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      // Replace known path for mpam files as they are dynamically named and likely to be unique on each machine
+      | extend FileName=iff(FolderPath matches regex @"([A-Z]:\\Windows\\ServiceProfiles\\NetworkService\\AppData\\Local\\Temp\\mpam-)[a-z0-9]{7,8}\.exe", "mpam-RANDOM.exe", FileName)
+      // Replace known path for AM delta patch files as they jump frequently and not likely to be exact on each machine
+      | extend FileName=iff(FolderPath matches regex @"([A-Z]:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_)[0-9\.]+\.exe", "AM_Delta_Patch_Version.exe", FileName)
+      | summarize Timestamp=max(Timestamp), Count=count(), AdditionalData=makeset(FolderPath) by FileName, DeviceId
+      // Replace various mbam executables that are semiunique-generated with some text to help reduce noise
+      | project Timestamp, Entity=FileName, Count, AdditionalData=tostring(AdditionalData), DeviceId, DataType="Process Creation"
+  };
+  // Function to get powershell commands given a list of computer names and how far back to look
+  let GetPSCommands=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceEvents
+      | where "PowerShell Command" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      | where ActionType == 'PowerShellCommand'
+      // Remove two different signatures for scripts being executed which cause a lot of noise
+      // The first signature matches scripts generated as part of testing execution policy
+      // The second signature matches scripts generated by SCCM
+      | where not(AdditionalFields matches regex @"Script_[0-9a-f]{20}" and InitiatingProcessFileName =~ 'monitoringhost.exe')
+      | where not(AdditionalFields matches regex @"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.ps1" and InitiatingProcessFileName =~ 'powershell.exe')
+      | summarize Timestamp=max(Timestamp), count(), IPFN_Set=makeset(InitiatingProcessFileName) by AdditionalFields, DeviceId
+      | project Timestamp, Entity=tostring(extractjson("$.Command", AdditionalFields)), Count=count_, AdditionalData=tostring(IPFN_Set), DeviceId, DataType="PowerShell Command"
+  };
+  // Function to get file creations given a list of computer names and how far back to look
+  let GetFileCreates=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceFileEvents
+      | where "File Creation" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      // Remove temporary files created by office products
+      | where not(FileName matches regex @"~.*\.(doc[xm]?|ppt[xm]?|xls[xm]?|dotm|rtf|xlam|lnk)")
+      // Replace two different signatures for PS scripts being created which cause a lot of noise
+      | extend iff(FileName matches regex @"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.ps1" or
+                   FileName matches regex @"[0-9a-z]{8}\.[0-9a-z]{3}\.ps1", "RANDOM.ps1", FileName)
+      | summarize Timestamp=max(Timestamp), FP_Set=makeset(FolderPath), count() by FileName, DeviceId
+      | project Timestamp, Entity=FileName, Count=count_, AdditionalData=tostring(FP_Set), DeviceId, DataType="File Creation"
+  };
+  // Function to get logon events given a list of computer names and how far back to look
+  let GetDeviceLogonEvents=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceLogonEvents
+      | where "Logon" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      // Remove logons made by WDM or UMFD
+      | where AccountDomain !in ('font driver host', 'window manager')
+      | summarize Timestamp=max(Timestamp), Count=count(), LT_Set=makeset(LogonType) by AccountName, AccountDomain, DeviceId
+      | project Timestamp, Entity=iff(AccountDomain == "", AccountName, strcat(AccountDomain, @"\", AccountName)), Count, AdditionalData=tostring(LT_Set), DeviceId, DataType="Logon"
+  };
+  // Function to get registry events given a list of computer names and how far back to look
+  let GetDeviceRegistryEvents=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceRegistryEvents
+      | where "Registry Event" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      | extend RegistryKey=iff(RegistryKey matches regex @"HKEY_CURRENT_USER\\S-[^\\]+\\", replace(@"(HKEY_CURRENT_USER\\)S-[^\\]+\\", @"\1SID\\", RegistryKey), RegistryKey)
+      | summarize Timestamp=max(Timestamp), RVD_Set=makeset(RegistryValueData), Count=count() by DeviceId, RegistryKey
+      | project Timestamp, Entity=RegistryKey, Count, AdditionalData=tostring(RVD_Set), DeviceId, DataType="Registry Event"
+  };
+  // Function to get connected networks given a list of computer names and how far back to look
+  let GetConnectedNetworks=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceNetworkInfo
+      | where "Connected Networks" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      | summarize Timestamp=max(Timestamp), Count=count() by DeviceId, ConnectedNetworks
+      | project Timestamp, Entity=tostring(extractjson("$[0].Name", ConnectedNetworks)), Count, AdditionalData=ConnectedNetworks, DeviceId, DataType="Connected Networks"
+  };
+  // Function to get image load events given a list of computer names and how far back to look
+  let GetImageLoads=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceImageLoadEvents
+      | where "Image Loads" in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      | summarize Timestamp=max(Timestamp), Set_FN=makeset(InitiatingProcessFileName), Count=count() by DeviceId, FolderPath
+      // Replace various native windows DLL's that are guid-generated with some text to help reduce noise
+      | extend Entity=replace(@"([wW]indows\\assembly\\NativeImages.*\\)[0-9a-f]{32}", @"\1GUID", FolderPath)
+      | project Timestamp, Entity, Count, AdditionalData=tostring(Set_FN), DeviceId, DataType="Image Loads"
+  };
+  // Function to get raw IP address network communications given a list of computer names and how far back to look
+  let GetRawIPCommunications=(InDeviceId: dynamic, LeftTimestamp: datetime) {
+      DeviceNetworkEvents
+      | where 'Raw IP Communication' in (ReturnSets)
+      | where Timestamp > LeftTimestamp
+      | where DeviceId in~ (InDeviceId)
+      // Replace all v4 to v6 addresses with their v4 equivalent
+      | extend RemoteIP=replace("^::ffff:", "", RemoteIP)
+      | summarize Timestamp=max(Timestamp), Set_RPort=makeset(RemotePort), Set_LPort=makeset(LocalPort), Set_FN=makeset(InitiatingProcessFileName), Set_URL=makeset(RemoteUrl), Count=count() by DeviceId, RemoteIP
+      // Only include any IP addresses that do not have a resolved URL as resolved URLs are handled in network communications
+      | where tostring(Set_URL) == '[""]'
+      // Do not include machines that are only doing WUDO
+      | where tostring(Set_RPort) != '[7680]' and tostring(Set_RPort) != '[7680]'
+      | project Timestamp, Entity=RemoteIP, Count, AdditionalData=tostring(Set_FN), DeviceId, DataType='Raw IP Communication'
+  };
+  // Calculate the left event time for "good" machines
+  let GoodLeftTimestamp=ago(GoodTimeRange);
+  // Calculate the left event time for suspected bad machines
+  let SuspectedBadLeftTimestamp=ago(SuspectedBadTimeRange);
+  // Calculate the machine IDs for "good" machines
+  let GoodHostNameMapping=GetDeviceId(GoodHosts);
+  // Reduce all of the good machine IDs into a single variable
+  let GoodHostDeviceId=toscalar(ConsolidateDeviceId(GoodHostNameMapping));
+  // Calculate the machine IDs for suspected bad machines
+  let SuspectedBadHostNameMapping=GetDeviceId(SuspectedBadHosts);
+  // Reduce all of the suspected bad machine IDs into a single variable
+  let SuspectedBadHostDeviceId=toscalar(ConsolidateDeviceId(SuspectedBadHostNameMapping));
+  // Calculate the delta in network events, keeping the bad ones
+  let NetworkDelta=GetNetworkEvents(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetNetworkEvents(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in process create events, keeping the bad ones
+  let ProcessDelta=GetProcessCreates(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetProcessCreates(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in powershell events, keeping the bad ones
+  let PSDelta=GetPSCommands(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetPSCommands(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in file create events, keeping the bad ones
+  let FileDelta=GetFileCreates(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetFileCreates(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in logon events, keeping the bad ones
+  let LogonDelta=GetDeviceLogonEvents(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetDeviceLogonEvents(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in registry events, keeping the bad ones
+  let RegistryDelta=GetDeviceRegistryEvents(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetDeviceRegistryEvents(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in connected network events, keeping the bad ones
+  let ConnectedNetworkDelta=GetConnectedNetworks(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetConnectedNetworks(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in image load events, keeping the bad ones
+  let ImageLoadDelta=GetImageLoads(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetImageLoads(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Calculate the delta in raw IP address communications, keeping the bad ones
+  let RawIPCommunicationDelta=GetRawIPCommunications(SuspectedBadHostDeviceId, SuspectedBadLeftTimestamp)
+  | join kind=leftanti (
+      GetRawIPCommunications(GoodHostDeviceId, GoodLeftTimestamp)
+  ) on Entity;
+  // Get the alerts for the bad machines (no delta, we care about all alerts)
+  let Alerts=AlertInfo | join AlertEvidence on AlertId
+  | where "Alert" in (ReturnSets)
+  | where Timestamp > SuspectedBadLeftTimestamp
+  | where DeviceId in (SuspectedBadHostDeviceId)
+  | summarize Timestamp=max(Timestamp), Count=count() by Title, DeviceId, FileName, RemoteUrl
+  | project Timestamp, Entity=Title, Count, AdditionalData=coalesce(FileName, RemoteUrl), DeviceId, DataType="Alert";
+  // String everything together
+  let ResultDataWithoutMachineCount=union NetworkDelta, ProcessDelta, PSDelta, FileDelta, Alerts, LogonDelta, RegistryDelta,
+        ConnectedNetworkDelta, ImageLoadDelta, RawIPCommunicationDelta
+  // Join back against the machine info so the Computer Names can be reassociated
+  | join kind=leftouter (
+          SuspectedBadHostNameMapping
+  ) on DeviceId
+  // Remove duplicated column
+  | project-away DeviceId1;
+  // This is the start of the final result set that is shown
+  // Calculate the number of machines that each entity/datatype pair have and join that data back into the data to add
+  // an additional column for the number of bad machines
+  ResultDataWithoutMachineCount
+  | join kind=leftouter (
+      ResultDataWithoutMachineCount
+      | summarize BadMachinesCount=dcount(DeviceId) by Entity, DataType
+  ) on Entity, DataType
+  // Remove duplicated columns
+  | project-away Entity1, DataType1
+  // and sort by Machine, DataType, Entity
+  | order by BadMachinesCount desc, DeviceId asc, DataType asc, Entity asc
+  //| where BadMachinesCount > 1

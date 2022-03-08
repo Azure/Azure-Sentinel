@@ -1,17 +1,17 @@
-# Azure Sentinel Information Model (ASIM) ProcessEvent parsers 
+# Advanced Security Information Model (ASIM) ProcessEvent parsers 
 
-This folder includes the the Azure Sentinel Information Model (ASIM)  ProcessEvent parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
+This folder includes the the Advanced Security Information Model (ASIM)  ProcessEvent parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel ProcessEvent normalization schema reference](https://aka.ms/AzSentinelProcessEventDoc)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Microsoft Sentinel ProcessEvent normalization schema reference](https://aka.ms/ASimProcessEventDoc)
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelProcessEventARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimProcessEventARM)
 
 <br>
 
@@ -26,12 +26,12 @@ This template deploys the following parsers:
   * vimProcessEmpty - Empty ASim Process table
 
 * Source specific parsers:
-  * **Microsoft 365 Defender for Endpoints** - vimProcessEventsMicrosoft365D
-  * **Sysmon for Windows** - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
-  * **Sysmon for Linux** - vimProcessCreateLinuxSysmon
+  * **Microsoft 365 Defender for Endpoints** - vimProcessEventMicrosoft365D
+  * **Sysmon for Windows** (Events 1 and 5) - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
+  * **Sysmon for Linux** - vimProcessCreateLinuxSysmon, vimProcessTerminateLinuxSysmon
   * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
   * **Windows Events** collecting using the Azure Monitor Agent - vimProcessCreateMicrosoftWindowsEvents, vimProcessCreationMicrosoftWindowsEvents. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
-  * **Azude Defender for IoT (AD4IoT)** - vimProcessEventAD4IoT  
+  * **Microsoft Defender for IoT - Endpoint (MD4IoT)** - vimProcessEventMD4IoT  
 
 ## Analytics rules
 

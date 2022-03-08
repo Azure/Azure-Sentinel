@@ -1,0 +1,65 @@
+id: 7cad4b66-5e83-4756-8de4-f21315ab1e77
+name: Firmware Updates (Microsoft Defender for IoT)
+description: |
+  'This alert leverages Defender for IoT to detect unauthorized firmware updates that may indicate malicious activity on the network such as a cyber threat that attempts to manipulate PLC firmware to compromise PLC function.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T0857
+query: |
+  SecurityAlert
+  | where ProductName == "Azure Security Center for IoT"
+  | where AlertName == "Beckhoff Software Changed" 
+  or AlertName contains "Firmware Version Changed"
+  or AlertName contains "Firmware Change"
+  or AlertName contains "Firmware Changed"
+  or AlertName contains "Firmware Update"
+  | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
+  | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
+  | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
+  | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
+  | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductName,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    AlertLink
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDeviceAddress
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
+version: 1.0.0
+kind: Scheduled

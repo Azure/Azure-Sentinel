@@ -1,4 +1,4 @@
-# NetworkSessions - Azure Sentinel Information Model
+# NetworkSessions - Advanced Security Information Model
 
 **Note: this folder contains ASIM V1 Netwrok Session parsers**
 
@@ -13,4 +13,4 @@ This template deploys the following:
 * vimNwSZScaler
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelNetworkSessionV1)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimNetworkSessionV1)

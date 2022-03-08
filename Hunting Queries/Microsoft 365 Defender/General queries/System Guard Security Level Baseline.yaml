@@ -1,0 +1,19 @@
+id: 9365b174-d46f-41e9-998a-73e2fe5ae2d9
+name: System Guard Security Level Baseline
+description: |
+  Establishes a baseline SystemGuardSecurityLevel and show the devices that are below that baseline.
+  See https://techcommunity.microsoft.com/t5/Microsoft-Defender-ATP/How-insights-from-system-attestation-and-advanced-hunting-can/ba-p/969252 for full details on this query.
+  And Device Boot Attestation Info and feel free to ping @DepletionMode or @flyingbluemonki on twitter.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+query: |
+  let TargetSecurityLevel = 700;
+  DeviceEvents
+  | where Timestamp >= ago(7d)
+  | where ActionType == "DeviceBootAttestationInfo"
+  | extend AdditionalFieldData = parse_json(AdditionalFields)
+  | project DeviceName, ReportTime = todatetime(AdditionalFieldData.ReportValidityStartTime), CurrentSecurityLevel = toint(AdditionalFieldData.SystemGuardSecurityLevel), AdditionalFieldData.ReportValidityStartTime
+  | where CurrentSecurityLevel < TargetSecurityLevel
+  | summarize arg_max(ReportTime, CurrentSecurityLevel) by DeviceName

@@ -140,14 +140,14 @@ function Get-RequiredModules {
                 Write-Log -Message "Can not install the $Module module. You are not running as Administrator" -LogFileName $LogFileName -Severity Warning
                 Write-Log -Message "Installing $Module module to current user Scope" -LogFileName $LogFileName -Severity Warning
                 
-                Install-Module -Name $Module -Scope CurrentUser -Force
+                Install-Module -Name $Module -Scope CurrentUser -Repository PSGallery -Force -AllowClobber
                 Import-Module -Name $Module -Force
             }
             else {
                 #Admin, install to all users																		   
                 Write-Log -Message "Installing the $Module module to all users" -LogFileName $LogFileName -Severity Warning
-                Install-Module -Name $Module -Force -ErrorAction continue
-                Import-Module -Name $Module -Force -ErrorAction continue
+                Install-Module -Name $Module -Repository PSGallery -Force -AllowClobber
+                Import-Module -Name $Module -Force
             }
         }
         # Install-Module will obtain the module from the gallery and install it on your local machine, making it available for use.
@@ -310,14 +310,16 @@ function New-AdxRawMappingTables {
         else {
             $TableName = $table
         }
+
+        $TableName = $TableName.ToString().Trim()
                 
         if ($TableName -match '_CL$') {                
             Write-Log -Message "Custom log table : $TableName not supported" -LogFileName $LogFileName -Severity Information
         }
-        elseif ($supportedTables.SupportedTables -ccontains $TableName.ToString().Trim()) {        
+        elseif ($supportedTables.SupportedTables -ccontains $TableName) {        
             Write-Log -Message "Retrieving schema and mappings for $TableName" -LogFileName $LogFileName -Severity Information
             $query = $TableName + ' | getschema | project ColumnName, DataType'        
-            $AdxTablesArray.Add($TableName.Trim())
+            $AdxTablesArray.Add($TableName)
             
             Write-Verbose "Executing: (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results"																														  
             $output = (Invoke-AzOperationalInsightsQuery -WorkspaceId $LogAnalyticsWorkspaceId -Query $query).Results
@@ -426,17 +428,17 @@ function New-EventHubNamespace {
                         Write-Log -Message "$EventHubNamespaceName created successfully" -LogFileName $LogFileName -Severity Information
                     }                
                 }
-                catch {
-                    
-                    Write-Log -Message "$($_.Exception.Response.StatusCode.value__)" -LogFileName $LogFileName -Severity Error                  
-                    Write-Log -Message "$($_.Exception.Response.StatusDescription)" -LogFileName $LogFileName -Severity Error
+                catch {                    
+                    Write-Log -Message "$($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+                    Write-Log -Message "$($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error
                 }
             }
         } 
         return $EventHubsArray
     }
-    catch {        
-        Write-Log -Message "An error occurred in Create-EventHubNamespace() method" -LogFileName $LogFileName -Severity Error		
+    catch {       
+        Write-Log -Message "An error occurred in Create-EventHubNamespace() method : $($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+        Write-Log -Message "An error occurred in Create-EventHubNamespace() method : $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error         
         exit
     }
 }
@@ -503,8 +505,8 @@ function New-LaDataExportRule {
                     Write-Log -Message $CreateDataExportRule -LogFileName $LogFileName -Severity Information
                 } 
                 catch {                    
-                    Write-Log -Message $($_.Exception.Response.StatusCode.value__) -LogFileName $LogFileName -Severity Error                 
-                    Write-Log -Message $($_.Exception.Response.StatusDescription) -LogFileName $LogFileName -Severity Error                
+                    Write-Log -Message "$($_.ErrorDetails.Message)" -LogFileName $LogFileName -Severity Error                  
+                    Write-Log -Message "$($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error                
                 }   
                 $Count++
             }
@@ -590,13 +592,12 @@ function New-ADXDataConnectionRules {
                 
             } 
             catch {
-                
-                Write-Log -Message "An error occurred in retrieving Event Hub topics from $AdxEH" -LogFileName $LogFileName -Severity Error        
+                Write-Log -Message "An error occurred in retrieving Event Hub topics - $($_.ErrorDetails.Message) $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error                                  
             }
         }
     }
     catch {
-        Write-Log -Message "An error occurred in Create-ADXDataConnectionRules() method" -LogFileName $LogFileName -Severity Error		
+        Write-Log -Message "An error occurred in Create-ADXDataConnectionRules() method - $($_.ErrorDetails.Message) $($_.InvocationInfo.Line)" -LogFileName $LogFileName -Severity Error		
         exit
     }
 }
@@ -607,6 +608,7 @@ function New-ADXDataConnectionRules {
 
 Get-RequiredModules("Az.Resources")
 Get-RequiredModules("Az.OperationalInsights")
+Get-RequiredModules("Az.EventHub")
 
 # Check Powershell version, needs to be 5 or higher
 if ($host.Version.Major -lt 5) {
@@ -652,7 +654,7 @@ catch {
 }
 
 #region ADXTableCreation
-$LaTablesQuestion = "Do you want to create ADX Raw and Mapping tables for all tables in Log Analytics workspace: $($LogAnalyticsWorkspaceName)?"
+$LaTablesQuestion = "Do you want to create/update ADX Raw and Mapping tables for all tables in Log Analytics workspace: $($LogAnalyticsWorkspaceName)"
 $LaTablesQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
 $LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
 $LaTablesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
@@ -688,39 +690,52 @@ $AdxTablesArray = New-Object System.Collections.Generic.List[System.Object]
 New-AdxRawMappingTables -LaTables $ResultsAllTables -LaMappingDecision $LaTablesQuestionDecision
 #endregion
 
-#region EventHubsCreation
-Write-Verbose " There are $($AdxTablesArray.ToArray().Count) supported tables to map."
+$CreateOrUpdateQuestion = "Are you updating existing table schemas in Azure Data Explorer(ADX)? If you are running this Script for the first time to integrate ADX, Select No"
+$CreateOrUpdateQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+$CreateOrUpdateQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+$CreateOrUpdateQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
 
-if ($AdxTablesArray.ToArray().Count -gt 0) {      
-    $AdxMappedTables = Split-ArrayBySize -AdxTabsArray $AdxTablesArray.ToArray() -ArraySize 10        
-    
-    Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables" 
-    $EventHubsForADX = New-EventHubNamespace -ArraysObject $AdxMappedTables
+$CreateOrUpdateQuestionDecision = $Host.UI.PromptForChoice($title, $CreateOrUpdateQuestion, $CreateOrUpdateQuestionChoices, 1)
+
+if ($CreateOrUpdateQuestionDecision -eq 1) {
+    #region EventHubsCreation
+    Write-Verbose " There are $($AdxTablesArray.ToArray().Count) supported tables to map."
+
+    if ($AdxTablesArray.ToArray().Count -gt 0) {      
+        $AdxMappedTables = Split-ArrayBySize -AdxTabsArray $AdxTablesArray.ToArray() -ArraySize 10        
+        
+        Write-Verbose "Executing: New-EventHubNamespace -ArraysObject $AdxMappedTables" 
+        $EventHubsForADX = New-EventHubNamespace -ArraysObject $AdxMappedTables
+    }
+    else {
+        Write-Log "There are $($AdxTablesArray.ToArray().Count) supported tables to map in $($LogAnalyticsWorkspaceName), you must choose a workspace with at least one supported table." -LogFileName $LogFileName -Severity Error
+        exit
+    }
+
+    #endregion
+
+    #region LogAnalyticsDataExportRule
+    New-LaDataExportRule -AdxEventHubs $EventHubsForADX -TablesArrayCollection $AdxMappedTables
+    #endregion
+
+    #region ADXDataConnectionRule
+    $DataConnectionQuestion = "Do you want to create data connection rules in $AdxDBName for each table with corresponding Event Hub topic, TableRaw and TableRawMappings? `
+                            If Yes, the script will wait for 30 minutes, If No, you must create the data connection rules manually."
+    $DataConnectionQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+    $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+    $DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+
+    $DataConnectionQuestionDecision = $Host.UI.PromptForChoice($title, $DataConnectionQuestion, $DataConnectionQuestionChoices, 0)
+    if ($DataConnectionQuestionDecision -eq 0) {
+        Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
+        New-ADXDataConnectionRules -AdxEventHubs $EventHubsForADX
+    }
+    else {            
+        Write-Log -Message "Please manually create data connection rules for $AdxDBName in $AdxEngineUrl" -LogFileName $LogFileName -Severity Warning    
+    }
+    #endregion
 }
 else {
-    Write-Log "There are $($AdxTablesArray.ToArray().Count) supported tables to map in $($LogAnalyticsWorkspaceName), you must choose a workspace with at least one supported table." -LogFileName $LogFileName -Severity Error
+    Write-Log "Table schemas has been updated" -LogFileName $LogFileName -Severity Information
     exit
 }
-
-#endregion
-
-#region LogAnalyticsDataExportRule
-New-LaDataExportRule -AdxEventHubs $EventHubsForADX -TablesArrayCollection $AdxMappedTables
-#endregion
-
-#region ADXDataConnectionRule
-$DataConnectionQuestion = "Do you want to create data connection rules in $AdxDBName for each table with corresponding Event Hub topic, TableRaw and TableRawMappings? `
-                           If Yes, the script will wait for 30 minutes, If No, you must create the data connection rules manually."
-$DataConnectionQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-$DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-$DataConnectionQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-
-$DataConnectionQuestionDecision = $Host.UI.PromptForChoice($title, $DataConnectionQuestion, $DataConnectionQuestionChoices, 0)
-if ($DataConnectionQuestionDecision -eq 0) {
-    Start-SleepMessage -Seconds 1800 -waitMessage "Provisioning Event Hub topics for Log Analytics tables"                    
-    New-ADXDataConnectionRules -AdxEventHubs $EventHubsForADX
-}
-else {            
-    Write-Log -Message "Please manually create data connection rules for $AdxDBName in $AdxEngineUrl" -LogFileName $LogFileName -Severity Warning    
-}
-#endregion

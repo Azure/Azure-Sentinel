@@ -1,19 +1,24 @@
-﻿using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model;
+﻿using DetectionTemplateSchemaValidation.Tests;
+using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model;
+using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Reflection;
 using System.Runtime.Serialization;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model
 {
+    [NoTechniquesWithoutMatchingTactics]
     [KnownType("DerivedTypes")]
+    [JsonConverter(typeof(AnalyticsTemplateConverter))]
     public abstract class AnalyticsTemplateInternalModelBase
     {
         [JsonProperty("id", Required = Required.Always)]
         public Guid Id { get; set; }
+
+        [JsonProperty("kind", Required = Required.Always)]
+        public abstract AlertRuleKind Kind { get; }
 
         [JsonProperty("name", Required = Required.Always)]
         [StringLength(256)]
@@ -25,6 +30,9 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
 
         [JsonProperty("tactics")]
         public List<AttackTactic> Tactics { get; set; }
+
+        [JsonProperty("relevantTechniques")]
+        public List<string> RelevantTechniques { get; set; }
 
         [JsonProperty("requiredDataConnectors", NullValueHandling = NullValueHandling.Ignore)]
         public virtual List<DataConnectorInternalModel> RequiredDataConnectors { get; set; } = new List<DataConnectorInternalModel>();
