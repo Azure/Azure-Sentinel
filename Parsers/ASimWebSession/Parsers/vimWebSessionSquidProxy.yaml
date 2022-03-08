@@ -30,6 +30,9 @@ ParserParams:
   - Name: srcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: url_has_any
     Type: dynamic
     Default: dynamic([])
@@ -53,6 +56,7 @@ ParserQuery: |
     starttime:datetime=datetime(null), 
     endtime:datetime=datetime(null),
     srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+    ipaddr_has_any_prefix:dynamic=dynamic([]), 
     url_has_any:dynamic=dynamic([]),
     httpuseragent_has_any:dynamic=dynamic([]),
     eventresultdetails_in:dynamic=dynamic([]),
@@ -67,6 +71,7 @@ ParserQuery: |
       and ((array_length(url_has_any) == 0) or (RawData has_any (url_has_any)))
       and ((array_length(httpuseragent_has_any) == 0) or (RawData has_any (httpuseragent_has_any)))
       and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(RawData, srcipaddr_has_any_prefix))
+      and ((array_length(ipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(RawData, ipaddr_has_any_prefix))
       and ((array_length(eventresultdetails_in) == 0) or (RawData has_any (eventresultdetails_in)))
     // -- Parse
     | extend AccessRawLog = extract_all(@"^(\d+\.\d+)\s+(\d+)\s(\S+)\s([A-Z_]+)\/(\d+)\s(\d+)\s([A-Z]+)\s(\S+)\s(\S+)\s([A-Z_]+)\/(\S+)\s(\S+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12]),RawData)[0]
@@ -88,6 +93,11 @@ ParserQuery: |
       SrcUsername = tostring(AccessRawLog[8]), 
       DstIpAddr = tostring(AccessRawLog[10]), 
       HttpContentType = tostring(AccessRawLog[11]) 
+    // Post Filter
+    | where 
+        ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+    //    
+    //    and ((array_length(ipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix) or has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix))
     // -- Constant fields
     | extend 
       EventCount = int(1), 
@@ -111,7 +121,11 @@ ParserQuery: |
     | extend    
       DstHostname = tostring(DstFQDNparts[0]),
       DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),"."),
-      DstDomainType = "FQDN"
+      DstDomainType = "FQDN",
+      ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr"
+                              )
     // -- aliases
     | extend 
       EventStartTime = EventEndTime,
@@ -124,4 +138,4 @@ ParserQuery: |
       Hostname = DstHostname
     | project-away AccessRawLog, RawData
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult, disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, ipaddr_has_any_prefix, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult, disabled)
