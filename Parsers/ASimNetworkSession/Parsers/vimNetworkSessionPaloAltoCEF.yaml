@@ -32,6 +32,9 @@ ParserParams:
     Default: dynamic([])
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
     Default: dynamic([])
   - Name: dstportnumber
     Type: int
@@ -57,12 +60,16 @@ ParserQuery: |
     , "deny","Deny"
     , "drop", "Drop"
     , "drop ICMP", "Drop ICMP"];
-    let NWParser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
+    let NWParser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
     CommonSecurityLog | where not(disabled)
     | where DeviceVendor == "Palo Alto Networks" and DeviceProduct == "PAN-OS" and Activity == "TRAFFIC"
       /// Prefilterring:
       | where (isnull(starttime) or TimeGenerated>=starttime)
       and     (isnull(endtime) or TimeGenerated<=endtime)
+      and (array_length(ipaddr_has_any_prefix)==0 
+                or has_any_ipv4_prefix(SourceIP,ipaddr_has_any_prefix)
+                or has_any_ipv4_prefix(DestinationIP,ipaddr_has_any_prefix)
+                )
       and (array_length(srcipaddr_has_any_prefix)==0 
                 or has_any_ipv4_prefix(SourceIP,srcipaddr_has_any_prefix)
                 )
@@ -115,6 +122,10 @@ ParserQuery: |
     | lookup Actions on DeviceAction
     // Action post filtering
     | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
+    | extend ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr"
+                              )
     | project-rename
         DstMacAddr=DestinationMACAddress
         , SrcMacAddr=SourceMACAddress
@@ -140,4 +151,4 @@ ParserQuery: |
       EventEndTime =EventStartTime,
       Src=SrcIpAddr
     };
-    NWParser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+    NWParser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

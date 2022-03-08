@@ -33,6 +33,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -61,6 +64,7 @@ ParserQuery: |
     endtime:datetime=datetime(null), 
     srcipaddr_has_any_prefix:dynamic=dynamic([]), 
     dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+    ipaddr_has_any_prefix:dynamic=dynamic([]), 
     dstportnumber:int=int(null), 
     hostname_has_any:dynamic=dynamic([]), 
     dvcaction:dynamic=dynamic([]), 
@@ -77,6 +81,12 @@ ParserQuery: |
             and array_length(dvcaction) == 0
             and (isnull(starttime) or TimeGenerated >= starttime)
             and (isnull(endtime) or TimeGenerated <= endtime)
+            and 
+            (
+                array_length(ipaddr_has_any_prefix) == 0 
+                or has_any_ipv4_prefix(SourceIp,ipaddr_has_any_prefix)
+                or has_any_ipv4_prefix(DestinationIp,ipaddr_has_any_prefix)
+            )
             and 
             (
                 array_length(srcipaddr_has_any_prefix) == 0 
@@ -138,6 +148,11 @@ ParserQuery: |
             and array_length(dvcaction) == 0
             and (starttime == datetime(null) or TimeGenerated >= starttime)
             and (endtime == datetime(null) or TimeGenerated <= endtime)
+            and (
+                array_length(ipaddr_has_any_prefix) == 0 
+                or has_any_ipv4_prefix(SourceIp,ipaddr_has_any_prefix)
+                or has_any_ipv4_prefix(Destinationp,ipaddr_has_any_prefix)
+            )
             and (
                 array_length(srcipaddr_has_any_prefix) == 0 
                 or has_any_ipv4_prefix(SourceIp,srcipaddr_has_any_prefix)
@@ -212,7 +227,11 @@ ParserQuery: |
       DvcId = Machine,
       RemoteIpAddr = RemoteIp
     // -- Calculated fields
-    | extend EventOriginalSeverity = tostring(Severity)
+    | extend EventOriginalSeverity = tostring(Severity),
+     ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr"
+                              )
     | lookup SeverityLookup on EventOriginalSeverity
     | extend
       EventResult = "Success",
@@ -239,4 +258,4 @@ ParserQuery: |
       Duration = NetworkDuration,
       SessionId = NetworkSessionId
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

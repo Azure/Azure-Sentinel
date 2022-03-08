@@ -33,6 +33,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -67,6 +70,7 @@ ParserQuery: |
     , endtime:datetime=datetime(null)
     , srcipaddr_has_any_prefix:dynamic=dynamic([])
     , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , ipaddr_has_any_prefix:dynamic=dynamic([])
     , dstportnumber:int=int(null)
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
@@ -81,6 +85,7 @@ ParserQuery: |
     and (isnull(starttime) or TimeGenerated >= starttime)
     and  (isnull(endtime) or TimeGenerated <= endtime)
     and  (isnull(dstportnumber) or dstportnumber == DestinationPort) 
+    and  (array_length(ipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SourceIP ,ipaddr_has_any_prefix) or has_any_ipv4_prefix(DestinationIP ,ipaddr_has_any_prefix)) 
     and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SourceIP ,srcipaddr_has_any_prefix)) 
     and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestinationIP ,dstipaddr_has_any_prefix))
   | project-rename DvcOriginalAction = DeviceAction
@@ -125,7 +130,11 @@ ParserQuery: |
     ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
     SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
     DstBytes = tolong(ReceivedBytes), 
-    SrcBytes = tolong(SentBytes)
+    SrcBytes = tolong(SentBytes),
+    ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr"
+                              )
   // -- Enrichment
   | extend
     DstAppType = "Service", 
@@ -141,4 +150,4 @@ ParserQuery: |
   | project-away 
     DeviceCustom*
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

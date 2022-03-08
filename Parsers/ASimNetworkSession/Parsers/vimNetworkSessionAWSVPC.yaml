@@ -31,6 +31,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -206,15 +209,17 @@ ParserQuery: |
       'REJECT', 'Deny'
     ];
     let parser = (
-        starttime:datetime=datetime(null), 
-        endtime:datetime=datetime(null), 
+        starttime:datetime=datetime(null),
+        endtime:datetime=datetime(null),
         srcipaddr_has_any_prefix:dynamic=dynamic([]), 
         dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
         dstportnumber:int=int(null), 
         hostname_has_any:dynamic=dynamic([]), 
         dvcaction:dynamic=dynamic([]), 
         eventresult:string='*', 
-        disabled:bool=false)
+        disabled:bool=false
+        )
     {
     AWSVPCFlow | where not(disabled)
     | where LogStatus != "NODATA"
@@ -223,6 +228,12 @@ ParserQuery: |
             (array_length(hostname_has_any) == 0)
             and (isnull(starttime) or TimeGenerated >= starttime)
             and (isnull(endtime) or TimeGenerated <= endtime)
+            and 
+            (
+                array_length(ipaddr_has_any_prefix) == 0 
+                or has_any_ipv4_prefix(DstAddr,ipaddr_has_any_prefix) 
+                or has_any_ipv4_prefix(SrcAddr,ipaddr_has_any_prefix)
+            )
             and 
             (
                 array_length(srcipaddr_has_any_prefix) == 0 
@@ -252,7 +263,10 @@ ParserQuery: |
         EventSchema="NetworkSession",
         SrcAppType = iff (PktSrcAwsService != "", "CloudService", ""),
         DstAppType = iff (PktDstAwsService != "", "CloudService", ""),
-        DvcIdType = "AwsVpcId"
+        DvcIdType = "AwsVpcId",
+        ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(DstAddr,ipaddr_has_any_prefix), "DstIpAddr",
+                                  has_any_ipv4_prefix(DstAddr,ipaddr_has_any_prefix), "SrcIpAddr")
     | lookup ProtocolLookup on Protocol
     | lookup DirectionLookup on FlowDirection
     | project-rename
@@ -279,4 +293,4 @@ ParserQuery: |
         EventStartTime = TimeGenerated,
         DvcInterface = DvcInboundInterface
     };
-    parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+    parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

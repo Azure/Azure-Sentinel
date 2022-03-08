@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -68,6 +71,7 @@ ParserQuery: |
         endtime:datetime=datetime(null), 
         srcipaddr_has_any_prefix:dynamic=dynamic([]), 
         dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
         dstportnumber:int=int(null), 
         hostname_has_any:dynamic=dynamic([]), 
         dvcaction:dynamic=dynamic([]), 
@@ -84,6 +88,10 @@ ParserQuery: |
         (array_length(hostname_has_any) == 0)
          and (isnull(starttime) or TimeGenerated>=starttime) 
          and (isnull(endtime) or TimeGenerated<=endtime) 
+         and (
+            array_length(ipaddr_has_any_prefix)==0 
+            or has_any_ipv4_prefix(msg_s,ipaddr_has_any_prefix)
+          ) 
          and (
             array_length(srcipaddr_has_any_prefix)==0 
             or has_any_ipv4_prefix(msg_s,srcipaddr_has_any_prefix)
@@ -155,7 +163,11 @@ ParserQuery: |
           EventCount=toint(1),
           EventSchemaVersion="0.2.2",
           EventSchema="NetworkSession",
-          DvcIdType = "AzureResourceId"
+          DvcIdType = "AzureResourceId",
+          ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr"
+                              )
       | project-rename
           DvcSubscriptionId = SubscriptionId,
           DvcId = ResourceId
@@ -180,4 +192,4 @@ ParserQuery: |
           _ResourceId,
           TimeGenerated
   };
-  parser  (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser  (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

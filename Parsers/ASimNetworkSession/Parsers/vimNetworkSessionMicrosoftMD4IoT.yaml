@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -55,6 +58,10 @@ ParserQuery: |
         and (isnull(starttime) or TimeGenerated>=starttime) 
         and (isnull(endtime) or TimeGenerated<=endtime) 
         and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
+        and (array_length(ipaddr_has_any_prefix)==0 
+             or has_any_ipv4_prefix(RemoteAddress,ipaddr_has_any_prefix)
+             or has_any_ipv4_prefix(LocalAddress ,ipaddr_has_any_prefix)
+            ) 
         and (array_length(srcipaddr_has_any_prefix)==0 
              or has_any_ipv4_prefix(RemoteAddress,srcipaddr_has_any_prefix)
              or has_any_ipv4_prefix(LocalAddress ,srcipaddr_has_any_prefix)
@@ -150,7 +157,11 @@ ParserQuery: |
         EventStartTime = TimeGenerated, // Open question about timestamps
         EventEndTime = TimeGenerated,  // Open question about timestamps
         EventResult = 'Success',
-        EventSeverity = 'Informational'
+        EventSeverity = 'Informational',
+        ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr"
+                              )
       | project-rename
         EventProductVersion = AgentVersion, // Not available in Windows
         _ResourceId = AssociatedResourceId, 
