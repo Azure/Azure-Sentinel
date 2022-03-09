@@ -1,18 +1,16 @@
-# Advanced Security Information Model (ASIM) Network Session parsers 
+# Azure Sentinel Information Model (ASIM) NetworkSession parsers 
 
-This template deploys all ASIM Network parsers. The template is part of the Advanced Security Information Model (ASIM).
+This template deploys all ASIM NetworkSession parsers.
 
-The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced SIEM Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
-- [Microsoft Sentinel Network Session normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
+- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Deploy all of ASIM](https://aka.ms/DeployASIM)
+- [ASIM NetworkSession normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimNetworkSessionARM) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimNetworkSessionARMgov)
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fyf%2Frearrangement2%2FParsers%2FASimNetworkSession%2FARM%2FFullDeploymentNetworkSession.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fyf%2Frearrangement2%2FParsers%2FASimNetworkSession%2FARM%2FFullDeploymentNetworkSession.json)
 <br>
-
-This page refers to Version 0.2 of the ASIM NetworkSession schema. If you are looking for Version 0.1 ASIM Network Session parsers refer to the [ASimNetworkSessionV1](https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASimNetworkSession/ASimNetworkSessionV1) folder.
