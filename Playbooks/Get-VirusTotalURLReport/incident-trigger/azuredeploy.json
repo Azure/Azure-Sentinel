@@ -5,7 +5,7 @@
         "title": "URL Enrichment - Virus Total report",
         "description": "This playbook will take each URL entity and query VirusTotal for URL Report (https://developers.virustotal.com/v3.0/reference#url-info). It will write the results to Log Analytics and add a comment to the incident.",
         "prerequisites": "Register to Virus Total community for an API key.",
-        "lastUpdateTime": "2021-05-08T00:00:00.000Z",
+        "lastUpdateTime": "2022-02-03T00:00:00.000Z",
         "entities": [ "URL" ],
         "tags": [ "Enrichment" ],
         "support": {
@@ -75,7 +75,7 @@
             "tags": {
                 "LogicAppsCategory": "security",
                 "hidden-SentinelTemplateName": "Get-VirusTotalURLReport",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -136,7 +136,7 @@
                                             "inputs": {
                                                 "body": {
                                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_URL_report')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -155,7 +155,7 @@
                                         },
                                         "Send_Data": {
                                             "inputs": {
-                                                "body": "@{body('Get_URL_report')?['data']}",
+                                                "body": "@{body('Retrieve_information_about_a_file_or_URL_analysis')['data']}",
                                                 "headers": {
                                                     "Log-Type": "VTURLReport",
                                                     "time-generated-field": "@{utcNow()}"
@@ -178,7 +178,7 @@
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_URL_report')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -197,7 +197,7 @@
                                             },
                                             "Send_Data_2": {
                                                 "inputs": {
-                                                    "body": "@{body('Get_URL_report')?['data']}",
+                                                    "body": "@{body('Retrieve_information_about_a_file_or_URL_analysis')['data']}",
                                                     "headers": {
                                                         "Log-Type": "VTURLReport",
                                                         "time-generated-field": "@{utcNow()}"
@@ -218,21 +218,27 @@
                                     "expression": {
                                         "or": [
                                             {
-                                                "greaterOrEquals": [
-                                                    "@body('Get_URL_report')?['data']?['attributes']?['reputation']",
+                                                "greater": [
+                                                    "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']",
+                                                    0
+                                                ]
+                                            },
+                                            {
+                                                "greater": [
+                                                    "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']",
                                                     0
                                                 ]
                                             }
                                         ]
                                     },
                                     "runAfter": {
-                                        "Get_URL_report": [
+                                        "Retrieve_information_about_a_file_or_URL_analysis": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "If"
                                 },
-                                "Get_URL_report": {
+                                "Retrieve_information_about_a_file_or_URL_analysis": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -240,7 +246,7 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/api/v3/urls/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
+                                        "path": "/api/v3/analyses/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
                                     },
                                     "runAfter": {
                                         "Analyse_an_URL": [
@@ -268,7 +274,7 @@
                         }
                     },
                     "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                        "Microsoft_Sentinel_incident": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -289,7 +295,7 @@
                         "value": {
                             "azureloganalyticsdatacollector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                             },
                             "azuresentinel": {

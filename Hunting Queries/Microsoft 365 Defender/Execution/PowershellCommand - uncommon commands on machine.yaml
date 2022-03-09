@@ -1,0 +1,23 @@
+id: 7d3acc08-312c-4139-85c9-f08299b79932
+name: PowershellCommand - uncommon commands on machine
+description: |
+  Find which uncommon Powershell Cmdlets were executed on that machine in a certain time period.
+  This covers all Powershell commands executed in the Powershell engine by any process.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+query: |
+  let DeviceId = "474908f457a1dc4c1fab568f808d5f77bf3bb951";
+  let timestamp = datetime(2018-06-09T02:23:26.6832917Z);
+  // Query for Powershell cmdlets
+  let powershellCommands =
+      DeviceEvents
+      | where ActionType == "PowerShellCommand"
+      // Extract the powershell command name from the Command field in the AdditionalFields JSON column
+      | project PowershellCommand=extractjson("$.Command", AdditionalFields, typeof(string)), InitiatingProcessCommandLine, InitiatingProcessParentFileName, Timestamp, DeviceId
+      | where PowershellCommand !endswith ".ps1" and PowershellCommand !endswith ".exe";
+  // Filter Powershell cmdlets executed on relevant machine and time period
+  powershellCommands | where DeviceId == DeviceId and Timestamp between ((timestamp-5min) .. 10min)
+  // Filter out common powershell cmdlets
+  | join kind=leftanti (powershellCommands | summarize MachineCount=dcount(DeviceId) by PowershellCommand | where MachineCount > 20) on PowershellCommand

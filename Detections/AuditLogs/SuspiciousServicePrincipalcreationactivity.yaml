@@ -9,7 +9,7 @@ requiredDataConnectors:
       - AuditLogs
       - AADServicePrincipalSignInLogs
 queryFrequency: 1h
-queryPeriod: 1h
+queryPeriod: 70m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -19,10 +19,10 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-  let timeframe = 60m;
-  let lookback = 10m;
+  let queryfrequency = 1h;
+  let wait_for_deletion = 10m;
   let account_created =
-  AuditLogs 
+    AuditLogs 
     | where ActivityDisplayName == "Add service principal"
     | where Result == "success"
     | extend AppID = tostring(AdditionalDetails[1].value)
@@ -30,12 +30,12 @@ query: |
     | extend userPrincipalName_creator = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
     | extend ipAddress_creator = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
   let account_activity =
-  AADServicePrincipalSignInLogs
+    AADServicePrincipalSignInLogs
     | extend Activities = pack("ActivityTime", TimeGenerated ,"IpAddress", IPAddress, "ResourceDisplayName", ResourceDisplayName)
     | extend AppID = AppId
     | summarize make_list(Activities) by AppID;
   let account_deleted =
-  AuditLogs 
+    AuditLogs 
     | where OperationName == "Remove service principal"
     | where Result == "success"
     | extend AppID = tostring(AdditionalDetails[1].value)
@@ -43,28 +43,27 @@ query: |
     | extend userPrincipalName_deleter = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
     | extend ipAddress_deleter = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
   let account_credentials =
-  AuditLogs
-    | where OperationName contains "Update application - Certificates and secrets management"
+    AuditLogs
+    | where OperationName has_all ("Update application", "Certificates and secrets management")
     | where Result == "success"
     | extend AppID = tostring(AdditionalDetails[1].value)
     | extend credentialCreationTime = ActivityDateTime;
   let roles_assigned =
-  AuditLogs
+    AuditLogs
     | where ActivityDisplayName == "Add app role assignment to service principal"
     | extend AppID = tostring(TargetResources[1].displayName)
     | extend AssignedRole =  iff(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].displayName)=="AppRole.Value", tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].newValue))),"")
     | extend AssignedRoles = pack("Role", AssignedRole)
-    |summarize  make_list(AssignedRoles) by AppID;
-  account_created 
-    | join kind= inner (account_activity) on AppID, AppID 
-    | join kind= inner (account_deleted) on AppID, AppID 
-    | join kind= inner (account_credentials) on AppID, AppID 
-    | join kind= inner (roles_assigned) on AppID, AppID
-    | where deletionTime - creationTime < lookback
-    | where tolong(deletionTime - creationTime) >= 0
-    | where creationTime > ago(timeframe)
-    | extend AliveTime = deletionTime - creationTime
-    | project AADTenantId, AppID, creationTime, deletionTime, userPrincipalName_creator, userPrincipalName_deleter, ipAddress_creator, ipAddress_deleter, list_Activities , list_AssignedRoles, AliveTime
+    | summarize make_list(AssignedRoles) by AppID;
+  account_created
+  | where TimeGenerated between (ago(wait_for_deletion+queryfrequency)..ago(wait_for_deletion))
+  | join kind= inner (account_activity) on AppID
+  | join kind= inner (account_deleted) on AppID
+  | join kind= inner (account_credentials) on AppID
+  | join kind= inner (roles_assigned) on AppID
+  | where deletionTime - creationTime between (time(0s)..wait_for_deletion)
+  | extend AliveTime = deletionTime - creationTime
+  | project AADTenantId, AppID, creationTime, deletionTime, userPrincipalName_creator, userPrincipalName_deleter, ipAddress_creator, ipAddress_deleter, list_Activities, list_AssignedRoles, AliveTime
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -82,5 +81,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: ipAddress_deleter
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled
