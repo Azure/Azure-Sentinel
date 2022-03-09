@@ -51,6 +51,23 @@ function removePropertiesRecursively ($resourceObj) {
     $resourceObj
 }
 
+function queryResourceExists () {
+    foreach ($resource in $baseMainTemplate.resources) {
+        if ($resource.type -eq "Microsoft.OperationalInsights/workspaces") {
+            return $true
+        }
+    }
+    return $false
+}
+
+function getQueryResourceLocation () {
+    for($i = 0; $i -lt $baseMainTemplate.resources.Length; $i++){
+        if ($baseMainTemplate.resources[$i].type -eq "Microsoft.OperationalInsights/workspaces") {
+            return $i
+        }
+    }
+}
+
 foreach ($inputFile in $(Get-ChildItem $path)) {
     $inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
 
@@ -63,6 +80,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $workbookCounter = 1
     $playbookCounter = 1
     $parserCounter = 1
+    $savedSearchCounter = 1
     $huntingQueryCounter = 1
     $watchlistCounter = 1
 
@@ -205,7 +223,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             name       = "[parameters('workbook$workbookCounter-id')]";
                             location   = "[parameters('workspace-location')]";
                             kind       = "shared";
-                            apiVersion = "2020-02-12";
+                            apiVersion = "2021-08-01";
                             properties = [PSCustomObject] @{
                                 displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
@@ -340,6 +358,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         type      = "securestring";
                                         minLength = 1;
                                         metadata  = [PSCustomObject] @{ description = "Password to connect to $solutionName API"; }
+                                    }
+								)
+                            }
+							elseif ($param.Name.ToLower().contains("apikey")) {
+                                $playbookPasswordObject = [PSCustomObject] @{
+                                    name        = "playbook$playbookCounter-$paramName";
+                                    type        = "Microsoft.Common.PasswordBox";
+                                    label       = [PSCustomObject] @{password = "ApiKey"};
+                                    toolTip     = "ApiKey to connect to $solutionName API";
+                                    constraints = [PSCustomObject] @{ required = $true; };
+                                    options     = [PSCustomObject] @{ hideConfirmation = $true; };
+                                }
+                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
+                                        type      = "securestring";
+                                        minLength = 1;
+                                        metadata  = [PSCustomObject] @{ description = "ApiKey to connect to $solutionName API"; }
                                     })
                             }
                             else {
@@ -407,7 +442,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($variableValue -is [System.String]) {
                                 $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                             }
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
+                            if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey")))
+                            {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$variableName" -NotePropertyValue "[$variableValue]"
+                            }
+                            else
+                            {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
+                            }                           
                         }
 
                         $azureManagementUrlExists = $false
@@ -493,13 +535,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if ($foundConnection) {
-                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
+                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"                     
                                     }
                                     else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
-                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
+                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"               
                                     }
+                                    if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
+                                        {
+                                            $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
+                                        }
                                 }
                             }
                             $playbookResource = $(replaceVarsRecursively $playbookResource)
@@ -684,6 +730,43 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         # Update Connector Counter
                         $connectorCounter += 1
                     }
+                    elseif ($objectKeyLowercase -eq "savedsearches") {
+                        $isStandardTemplate = $false
+                        $searchData = $json # Assume input is basic array of SavedSearches to start
+                        # Check if SavedSearch input file uses direct structure given by export
+                        if ($searchData -isnot [System.Array] -and $searchData.value) {
+                            $searchData = $searchData.value 
+                        }
+                        # Check if SavedSearch input file uses standard template structure
+                        if ($searchData -isnot [System.Array] -and $searchData.resources) {
+                            $isStandardTemplate = $true
+                            $searchData = $searchData.resources
+                        }
+                        if($searchData -is [System.Array] -and !$isStandardTemplate) {
+                            foreach($search in $searchData) {
+                                $savedSearchIdParameterName = "savedsearch$savedSearchCounter-id"
+                                $savedSearchIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
+                                $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $savedSearchIdParameterName -Value $savedSearchIdParameter
+
+                                $savedSearchResource = [PSCustomObject]@{
+                                    type = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                                    apiVersion = "2020-08-01";
+                                    name = "[concat(parameters('workspace'),'/',parameters('$savedSearchIdParameterName'))]";
+                                    properties = [PSCustomObject]@{
+                                        category = $search.properties.category;
+                                        displayName = $search.properties.displayName;
+                                        query = $search.properties.query;
+                                        functionAlias = $search.properties.functionAlias;
+                                        version = $search.properties.version;
+                                    };
+                                }
+                                $baseMainTemplate.resources += $savedSearchResource
+                                $savedSearchCounter++
+                            }
+                        } elseif ($isStandardTemplate) {
+                            $baseMainTemplate.resources += $searchData
+                        }
+                    }
                     elseif ($objectKeyLowercase -eq "watchlists") {
                         $watchlistData = $json.resources[0]
 
@@ -785,14 +868,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 version   = $contentToImport.Version;
                             };
 
-                            function queryResourceExists () {
-                                foreach ($resource in $baseMainTemplate.resources) {
-                                    if ($resource.type -eq "Microsoft.OperationalInsights/workspaces") {
-                                        return $true
-                                    }
-                                }
-                                return $false
-                            }
                             if ($huntingQueryCounter -eq 1) {
                                 if (!$(queryResourceExists)) {
                                     $baseHuntingQueryResource = [PSCustomObject] @{
@@ -864,7 +939,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $huntingQueryObj.properties.tags += $tacticsObj
                             }
-                            $baseMainTemplate.resources[$baseMainTemplate.resources.Length - 1].resources += $huntingQueryObj
+                            $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $huntingQueryObj
 
                             $dependencyDescription = ""
                             if ($yaml.requiredDataConnectors) {
@@ -1054,7 +1129,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Use File Name as Parser Name
                         $functionAlias = getFileNameFromPath $file
-                        if ($parserCounter -eq 1) {
+                        if ($parserCounter -eq 1 -and !$(queryResourceExists)) {
                             $baseParserResource = [PSCustomObject] @{
                                 type       = "Microsoft.OperationalInsights/workspaces";
                                 apiVersion = "2020-08-01";
@@ -1082,7 +1157,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 version       = 1;
                             }
                         }
-                        $baseMainTemplate.resources[$baseMainTemplate.resources.Length - 1].resources += $parserObj
+                        $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $parserObj
 
                         # Update Parser Counter
                         $parserCounter += 1
