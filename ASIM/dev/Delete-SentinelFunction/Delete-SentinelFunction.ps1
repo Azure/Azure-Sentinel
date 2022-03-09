@@ -1,34 +1,44 @@
     <#
         .SYNOPSIS
-        Deletes saved searches from Log Analytics workspace
+        Deletes saved functions from a Log Analytics workspace. 
 
         .DESCRIPTION
-        Deletes functions from Log Analytics workspace.
-        Takes a list of strings for the function names.
+        This PowerShell script deletes saved functions from a Log Analytics workspace. It supports wildcards and enable batch cleaning the workspace from unneeded functions, especially when deploying a new function ARM tempalte such as those used by Microsoft Sentinel ASIM. 
 
         .PARAMETER FunctionName
-        Specifies a comma delimited list of saved function name to be deleted. Accepts wildchars. 
+        A comma delimited list of names or wildcard patterns of the function to be delete.  
 
         .PARAMETER WorkspaceName
-        Specifies the workspace where functions are saved.
+        The workspace the functions should be deleted from.
 
         .PARAMETER ResourceGroup
-        Specifies the resource group of workspace.
+        The resource group of the workspace.
 
         
         .PARAMETER Force
-        If set the user will not be prompted for approval. Be causious!.
+        If specified, the user is not prompted for confirmation, enabling using the script as part of an automation  (Optional).
 
         .PARAMETER Category
-        Specifies the category of deleted functions.
+        Delete functions only if they belong to this category (Optional). For example, currently all ASIM functions use the category ASIM, which enables ensuring that the script delete only ASIM functions even when using wildcards.
 
         .PARAMETER Emulate
-        If used script will run without deleting functions
+        If specified, the script will run without actually deleting, enabling you to list the functions about to be deleted first.
+
         .EXAMPLE
-        PS> Delete-SentinelFunction DeleteM*, TestFunction* -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
+        PS> Delete-SentinelFunction TestFunction -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
+        Delete a specific function
+
+        .EXAMPLE
+        PS> Delete-SentinelFunction * -Category ASIM -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
+        Delete all ASIM functions (note that some older functions may not have this category)
+
+        .EXAMPLE
+        PS> Delete-SentinelFunction * -Emulate -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
+        List of functions in a workspace
 
         .LINK
         https://aka.ms/ASimDeleFunctionScript
+    
     #>
     [CmdletBinding(PositionalBinding=$false)]
     param(

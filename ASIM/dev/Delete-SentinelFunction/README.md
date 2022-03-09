@@ -1,26 +1,35 @@
-# Delete Log Analytics saved functions
+# Deletes saved functions from a Log Analytics workspace
 
-Use this tool to delete saved functions in a LA workspace
+This PowerShell script deletes saved functions from a Log Analytics workspace. It supports wildcards and enable batch cleaning the workspace from unneeded functions, especially when deploying a new function ARM tempalte such as those used by Microsoft Sentinel ASIM.
 
-To use:
+The script accepts the following parameters:
 
- `>>  Delete-LASavedFunction DeleteM*, TestFunction* -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg`
+| Parameter | Description |
+| --------- | ----------- |
+| FunctionName | A comma delimited list of names or wildcard patterns of the function to be delete. The list can also be specified without a parameter name. |
+| WorkspaceName | The workspace the functions should be deleted from. |
+| ResourceGroup | The resource group of the workspace. |
+| Force | If specified, the user is not prompted for confirmation, enabling using the script as part of an automation  (Optional). |
+| Category | Delete functions only if they belong to this category (Optional). For example, currently all ASIM functions use the category ASIM, which enables ensuring that the script delete only ASIM functions even when using wildcards. |
+| Emulate | If specified, the script will run without actually deleting, enabling you to list the functions about to be deleted first. |
+|||
 
-Parameters:
-- FunctionName:
-  Specifies a comma delimited list of saved function name to be deleted. Accepts wildchars. 
+For example:
 
-- WorkspaceName
-        Specifies the workspace where functions are saved.
+Delete a specific function
 
-- ResourceGroup
-        Specifies the resource group of workspace.
+``` PowerShell
+PS> Delete-SentinelFunction TestFunction -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
+```
 
-        
-- Force
-        If set the user will not be prompted for approval. Be causious!
+Delete all ASIM functions (note that some older functions may not have this category)
 
-- Category
-        Specifies the category of deleted functions.
+``` PowerShell
+PS> Delete-SentinelFunction * -Category ASIM -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
+```
 
+List of functions in a workspace
 
+``` PowerShell
+PS> Delete-SentinelFunction * -Emulate -Subscription "Contoso Production" -Workspace contosoc_ws -ResourceGroup soc_rg
+```
