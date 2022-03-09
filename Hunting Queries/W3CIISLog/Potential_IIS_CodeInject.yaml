@@ -15,7 +15,6 @@ relevantTechniques:
   - T1190
 query: |  
 
-  let lookback = 7d;
   // set cIP and csMethod count limit to indicate potentially noisy events, this will be listed at the top of the results 
   // for any returns that are gt or equal to the default of 50
   let cIP_MethodCountLimit = 50;
@@ -27,7 +26,6 @@ query: |
   // Include in the list expected IPs where remote methods such as vuln scanning may be expected for your environment
   let expectedIPs = dynamic(['X.X.X.X', 'Y.Y.Y.Y']);
   let codeInjectionAttempts = W3CIISLog
-  | where TimeGenerated >= ago(lookback)
   | extend cIPType = iff(cIP matches regex PrivateIPregex,"private" ,"public" )
   | where cIPType =="public"
   | where cIP !in (expectedIPs)
@@ -53,18 +51,18 @@ query: |
   | where array_length(arr) > 0
   | project-away pak;
   let cIP_MethodHighCount = codeInjectionAttempts 
-  | summarize StartTimeUtc = max(TimeGenerated), EndTimeUtc = min(TimeGenerated), cIP_MethodCount = count() 
+  | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), cIP_MethodCount = count() 
   by cIP, tostring(arr), cIP_MethodCountType = "High Count of cIP and csMethod, this may be noise" 
   | where cIP_MethodCount >=  cIP_MethodCountLimit;
   let codeInjectAtt = 
   codeInjectionAttempts 
-  | summarize StartTimeUtc = max(TimeGenerated), EndTimeUtc = min(TimeGenerated), cIP_MethodCount = count() 
+  | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), cIP_MethodCount = count() 
   by cIP, cIP_MethodCountType = "Count of repeated entries, this is to reduce rowsets returned", csMethod, 
   tostring(arr), csHost, scStatus, sIP, csUriStem, csUriQuery, csUserName, csUserAgent, csCookie, csReferer;
   // union the events and sort by cIP_MethodCount to identify potentially noisy entries.  Additionally, cIP_MethodCountType 
   // indicates whether it is a high count or simply a count of repeated entries
   (union isfuzzy=true
   cIP_MethodHighCount, codeInjectAtt
-  | sort by cIP_MethodCount desc, cIP desc, StartTimeUtc desc)
-  | extend timestamp = StartTimeUtc, IPCustomEntity = cIP, HostCustomEntity = csHost, AccountCustomEntity = csUserName, URLCustomEntity = csUriQuery
+  | sort by cIP_MethodCount desc, cIP desc, StartTime desc)
+  | extend timestamp = StartTime, IPCustomEntity = cIP, HostCustomEntity = csHost, AccountCustomEntity = csUserName, URLCustomEntity = csUriQuery
   

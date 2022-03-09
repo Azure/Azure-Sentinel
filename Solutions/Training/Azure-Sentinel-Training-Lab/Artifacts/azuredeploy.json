@@ -1,0 +1,203 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "The workspace name should include 4-63 letters, digits or '-'. The '-' shouldn't be the first or the last symbol"
+            }
+        }
+    },
+    "variables": {
+         "_artifactsLocation": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/"
+    },
+    "resources": [
+        {
+            "name": "workspaceCreation",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/workspace.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                        "value": "[parameters('workspaceName')]"
+                    },
+                    "pricingTier": {
+                        "value": "PerGB2018"
+                    },
+                    "dataRetention": {
+                        "value": 90
+                    },
+                    "location": {
+                        "value": "[resourceGroup().location]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "ingestEvents",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'workspaceCreation')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/ingestEvents.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "WorkspaceId": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceIdOutput.value]"
+                    },
+                    "SharedKey": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceKeyOutput.value]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "alertRules",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','workbook')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/alertRules.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                        "value": "[parameters('workspaceName')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "playbook",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/playbook.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "PlaybookName": {
+                        "value": "Get-GeoFromIpAndTagIncident"
+                    }
+                }
+            }
+        },
+        {
+            "name": "workbook",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/workbook.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workbookDisplayName": {
+                        "value": "[concat('Investigation Insights - ',parameters('workspaceName'))]"
+                    },
+                    "workbookSourceId": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceResourceIdOutput.value]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "Watchlist",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/watchlist.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                       "value": "[parameters('workspaceName')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2020-08-01",
+            "name": "[concat(parameters('workspaceName'), '/',uniqueString('solorigate'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+            ],
+            "properties": {
+                "etag": "*",
+                "Category": "Hunting Queries",
+                "DisplayName": "Solorigate Inventory check", 
+                "Query": "let timeframe = 7d;\r\n(union isfuzzy=true\r\n(Event\r\n| where TimeGenerated >= ago(timeframe)\r\n| where Source == \"Microsoft-Windows-Sysmon\"\r\n| where EventID in (17,18)\r\n| extend EvData = parse_xml(EventData)\r\n| extend EventDetail = EvData.DataItem.EventData.Data\r\n| extend NamedPipe = EventDetail.[5].[\"#text\"]\r\n| extend ProcessDetail = EventDetail.[6].[\"#text\"]\r\n| where NamedPipe contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n| extend Account = UserName\r\n| project-away EventDetail, EvData\r\n),\r\n(\r\nSecurityEvent_CL\r\n| where TimeGenerated >= ago(timeframe)\r\n| where EventID_s == '5145'\r\n| where AccessList_s has '%%4418' // presence of CreatePipeInstance value\r\n| where RelativeTargetName_g contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n)\r\n)\r\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account_s, HostCustomEntity = Computer",
+                    "Tags": [
+                        {
+                            "Name": "description",
+                            "Value": "On systems where the malicious SolarWinds DLL is running, it is known that the attacker used a hardcoded named pipe '583da945-62af-10e8-4902-a8f205c72b2e'. This activity can be detected if you are collecting Sysmon Event Id 17/18 or Security Event Id 5145"
+                        },
+                        {
+                            "Name": "tactics",
+                            "Value": "Execution"
+                        }
+                    ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2020-08-01",
+            "name": "[concat(parameters('workspaceName'), '/',uniqueString('OAuthApplications'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+            ],
+            "properties": {
+                "etag": "*",
+                "Category": "Hunting Queries",
+                "DisplayName": "Adding credentials to legitimate OAuth Applications", 
+                "Query": "AuditLogs_CL\r\n| where OperationName has_any (\"Add service principal\", \"Certificates and secrets management\")\r\n| where Result_s =~ \"success\"\r\n| mv-expand target = todynamic(TargetResources_s )\r\n| where tostring(tostring(parse_json(tostring(parse_json(InitiatedBy_s).user)).userPrincipalName)) has \"@\" or tostring(parse_json(InitiatedBy_s).displayName) has \"@\"\r\n| extend targetDisplayName = tostring(parse_json(TargetResources_s)[0].displayName)\r\n| extend targetId = tostring(parse_json(TargetResources_s)[0].id)\r\n| extend targetType = tostring(parse_json(TargetResources_s)[0].type)\r\n| extend eventtemp = todynamic(TargetResources_s)\r\n| extend keyEvents = eventtemp[0].modifiedProperties\r\n| mv-expand keyEvents\r\n| where keyEvents.displayName =~ \"KeyDescription\"\r\n| extend set1 = parse_json(tostring(keyEvents.newValue))\r\n| extend set2 = parse_json(tostring(keyEvents.oldValue))\r\n| extend diff = set_difference(set1, set2)\r\n| where isnotempty(diff)\r\n| parse diff with * \"KeyIdentifier=\" keyIdentifier: string \",KeyType=\" keyType: string \",KeyUsage=\" keyUsage: string \",DisplayName=\" keyDisplayName: string \"]\" *\r\n| where keyUsage == \"Verify\" or keyUsage == \"\"\r\n| extend AdditionalDetailsttemp = todynamic(AdditionalDetails_s)\r\n| extend UserAgent = iff(todynamic(AdditionalDetailsttemp[0]).key == \"User-Agent\", tostring(AdditionalDetailsttemp[0].value), \"\")\r\n| extend InitiatedByttemp = todynamic(InitiatedBy_s)\r\n| extend InitiatingUserOrApp = iff(isnotempty(InitiatedByttemp.user.userPrincipalName), tostring(InitiatedByttemp.user.userPrincipalName), tostring(InitiatedByttemp.app.displayName))\r\n| extend InitiatingIpAddress = iff(isnotempty(InitiatedByttemp.user.ipAddress), tostring(InitiatedByttemp.user.ipAddress), tostring(InitiatedByttemp.app.ipAddress))\r\n| project-away diff, set1, set2 , eventtemp ,AdditionalDetailsttemp, InitiatedByttemp\r\n| project-reorder TimeGenerated, OperationName,InitiatingUserOrApp,InitiatingIpAddress,UserAgent,targetDisplayName,targetId,targetType,keyDisplayName,keyType,keyUsage,keyIdentifier,CorrelationId\r\n| extend timestamp = TimeGenerated,AccountCustomEntity = InitiatingUserOrApp,IPCustomEntity = InitiatingIpAddress",
+                    "Tags": [
+                        {
+                            "Name": "description",
+                            "Value": "This query looks for Applications or Service Principals where new Key Credentials were added. This has been used by attackers to gain persistent access and elevate privileges."
+                        },
+                        {
+                            "Name": "tactics",
+                            "Value": "Persistence"
+                        },
+						{
+                            "Name": "techniques",
+                            "Value": "T1098"
+                        }
+                    ]
+            }
+        }
+    ],
+    "outputs": { 
+    }
+}

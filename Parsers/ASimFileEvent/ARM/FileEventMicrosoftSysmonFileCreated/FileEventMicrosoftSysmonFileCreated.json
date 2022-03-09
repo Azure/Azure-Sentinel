@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimFileEventMicrosoftSysmonCreated",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Sysmon Event 11 - Create File",
+            "category": "Security",
+            "FunctionAlias": "vimFileEventMicrosoftSysmonCreated",
+            "query": "// this is the parser for sysmon from Event table\n   let Sysmon11_Event=(){\n       Event\n       | where Source == \"Microsoft-Windows-Sysmon\"\n       | where EventID == 11\n       | parse EventData with '<DataItem type=\"System.XmlData\" time=\"'Time:datetime\n         '\" sourceHealthServiceId=\"'sourceHealthServiceId\n         '\"><EventData xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\"><Data Name=\"RuleName\">'RuleName:string\n         '</Data><Data Name=\"UtcTime\">'UtcTime:datetime'</Data><Data Name=\"ProcessGuid\">{'ProcessGuid:string\n         '}</Data><Data Name=\"ProcessId\">'ProcessId:string\n         '</Data><Data Name=\"Image\">'Image:string /// Image is the full path \n         '</Data><Data Name=\"TargetFilename\">'TargetFilename:string //// Full Path\n         '</Data><Data Name=\"CreationUtcTime\">'CreationUtcTime:datetime*\n       | parse EventData with *'<Data Name=\"User\">'ActorUsername'</Data>'*  // parsing will work only for newer versions of sysmon -> for older will remain empty field\n       | extend\n           EventType='FileCreated'\n           , EventProduct='Sysmon'\n           , EventSchemaVersion = '0.1.0'\n           , EventResult='Success'\n           , EventCount=int(1)\n           , EventStartTime = TimeGenerated\n           , EventEndTime = TimeGenerated\n           , DvcOs='Windows'\n           , TargetFileName_wo_Path=tostring(split(TargetFilename,'\\\\')[-1])\n       | project-rename\n           DvcHostname = Computer\n           , ActingProcessName = Image\n           , ActingProcessId = ProcessId\n           , ActingProcessGuid = ProcessGuid\n           , EventOriginalType=EventID\n           , TargetFileCreationTime=CreationUtcTime\n           , EventMessage=RenderedDescription\n           , TargetFilePath=TargetFilename\n           ,TargetFileName=TargetFileName_wo_Path\n       | extend\n              ActorUserType = iff(isnotempty(ActorUsername),'Windows', '')\n              // aliases\n               ,Process = ActingProcessName\n               , Dvc = DvcHostname\n               , FilePath = TargetFilePath\n               , User = ActorUsername\n       | project-away EventData, sourceHealthServiceId, ParameterXml\n               };\n   // this is the parser for sysmon from WindowsEvent table\n    let Sysmon11_windowsEvent=(){\n     WindowsEvent \n     | where Provider == \"Microsoft-Windows-Sysmon\"\n     | where EventID == 11\n     | extend \n             EventType = 'FileCreated',\n             EventProduct = 'Sysmon',\n             EventSchemaVersion = '0.1.0',\n             EventResult='Success',\n             EventCount=int(1),\n             EventStartTime = TimeGenerated,\n             EventEndTime = TimeGenerated,\n             EventMessage=tostring(EventData.RenderedDescription),\n             DvcOs='Windows',\n             TargetFileName = tostring(split(EventData.TargetFilename,'\\\\')[-1]),\n             TargetFileCreationTime=todatetime(EventData.CreationUtcTime),\n             TargetFilePath=tostring(EventData.TargetFilename),\n             ActingProcessName = tostring(EventData.Image),\n             ActingProcessId = toint(EventData.ProcessId),\n             ActingProcessGuid = tostring(EventData.ProcessGuid),\n             ActorUsername = tostring(EventData.User) // this field is relevant for newer versions of Sysmon\n     | project-rename\n             DvcHostname = Computer,\n             EventOriginalType=EventID\n     | extend \n             ActorUserType = iff(isnotempty(ActorUsername),'Windows', ''),\n             // aliases\n             Process = ActingProcessName,\n             Dvc = DvcHostname,\n             FilePath = TargetFilePath,\n             User = ActorUsername\n     | project-away EventData\n     };\n   union isfuzzy=true\n           Sysmon11_Event,\n           Sysmon11_windowsEvent",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,329 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This Logic App connector will act as a Webhook listener, CanaryTokens can then send data upon an incident when the canary token has been opened. This will send the data to Azure Sentinel - CanaryTokens_CL",
+        "author": "Nathan Swift"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Ingest-CanaryTokens",
+            "type": "String"
+        },
+        "WorkspaceID": {
+            "defaultValue": "your-workspaceID",
+            "type": "string"
+        },
+        "WorkspaceKey": {
+            "defaultValue": "your-workspaceKey",
+            "type": "securestring"
+        }
+    },
+    "variables": {
+        "azureloganalyticsdatacollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azureloganalyticsdatacollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "IngestCanaryTokenAlerts",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                },
+                "parameterValues": {
+                    "username": "[parameters('workspaceId')]",
+                    "password": "[parameters('workspaceKey')]"
+                }               
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollectorConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {}
+                        }
+                    },
+                    "actions": {
+                        "Compose_data_for_Sentinel": {
+                            "runAfter": {
+                                "Parse_JSON_GeoIp": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": {
+                                "as": "@{body('Parse_JSON_GeoIp')?['as']}",
+                                "canarytriggertime": "@body('Parse_JSON_Token_Response')?['time']",
+                                "channel": "@{body('Parse_JSON_Token_Response')?['channel']}",
+                                "city": "@{body('Parse_JSON_GeoIp')?['city']}",
+                                "country": "@{body('Parse_JSON_GeoIp')?['country']}",
+                                "countrycode": "@{body('Parse_JSON_GeoIp')?['countryCode']}",
+                                "fileloc": "@{body('Parse_JSON_Token_Response')?['additional_data']?['location']}",
+                                "incidentlist_csv": "@{variables('incidentscsv_url')}",
+                                "incidentlist_json": "@{variables('incidentsjson_url')}",
+                                "lat": "@{body('Parse_JSON_GeoIp')?['lat']}",
+                                "lon": "@{body('Parse_JSON_GeoIp')?['lon']}",
+                                "manage_url": " @{body('Parse_JSON_Token_Response')?['manage_url']}",
+                                "memo": "@{body('Parse_JSON_Token_Response')?['memo']}",
+                                "org": "@{body('Parse_JSON_GeoIp')?['org']}",
+                                "postal": "@{body('Parse_JSON_GeoIp')?['zip']}",
+                                "region": "@{body('Parse_JSON_GeoIp')?['region']}",
+                                "regionname": "@{body('Parse_JSON_GeoIp')?['regionName']}",
+                                "src_ip": "@{body('Parse_JSON_Token_Response')?['additional_data']?['src_ip']}",
+                                "timezone": "@{body('Parse_JSON_GeoIp')?['timezone']}",
+                                "tokenhistory_url": "@{variables('history_url')}",
+                                "useragent": "@{body('Parse_JSON_Token_Response')?['additional_data']?['useragent']}"
+                            }
+                        },
+                        "HTTP_CanaryTokenDetails": {
+                            "runAfter": {
+                                "Initialize_variable_incidentsjson_url": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "@variables('incidentsjson_url')"
+                            }
+                        },
+                        "HTTP_GeoIP": {
+                            "runAfter": {
+                                "HTTP_CanaryTokenDetails": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "http://ip-api.com/json/@{body('Parse_JSON_Token_Response')?['additional_data']?['src_ip']}"
+                            }
+                        },
+                        "Initialize_variable_TokenAuth": {
+                            "runAfter": {
+                                "Parse_JSON_Token_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TokenAuth",
+                                        "type": "string",
+                                        "value": "@{substring(body('Parse_JSON_Token_Response')?['manage_url'], 38)}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_history_url": {
+                            "runAfter": {
+                                "Initialize_variable_TokenAuth": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "history_url",
+                                        "type": "string",
+                                        "value": "https://canarytokens.org/history?token=@{variables('TokenAuth')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_incidentscsv_url": {
+                            "runAfter": {
+                                "Initialize_variable_history_url": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incidentscsv_url",
+                                        "type": "string",
+                                        "value": "https://canarytokens.org/download?fmt=incidentlist_csv&token=@{variables('TokenAuth')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_incidentsjson_url": {
+                            "runAfter": {
+                                "Initialize_variable_incidentscsv_url": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incidentsjson_url",
+                                        "type": "string",
+                                        "value": "https://canarytokens.org/download?fmt=incidentlist_json&token=@{variables('TokenAuth')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_GeoIp": {
+                            "runAfter": {
+                                "HTTP_GeoIP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_GeoIP')",
+                                "schema": {
+                                    "properties": {
+                                        "as": {
+                                            "type": "string"
+                                        },
+                                        "city": {
+                                            "type": "string"
+                                        },
+                                        "country": {
+                                            "type": "string"
+                                        },
+                                        "countryCode": {
+                                            "type": "string"
+                                        },
+                                        "isp": {
+                                            "type": "string"
+                                        },
+                                        "lat": {
+                                            "type": "number"
+                                        },
+                                        "lon": {
+                                            "type": "number"
+                                        },
+                                        "org": {
+                                            "type": "string"
+                                        },
+                                        "query": {
+                                            "type": "string"
+                                        },
+                                        "region": {
+                                            "type": "string"
+                                        },
+                                        "regionName": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "timezone": {
+                                            "type": "string"
+                                        },
+                                        "zip": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_Token_Response": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()",
+                                "schema": {
+                                    "properties": {
+                                        "additional_data": {
+                                            "properties": {
+                                                "location": {},
+                                                "referer": {},
+                                                "src_ip": {
+                                                    "type": "string"
+                                                },
+                                                "useragent": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "channel": {
+                                            "type": "string"
+                                        },
+                                        "manage_url": {
+                                            "type": "string"
+                                        },
+                                        "memo": {
+                                            "type": "string"
+                                        },
+                                        "time": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Send_Data_to_Sentinel": {
+                            "runAfter": {
+                                "Compose_data_for_Sentinel": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{outputs('Compose_data_for_Sentinel')}",
+                                "headers": {
+                                    "Log-Type": "CanaryTokens"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "AzureLogAnalyticsDataCollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('azureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

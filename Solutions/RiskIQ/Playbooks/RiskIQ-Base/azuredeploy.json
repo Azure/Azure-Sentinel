@@ -1,0 +1,99 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "Establish the needed base resources to leverage with all RiskIQ playbooks.",
+        "author": "Brandon Dixon, RiskIQ"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RiskIQ-Base",
+            "type": "string"
+        },
+        "RiskiqEmail": {
+            "defaultValue": "<your-email-here@example.com>",
+            "type": "string"
+        },
+        "RiskiqApiKey": {
+            "defaultValue": "<your-api-key-here>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "RiskIQConnectionName": "riskiq-shared"
+    },
+    "resources": [{
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('RiskIQConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+            "displayName": "RiskIQ-Shared",
+            "parameterValues": {
+                "username": "[parameters('RiskiqEmail')]",
+                "password": "[parameters('RiskiqApiKey')]"
+            },
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+            }
+        }
+    }, {
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2017-07-01",
+        "name": "[parameters('PlaybookName')]",
+        "location": "[resourceGroup().location]",
+        "tags": {
+            "LogicAppsCategory": "security"
+        },
+        "dependsOn": [
+            "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]"
+        ],
+        "properties": {
+            "state": "Enabled",
+            "definition": {
+                "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                "actions": {
+                    "Get_account_metadata_and_settings": {
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['riskiqpassivetotal']['connectionId']"
+                                }
+                            },
+                            "method": "get",
+                            "path": "/account"
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                    }
+                },
+                "contentVersion": "1.0.0.0",
+                "outputs": {},
+                "parameters": {
+                    "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    }
+                },
+                "triggers": {
+                    "manual": {
+                        "inputs": {},
+                        "kind": "Http",
+                        "type": "Request"
+                    }
+                }
+            },
+            "parameters": {
+                "$connections": {
+                    "value": {
+                        "riskiqpassivetotal": {
+                            "connectionId": "[resourceId('Microsoft.Web/connections', variables('RiskIQConnectionName'))]",
+                            "connectionName": "[variables('RiskIQConnectionName')]",
+                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/riskiqpassivetotal')]"
+                        }
+                    }
+                }
+            }
+        }
+    }]
+}

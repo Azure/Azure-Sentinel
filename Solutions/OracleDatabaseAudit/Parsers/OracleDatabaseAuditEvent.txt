@@ -1,0 +1,230 @@
+// Usage Instruction :
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias as OracleDatabaseAuditEvent.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. OracleDatabaseAuditEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+let oracledb_type_1 =() {
+Syslog
+| where SyslogMessage matches regex @".*ACTION(\s)?:\[\d+\]\s\'(.*?)\s"
+| extend EventVendor = 'Oracle'
+| extend EventProduct = 'Oracle Audit'
+| extend MessageLength = extract(@"LENGTH(\s)?: \'(\d+)\'", 2, SyslogMessage)
+| extend Action = extract(@"ACTION(\s)?:\[\d+\] \'(.*?)\'\s+DATABASE USER", 2, SyslogMessage)
+| extend ActionLength = extract(@"ACTION(\s)?:\[(\d+)\] \'(.*?)\'\s+DATABASE USER", 2, SyslogMessage)
+| extend DbAction = toupper(extract(@"ACTION(\s)?:\[\d+\] \'(?i)(SELECT|CREATE|ALTER|DROP|read|declare|BEGIN|Copy|CONNECT|COMMIT)(\s|\')", 2, SyslogMessage))
+| extend DstUserName = extract(@"DATABASE USER(\s)?:\[\d+\]\s\'(.*?)\'\s+PRIVILEGE", 2, SyslogMessage)
+| extend Privilege = extract(@"PRIVILEGE(\s)?:\[\d+\]\s\'(.*?)\'", 2, SyslogMessage)
+| extend SrcUserName = extract(@"CLIENT USER(\s)?:\[\d+\]\s\'(.*?)\'", 2, SyslogMessage)
+| extend ClientTerminal = extract(@"CLIENT TERMINAL(\s)?:\[\d+\] \'(.*?)\'", 2, SyslogMessage)
+| extend Status = extract(@"STATUS(\s)?:\[\d+\]\s\'(.*?)\'" , 2, SyslogMessage)
+| extend DbId = extract(@"DBID(\s)?:\[\d+\]\s\'(.*?)\'" , 2, SyslogMessage)
+| extend SrcIpAddr = extract(@'HOST=(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, SyslogMessage)
+| extend SrcPortNumber = extract(@'PORT=(\d{1,5})', 1, SyslogMessage)
+};
+let oracledb_type_2 =() {
+Syslog
+| where SyslogMessage matches regex @"STATEMENT(\s)?:\[\d+\]"
+| extend EventVendor = 'Oracle'
+| extend EventProduct = "Oracle Audit"
+| extend MessageLength = extract(@'LENGTH(\s)?:(\s)?(\d+)\s+', 3, SyslogMessage)
+| extend SessionId = extract(@'SESSIONID(\s)?:\[\d+\]\s+(\d+)\s+', 2, SyslogMessage)
+| extend EntryId = extract(@'ENTRYID(\s)?:\[\d+\]\s+(\d+)\s+', 2, SyslogMessage)
+| extend Statement = extract(@'STATEMENT(\s)?:\[\d+\]\s+(\d+)\s+', 2, SyslogMessage)
+| extend SrcUserName = extract(@'USERID(\s)?:\[\d+\]\s+(.*?)\s+USERHOST"', 2, SyslogMessage)
+| extend SrcDvcHostname = extract(@'USERHOST(\s)?:\[\d+\]\s+(.*?)\s+(ACTION|TERMINAL)', 2, SyslogMessage)
+| extend Action = extract(@'ACTION(\s)?:\[\d+\]\s+(.*?)\s+RETURNCODE', 2, SyslogMessage)
+| extend ActionLength = extract(@'ACTION(\s)?:\[(\d+)\]\s+(.*?)\s+RETURNCODE', 2, SyslogMessage)
+| extend DbAction = case(Action == '1', 'CREATE TABLE',
+                         Action == '2', 'INSERT',
+                         Action == '3', 'SELECT',
+                         Action == '4', 'CREATE CLUSTER',
+                         Action == '5', 'ALTER CLUSTER',
+                         Action == '6', 'UPDATE',
+                         Action == '7', 'DELETE',
+                         Action == '8', 'DROP CLUSTER',
+                         Action == '9', 'CREATE INDEX',
+                         Action == '10', 'DROP INDEX',
+                         Action == '11', 'ALTER INDEX',
+                         Action == '12', 'DROP TABLE',
+                         Action == '13', 'CREATE SEQUENCE',
+                         Action == '14', 'ALTER SEQUENCE',
+                         Action == '15', 'ALTER TABLE',
+                         Action == '16', 'DROP SEQUENCE',
+                         Action == '17', 'GRANT OBJECT',
+                         Action == '18', 'REVOKE OBJECT',
+                         Action == '19', 'CREATE SYNONYM',
+                         Action == '20', 'DROP SYNONYM',
+                         Action == '21', 'CREATE VIEW',
+                         Action == '22', 'DROP VIEW',
+                         Action == '23', 'VALIDATE INDEX',
+                         Action == '24', 'CREATE PROCEDURE',
+                         Action == '25', 'ALTER PROCEDURE',
+                         Action == '26', 'LOCK',
+                         Action == '27', 'NO-OP',
+                         Action == '28', 'RENAME',
+                         Action == '29', 'COMMENT',
+                         Action == '30', 'AUDIT OBJECT',
+                         Action == '31', 'NOAUDIT OBJECT',
+                         Action == '32', 'CREATE DATABASE LINK',
+                         Action == '33', 'DROP DATABASE LINK',
+                         Action == '34', 'CREATE DATABASE',
+                         Action == '35', 'ALTER DATABASE',
+                         Action == '36', 'CREATE ROLLBACK SEG',
+                         Action == '37', 'ALTER ROLLBACK SEG',
+                         Action == '38', 'DROP ROLLBACK SEG',
+                         Action == '39', 'CREATE TABLESPACE',
+                         Action == '40', 'ALTER TABLESPACE',
+                         Action == '41', 'DROP TABLESPACE',
+                         Action == '42', 'ALTER SESSION',
+                         Action == '43', 'ALTER USER',
+                         Action == '44', 'COMMIT',
+                         Action == '45', 'ROLLBACK',
+                         Action == '46', 'SAVEPOINT',
+                         Action == '47', 'PL/SQL EXECUTE',
+                         Action == '48', 'SET TRANSACTION',
+                         Action == '49', 'ALTER SYSTEM',
+                         Action == '50', 'EXPLAIN',
+                         Action == '51', 'CREATE USER',
+                         Action == '52', 'CREATE ROLE',
+                         Action == '53', 'DROP USER',
+                         Action == '54', 'DROP ROLE',
+                         Action == '55', 'SET ROLE',
+                         Action == '56', 'CREATE SCHEMA',
+                         Action == '57', 'CREATE CONTROL FILE',
+                         Action == '59', 'CREATE TRIGGER',
+                         Action == '60', 'ALTER TRIGGER',
+                         Action == '61', 'DROP TRIGGER',
+                         Action == '62', 'ANALYZE TABLE',
+                         Action == '63', 'ANALYZE INDEX',
+                         Action == '64', 'ANALYZE CLUSTER',
+                         Action == '65', 'CREATE PROFILE',
+                         Action == '66', 'DROP PROFILE',
+                         Action == '67', 'ALTER PROFILE',
+                         Action == '68', 'DROP PROCEDURE',
+                         Action == '70', 'ALTER RESOURCE COST',
+                         Action == '71', 'CREATE MATERIALIZED VIEW LOG',
+                         Action == '72', 'ALTER MATERIALIZED VIEW LOG',
+                         Action == '73', 'DROP MATERIALIZED VIEW LOG',
+                         Action == '74', 'CREATE MATERIALIZED VIEW',
+                         Action == '75', 'ALTER MATERIALIZED VIEW',
+                         Action == '76', 'DROP MATERIALIZED VIEW',
+                         Action == '77', 'CREATE TYPE',
+                         Action == '78', 'DROP TYPE',
+                         Action == '79', 'ALTER ROLE',
+                         Action == '80', 'ALTER TYPE',
+                         Action == '81', 'CREATE TYPE BODY',
+                         Action == '82', 'ALTER TYPE BODY',
+                         Action == '83', 'DROP TYPE BODY',
+                         Action == '84', 'DROP LIBRARY',
+                         Action == '85', 'TRUNCATE TABLE',
+                         Action == '86', 'TRUNCATE CLUSTER',
+                         Action == '91', 'CREATE FUNCTION',
+                         Action == '92', 'ALTER FUNCTION',
+                         Action == '93', 'DROP FUNCTION',
+                         Action == '94', 'CREATE PACKAGE',
+                         Action == '95', 'ALTER PACKAGE',
+                         Action == '96', 'DROP PACKAGE',
+                         Action == '97', 'CREATE PACKAGE BODY',
+                         Action == '98', 'ALTER PACKAGE BODY',
+                         Action == '99', 'DROP PACKAGE BODY',
+                         Action == '100', 'LOGON',
+                         Action == '101', 'LOGOFF',
+                         Action == '102', 'LOGOFF BY CLEANUP',
+                         Action == '103', 'SESSION REC',
+                         Action == '104', 'SYSTEM AUDIT',
+                         Action == '105', 'SYSTEM NOAUDIT',
+                         Action == '106', 'AUDIT DEFAULT',
+                         Action == '107', 'NOAUDIT DEFAULT',
+                         Action == '108', 'SYSTEM GRANT',
+                         Action == '109', 'SYSTEM REVOKE',
+                         Action == '110', 'CREATE PUBLIC SYNONYM',
+                         Action == '111', 'DROP PUBLIC SYNONYM',
+                         Action == '112', 'CREATE PUBLIC DATABASE LINK',
+                         Action == '113', 'DROP PUBLIC DATABASE LINK',
+                         Action == '114', 'GRANT ROLE',
+                         Action == '115', 'REVOKE ROLE',
+                         Action == '116', 'EXECUTE PROCEDURE',
+                         Action == '117', 'USER COMMENT',
+                         Action == '118', 'ENABLE TRIGGER',
+                         Action == '119', 'DISABLE TRIGGER',
+                         Action == '120', 'ENABLE ALL TRIGGERS',
+                         Action == '121', 'DISABLE ALL TRIGGERS',
+                         Action == '122', 'NETWORK ERROR',
+                         Action == '123', 'EXECUTE TYPE',
+                         Action == '128', 'FLASHBACK',
+                         Action == '129', 'CREATE SESSION',
+                         Action == '157', 'CREATE DIRECTORY',
+                         Action == '158', 'DROP DIRECTORY',
+                         Action == '159', 'CREATE LIBRARY',
+                         Action == '160', 'CREATE JAVA',
+                         Action == '161', 'ALTER JAVA',
+                         Action == '162', 'DROP JAVA',
+                         Action == '163', 'CREATE OPERATOR',
+                         Action == '164', 'CREATE INDEXTYPE',
+                         Action == '165', 'DROP INDEXTYPE',
+                         Action == '167', 'DROP OPERATOR',
+                         Action == '168', 'ASSOCIATE STATISTICS',
+                         Action == '169', 'DISASSOCIATE STATISTICS',
+                         Action == '170', 'CALL METHOD',
+                         Action == '171', 'CREATE SUMMARY',
+                         Action == '172', 'ALTER SUMMARY',
+                         Action == '173', 'DROP SUMMARY',
+                         Action == '174', 'CREATE DIMENSION',
+                         Action == '175', 'ALTER DIMENSION',
+                         Action == '176', 'DROP DIMENSION',
+                         Action == '177', 'CREATE CONTEXT',
+                         Action == '178', 'DROP CONTEXT',
+                         Action == '179', 'ALTER OUTLINE',
+                         Action == '180', 'CREATE OUTLINE',
+                         Action == '181', 'DROP OUTLINE',
+                         Action == '182', 'UPDATE INDEXES',
+                         Action == '183', 'ALTER OPERATOR',
+                         Action == '197', 'PURGE USER_RECYCLEBIN',
+                         Action == '198', 'PURGE DBA_RECYCLEBIN',
+                         Action == '199', 'PURGE TABLESAPCE',
+                         Action == '200', 'PURGE TABLE',
+                         Action == '201', 'PURGE INDEX',
+                         Action == '202', 'UNDROP OBJECT',
+                         Action == '204', 'FLASHBACK DATABASE',
+                         Action == '205', 'FLASHBACK TABLE',
+                         Action == '206', 'CREATE RESTORE POINT',
+                         Action == '207', 'DROP RESTORE POINT',
+                         Action == '208', 'PROXY AUTHENTICATION ONLY',
+                         Action == '209', 'DECLARE REWRITE EQUIVALENCE',
+                         Action == '210', 'ALTER REWRITE EQUIVALENCE',
+                         Action == '211', 'DROP REWRITE EQUIVALENCE',
+                         'UNKNOWN ACTION'
+                         )
+| extend ReturnCode = extract(@'RETURNCODE(\s)?:\[\d+\]\s+(\d+)\s+', 2, SyslogMessage)
+| extend ObjCreator = extract(@'OBJ(\s)?:\[\d+\]\s+(.*?)\s+OBJ', 2, SyslogMessage)
+| extend ObjName = extract(@'OBJ.*?OBJ(\s)?:\[\d+\]\s+(.*?)\s+OS', 2, SyslogMessage)
+| extend OsUserId = extract(@'OS(\s)?:\[\d+\]\s+(.*?)\s+', 2, SyslogMessage)
+| extend ClientTerminal =  extract(@'TERMINAL(\s)?:\[\d+\]\s+(.*?)\s+ACTION', 2, SyslogMessage)
+| extend DbId = extract(@'DBID(\s)?:\[\d+\]\s+(\d+)', 2, SyslogMessage)
+| extend SrcIpAddr = extract(@'HOST=(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, SyslogMessage)
+| extend SrcPortNumber = extract(@'PORT=(\d{1,5})', 1, SyslogMessage)
+};
+union isfuzzy=true oracledb_type_1, oracledb_type_2
+| project TimeGenerated
+        , EventVendor
+        , EventProduct
+        , SeverityLevel
+        , MessageLength
+        , Action
+        , ActionLength
+        , DbAction
+        , DstUserName
+        , Privilege
+        , SrcUserName
+        , ClientTerminal
+        , Status
+        , DbId
+        , SessionId
+        , EntryId
+        , Statement
+        , SrcDvcHostname
+        , SrcIpAddr
+        , SrcPortNumber
+        , ReturnCode
+        , ObjCreator
+        , ObjName
+        , OsUserId

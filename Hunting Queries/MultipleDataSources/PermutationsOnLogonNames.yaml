@@ -18,11 +18,10 @@ relevantTechniques:
   - T1110
 query: |
 
-  let lookback = 1d;
   let fl_Min = 3;
   let un_MatchMin = 2;
-  let upnFunc = (startTimeSpan:timespan, tableName:string){
-  table(tableName) | where TimeGenerated >= ago(lookback)
+  let upnFunc = (tableName:string){
+  table(tableName) 
   | extend Operation = columnifexists("Operation", "Sign-in activity")
   | where Operation == "UserLoginFailed" or Operation == "Sign-in activity"
   | extend Result = columnifexists("ResultType", "tempValue")
@@ -45,8 +44,8 @@ query: |
   UserNameOnly contains "-", split(UserNameOnly, "-"),
   UserNameOnly contains "_", split(UserNameOnly, "_"),
   UserNameOnly)
-  | extend First = iff(isnotempty(tostring(parsejson(unoArray)[0])), tostring(parsejson(unoArray)[0]),tostring(unoArray))
-  | extend Last = tostring(parsejson(unoArray)[1])
+  | extend First = iff(isnotempty(tostring(parse_json(unoArray)[0])), tostring(parse_json(unoArray)[0]),tostring(unoArray))
+  | extend Last = tostring(parse_json(unoArray)[1])
   | extend First4char = iff(countof(substring(First, 0,4), '[0-9A-Za-z]', "regex") >= 4, substring(First, 0,4), "LessThan4"),
   First6char = iff(countof(substring(First, 0,6), '[0-9A-Za-z]', "regex") >= 6, substring(First, 0,6), "LessThan6"),
   First8char = iff(countof(substring(First, 0,8), '[0-9A-Za-z]', "regex") >= 8, substring(First, 0,8), "LessThan8"),
@@ -57,8 +56,8 @@ query: |
   | summarize UserNames = makeset(UserNameOnly),
   fl_Count = count() by bin(TimeGenerated, 10m), First4char, First6char, First8char, Last4char, Last6char, Last8char, Type
   };
-  let SigninList = upnFunc(lookback,"SigninLogs");
-  let OffActList = upnFunc(lookback,"OfficeActivity");
+  let SigninList = upnFunc("SigninLogs");
+  let OffActList = upnFunc("OfficeActivity");
   let UserNameList = (union isfuzzy=true SigninList, OffActList);
   let Char4List = UserNameList
   | project TimeGenerated, First4char, Last4char, UserNames, fl_Count, Type

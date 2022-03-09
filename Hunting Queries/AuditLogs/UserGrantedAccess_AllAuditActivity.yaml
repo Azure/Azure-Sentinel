@@ -3,7 +3,7 @@ name: User Granted Access and associated audit activity
 description: |
   'Identifies when a new user is granted access and any subsequent audit related activity.  This can help you identify rogue or malicious user behavior.'
 requiredDataConnectors:
-  - connectorId: AzureActivity
+  - connectorId: AzureActiveDirectory
     dataTypes:
       - AuditLogs
 tactics:
@@ -15,13 +15,16 @@ relevantTechniques:
   - T1078
   - T1496
 query: |
-  let auditLookback = 14d;
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime - 14d;
   let opName = dynamic(["Add user", "Invite external user"]);
   // Setting threshold to 3 as a default, change as needed.  Any operation that has been initiated by a user or app more than 3 times in the past 14 days will be excluded
   let threshold = 3;
   // Helper function to extract relevant fields from AuditLog events
   let auditLogEvents = view (startTimeSpan:timespan)  {
-      AuditLogs | where TimeGenerated >= ago(auditLookback)
+      AuditLogs | where TimeGenerated >= auditLookback
       | extend ModProps = iff(TargetResources.[0].modifiedProperties != "[]", TargetResources.[0].modifiedProperties, todynamic("NoValues"))
       | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
       tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
@@ -38,7 +41,7 @@ query: |
       | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
       | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName ) 
       | mvexpand ModProps
-      | extend PropertyName = tostring(ModProps.displayName), newValue = replace("\"","",tostring(ModProps.newValue));
+      | extend PropertyName = tostring(ModProps.displayName), newValue = replace('\"','',tostring(ModProps.newValue));
   };
   let HistoricalAdd = auditLogEvents(auditLookback)
   | where OperationName in~ (opName)
@@ -64,6 +67,16 @@ query: |
   Results
   | extend newValue = split(newValue, ";")
   | extend PropertyUpdate = pack(PropertyName, newValue, "Id", Id)
-  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) 
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) 
   by InitiatedBy, IpAddress, TargetUserName, TargetResourceName, OperationName, CorrelationId
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = InitiatedBy, HostCustomEntity = TargetResourceName, IPCustomEntity = IpAddress
+  | extend timestamp = StartTime, AccountCustomEntity = InitiatedBy, IPCustomEntity = IpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

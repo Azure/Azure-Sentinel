@@ -1,0 +1,1004 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block URL - Palo Alto Wildfire and PAN-OS",
+        "description": "This playbook used to add verdict URL security policy rules",
+        "mainSteps": [ "1. Fetches detailed verdict information of the URL.", "2. Checks for verdict status. If it is benign then it closes the incident with URL verdict information.", "3. If verdict status is other than benign (phishing, malware, grayware) then it creates the address object for URL and adds address object to the security policy rules." ],
+        "prerequisites": [
+            "1. Palo Alto WildFire Custom Connector and Palo Alto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+            "2. Generate wildfire API key to establish the connection to wildfire custom connector.",
+            "3. Security policy rule in the Palo Alto PAN-OS VM."
+        ],
+        "prerequisitesDeployTemplateFile": [ "../../WildfireConnector/azuredeploy.json" ],
+        "lastUpdateTime": "2021-07-27T00:00:00.000Z",
+        "entities": [ "URL" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Block-URL-PaloAltoWildFire",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Block URL Playbook Name"
+            },
+            "minLength": 3
+        },
+        "WildfireCustomConnectorName": {
+            "defaultValue": "PaloAltoWildFire",
+            "type": "String",
+            "metadata": {
+                "description": "Enter Palo Alto WildFire Custom Connector Name"
+            },
+            "minLength": 3
+        },
+        "PAN-OSCustomConnectorName": {
+            "defaultValue": "PaloAltoPANOS",
+            "type": "String",
+            "metadata": {
+                "description": "Enter Palo Alto PAN-OS Custom Connector Name"
+            },
+            "minLength": 3
+        },
+        "WildfireAPIKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter WildFire API Key"
+            },
+            "minLength": 3
+        },
+        "SecurityPolicyRule": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Security Policy Rule Name - Created in PAN-OS"
+            },
+            "minLength": 3
+        }
+    },
+    "variables": {
+        "WildFireConnectionName": "[concat('WildFireConnector-', parameters('PlaybookName'))]",
+        "PANOSConnectionName": "[concat('PANOSConnector-', parameters('PlaybookName'))]",
+        "AzureSentinelConnectionName": "[concat('AzureSentinelConnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('WildFireConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('WildfireCustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('PANOSConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PAN-OSCustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },        
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('PANOSConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('WildFireConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "APIKey": {
+                            "defaultValue": "[parameters('WildfireAPIKey')]",
+                            "type": "SecureString"
+                        },
+                        "SecurityPolicyRule": {
+                            "defaultValue": "[parameters('SecurityPolicyRule')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_icon_to_the_comment": {
+                            "runAfter": {
+                                "Append_consolidated_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://avatars.githubusercontent.com/u/4855743?s=200&v=4\",alt=\"Lamp\" width=\"32\" height=\"32\" />",
+                            "description": "Wildfire logo for incident comment"
+                        },
+                        "Append_consolidated_comment": {
+                            "runAfter": {
+                                "Check_for_malicious_verdict": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                                "name": "finalConsolidatedcomments",
+                                "value": "@variables('incidentComment')"
+                            },
+                            "description": "consolidate comments of each iteration to update to incident"
+                        },
+                        "Check_for_malicious_verdict": {
+                            "actions": {
+                                "Append_incident_comment": {
+                                    "runAfter": {
+                                        "Create_HTML_table_for_verdict": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "incidentComment",
+                                        "value": "<b>Below list of URL(s) is/are associated with incident.</b>\n@{body('Create_HTML_table_for_verdict')}"
+                                    },
+                                    "description": "To append incident comment"
+                                },
+                                "Create_HTML_table_for_verdict": {
+                                    "runAfter": {},
+                                    "type": "Table",
+                                    "inputs": {
+                                        "columns": [
+                                            {
+                                                "header": "URL",
+                                                "value": "@item()?['URL']"
+                                            },
+                                            {
+                                                "header": "Verdict",
+                                                "value": "@item()?['Wildfire_Verdict']"
+                                            },
+                                            {
+                                                "header": "Security Policy Rule",
+                                                "value": "@parameters('SecurityPolicyRule')"
+                                            },
+                                            {
+                                                "header": "Action Taken",
+                                                "value": "Blocked"
+                                            }
+                                        ],
+                                        "format": "HTML",
+                                        "from": "@variables('ConsolidatedverdictArray')"
+                                    },
+                                    "description": "Create HTML table for verdict "
+                                },
+                                "Set_classification_reason_variable": {
+                                    "runAfter": {
+                                        "Append_incident_comment": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ClassificationReason",
+                                        "value": "TruePositive - SuspiciousActivity"
+                                    },
+                                    "description": "to store classification reason"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_classification_reason_variable_for_benign": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "ClassificationReason",
+                                            "value": "BenignPositive - SuspiciousButExpected"
+                                        },
+                                        "description": "To store classification reason"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@variables('ConsolidatedverdictArray')",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Condition to check if verdict array has values"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each_URL": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "Check_if_URL_is_benign": {
+                                    "actions": {
+                                        "Add_incident_comment": {
+                                            "runAfter": {
+                                                "Create_HTML_table_for_benign_verdict": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "incidentComment",
+                                                "value": "<b>Below table provides the list of Benign URL(s)</b>\n@{body('Create_HTML_table_for_benign_verdict')}"
+                                            },
+                                            "description": "To store incident comment"
+                                        },
+                                        "Create_HTML_table_for_benign_verdict": {
+                                            "runAfter": {},
+                                            "type": "Table",
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "URL",
+                                                        "value": "@body('Parse_verdict_JSON')?['get-verdict-info']?['url']"
+                                                    },
+                                                    {
+                                                        "header": "Verdict",
+                                                        "value": "Benign"
+                                                    },
+                                                    {
+                                                        "header": "Analysis Time",
+                                                        "value": "@body('Parse_verdict_JSON')?['get-verdict-info']?['analysis_time']"
+                                                    },
+                                                    {
+                                                        "header": "Valid",
+                                                        "value": "@body('Parse_verdict_JSON')?['get-verdict-info']?['valid']"
+                                                    },
+                                                    {
+                                                        "header": "Comment",
+                                                        "value": "The sample is safe and does not exhibit malicious behavior."
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@createArray(body('Parse_verdict_JSON'))"
+                                            },
+                                            "description": "To create html table for incident comment"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_verdict_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Check_if_address_object_exists": {
+                                                "actions": {
+                                                    "Check_if_security_rule_applied_to_URL": {
+                                                        "actions": {
+                                                            "Append_consolidated_verdict": {
+                                                                "runAfter": {
+                                                                    "Append_verdict_object": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "ConsolidatedverdictArray",
+                                                                    "value": "@variables('verdictObject')"
+                                                                },
+                                                                "description": "To append verdict object"
+                                                            },
+                                                            "Append_verdict_object": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "verdictObject",
+                                                                    "value": {
+                                                                        "URL": "@{items('For_each_URL')?['Url']}",
+                                                                        "Wildfire_Verdict": "@{variables('verdictDescription')}"
+                                                                    }
+                                                                },
+                                                                "description": " For existing address object "
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Filter_security_policy_member": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "greater": [
+                                                                        "@length(body('Filter_security_policy_member'))",
+                                                                        0
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If",
+                                                        "description": "Check if security rule applied to URL"
+                                                    },
+                                                    "Filter_security_policy_member": {
+                                                        "runAfter": {},
+                                                        "type": "Query",
+                                                        "inputs": {
+                                                            "from": "@body('Get_existing_member_of_the_security_rules')?['result']?['entry']",
+                                                            "where": "@contains(item()?['destination']?['member'], items('For_each_URL')?['Url'])"
+                                                        },
+                                                        "description": "To filter security policy based on URL"
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Filter_address_object": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Create_address_object_to_apply_security_rule": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "entry": {
+                                                                        "@@name": "@items('For_each_URL')?['Url']",
+                                                                        "description": "@items('For_each_URL')?['Url']",
+                                                                        "fqdn": "@items('For_each_URL')?['Url']"
+                                                                    }
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/restapi/v10.0/Objects/Addresses",
+                                                                "queries": {
+                                                                    "address type": "fqdn",
+                                                                    "location": "vsys",
+                                                                    "name": "@items('For_each_URL')?['Url']",
+                                                                    "vsys": "vsys1"
+                                                                }
+                                                            },
+                                                            "description": "Create address object to apply security rule"
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "greater": [
+                                                                "@length(body('Filter_address_object'))",
+                                                                0
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If",
+                                                "description": "Check address object exists for the URL"
+                                            },
+                                            "Check_if_the_URL_is_added_to_security_policy_rules": {
+                                                "actions": {
+                                                    "Add_address_objects_to_security_policy_rules": {
+                                                        "runAfter": {
+                                                            "Append_destination_member": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "entry": {
+                                                                    "@@name": "@parameters('SecurityPolicyRule')",
+                                                                    "action": "allow",
+                                                                    "application": {
+                                                                        "member": "any"
+                                                                    },
+                                                                    "category": {
+                                                                        "member": "any"
+                                                                    },
+                                                                    "destination": {
+                                                                        "member": "@variables('destinationMembers')"
+                                                                    },
+                                                                    "from": {
+                                                                        "member": "any"
+                                                                    },
+                                                                    "hip-profiles": {
+                                                                        "member": "any"
+                                                                    },
+                                                                    "service": {
+                                                                        "member": "any"
+                                                                    },
+                                                                    "source": {
+                                                                        "member": "any"
+                                                                    },
+                                                                    "source-user": {
+                                                                        "member": "any"
+                                                                    },
+                                                                    "to": {
+                                                                        "member": "any"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "put",
+                                                            "path": "/restapi/v10.0/Policies/SecurityRules",
+                                                            "queries": {
+                                                                "location": "vsys",
+                                                                "name": "@parameters('SecurityPolicyRule')",
+                                                                "vsys": "vsys1"
+                                                            }
+                                                        },
+                                                        "description": "Add address objects to security policy rules"
+                                                    },
+                                                    "Append_consolidated_verdict_for_new_URL": {
+                                                        "runAfter": {
+                                                            "Append_verdict_object_for_new_URL": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "ConsolidatedverdictArray",
+                                                            "value": "@variables('verdictObject')"
+                                                        },
+                                                        "description": "To store verdict object"
+                                                    },
+                                                    "Append_destination_member": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "destinationMembers",
+                                                            "value": "@items('For_each_URL')?['Url']"
+                                                        },
+                                                        "description": "To append destination member"
+                                                    },
+                                                    "Append_verdict_object_for_new_URL": {
+                                                        "runAfter": {
+                                                            "Add_address_objects_to_security_policy_rules": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "verdictObject",
+                                                            "value": {
+                                                                "URL": "@{items('For_each_URL')?['Url']}",
+                                                                "Wildfire_Verdict": "@{variables('verdictDescription')}"
+                                                            }
+                                                        },
+                                                        "description": "To store verdict object"
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Check_if_address_object_exists": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "expression": {
+                                                    "or": [
+                                                        {
+                                                            "equals": [
+                                                                "@empty(body('Filter_address_object'))",
+                                                                true
+                                                            ]
+                                                        },
+                                                        {
+                                                            "equals": [
+                                                                "@empty(body('Filter_security_policy_member'))",
+                                                                true
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If",
+                                                "description": "Check if the URL is added to security policy rules"
+                                            },
+                                            "Filter_address_object": {
+                                                "runAfter": {
+                                                    "Switch_for_verdict_value": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Query",
+                                                "inputs": {
+                                                    "from": "@body('Get_address_list')?['result']?['entry']",
+                                                    "where": "@equals(item()?['@name'], items('For_each_URL')?['Url'])"
+                                                },
+                                                "description": "To filter address object based on URL"
+                                            },
+                                            "Get_address_list": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "get",
+                                                    "path": "/restapi/v10.0/Objects/Addresses",
+                                                    "queries": {
+                                                        "location": "vsys",
+                                                        "vsys": "vsys1"
+                                                    }
+                                                },
+                                                "description": " Get list of address object filtered by address object name from PAN OS VM"
+                                            },
+                                            "Get_existing_member_of_the_security_rules": {
+                                                "runAfter": {
+                                                    "Get_address_list": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['PANOSConnector']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "get",
+                                                    "path": "/restapi/v10.0/Policies/SecurityRules",
+                                                    "queries": {
+                                                        "location": "vsys",
+                                                        "name": "@parameters('SecurityPolicyRule')",
+                                                        "vsys": "vsys1"
+                                                    }
+                                                },
+                                                "description": "Fetch the existing member of the security rules from PAN OS VM"
+                                            },
+                                            "Switch_for_verdict_value": {
+                                                "runAfter": {
+                                                    "Get_existing_member_of_the_security_rules": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "cases": {
+                                                    "Grayware_case": {
+                                                        "case": 2,
+                                                        "actions": {
+                                                            "Set_verdict_as_grayware": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "verdictDescription",
+                                                                    "value": "Grayware"
+                                                                },
+                                                                "description": "Grayware verdict"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Malware_case": {
+                                                        "case": 1,
+                                                        "actions": {
+                                                            "Set_verdict_as_malware": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "verdictDescription",
+                                                                    "value": "Malware"
+                                                                },
+                                                                "description": "Malware verdict"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Phishing_case": {
+                                                        "case": 4,
+                                                        "actions": {
+                                                            "Set_verdict_as_phishing": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "verdictDescription",
+                                                                    "value": "phishing"
+                                                                },
+                                                                "description": "Phishing verdict"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "default": {
+                                                    "actions": {}
+                                                },
+                                                "expression": "@int(body('Parse_verdict_JSON')?['get-verdict-info']?['verdict'])",
+                                                "type": "Switch",
+                                                "description": "Conditon for vedict value"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@int(body('Parse_verdict_JSON')?['get-verdict-info']?['verdict'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Apply condition on verdict value of the URL"
+                                },
+                                "Construct_verdict_JSON_object": {
+                                    "runAfter": {
+                                        "Get_URL_or_Hash_verdict": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "VerdictJSON",
+                                        "value": {
+                                            "get-verdict-info": {
+                                                "analysis_time": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['analysis_time']",
+                                                "url": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['url']",
+                                                "valid": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['valid']",
+                                                "verdict": "@json(xml(body('Get_URL_or_Hash_verdict')))['wildfire']['get-verdict-info']['verdict']"
+                                            }
+                                        }
+                                    },
+                                    "description": "Construct JSON object for XML"
+                                },
+                                "Get_URL_or_Hash_verdict": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "apikey": "@parameters('APIKey')",
+                                            "url": "@items('For_each_URL')?['Url']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['WildFireConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/get/verdict"
+                                    },
+                                    "description": " Get verdict infomation for the URL "
+                                },
+                                "Parse_verdict_JSON": {
+                                    "runAfter": {
+                                        "Construct_verdict_JSON_object": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@variables('VerdictJSON')",
+                                        "schema": {
+                                            "properties": {
+                                                "get-verdict-info": {
+                                                    "properties": {
+                                                        "analysis_time": {
+                                                            "description": "Analysis time of the URL",
+                                                            "type": "string"
+                                                        },
+                                                        "url": {
+                                                            "description": "The URL for which verdict information generated",
+                                                            "type": "string"
+                                                        },
+                                                        "valid": {
+                                                            "description": "Valid Infomation of the URL",
+                                                            "type": "string"
+                                                        },
+                                                        "verdict": {
+                                                            "description": "Verdict value of the URL",
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "description": "To parse verdict json"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_classification_reason_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "Loop for azure sentinel URL entity"
+                        },
+                        "For_each_incident_comment": {
+                            "foreach": "@variables('finalConsolidatedcomments')",
+                            "actions": {
+                                "Add_comment_to_the_incident": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Add_icon_to_the_comment')} Palo Alto WildFire Block URL Playbook<br>\n<br>\n@{item()}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Add_icon_to_the_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "Loop for incident comment"
+                        },
+                        "Initialize_classification_reason_variable": {
+                            "runAfter": {
+                                "Initialize_verdict_description_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ClassificationReason",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_consolidated_comments_variable": {
+                            "runAfter": {
+                                "Initialize_incident_comment_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "finalConsolidatedcomments",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To store comment of each iteration "
+                        },
+                        "Initialize_consolidated_verdict_variable": {
+                            "runAfter": {
+                                "Initialize_verdict_object_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ConsolidatedverdictArray",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To store the consolidated verdict array"
+                        },
+                        "Initialize_destination_members_variable": {
+                            "runAfter": {
+                                "Initialize_consolidated_verdict_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "destinationMembers",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": " To add existing members of the security policy rules"
+                        },
+                        "Initialize_incident_comment_variable": {
+                            "runAfter": {
+                                "Initialize_verdict_JSON_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incidentComment",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "To store incident comment"
+                        },
+                        "Initialize_verdict_JSON_variable": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "VerdictJSON",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "To store the verdict JOSN object"
+                        },
+                        "Initialize_verdict_description_variable": {
+                            "runAfter": {
+                                "Initialize_destination_members_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "verdictDescription",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "To store verdict description "
+                        },
+                        "Initialize_verdict_object_variable": {
+                            "runAfter": {
+                                "Initialize_consolidated_comments_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "verdictObject",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "To store verdict object"
+                        },
+                        "Update_incident": {
+                            "runAfter": {
+                                "For_each_incident_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "classification": {
+                                        "ClassificationAndReason": "@variables('ClassificationReason')"
+                                    },
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                                    "status": "Closed"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/Incidents"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "PANOSConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PANOSConnectionName'))]",
+                                "connectionName": "[variables('PANOSConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PAN-OSCustomConnectorName'))]"
+                            },
+                            "WildFireConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('WildFireConnectionName'))]",
+                                "connectionName": "[variables('WildFireConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('WildfireCustomConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

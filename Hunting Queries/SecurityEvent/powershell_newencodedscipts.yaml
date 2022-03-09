@@ -11,34 +11,41 @@ tactics:
   - CommandAndControl
 query: |
 
-  let starttime = 21d;
-  let midtime = 14d;
-  let endtime = 7d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*3);
+  let midlookback = totimespan((endtime-starttime)*2);
   let ProcessCreationEvents=() {
   let processEvents=SecurityEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
   | where EventID==4688
-  | project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,AccountDomain=SubjectDomainName,
-    FileName=tostring(split(NewProcessName, '\\')[-1]),
-  ProcessCommandLine = CommandLine, 
-  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+  | where NewProcessName has_any ("powershell.exe","pwsh.exe")
+  | project TimeGenerated, Computer, Account, NewProcessName, FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, ParentProcessName;
   processEvents};
-  let encodedPSScripts = 
-  ProcessCreationEvents 
-  | where TimeGenerated >= ago(midtime)
-  | where FileName =~ "powershell.exe"
-  | where ProcessCommandLine contains "-encodedCommand";
+  let encodedPSScripts =
+  ProcessCreationEvents
+  | where TimeGenerated between(ago(midlookback)..starttime)
+  | where FileName in~ ("powershell.exe","pwsh.exe")
+  | where ProcessCommandLine has "-encodedCommand";
   encodedPSScripts
-  | where TimeGenerated > ago(endtime)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by ProcessCommandLine
+  | where TimeGenerated between(starttime..endtime)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Computer, Account, NewProcessName, FileName, ProcessCommandLine, ParentProcessName
   | parse ProcessCommandLine with * "-EncodedCommand " encodedCommand
-  | project StartTimeUtc, EndTimeUtc, decodedCommand=base64_decodestring(substring(encodedCommand, 0, 
-   strlen(encodedCommand) - (strlen(encodedCommand) %8))), encodedCommand 
-  | join kind=anti (encodedPSScripts
-    | where TimeGenerated between(ago(starttime)..ago(endtime))
+  | extend decodedCommand = base64_decode_tostring(substring(encodedCommand, 0, strlen(encodedCommand) - (strlen(encodedCommand) %8)))
+  | join kind=leftanti (
+    encodedPSScripts
+    | where TimeGenerated between(ago(lookback)..starttime)
     | summarize count() by ProcessCommandLine
     | parse ProcessCommandLine with * "-EncodedCommand " encodedCommand
-    | project decodedCommand=base64_decodestring(substring(encodedCommand, 0, 
-     strlen(encodedCommand) - (strlen(encodedCommand) %8))), encodedCommand 
-  ) on encodedCommand, decodedCommand 
-  | extend timestamp = StartTimeUtc
-  
+    | extend decodedCommand = base64_decode_tostring(substring(encodedCommand, 0, strlen(encodedCommand) - (strlen(encodedCommand) %8)))
+  ) on encodedCommand, decodedCommand
+  | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

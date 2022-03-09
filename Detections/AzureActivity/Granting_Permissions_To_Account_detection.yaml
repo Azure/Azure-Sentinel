@@ -1,4 +1,4 @@
-﻿id: b2c15736-b9eb-4dae-8b02-3016b6a45a32
+id: b2c15736-b9eb-4dae-8b02-3016b6a45a32
 name: Suspicious granting of permissions to an account
 description: |
   'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'
@@ -23,7 +23,7 @@ query: |
   // The number of operations below which an IP address is considered an unusual source of role assignment operations
   let alertOperationThreshold = 5;
   let createRoleAssignmentActivity = AzureActivity
-  | where OperationName == "Create role assignment";
+  | where OperationNameValue =~ "microsoft.authorization/roleassignments/write";
   createRoleAssignmentActivity 
   | where TimeGenerated between (ago(starttime) .. ago(endtime))
   | summarize count() by CallerIpAddress, Caller
@@ -31,8 +31,19 @@ query: |
   | join kind = rightanti ( 
   createRoleAssignmentActivity
   | where TimeGenerated > ago(endtime)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), 
-  OperationIds = makelist(OperationId), CorrelationId = makelist(CorrelationId), ActivityCountByCallerIPAddress = count()  
-  by ResourceId, CallerIpAddress, Caller, OperationName, Resource, ResourceGroup
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), 
+  OperationIds = make_set(OperationId), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  
+  by ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup
   ) on CallerIpAddress, Caller
   | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.1.0
+kind: Scheduled

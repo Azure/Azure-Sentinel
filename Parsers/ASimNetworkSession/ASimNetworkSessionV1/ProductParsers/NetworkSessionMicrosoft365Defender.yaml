@@ -1,0 +1,66 @@
+Parser:
+  Title: M365 Defender Network Sessions
+  Version: '0.0'
+  LastUpdated: June 20, 2021
+Product:
+  Name: M365 Defender
+Normalization:
+  Schema: NetworkSessions
+  Version: '0.1.0'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This Query Parser maps M365 Defender network events to the Advanced Security Information Model Network Session schema.
+ParserName: vimNetworkSessionMicrosoft365Defender
+ParserQuery: |
+  let M365Defender=(){
+  let Direction=datatable(ActionType:string,NetworkDirection:string)[
+  'ConnectionSuccess','Outbound'
+  ,'ConnectionFailed', 'Outbound'
+  ,'ConnectionRequest','Outbound'
+  ,'InboundConnectionAccepted', 'Inbound'
+  ,'ConnectionFound', 'Unkown'
+  ,'ListeningConnectionCreated', 'Listening'];
+  DeviceNetworkEvents 
+  | extend EventType = "Traffic"
+  ,EventCount = 1
+  ,EventEndTime = TimeGenerated
+  ,EventMessage = ActionType
+  ,DvcIpAddr = LocalIP
+  ,DvcHostname = DeviceName
+  ,EventProduct = "M365 Defender for Endpoint"
+  ,EventVendor = "Microsoft"
+      // Types: 
+      // - ConnectionFailed
+      //   An attempt to establish a network connection from the device failed.
+      // - ConnectionRequest
+      //   The device initiated a network connection.
+      // - InboundConnectionAccepted
+      //   The device accepted a network connection initiated by another device.
+      // - ConnectionFound
+      //   An active network connection was found on the device.
+      // - ConnectionSuccess
+      //   The TCP three-way handshake was completed.
+      // - ListeningConnectionCreated
+      //   A process has started listening for connections on a certain port.
+  ,EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
+  ,EventResultDetails = ActionType
+  ,EventSchemaVersion = '0.1.0'
+  ,EventStartTime = TimeGenerated
+  ,DstIpAddr = RemoteIP
+  ,DstPortNumber = RemotePort
+  ,SrcIpAddr = LocalIP
+  ,SrcPortNumber = LocalPort
+  ,SrcUserSid = InitiatingProcessAccountSid
+  ,SrcUserAadId = InitiatingProcessAccountObjectId
+  ,SrcUsername = InitiatingProcessAccountName
+  ,SrcUserUpn = InitiatingProcessAccountUpn
+  ,SrcUserDomain = InitiatingProcessAccountDomain
+  ,NetworkProtocol = Protocol
+  ,UrlOriginal = RemoteUrl
+  | lookup kind=leftouter Direction on ActionType};
+  M365Defender
+

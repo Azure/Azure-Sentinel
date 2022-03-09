@@ -2,8 +2,8 @@ id: 847c2652-547d-4d5f-9b71-d2f8d81eac62
 name: Inactive or new account signins
 description: |
   'Query for accounts seen signing in for the first time - these could be associated
-  with stale/inactive accounts that ought to have been deleted but weren't - and have 
-  subseuqently been compromised. 
+  with stale/inactive accounts that ought to have been deleted but were not - and have
+  subseuqently been compromised.
   Results for user accounts created in the last 7 days are filtered out'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -14,31 +14,35 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-  
-  //Inactive accounts that sign in - first-time logins for accounts created in last 7 days are filtered out
-  let starttime = 14d;
-  let midtime = 7d;
-  let endtime = 1d;
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let midtime = starttime - 7d;
   SigninLogs
-  | where TimeGenerated >= ago(endtime)
+  | where TimeGenerated between(starttime..endtime)
   // successful sign-in
   | where ResultType == 0
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), loginCountToday=count() by UserPrincipalName, Identity
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), loginCountToday=count() by UserPrincipalName, Identity
   | join kind=leftanti (
      SigninLogs
      // historical successful sign-in
-     | where TimeGenerated < ago(endtime)
-     | where TimeGenerated >= ago(starttime)
+     | where TimeGenerated between(lookback..starttime)
      | where ResultType == 0
      | summarize by UserPrincipalName, Identity
-  ) on UserPrincipalName 
+  ) on UserPrincipalName
   | join kind= leftanti (
      // filter out newly created user accounts
      AuditLogs
-     | where TimeGenerated >= ago(midtime)
-     | where OperationName == "Add user" 
+     | where TimeGenerated between(midtime..starttime)
+     | where OperationName == "Add user"
      // Normalize to lower case in order to match against equivalent UPN in Signin logs
      | extend NewUserPrincipalName = tolower(extractjson("$.userPrincipalName", tostring(TargetResources[0]), typeof(string)))
-  ) on $left.UserPrincipalName == $right.NewUserPrincipalName 
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName
-  
+  ) on $left.UserPrincipalName == $right.NewUserPrincipalName
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

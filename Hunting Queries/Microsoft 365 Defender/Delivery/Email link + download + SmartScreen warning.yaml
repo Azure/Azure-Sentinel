@@ -1,0 +1,41 @@
+id: b29c75ca-a110-4c58-8d0b-6afac6d61078
+name: Email link + download + SmartScreen warning
+description: |
+  Look for links opened from outlook.exe, followed by a browser download and then a SmartScreen app warning that was ignored by the user.
+  Read more about these events and this hunting approach in this post: https://techcommunity.microsoft.com/t5/forums/editpage/board-id/WDATPActor/message-id/34.
+  Data availability: SmartScreen events are available only on Windows 10 version 1703 and onwards.
+  Tags: #EmailLink, #BrowserDownload, #SmartScreen.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - DeviceFileEvents
+query: |
+  let smartscreenAppWarnings =
+  // Query for SmartScreen warnings of unknown executed applications
+      DeviceEvents
+      | where ActionType == "SmartScreenAppWarning"
+      | project WarnTime=Timestamp, DeviceName, WarnedFileName=FileName, WarnedSHA1=SHA1, ActivityId=extractjson("$.ActivityId", AdditionalFields, typeof(string))
+      // Select only warnings that the user has decided to ignore and has executed the app.
+      | join kind=leftsemi (
+              DeviceEvents
+              | where ActionType == "SmartScreenUserOverride"
+              | project DeviceName, ActivityId=extractjson("$.ActivityId", AdditionalFields, typeof(string)))
+           on DeviceName, ActivityId
+  	| project-away ActivityId;
+  // Query for links opened from outlook, that are close in time to a SmartScreen warning
+  let emailLinksNearSmartScreenWarnings =
+      DeviceEvents
+      | where ActionType == "BrowserLaunchedToOpenUrl" and isnotempty(RemoteUrl) and InitiatingProcessFileName =~ "outlook.exe"
+      | extend WasOutlookSafeLink=(tostring(parse_url(RemoteUrl).Host) endswith "safelinks.protection.outlook.com")
+      | project DeviceName, MailLinkTime=Timestamp,
+          MailLink=iff(WasOutlookSafeLink, url_decode(tostring(parse_url(RemoteUrl)["Query Parameters"]["url"])), RemoteUrl)
+      | join kind=inner smartscreenAppWarnings on DeviceName | where (WarnTime-MailLinkTime) between (0min..4min);
+  // Add the browser download event to tie in all the dots
+  DeviceFileEvents
+  | where isnotempty(FileOriginUrl) and InitiatingProcessFileName in~ ("chrome.exe", "browser_broker.exe")
+  | project FileName, FileOriginUrl, FileOriginReferrerUrl, DeviceName, Timestamp, SHA1
+  | join kind=inner emailLinksNearSmartScreenWarnings on DeviceName
+  | where (Timestamp-MailLinkTime) between (0min..3min) and (WarnTime-Timestamp) between (0min..1min)
+  | project FileName, MailLink, FileOriginUrl, FileOriginReferrerUrl, WarnedFileName, DeviceName, SHA1, WarnedSHA1, Timestamp
+  | distinct *

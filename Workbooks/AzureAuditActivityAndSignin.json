@@ -72,7 +72,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\n| extend ResultText = case(isnotempty(ResultDescription), ResultDescription, ResultType == 0 and isempty(ResultDescription), \"Successfull login\", \"unknown\") // Create readable result text to include succesfull logins\n| summarize dcount(CorrelationId) by ResultText // Signin results by unique CorrelationId\n| render piechart",
+        "query": "SigninLogs\n| extend ResultText = case(isnotempty(ResultDescription), ResultDescription, ResultType == 0 and isempty(ResultDescription), \"successful login\", \"unknown\") // Create readable result text to include succesfull logins\n| summarize dcount(CorrelationId) by ResultText // Signin results by unique CorrelationId\n| render piechart",
         "size": 0,
         "title": "Login events by result",
         "timeContext": {
@@ -89,7 +89,7 @@
           "createOtherGroup": null,
           "seriesLabelSettings": [
             {
-              "seriesName": "Successfull login",
+              "seriesName": "successful login",
               "color": "green"
             }
           ],
@@ -107,7 +107,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\n| extend ResultText = case(isnotempty(ResultDescription), ResultDescription, ResultType == 0 and isempty(ResultDescription), \"Successfull login\", \"unknown\")\n| summarize dcount(CorrelationId) by ResultText, bin(TimeGenerated,4h) // summarize the total Signin events per Description per hour (by unique CorrelationId's)",
+        "query": "SigninLogs\n| extend ResultText = case(isnotempty(ResultDescription), ResultDescription, ResultType == 0 and isempty(ResultDescription), \"successful login\", \"unknown\")\n| summarize dcount(CorrelationId) by ResultText, bin(TimeGenerated,4h) // summarize the total Signin events per Description per hour (by unique CorrelationId's)",
         "size": 0,
         "title": "Count of login types per 4 hours",
         "timeContext": {
@@ -147,9 +147,9 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "SigninLogs\n| where isnotempty(LocationDetails['countryOrRegion']) and ResultType == 0// Where location details are available and login is successfull\n| extend city = tostring(LocationDetails['city'])\n| summarize count() by city, Location // Summarize by city name\n| join (\nSigninLogs\n| extend city = tostring(LocationDetails['city'])\n| make-series TrendList = count() on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by city \n) on city\n| project Location, city, [\"Total events\"] = count_, TrendLine = TrendList\n| top 10 by [\"Total events\"] desc",
+        "query": "SigninLogs\n| where isnotempty(LocationDetails['countryOrRegion']) and ResultType == 0// Where location details are available and login is successful\n| extend city = tostring(LocationDetails['city'])\n| summarize count() by city, Location // Summarize by city name\n| join (\nSigninLogs\n| extend city = tostring(LocationDetails['city'])\n| make-series TrendList = count() on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by city \n) on city\n| project Location, city, [\"Total events\"] = count_, TrendLine = TrendList\n| top 10 by [\"Total events\"] desc",
         "size": 0,
-        "title": "Successfull login locations",
+        "title": "successful login locations",
         "timeContext": {
           "durationMs": 0
         },
@@ -320,7 +320,7 @@
         "version": "KqlItem/1.0",
         "query": "SigninLogs\r\n| where ResultType == 0 and AppDisplayName != \"\"\r\n| summarize count() by AppDisplayName\r\n| join (\r\nSigninLogs\r\n| make-series TrendList = count() on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, 4h) by AppDisplayName \r\n) on AppDisplayName\r\n| top 10 by count_ desc",
         "size": 4,
-        "title": "Successfull logins by application",
+        "title": "successful logins by application",
         "timeContext": {
           "durationMs": 0
         },
@@ -384,7 +384,7 @@
     {
       "type": 1,
       "content": {
-        "json": "----\n## AuditLogs\n\nThese tables give an Azure administrators the information they needs to make sure that the services and user operations are successfullly executed. <br>\nIt also benefits the security operator by seeing which operations are perfomed by which users or services. Therefore he can act quickly on a suspicious operation."
+        "json": "----\n## AuditLogs\n\nThese tables give an Azure administrators the information they needs to make sure that the services and user operations are successfully executed. <br>\nIt also benefits the security operator by seeing which operations are perfomed by which users or services. Therefore he can act quickly on a suspicious operation."
       },
       "name": "text - 9"
     },
@@ -497,7 +497,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AzureActivity \n| union (AuditLogs) // Insert AuditLogs\n| extend CallerUserName = case( Type == 'AuditLogs' and notempty(InitiatedBy['user']), InitiatedBy['user']['userPrincipalName'], // Find best initiator for data source\n                                Type == 'AuditLogs' and InitiatedBy == \"{}\", Identity,\n                                Type == 'AzureActivity'   ,Caller, 'Unknown')\n| extend TargetResource =  case( Type == 'AuditLogs' and TargetResources[0]['type'] == 'User', strcat(TargetResources[0]['type'], \": \", TargetResources[0]['userPrincipalName']), // Find the best resource name for the data source\n                                Type == 'AuditLogs' and TargetResources[0]['type'] == 'Group', strcat(TargetResources[0]['type'], \": \", TargetResources[0]['displayName']),\n                                Type == 'AzureActivity'   ,Resource, 'Unknown')\n| extend ResultStatus =  case( Type == 'AuditLogs' and Result == 'failure', 'failed', // Change the result value to failure for the icon\n                               Type == 'AuditLogs' and Result == 'success', Result, // Only resutl that directly matches icon name\n                               Type == 'AzureActivity' and ActivityStatus == 'Started', 'info', // There is no started icon so using info instead.\n                               Type == 'AzureActivity' and ActivityStatus == 'Failed', 'failed', // change to failed\n                               Type == 'AzureActivity' and ActivityStatus == 'Succeeded', 'success', // Change to success\n                               'unknown')\n| sort by TimeGenerated desc // Sort descending on TimeGenerated to see latest events\n| project Time = TimeGenerated, ['From data source'] = Type, Operation = OperationName, ['Initiated by'] = CallerUserName, TargetResource, ResultStatus\n",
+        "query": "AzureActivity \n| union (AuditLogs) // Insert AuditLogs\n| extend CallerUserName = case( Type == 'AuditLogs' and notempty(InitiatedBy['user']), InitiatedBy['user']['userPrincipalName'], // Find best initiator for data source\n                                Type == 'AuditLogs' and InitiatedBy == \"{}\", Identity,\n                                Type == 'AzureActivity'   ,Caller, 'Unknown')\n| extend TargetResource =  case( Type == 'AuditLogs' and TargetResources[0]['type'] == 'User', strcat(TargetResources[0]['type'], \": \", TargetResources[0]['userPrincipalName']), // Find the best resource name for the data source\n                                Type == 'AuditLogs' and TargetResources[0]['type'] == 'Group', strcat(TargetResources[0]['type'], \": \", TargetResources[0]['displayName']),\n                                Type == 'AzureActivity'   ,Resource, 'Unknown')\n| extend ResultStatus =  case( Type == 'AuditLogs' and Result == 'failure', 'failed', // Change the result value to failure for the icon\n                               Type == 'AuditLogs' and Result == 'success', Result, // Only resutl that directly matches icon name\n                               Type == 'AzureActivity' and ActivityStatusValue == 'Started', 'info', // There is no started icon so using info instead.\n                               Type == 'AzureActivity' and ActivityStatusValue == 'Failed', 'failed', // change to failed\n                               Type == 'AzureActivity' and ActivityStatusValue == 'Succeeded', 'success', // Change to success\n                               'unknown')\n| sort by TimeGenerated desc // Sort descending on TimeGenerated to see latest events\n| project Time = TimeGenerated, ['From data source'] = Type, Operation = OperationName, ['Initiated by'] = CallerUserName, TargetResource, ResultStatus\n",
         "size": 0,
         "title": "Latest operation from audit and activity logs",
         "timeContext": {
@@ -708,7 +708,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AzureActivity\n| extend ActivityType = case(OperationName contains \"delete\", \"Delete\",\n                             OperationName contains \"create\", \"Create\",\n                             OperationName contains \"Update\", \"Update\", \"Other\")\n| summarize Succeeded = countif(ActivityStatus == \"Succeeded\"), Failed = countif(ActivityStatus == \"Failed\") by ResourceProvider, ActivityType\n| extend SuccesRate = Succeeded * 100 / (Succeeded + Failed)\n| where isnotempty(SuccesRate)\n| top 10 by SuccesRate asc \n| project ActivityType, ResourceProvider, SuccesRate, Succeeded, Failed ",
+        "query": "AzureActivity\n| extend ActivityType = case(OperationNameValue hassuffix \"delete\", \"Delete\",\n                             OperationNameValue hassuffix \"write\", \"Create or Update\",\"Other\")\n| summarize Succeeded = countif(ActivityStatusValue == \"Succeeded\"), Failed = countif(ActivityStatusValue == \"Failed\") by ResourceProvider, ActivityType\n| extend SuccesRate = Succeeded * 100 / (Succeeded + Failed)\n| where isnotempty(SuccesRate)\n| top 10 by SuccesRate asc \n| project ActivityType, ResourceProvider, SuccesRate, Succeeded, Failed ",
         "size": 0,
         "title": "Least successrate by Action and ResourceProvider",
         "timeContext": {
@@ -810,7 +810,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AzureActivity\r\n//| where ActivityStatus == 'Succeeded'\r\n| summarize Actions = count() by OperationName, Id = strcat(Caller, ' - ', CallerIpAddress)\r\n| extend Name = Id\r\n| union ( AzureActivity\r\n//| where ActivityStatus == 'Succeeded'\r\n| summarize Actions = count() by Id = OperationName\r\n| extend Name = Id)\r\n| project Name, Actions, Id, OperationName\r\n| order by Actions desc",
+        "query": "AzureActivity\r\n//| where ActivityStatusValue == 'Succeeded'\r\n| summarize Actions = count() by OperationNameValue, Id = strcat(Caller, ' - ', CallerIpAddress)\r\n| extend Name = Id\r\n| union ( AzureActivity\r\n//| where ActivityStatusValue == 'Succeeded'\r\n| summarize Actions = count() by Id = OperationNameValue\r\n| extend Name = Id)\r\n| project Name, Actions, Id, OperationNameValue\r\n| order by Actions desc",
         "size": 0,
         "title": "Tree view for users by operations",
         "timeContext": {

@@ -16,11 +16,12 @@ query: |
 
   let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
   let PolicyArnList = dynamic(["arn:aws:iam::aws:policy/AdministratorAccess","arn:aws:iam::aws:policy/DatabaseAdministrator","arn:aws:iam::aws:policy/NetworkAdministrator","arn:aws:iam::aws:policy/SystemAdministrator","arn:aws:iam::aws:policy/AmazonS3FullAccess"]);
-  let timeframe = 1d;
-  let lookback = 14d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
   //Creating a temp table of events creating privileged role or users which can later be correlated with suspicious operations.
   let PrivilegedRoleorUsers = AWSCloudTrail
-  | where TimeGenerated >= ago(lookback) 
+  | where TimeGenerated >= lookback 
   | where EventName in (EventNameList)
   | extend PolicyArn = tostring(parse_json(RequestParameters).policyArn), RoleName = tostring(parse_json(RequestParameters).roleName)
   | where PolicyArn in (PolicyArnList)
@@ -29,9 +30,18 @@ query: |
   PrivilegedRoleorUsers
   | join (
   AWSCloudTrail
-  | where TimeGenerated >= ago(timeframe)
+  | where TimeGenerated between (starttime..endtime)
   | where EventName in ("AddRoleToInstanceProfile") 
   | extend InstanceProfileName = tostring(parse_json(RequestParameters).InstanceProfileName), RoleName = tostring(parse_json(RequestParameters).roleName)
   | summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventSource, EventName, UserIdentityType , UserIdentityArn , UserIdentityUserName, SourceIpAddress, RoleName
   ) on RoleName 
   | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIpAddress, AccountCustomEntity = RoleName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

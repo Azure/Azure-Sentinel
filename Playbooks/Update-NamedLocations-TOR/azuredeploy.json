@@ -1,0 +1,384 @@
+
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "<PlaybookName>",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "ClientID": {
+            "defaultValue": "****REPLACE WITH CLIENT ID ****",
+            "type": "string"
+        },
+        "TenantID": {
+            "defaultValue": "****REPLACE WITH TENANT ID ****",
+            "type": "string"
+        },
+        "NamedLocationID": {
+            "defaultValue": "****REPLACE WITH NAMED LOCATION ID ****",
+            "type": "string"
+        },
+         "NamedLocationDisplayName": {
+            "defaultValue": "Tor Exit Nodes",
+            "type": "string"
+        },
+        "KeyVaultClientCredentialsURL-BigDataCloud": {
+            "defaultValue": "****REPLACE WITH KEY VAULT URI FOR BIGDATACLOUD.COM API KEY ****",
+            "type": "string"
+        },
+        "KeyVaultClientCredentialsURL-GraphAPI": {
+            "defaultValue": "****REPLACE WITH KEY VAULT URI FOR GRAPH API KEY ****",
+            "type": "string"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "ClientID": {
+                            "defaultValue": "[parameters('ClientID')]",
+                            "type": "String"
+                        },
+                        "KeyVaultClientCredentialsURL-BigDataCloud": {
+                            "defaultValue": "[parameters('KeyVaultClientCredentialsURL-BigDataCloud')]",
+                            "type": "String"
+                        },
+                        "KeyVaultClientCredentialsURL-GraphAPI": {
+                            "defaultValue": "[parameters('KeyVaultClientCredentialsURL-GraphAPI')]",
+                            "type": "String"
+                        },
+                        "NamedLocationID": {
+                            "defaultValue": "[parameters('NamedLocationID')]",
+                            "type": "String"
+                        },
+                        "NamedLocationDisplayName": {
+                            "defaultValue": "[parameters('NamedLocationDisplayName')]",
+                            "type": "String"
+                        },
+                        "TenantID": {
+                            "defaultValue": "[parameters('TenantID')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Close_TOR_Exit_Nodes": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "ExitNodes",
+                                "value": "    ]\n}"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Parse_TOR_Exit_Nodes')?['nodes']",
+                            "actions": {
+                                "Append_IP_to_TOR_Exit_Nodes": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "ExitNodes",
+                                        "value": "        ,{\n            \"@odata.type\": \"#microsoft.graph.iPv4CidrRange\",\n            \"cidrAddress\": \"@{items('For_each')?['ip']}/32\"\n        }\n"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_TOR_Exit_Nodes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "GET_Client_Secret_From_Key_Vault_-_Graph_API": {
+                            "runAfter": {
+                                "Initialize_ExitNodes_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://vault.azure.net",
+                                    "identity": "Managed Identity",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2016-10-01"
+                                },
+                                "uri": "@parameters('KeyVaultClientCredentialsURL-GraphAPI')"
+                            }
+                        },
+                        "GET_Client_Secret_from_Key_Vault_-_BigDataCloud": {
+                            "runAfter": {
+                                "Parse_Response_from_Key_Vault_-_Graph_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://vault.azure.net",
+                                    "identity": "Managed Identity",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2016-10-01"
+                                },
+                                "uri": "@parameters('KeyVaultClientCredentialsURL-BigDataCloud')"
+                            }
+                        },
+                        "GET_TOR_Exit_Nodes": {
+                            "runAfter": {
+                                "Parse_Response_from_Key_Vault_-_BigDataCloud": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "https://api.bigdatacloud.net/data/tor-exit-nodes-list?batchSize=900&offset=0&localityLanguage=en&key=@{body('Parse_Response_from_Key_Vault_-_BigDataCloud')?['value']}"
+                            }
+                        },
+                        "Initialize_ExitNodes_Variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ExitNodes",
+                                        "type": "string",
+                                        "value": "{\n    \"@odata.type\": \"#microsoft.graph.ipNamedLocation\",\n    \"id\": \"0570e719-88c4-4911-b571-3b8b06afd2a3\",\n    \"displayName\": \"@{parameters('NamedLocationDisplayName')}\",\n    \"modifiedDateTime\": null,\n    \"createdDateTime\": null,\n    \"isTrusted\": false,\n    \"ipRanges\": [\n        {\n            \"@odata.type\": \"#microsoft.graph.iPv4CidrRange\",\n            \"cidrAddress\": \"103.234.220.197/32\"\n        }\n"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Response_from_Key_Vault_-_BigDataCloud": {
+                            "runAfter": {
+                                "GET_Client_Secret_from_Key_Vault_-_BigDataCloud": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('GET_Client_Secret_from_Key_Vault_-_BigDataCloud')",
+                                "schema": {
+                                    "properties": {
+                                        "attributes": {
+                                            "properties": {
+                                                "created": {
+                                                    "type": "integer"
+                                                },
+                                                "enabled": {
+                                                    "type": "boolean"
+                                                },
+                                                "recoveryLevel": {
+                                                    "type": "string"
+                                                },
+                                                "updated": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_Response_from_Key_Vault_-_Graph_API": {
+                            "runAfter": {
+                                "GET_Client_Secret_From_Key_Vault_-_Graph_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('GET_Client_Secret_From_Key_Vault_-_Graph_API')",
+                                "schema": {
+                                    "properties": {
+                                        "attributes": {
+                                            "properties": {
+                                                "created": {
+                                                    "type": "integer"
+                                                },
+                                                "enabled": {
+                                                    "type": "boolean"
+                                                },
+                                                "recoveryLevel": {
+                                                    "type": "string"
+                                                },
+                                                "updated": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_TOR_Exit_Nodes": {
+                            "runAfter": {
+                                "GET_TOR_Exit_Nodes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('GET_TOR_Exit_Nodes')",
+                                "schema": {
+                                    "properties": {
+                                        "batch": {
+                                            "type": "integer"
+                                        },
+                                        "nodes": {
+                                            "items": {
+                                                "properties": {
+                                                    "carriers": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "asn": {
+                                                                    "type": "string"
+                                                                },
+                                                                "asnNumeric": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "organisation": {
+                                                                    "type": "string"
+                                                                },
+                                                                "rank": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "rankText": {
+                                                                    "type": "string"
+                                                                },
+                                                                "registeredCountry": {
+                                                                    "type": "string"
+                                                                },
+                                                                "registeredCountryName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "registrationLastChange": {
+                                                                    "type": "string"
+                                                                },
+                                                                "registry": {
+                                                                    "type": "string"
+                                                                },
+                                                                "totalIpv4Addresses": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "totalIpv4BogonPrefixes": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "totalIpv4Prefixes": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "required": [],
+                                                            "type": "object"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "countryCode": {
+                                                        "type": "string"
+                                                    },
+                                                    "countryName": {
+                                                        "type": "string"
+                                                    },
+                                                    "ip": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "ip"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "offset": {
+                                            "type": "integer"
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "UPDATE_Named_Location_List": {
+                            "runAfter": {
+                                "Close_TOR_Exit_Nodes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com",
+                                    "clientId": "@parameters('ClientID')",
+                                    "secret": "@body('Parse_Response_from_Key_Vault_-_Graph_API')?['value']",
+                                    "tenant": "@parameters('TenantID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "body": "@variables('ExitNodes')",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "PUT",
+                                "uri": "https://graph.microsoft.com/beta/identity/conditionalAccess/namedLocations/@{parameters('NamedLocationID')}"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            }
+        }
+    ]
+}

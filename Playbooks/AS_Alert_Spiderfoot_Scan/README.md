@@ -28,12 +28,8 @@ Open your browser and ensure you are logged into your Azure Sentinel workspace. 
 
 https://github.com/Arbala-Security/AS_Alert_Spiderfoot_Scan
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FAS_Alert_Spiderfoot_Scan%2Fmain%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FAS_Alert_Spiderfoot_Scan%2Fmaster%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>                                                 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FAS_Alert_Spiderfoot_Scan%2Fmain%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FAS_Alert_Spiderfoot_Scan%2Fmaster%2Fazuredeploy.json)
 
 From there, click the “Deploy to Azure” button at the bottom and it will bring you to the Custom Deployment Template.
 

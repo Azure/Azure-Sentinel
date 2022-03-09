@@ -1,0 +1,38 @@
+id: c9b6d281-b96b-4763-b728-9a04b9fe1246
+name: Cisco Umbrella - Connection to non-corporate private network
+description: |
+  'IP addresses of broadband links that usually indicates users attempting to access their home network, for example for a remote session to a home computer.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Exfiltration
+query: |
+  let lbtime = 10m;
+  Cisco_Umbrella
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'proxylogs'
+  | where DvcAction =~ 'Allowed'
+  | where UrlCategory has_any ('Dynamic and Residential', 'Personal VPN')
+  | project TimeGenerated, SrcIpAddr, Identities
+  | extend IPCustomEntity = SrcIpAddr
+  | extend AccountCustomEntity = Identities
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.1.0
+kind: Scheduled
+

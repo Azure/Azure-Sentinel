@@ -18,7 +18,6 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
-    
 }
 
 # Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <PROVIDER NAME APPLIANCE NAME> API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
@@ -30,7 +29,20 @@ $uri = $env:uri
 $CustomerId = $env:workspaceId 
 $SharedKey = $env:workspaceKey 
 $TimeStampField = "DateValue"  
-$LogType = $env:tableName      
+$LogType = $env:tableName     
+$logAnalyticsUri = $env:logAnalyticsUri
+
+if ([string]::IsNullOrEmpty($logAnalyticsUri))
+{
+    $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
+}
+
+# Returning if the Log Analytics Uri is in incorrect format.
+# Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
+if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
+{
+    throw "Invalid Log Analytics Uri."
+}
 
 <# Used this block to build the <PROVIDER NAME APPLIANCE NAME> REQUEST header needed to call the API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
 
@@ -93,7 +105,8 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    $uri = "https://" + $customerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+    
+    $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 
     $headers = @{
         "Authorization" = $signature;
@@ -102,9 +115,22 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         "time-generated-field" = $TimeStampField;
     }
 
-    $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
-    return $response.StatusCode
+    try {
+        $response = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
+    }
+    catch {
+        Write-Error "Error during sending logs to Azure Sentinel: $_.Exception.Message"
+        # Exit out of context
+        Exit
+    }
+    if ($response.StatusCode -eq 200) {
+        Write-Host "Logs have been successfully sent to Azure Sentinel."
+    }
+    else {
+        Write-Host "Error during sending logs to Azure Sentinel. Response code : $response.StatusCode"
+    }
 
+    return $response.StatusCode
 }
 
 <# Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API

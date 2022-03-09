@@ -1,0 +1,50 @@
+id: 2dfa9c23-1590-4589-995a-d1486be66028
+name: Azure DevOps - New Release Pipeline Created
+description: |
+  'An attacker could look to create a new poisoned pipeline in Azure DevOps and attack a build process to it. This hunting query looks for new pipelines being created in projects where the creating user has not been seen creating a pipeline before. This query could have a significant false positive rate and records should be triaged to determine if a user creating a pipeline is authorized and expected.'
+requiredDataConnectors: []
+tactics:
+  - Persistence
+  - Execution
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1053
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = 30d;
+  // Set the period for detections
+  // Get a list of previous Release Pipeline creators to exclude
+  let releaseusers = AzureDevOpsAuditing
+  | where TimeGenerated between(ago(lookback)..starttime)
+  | where OperationName =~ "Release.ReleasePipelineCreated"
+  // We want to look for users performing actions in specific organizations so we creat this userscope object to match on
+  | extend UserScope = strcat(ActorUPN, "-", ProjectName)
+  | summarize by UserScope;
+  // Get Release Pipeline creations by new users
+  AzureDevOpsAuditing
+  | where TimeGenerated between(starttime..endtime)
+  | where OperationName =~ "Release.ReleasePipelineCreated"
+  | extend UserScope = strcat(ActorUPN, "-", ProjectName)
+  | where UserScope !in (releaseusers)
+  | extend ActorUPN = tolower(ActorUPN)
+  | project-away Id, ActivityId, ActorCUID, ScopeId, ProjectId, TenantId, SourceSystem, UserScope
+  // See if any of these users have Azure AD alerts associated with them in the same timeframe
+  | join kind = leftouter (
+  SecurityAlert
+  | where TimeGenerated between(starttime..endtime)
+  | where ProviderName == "IPC"
+  | extend AadUserId = tostring(parse_json(Entities)[0].AadUserId)
+  | summarize Alerts=count() by AadUserId) on $left.ActorUserId == $right.AadUserId
+  | project-reorder TimeGenerated, ProjectName, Details, ActorUPN, IpAddress, UserAgent, Alerts
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

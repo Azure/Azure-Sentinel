@@ -1,0 +1,712 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block URL - F5 BIG-IP",
+        "description": "This playbook checks if malicious URL is part of URL Blocklist Category of F5 BIG-IP firewall.",
+        "mainSteps": [ "1. Fetches a list of potentially malicious URLs", "2.  If URL not present in URL Blocklist Category, then adds the URL to URL Blocklist Category." ],
+        "prerequisites": [
+            "1. Deploy the F5BigIP Base Playbook before the deployment of this playbook under the same subscription and same resource group. Capture the name of the playbook during deployment.",
+            "2. URL Blocklist Category should be created for blocking URLs"
+        ],
+        "prerequisitesDeployTemplateFile": "./BasePlaybook-F5BigIP/azuredeploy.json",
+        "lastUpdateTime": "2021-08-12T00:00:00.000Z",
+        "entities": [ "Url" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "F5BigIP-Block-URL",
+            "type": "String",
+            "metadata": {
+                "description": "Enter name for Block URL playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "BasePlaybookName": {
+            "defaultValue": "F5BigIP_Base",
+            "type": "String",
+            "metadata": {
+                "description": "Enter name for Base playbook name without spaces"
+            },
+            "minLength": 3
+        },
+        "URLBlocklistcategoryName": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter URL Blocklist Category name"
+            },
+            "minLength": 3
+        }
+    },
+    "variables": {
+        "AzureSentinel_Connection": "[concat('Azuresentienl-', parameters('PlaybookName'))]",
+        "F5BigIP_Base_id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('BasePlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "URLBlocklistcategoryName": {
+                            "defaultValue": "[parameters('URLBlocklistcategoryName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_if_body_present_in_Azure_Sentinel_incident": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Compose_Image_to_add_in_the_Incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Compose_Image_to_add_in_the_Incident')} <strong>Block-URL Playbook ran and added the below URL’s to “</strong><strong>@{parameters('URLBlocklistcategoryName')}</strong><strong>” URL block list category .</strong><br>\n@{body('Create_HTML_table_to_comment_in_the_Incident')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "description": "This adds comments to the incident"
+                                },
+                                "Compose_Image_to_add_in_the_Incident": {
+                                    "runAfter": {
+                                        "Create_HTML_table_to_comment_in_the_Incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "<img src=\"https://www.bing.com/th?id=OIP.7EfUwjpb7ziFgcqJgEla3gHaHP&w=119&h=102&c=8&rs=1&qlt=90&o=6&dpr=1.5&pid=3.1&rm=2\" alt=\"Lamp\" width=\"32\" height=\"32\">",
+                                    "description": "This composes the F5 image to update in the incident"
+                                },
+                                "Condition__to_check_if_predefined_URL_block_list_is_present_in_F5_Big_IP": {
+                                    "actions": {
+                                        "For_each_URL": {
+                                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                                            "actions": {
+                                                "Condition_to_check_if_URL_is_present_in_predefined_block_URL_category_list": {
+                                                    "actions": {
+                                                        "Append_to_array_variable_consolidated_comments_in_case_of_URL_already_blocked": {
+                                                            "runAfter": {
+                                                                "Set_variable_Comment_in_case_of_URL_already_blocked": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "ConsolidatedComments",
+                                                                "value": "@variables('Comment')"
+                                                            },
+                                                            "description": "This appends consolidated comments"
+                                                        },
+                                                        "Set_variable_Comment_in_case_of_URL_already_blocked": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Comment",
+                                                                "value": {
+                                                                    "Action": "No Action taken as URL already added to URL Blocklist category",
+                                                                    "Current_Status": "Blocked",
+                                                                    "Previous_Status": "Blocked",
+                                                                    "URL": " @{items('For_each_URL')?['Url']}",
+                                                                    "URLblocklistname": "@{parameters('URLBlocklistcategoryName')}"
+                                                                }
+                                                            },
+                                                            "description": "This sets comment variable if URL already blocked"
+                                                        },
+                                                        "Set_variable_Success_if_URL_already_blocked": {
+                                                            "runAfter": {
+                                                                "Append_to_array_variable_consolidated_comments_in_case_of_URL_already_blocked": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Success",
+                                                                "value": "Success"
+                                                            },
+                                                            "description": "This sets the success variable"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_variable_Address_List_Members": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Append_to_array_variable_Address_list_members": {
+                                                                "runAfter": {
+                                                                    "Set_variable_Address_List_Member": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "AddressListMembers",
+                                                                    "value": "@variables('AddressListMember')"
+                                                                },
+                                                                "description": "This Appends URL to Block list Memebers"
+                                                            },
+                                                            "Condition_to_check_if_URL_added_to_block_list_category": {
+                                                                "actions": {
+                                                                    "Append_to_array_variable_in_case_if_URL_is_added_successfully": {
+                                                                        "runAfter": {
+                                                                            "Set_variable_comment_in_case_if_URL_is_added_successfully": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "ConsolidatedComments",
+                                                                            "value": "@variables('Comment')"
+                                                                        },
+                                                                        "description": "This appends consolidated comments"
+                                                                    },
+                                                                    "Set_variable_Success_if_URL_blocked": {
+                                                                        "runAfter": {
+                                                                            "Append_to_array_variable_in_case_if_URL_is_added_successfully": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "Success",
+                                                                            "value": "Success"
+                                                                        },
+                                                                        "description": "This sets the success variable"
+                                                                    },
+                                                                    "Set_variable_comment_in_case_if_URL_is_added_successfully": {
+                                                                        "runAfter": {},
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "Comment",
+                                                                            "value": {
+                                                                                "Action": "URL added to Blocklist category by playbook",
+                                                                                "Current_Status": "Blocked",
+                                                                                "Previous_Status": "Allowed",
+                                                                                "URL": " @{items('For_each_URL')?['Url']}",
+                                                                                "URLblocklistname": "@{parameters('URLBlocklistcategoryName')}"
+                                                                            }
+                                                                        },
+                                                                        "description": "This sets comment variable if URL is blocked"
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "HTTP-Add_URL_to_URL_Block_List_category": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Append_to_array_variable_in_case_if_URL_is_not_added_successfully": {
+                                                                            "runAfter": {
+                                                                                "Set_variable_comment_in_case_if_URL_is_not_added_successfully": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "ConsolidatedComments",
+                                                                                "value": "@variables('Comment')"
+                                                                            },
+                                                                            "description": "This appends consolidated comments"
+                                                                        },
+                                                                        "Set_variable_Success_if_URL_not_blocked": {
+                                                                            "runAfter": {
+                                                                                "Append_to_array_variable_in_case_if_URL_is_not_added_successfully": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "Success",
+                                                                                "value": "Failure"
+                                                                            },
+                                                                            "description": "This sets the success variable"
+                                                                        },
+                                                                        "Set_variable_comment_in_case_if_URL_is_not_added_successfully": {
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "Comment",
+                                                                                "value": {
+                                                                                    "Action": "Failed to add URL to Blocklist category by playbook",
+                                                                                    "Current_Status": "Allowed",
+                                                                                    "Previous_Status": "Allowed",
+                                                                                    "URL": " @{items('For_each_URL')?['Url']}",
+                                                                                    "URLblocklistname": "@{parameters('URLBlocklistcategoryName')}"
+                                                                                }
+                                                                            },
+                                                                            "description": "This sets comment variable if URL is not blocked"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP-Add_URL_to_URL_Block_List_category')['statusCode']",
+                                                                                200
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If",
+                                                                "description": "This checks if URL is blocked"
+                                                            },
+                                                            "F5BigIP_Base_call": {
+                                                                "runAfter": {
+                                                                    "Append_to_array_variable_Address_list_members": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Workflow",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "triggerName": "manual",
+                                                                        "workflow": {
+                                                                            "id": "[variables('F5BigIP_Base_id')]"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "description": "This again calls the F5 Big URL for generating the token"
+                                                            },
+                                                            "HTTP-Add_URL_to_URL_Block_List_category": {
+                                                                "runAfter": {
+                                                                    "F5BigIP_Base_call": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "Http",
+                                                                "inputs": {
+                                                                    "body": {
+                                                                        "urls": "@variables('AddressListMembers')"
+                                                                    },
+                                                                    "headers": {
+                                                                        "Content-Type": "application/json",
+                                                                        "X-F5-Auth-Token": "@{body('F5BigIP_Base_call')?['X-F5-Auth-Token']}"
+                                                                    },
+                                                                    "method": "PATCH",
+                                                                    "uri": "@{body('F5BigIP_Base_call')?['F5BigIPHost']}/mgmt/tm/sys/url-db/url-category/@{parameters('URLBlocklistcategoryName')}"
+                                                                }
+                                                            },
+                                                            "Set_variable_Address_List_Member": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "AddressListMember",
+                                                                    "value": {
+                                                                        "name": "@{items('For_each_URL')?['Url']}"
+                                                                    }
+                                                                },
+                                                                "description": "This sets the Address list member"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greater": [
+                                                                    "@length(body('Filter_array_URL_from_URL_block_list'))",
+                                                                    0
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If",
+                                                    "description": "This checks if URL is present in URL block list"
+                                                },
+                                                "Filter_array_URL_from_URL_block_list": {
+                                                    "runAfter": {},
+                                                    "type": "Query",
+                                                    "inputs": {
+                                                        "from": "@body('HTTP-Get_specific_URL_Block_list_category')?['urls']",
+                                                        "where": "@equals(item()?['name'], items('For_each_URL')?['Url'])"
+                                                    },
+                                                    "description": "This filters the URL from URL block list"
+                                                },
+                                                "Set_variable_Address_List_Members": {
+                                                    "runAfter": {
+                                                        "Filter_array_URL_from_URL_block_list": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "AddressListMembers",
+                                                        "value": "@body('HTTP-Get_specific_URL_Block_list_category')?['urls']"
+                                                    },
+                                                    "description": "This sets the Address List members"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP-Get_specific_URL_Block_list_category": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_if_URL_block_list_not_present": {
+                                                "runAfter": {},
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runError": {
+                                                        "code": "404",
+                                                        "message": "There is no predefined URL blocklist present with the name @{parameters('URLBlocklistcategoryName')}"
+                                                    },
+                                                    "runStatus": "Failed"
+                                                },
+                                                "description": "This Terminates the playbook if block URL category is not present"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP-Get_specific_URL_Block_list_category')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "This checks if URL block list is present in F5 environment"
+                                },
+                                "Condition_to_check_if_URL_blocked_Successfully": {
+                                    "actions": {
+                                        "Update_incident": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "classification": {
+                                                        "ClassificationAndReason": "BenignPositive - SuspiciousButExpected",
+                                                        "ClassificationReasonText": "F5 Big IP_Block_URL playbook ran and closed this incident"
+                                                    },
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "status": "Closed"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('Success')",
+                                                    "Success"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Create_HTML_table_to_comment_in_the_Incident": {
+                                    "runAfter": {
+                                        "Condition__to_check_if_predefined_URL_block_list_is_present_in_F5_Big_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "columns": [
+                                            {
+                                                "header": "URL",
+                                                "value": "@item()?['URL']"
+                                            },
+                                            {
+                                                "header": "Previous Status",
+                                                "value": "@item()?['Previous_Status']"
+                                            },
+                                            {
+                                                "header": "Current Status",
+                                                "value": "@item()?['Current_Status']"
+                                            },
+                                            {
+                                                "header": "Action",
+                                                "value": "@item()?['Action']"
+                                            }
+                                        ],
+                                        "format": "HTML",
+                                        "from": "@variables('ConsolidatedComments')"
+                                    },
+                                    "description": "This creates a HTML table to update in the incident"
+                                },
+                                "F5BigIP_Base": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[variables('F5BigIP_Base_id')]"
+                                            }
+                                        }
+                                    },
+                                    "description": "This calls the F5 Big URL base playbook for the authentication token"
+                                },
+                                "HTTP-Get_specific_URL_Block_list_category": {
+                                    "runAfter": {
+                                        "F5BigIP_Base": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "X-F5-Auth-Token": "@{body('F5BigIP_Base')?['X-F5-Auth-Token']}"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{body('F5BigIP_Base')?['F5BigIPHost']}/mgmt/tm/sys/url-db/url-category/@{parameters('URLBlocklistcategoryName')}"
+                                    },
+                                    "description": "This gets the contents of specific URL block list"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_Success": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_if_URL_not_found_in_sentinel_body": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "code": "404",
+                                                "message": "URL not found in Azure Sentinel Incident"
+                                            },
+                                            "runStatus": "Failed"
+                                        },
+                                        "description": "This Terminates the Playbook if URL not found in the body"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@outputs('Entities_-_Get_URLs')",
+                                            "body"
+                                        ]
+                                    },
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_URLs')?['URLs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "This checks if body is present in Azure Sentinel"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "Initialize_variable_AddressListMember": {
+                            "runAfter": {
+                                "Initialize_variable_AddressListMembers": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AddressListMember",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the Address List Member"
+                        },
+                        "Initialize_variable_AddressListMembers": {
+                            "runAfter": {
+                                "Initialize_variable_Consolidated_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AddressListMembers",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the Address List Members"
+                        },
+                        "Initialize_variable_Comment": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Comment",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the value of comment variable"
+                        },
+                        "Initialize_variable_Consolidated_Comment": {
+                            "runAfter": {
+                                "Initialize_variable_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ConsolidatedComments",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the value of consolidated comments"
+                        },
+                        "Initialize_variable_Success": {
+                            "runAfter": {
+                                "Initialize_variable_AddressListMember": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Success",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the value of Success variable"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]",
+                                "connectionName": "[variables('AzureSentinel_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinel_Connection')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinel_Connection')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

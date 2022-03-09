@@ -1,0 +1,34 @@
+id: ba5e1a88-2054-4bda-a6e0-20008148ae6e
+name: OracleDBAudit - Users with new privileges
+description: |
+  'Query for searching user accounts whith new privileges.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+query: |
+  let lbtime_30d = 30d;
+  let lbtime_1d = 1d;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime_30d)
+  | where isnotempty(ActionLength)
+  | summarize avg_action_length = avg(toint(ActionLength))
+  | extend a = 1
+  | join (OracleDatabaseAuditEvent
+    | where TimeGenerated > ago(lbtime_1d)
+    | where isnotempty(ActionLength)
+    | extend a = 1) on a
+  | where toint(ActionLength) > 2*avg_action_length
+  | project avg_action_length, ActionLength, Action, DstUserName
+  | extend AccountCustomEntity = DstUserName
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

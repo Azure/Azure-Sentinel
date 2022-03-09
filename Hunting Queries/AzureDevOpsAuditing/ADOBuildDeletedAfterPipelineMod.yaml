@@ -1,0 +1,34 @@
+id: 47857f1f-f8e6-470d-b132-03a8a606b3f4
+name: Azure DevOps - Build Deleted After Pipeline Modification
+description: |
+  'An attacker altering pipelines may look to delete builds to reduce the footprint they leave on a system. This query looks for a build for a pipline being deleted within 1 hour of a pipeline being modified. This event may produce false positives but should not be so common that it can't be effectively used as part of hunting.'
+requiredDataConnectors: []
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1053
+query: |
+  AzureDevOpsAuditing
+  | where OperationName =~ "Release.ReleaseDeleted"
+  | extend PipelineId = tostring(Data.PipelineId)
+  | extend PipelineName = tostring(Data.PipelineName)
+  | extend timekey = bin(TimeGenerated, 1h)
+  | join (AzureDevOpsAuditing
+  | where OperationName =~ 'Release.ReleasePipelineModified'
+  | extend PipelineId = tostring(Data.PipelineId)
+  | extend PipelineName = tostring(Data.PipelineName)
+  | extend timekey = bin(TimeGenerated, 1h)) on timekey, PipelineId, ActorUPN
+  | where TimeGenerated1 < TimeGenerated
+  | extend ReleaseName = tostring(Data.ReleaseName)
+  | project-rename TimeModified = TimeGenerated1, TimeDeleted = TimeGenerated, ModifyOperation = OperationName1, ModifyUser=ActorUPN1, ModifyIP=IpAddress1, ModifyUA= UserAgent1, DeleteOperation=OperationName, DeleteUser=ActorUPN, DeleteIP=IpAddress, DeleteUA=UserAgent
+  | project-reorder TimeModified, ProjectName, PipelineName, ModifyUser, ModifyIP, ModifyUA, TimeDeleted, DeleteOperation, DeleteUser, DeleteIP, DeleteUA,ReleaseName
+  | extend timestamp = TimeDeleted, AccountCustomEntity = DeleteUser, IPCustomEntity = DeleteIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

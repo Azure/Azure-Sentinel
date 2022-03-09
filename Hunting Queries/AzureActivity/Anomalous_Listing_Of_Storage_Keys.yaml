@@ -8,7 +8,7 @@ description: |
   The query below generates known clusters of ip address per caller, notice that users which only had single
   operations do not appear in this list as we cannot learn from it their normal activity (only based on a single
   event). The activities for listing storage account keys is correlated with this learned 
-  clusters of expected activities and activity which is not expected is returned.' 
+  clusters of expected activities and activity which is not expected is returned.'
 requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
@@ -19,19 +19,26 @@ relevantTechniques:
   - T1087
 query: |
 
-  let timeframe = 7d;
   AzureActivity
-  | where TimeGenerated >= ago(timeframe)
-  | where OperationName == "List Storage Account Keys"
-  | where ActivityStatus == "Succeeded" 
+  | where OperationNameValue == "microsoft.storage/storageaccounts/listkeys/action"
+  | where ActivityStatusValue == "Succeeded" 
   | join kind= inner (
       AzureActivity
-      | where TimeGenerated >= ago(timeframe)
-      | where OperationName == "List Storage Account Keys"
-      | where ActivityStatus == "Succeeded" 
+      | where OperationNameValue == "microsoft.storage/storageaccounts/listkeys/action"
+      | where ActivityStatusValue == "Succeeded" 
       | project ExpectedIpAddress=CallerIpAddress, Caller 
       | evaluate autocluster()
   ) on Caller 
   | where CallerIpAddress != ExpectedIpAddress
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ResourceIds = makeset(ResourceId), ResourceIdCount = dcount(ResourceId) by OperationName, Caller, CallerIpAddress
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResourceIds = make_set(ResourceId), ResourceIdCount = dcount(ResourceId) by OperationNameValue, Caller, CallerIpAddress
+  | extend timestamp = StartTime, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

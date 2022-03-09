@@ -1,0 +1,140 @@
+{
+  "id": "GitHubLogs",
+  "title": "GitHub Enterprise(Preview)",
+  "publisher": "Microsoft",
+  "descriptionMarkdown": "The GitHub Enterprise connector provides the capability to ingest audit, repo and vulnerability alerts from the GitHub Enterprise into Azure Sentinel. The connector provides visibility into these log types in Azure Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "GitHub Audit Logs",
+      "baseQuery": "GitHub_CL"
+    },
+    {
+      "metricName": "Total data received",
+      "legend": "GitHub Repo Logs",
+      "baseQuery": "GitHubRepoLogs_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "Top 10 GitHub Audit Logs",
+      "query": "GitHub_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
+    },
+    {
+      "description": "Top 10 Github Repo Logs",
+      "query": "GitHubRepoLogs_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [ "GitHub_CL \n| summarize LastLogReceived = max(TimeGenerated) \n| project IsConnected = LastLogReceived > ago(30d)", "GitHubRepoLogs_CL \n| summarize LastLogReceived = max(TimeGenerated) \n| project IsConnected = LastLogReceived > ago(30d)" ]
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "GitHub_CL",
+      "lastDataReceivedQuery": "GitHub_CL \n| summarize Time = max(TimeGenerated) \n| where isnotempty(Time)"
+    },    
+    {
+      "name": "GitHubRepoLogs_CL",
+      "lastDataReceivedQuery": "GitHubRepoLogs_CL \n| summarize Time = max(TimeGenerated) \n| where isnotempty(Time)"
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": true
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Microsoft.Web/sites permissions",
+        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+      },
+      {
+        "name": "GitHub API Token (Personal Access Token)",
+        "description": "A GitHub API Token is required. See the documentation to learn more about the [GitHub Personal Access Token](https://github.com/settings/tokens/)."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "",
+      "description": ">**NOTE:** This connector uses Azure Functions to connect to GitHub Enterprise to pull its logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+    },
+    {
+      "title": "",
+      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+    },
+    {
+      "title": "",
+      "description": "**STEP 1 - Configuration steps for the GitHub PAT**\n\n[Follow these instructions](https://github.com/settings/tokens) to create an PAT."     
+    },
+    {
+      "title": "",
+      "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the GitHub Enterprise Data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the GitHub API Authorization Token, readily available.",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": [
+              "WorkspaceId"
+            ],
+            "label": "Workspace ID"
+          },
+          "type": "CopyableLabel"
+        },
+        {
+          "parameters": {
+            "fillWith": [
+              "PrimaryKey"
+            ],
+            "label": "Primary Key"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "title": "Option 1 - Azure Resource Manager (ARM) Template",
+      "description": "This method provides an automated deployment of the GitHub Data connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FGithubFunction%2Fazuredeploy.json)\n\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **Personal Access Token** \n> - The default **Time Interval** is set to pull the last five (5) minutes of data. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly (in the function.json file, post deployment) to prevent overlapping data ingestion. \n> - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy."	  
+    },
+    {
+      "title": "Option 2 - Manual Deployment of Azure Functions",
+      "description": "Use the following step-by-step instructions to deploy the GitHub Enterprise Data connector manually with Azure Functions."
+    },
+    {
+      "title": "",
+      "description": "**1. Create a Function App**\n\n1.  From the Azure Portal, navigate to [Function App](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp), and select **+ Add**.\n2. In the **Basics** tab, ensure Runtime stack is set to **Powershell Core**. \n3. In the **Hosting** tab, ensure the **Consumption (Serverless)** plan type is selected.\n4. Make other preferrable configuration changes, if needed, then click **Create**."
+    },
+    {
+      "title": "",
+      "description": "**2. Import Function App Code**\n\n1. In the newly created Function App, select **Functions** on the left pane and click **+ Add**.\n2. Select **Timer Trigger**.\n3. Enter a unique Function **Name** and leave the default cron schedule of every 5 minutes, then click **Create**.\n4. Click on **Code + Test** on the left pane. \n5. Copy the [Function App Code](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fandedevsecops%2FAzure-Sentinel%2Faz-func-github-dataconnector%2FDataConnectors%2FGithubFunction%2Fazuredeploy.json) and paste into the Function App `run.ps1` editor.\n5. Click **Save**."
+    },
+    {
+      "title": "",
+      "description": "**3. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following five (5) application settings individually, with their respective string values (case-sensitive): \n\t\tPersonalAccessToken\n\t\tTimeInterval\n\t\tWorkspaceID\n\t\tWorkspaceKey\n - Set the `timeInterval` (in minutes) to the default value of `5` to correspond to the default Timer Trigger of every `5` minutes. Note that modifying time interval will require modifying the Function App Timer Trigger accordingly to prevent overlapping data.\n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Once all application settings have been entered, click **Save**."
+    }
+  ]
+}

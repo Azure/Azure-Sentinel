@@ -1,0 +1,367 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This playbook will run query against Azure SQLDB and create or update Azure Sentinel Watchlist ",
+        "author": "Yaniv Shasha"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Watchlist-SendSQLData-Watchlist",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AzureSentinelWorkspaceName": {
+            "defaultValue": "The Azure Sentinel workspace name",
+            "type": "string"
+        },
+        "AzureSentinelResourceGroup": {
+            "defaultValue": "The resource group where the Sentinel workspace is under",
+            "type": "string"
+        },
+        "WatchlistName": {
+            "defaultValue": "Name of watchlist that stores SQL DB Info",
+            "type": "string"
+        },
+        "SQLQuery": {
+            "defaultValue": "SQL select query",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "sql-1": "[concat('sql-1', parameters('PlaybookName'))]"
+
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('sql-1')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sql')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('sql-1'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Update_existing_Watchlist_": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "properties": {
+                                                "contentType": "text/csv",
+                                                "createdBy": {
+                                                    "objectId": "c580700e-878a-4f6d-a6dd-3f2300d4ddca"
+                                                },
+                                                "description": "csv1",
+                                                "displayName": "data from SQL query",
+                                                "labels": [],
+                                                "numberOfLinesToSkip": "0",
+                                                "provider": "Microsoft",
+                                                "rawContent": "@{body('Create_CSV_table')}",
+                                                "source": "Local file"
+                                            }
+                                        },
+                                        "method": "PUT",
+                                        "uri": "https://management.azure.com/subscriptions/@{variables('SubscriptionID')}/resourceGroups/@{variables('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('WorkspaceName')}/providers/Microsoft.SecurityInsights/watchlists/@{variables('Watchlist_Name')}?api-version=2019-01-01-preview"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "check_if_watchlist_exist_": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Until": {
+                                        "actions": {
+                                            "Create_a_watchlist_and_Watchlist_Items": {
+                                                "runAfter": {},
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "authentication": {
+                                                        "type": "ManagedServiceIdentity"
+                                                    },
+                                                    "body": {
+                                                        "properties": {
+                                                            "contentType": "text/csv",
+                                                            "createdBy": {
+                                                                "objectId": "c580700e-878a-4f6d-a6dd-3f2300d4ddca"
+                                                            },
+                                                            "description": "csv1",
+                                                            "displayName": "Data From SQL Query",
+                                                            "labels": [],
+                                                            "numberOfLinesToSkip": "0",
+                                                            "provider": "Microsoft",
+                                                            "rawContent": "@{body('Create_CSV_table')}",
+                                                            "source": "Local file"
+                                                        }
+                                                    },
+                                                    "method": "PUT",
+                                                    "uri": "https://management.azure.com/subscriptions/@{variables('SubscriptionID')}/resourceGroups/@{variables('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('WorkspaceName')}/providers/Microsoft.SecurityInsights/watchlists/@{variables('Watchlist_Name')}?api-version=2019-01-01-preview"
+                                                }
+                                            },
+                                            "Increment_variable": {
+                                                "runAfter": {
+                                                    "Create_a_watchlist_and_Watchlist_Items": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "IncrementVariable",
+                                                "inputs": {
+                                                    "name": "runs",
+                                                    "value": 1
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "expression": "@greater(variables('runs'), 1)",
+                                        "limit": {
+                                            "count": 60,
+                                            "timeout": "PT1H"
+                                        },
+                                        "type": "Until"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('check_if_watchlist_exist_')['statusCode']",
+                                            200
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Create_CSV_table": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "CSV",
+                                "from": "@body('Parse_JSON')?['ResultSets']?['Table1']"
+                            }
+                        },
+                        "Execute_a_SQL_query_(V2)": {
+                            "runAfter": {
+                                "WatchListName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "query": "@variables('SQL Select Query')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['sql-1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('default'))},@{encodeURIComponent(encodeURIComponent('default'))}/query/sql"
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Execute_a_SQL_query_(V2)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Execute_a_SQL_query_(V2)')",
+                                "schema": {
+                                    "properties": {
+                                        "FirstName": {
+                                            "type": "string"
+                                        },
+                                        "LastName": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "ResourceGroup": {
+                            "runAfter": {
+                                "SubscriptionID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ResourceGroup",
+                                        "type": "string",
+                                        "value": "[parameters('AzureSentinelResourceGroup')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Runs": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "runs",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "SQL_Query": {
+                            "runAfter": {
+                                "Runs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SQL Select Query",
+                                        "type": "string",
+                                          "value": "[parameters('SQLQuery')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "SubscriptionID": {
+                            "runAfter": {
+                                "SQL_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SubscriptionID",
+                                        "type": "string",
+                                       "value": "[subscription().subscriptionId]"
+                                    }
+                                ]
+                            }
+                        },
+                        "WatchListName": {
+                            "runAfter": {
+                                "WorkspaceName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Watchlist_Name",
+                                        "type": "string",
+                                  "value": "[parameters('WatchlistName')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "WorkspaceName": {
+                            "runAfter": {
+                                "ResourceGroup": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "WorkspaceName",
+                                        "type": "string",
+                                        "value": "[parameters('AzureSentinelWorkspaceName')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "check_if_watchlist_exist_": {
+                            "runAfter": {
+                                "Create_CSV_table": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "uri": "https://management.azure.com/subscriptions/@{variables('SubscriptionID')}/resourceGroups/@{variables('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{variables('WorkspaceName')}/providers/Microsoft.SecurityInsights/watchlists/@{variables('Watchlist_Name')}?api-version=2019-01-01-preview"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                         "value": {
+                            "sql-1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('sql-1'))]",
+                                "connectionName": "[variables('sql-1')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sql')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,27 @@
+id: 55a29d46-2cd5-44af-80aa-20d0ac4c86f8
+name: Events surrounding alert (1)
+description: |
+  This query looks for events that are near in time to a detected event.
+  It shows how you could avoid typing exact timestamps, and replace it with a simple query to get the timestamp of your pivot event (e.g. a detected event).
+  This is useful when you have queries that you run often - e.g. as part of your regular investigation of an alert.
+  Original query: filter for network logon events right before some timestamp.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceAlertEvents
+  - AlertInfo
+  - AlertEvidence
+  - DeviceLogonEvents
+query: |
+  // Modified query: instead of copy-pasting the timestamp, get the timestamp of some event you can filter - MTP Schema
+  // In this example, take the time of the first detected event in an alert.
+  // We filter on alertId - which you can get from all our APIs (SIEM, Graph API, PowerBI, DeviceAlertEvents table) or from the UI (the last part of the link to the alert page)
+  let alertId = "636641078490537577_-1905871543";
+  let alert = AlertInfo | join AlertEvidence on AlertId | where AlertId == alertId | summarize AlertFirstTimestamp=min(Timestamp) by DeviceId;
+  let DeviceId = toscalar(alert | project DeviceId);
+  let timestamp = toscalar(alert | project AlertFirstTimestamp);
+  let lookupPeriod = 10m;
+  DeviceLogonEvents
+  | where Timestamp between ((timestamp - lookupPeriod) .. lookupPeriod)
+          and DeviceId == DeviceId
+          and LogonType == "Network"
