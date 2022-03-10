@@ -23,11 +23,7 @@ function Get-CloudTrailKmsPolicy
                 'AWS': ['${roleArn}']
             },
             'Action': [
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey'
+                'kms:Decrypt'
             ],
             'Resource': '*'
         }
@@ -117,7 +113,7 @@ function Get-RoleAndCloudTrailS3Policy
             'Principal': {
                 'AWS': '${roleArn}'
             },
-            'Action': ['s3:Get*','s3:List*'],
+            'Action': ['s3:GetObject'],
             'Resource': 'arn:aws:s3:::${bucketName}/*'
         },
 		{
