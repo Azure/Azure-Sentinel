@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "Workspace Region": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('Workspace Region')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTerminateMicrosoftWindowsEvents",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Terminate Event ASIM parser for WEF Security Events",
+            "category": "ASIM",
+            "FunctionAlias": "vimProcessTerminateMicrosoftWindowsEvents",
+            "query": "let ProcessEvents=(){\nWindowsEvent | where EventID == 4689\n    // -- Filter\n    // -- Map\n      | extend\n    // Event\n  EventCount = int(1),\n  EventVendor = \"Microsoft\",\n  EventProduct = \"Security Events\",\n  EventSchemaVersion = \"0.1.0\",\n  EventStartTime = todatetime(TimeGenerated),\n  EventEndTime = todatetime(TimeGenerated),\n  EventType = \"ProcessTerminated\",\n  EventResult = 'Success',\n  EventOriginalType = tostring(EventID),\n  EventOriginalUid = EventOriginId,\n  EventResultDetails = tostring(EventData.Status),\n  EventOriginalResultDetails = tostring(EventData.Status), \n// Device\n  DvcId = tostring(EventData.SourceComputerId),\n  DvcHostname = Computer,\n  DvcOs = \"Windows\",\n// Users\n  ActorUserId = tostring(EventData.SubjectUserSid),\n  ActorUserIdType = \"SID\",\n  ActorUsername = tostring(iff (EventData.SubjectDomainName in ('', '-'), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @\"\\\" , EventData.SubjectUserName))),\n  ActorUsernameType = iff(EventData.SubjectDomainName in ('', '-'),'Simple', 'Windows'),\n  ActorSessionId = tostring(toint(EventData.SubjectLogonId)),\n// Processes \n  TargetProcessId = tostring(toint(tostring(EventData.ProcessId))),\n  TargetProcessName = tostring(EventData.ProcessName),\n  TargetProcessCommandLine = tostring(EventData.CommandLine),\n  TargetProcessTokenElevation = tostring(EventData.TokenElevationType)\n// Aliases\n    | extend \n  User = ActorUsername,\n  Dvc = DvcHostname,\n  Process = TargetProcessName\n   | project-away EventData\n  }; ProcessEvents\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

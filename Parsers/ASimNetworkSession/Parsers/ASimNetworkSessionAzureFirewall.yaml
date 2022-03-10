@@ -1,0 +1,116 @@
+Parser:
+  Title: Network Session ASIM parser for Azure Firewall logs
+  Version: '0.1'
+  LastUpdated: Feb 07, 2021
+Product:
+  Name: Azure Firewall
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Azure Firewall logs to the ASIM Network Session normalized schema. This parser is partially based on a work by [Koos Goossens](https://github.com/TheCloudScout).
+ParserName: ASimNetworkSessionAzureFirewall
+EquivalentBuiltInParser: _ASim_NetworkSession_AzureFirewall
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ICMPlookup = datatable (NetworkIcmpCode: int, NetworkIcmpType:string)
+      [
+      0,"Echo Reply",
+      1,"Unassigned",
+      2,"Unassigned",
+      3,"Destination Unreachable",
+      5,"Redirect",
+      8,"Echo",
+      9,"Router Advertisement",
+      10,"Router Solicitation",
+      11,"Time Exceeded",
+      12,"Parameter Problem",
+      13,"Timestamp",
+      14,"Timestamp Reply",
+      40,"Photuris",
+      42,"Extended Echo Request",
+      43,"Extended Echo Reply"
+      ];
+  let parser = (disabled:bool=false) {
+      let AzureFirewallNetworkRuleLogs = 
+          AzureDiagnostics
+          | where not(disabled)
+          | where Category == "AzureFirewallNetworkRule"
+          | where isnotempty(msg_s);
+      let AzureFirewallSessionLogs = 
+          AzureFirewallNetworkRuleLogs
+          | where OperationName in ("AzureFirewallNetworkRuleLog","AzureFirewallThreatIntelLog")
+          | parse-where
+              msg_s with           NetworkProtocol:string 
+              " request from "     SrcIpAddr:string
+              ":"                  SrcPortNumber:int
+              " to "               DstIpAddr:string
+              ":"                  DstPortNumber:int
+              ". Action: "         DvcAction:string
+              "."                  *
+          | project-away msg_s
+          | extend NetworkIcmpCode = iff(NetworkProtocol startswith "ICMP", toint(extract ("type=(\\d+)",1,NetworkProtocol)), toint(0))
+          | extend NetworkProtocol = iff(NetworkProtocol startswith "ICMP", "ICMP", NetworkProtocol)
+          | lookup ICMPlookup on NetworkIcmpCode
+          | extend EventSeverity = case (
+              OperationName  == "AzureFirewallThreatIntelLog", "Medium",
+              DvcAction == "Deny", "Low",
+              "Informational")
+          | extend EventResult = iff(DvcAction == "Allow", "Success", "Failure")
+          ;
+      let AzureFirewallNATLogs = 
+          AzureFirewallNetworkRuleLogs
+          | where OperationName == "AzureFirewallNatRuleLog"
+          | parse-where
+              msg_s with           NetworkProtocol:string 
+              " request from "     SrcIpAddr:string
+              ":"                  SrcPortNumber:int
+              " to "               DstIpAddr:string
+              ":"                  DstPortNumber:int
+              " was DNAT'ed to "   DstNatIpAddr:string
+              ":"                  DstNatPortNumber:int
+          | project-away msg_s
+          | extend EventSeverity = "Informational"
+          | extend EventResult = "Success"
+          | extend DvcAction = "Allow"
+          ;
+      union AzureFirewallSessionLogs, AzureFirewallNATLogs
+      | extend
+          EventVendor="Microsoft",
+          EventProduct="Azure Firewall",
+          EventType="NetworkSession",
+          EventCount=toint(1),
+          EventSchemaVersion="0.2.2",
+          EventSchema="NetworkSession",
+          DvcIdType = "AzureResourceId"
+      | project-rename
+          DvcSubscriptionId = SubscriptionId,
+          DvcId = ResourceId
+      // -- Aliases
+      | extend
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          Dvc = DvcId,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated // ??
+      | project-keep
+          Src*,
+          Dst*,
+          Event*,
+          Dvc*,
+          Network*,
+          IpAddr,
+          Type,
+          _ResourceId,
+          TimeGenerated
+  };
+  parser (disabled)
