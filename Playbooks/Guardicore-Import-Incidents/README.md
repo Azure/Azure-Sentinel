@@ -25,6 +25,8 @@ You will need the following items to enter in the playbook settings during deplo
 
 * The Primary or Secondary Key to your workspace. 
 
+#
+
 Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
 In the **BASICS** section:  
