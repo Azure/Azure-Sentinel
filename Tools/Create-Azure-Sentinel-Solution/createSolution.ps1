@@ -80,6 +80,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $workbookCounter = 1
     $playbookCounter = 1
     $parserCounter = 1
+    $savedSearchCounter = 1
     $huntingQueryCounter = 1
     $watchlistCounter = 1
 
@@ -357,6 +358,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         type      = "securestring";
                                         minLength = 1;
                                         metadata  = [PSCustomObject] @{ description = "Password to connect to $solutionName API"; }
+                                    }
+								)
+                            }
+							elseif ($param.Name.ToLower().contains("apikey")) {
+                                $playbookPasswordObject = [PSCustomObject] @{
+                                    name        = "playbook$playbookCounter-$paramName";
+                                    type        = "Microsoft.Common.PasswordBox";
+                                    label       = [PSCustomObject] @{password = "ApiKey"};
+                                    toolTip     = "ApiKey to connect to $solutionName API";
+                                    constraints = [PSCustomObject] @{ required = $true; };
+                                    options     = [PSCustomObject] @{ hideConfirmation = $true; };
+                                }
+                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
+                                        type      = "securestring";
+                                        minLength = 1;
+                                        metadata  = [PSCustomObject] @{ description = "ApiKey to connect to $solutionName API"; }
                                     })
                             }
                             else {
@@ -424,7 +442,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($variableValue -is [System.String]) {
                                 $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                             }
-                            if (($solutionName.ToLower() -eq "ciscomeraki") -and ($variableName.ToLower().contains("apikey")))
+                            if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey")))
                             {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$variableName" -NotePropertyValue "[$variableValue]"
                             }
@@ -711,6 +729,43 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Update Connector Counter
                         $connectorCounter += 1
+                    }
+                    elseif ($objectKeyLowercase -eq "savedsearches") {
+                        $isStandardTemplate = $false
+                        $searchData = $json # Assume input is basic array of SavedSearches to start
+                        # Check if SavedSearch input file uses direct structure given by export
+                        if ($searchData -isnot [System.Array] -and $searchData.value) {
+                            $searchData = $searchData.value 
+                        }
+                        # Check if SavedSearch input file uses standard template structure
+                        if ($searchData -isnot [System.Array] -and $searchData.resources) {
+                            $isStandardTemplate = $true
+                            $searchData = $searchData.resources
+                        }
+                        if($searchData -is [System.Array] -and !$isStandardTemplate) {
+                            foreach($search in $searchData) {
+                                $savedSearchIdParameterName = "savedsearch$savedSearchCounter-id"
+                                $savedSearchIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
+                                $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $savedSearchIdParameterName -Value $savedSearchIdParameter
+
+                                $savedSearchResource = [PSCustomObject]@{
+                                    type = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                                    apiVersion = "2020-08-01";
+                                    name = "[concat(parameters('workspace'),'/',parameters('$savedSearchIdParameterName'))]";
+                                    properties = [PSCustomObject]@{
+                                        category = $search.properties.category;
+                                        displayName = $search.properties.displayName;
+                                        query = $search.properties.query;
+                                        functionAlias = $search.properties.functionAlias;
+                                        version = $search.properties.version;
+                                    };
+                                }
+                                $baseMainTemplate.resources += $savedSearchResource
+                                $savedSearchCounter++
+                            }
+                        } elseif ($isStandardTemplate) {
+                            $baseMainTemplate.resources += $searchData
+                        }
                     }
                     elseif ($objectKeyLowercase -eq "watchlists") {
                         $watchlistData = $json.resources[0]
