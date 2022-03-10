@@ -96,7 +96,7 @@
     foreach ($query in $queries.Value) {
         $category_matches = (-not $category_set -or $query.Properties.Category -ieq $Category)
         $savedfunctionname = $query.Properties.FunctionAlias
-        if ($category_matches -and  (%{$FunctionName | %{$savedfunctionname -like $_}}) -contains $true )  {
+        if ($category_matches -and ($savedfunctionname) -and  (%{$FunctionName | %{$savedfunctionname -like $_}}) -contains $true )  {
            Write-Host "Deleting $savedfunctionname ...`n"
            if ($yestoall -eq $false)       {
                $approved = Read-Host -Prompt "`t Are you sure (default: Skip)? [Y] Yes, [A] Yes to all, [S] Skip, [Q] quit"
