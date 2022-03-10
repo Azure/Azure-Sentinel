@@ -25,21 +25,56 @@ query: |
   let timeframe = 1d;
   let spanoftime = 10m;
   let threshold = 0;
-  SecurityEvent
+   (union isfuzzy=true
+   (SecurityEvent
   | where TimeGenerated > ago(timeframe+spanoftime)
   // A user account was created
   | where EventID == 4720
   | where AccountType =~ "User"
   | project creationTime = TimeGenerated, CreateEventID = EventID, CreateActivity = Activity, Computer, TargetUserName, UserPrincipalName, 
   AccountUsedToCreate = SubjectAccount, SIDofAccountUsedToCreate = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid
+  ),
+  (
+  WindowsEvent
+  | where TimeGenerated > ago(timeframe+spanoftime)
+  // A user account was created
+  | where EventID == 4720
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+  | where AccountType =~ "User"
+  | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend TargetSid = tostring(EventData.TargetSid)
+  | extend UserPrincipalName = tostring(EventData.UserPrincipalName)
+  | extend Activity = "4720 - A user account was created."
+  | extend TargetUserName = tostring(EventData.TargetUserName) 
+  | project creationTime = TimeGenerated, CreateEventID = EventID, CreateActivity = Activity, Computer, TargetUserName, UserPrincipalName, 
+  AccountUsedToCreate = SubjectAccount, SIDofAccountUsedToCreate = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid  
+  ))
   | join kind= inner (
-    SecurityEvent
+    (union isfuzzy=true
+    (SecurityEvent
     | where TimeGenerated > ago(timeframe)
     // A user account was deleted
     | where EventID == 4726
   | where AccountType == "User"
   | project deletionTime = TimeGenerated, DeleteEventID = EventID, DeleteActivity = Activity, Computer, TargetUserName, UserPrincipalName, 
   AccountUsedToDelete = SubjectAccount, SIDofAccountUsedToDelete = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid
+  ),
+  (WindowsEvent
+  | where TimeGenerated > ago(timeframe)
+    // A user account was deleted
+  | where EventID == 4726
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend AccountType=case(SubjectAccount endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+  | where AccountType == "User"
+  | extend TargetSid = tostring(EventData.TargetSid)
+  | extend UserPrincipalName = tostring(EventData.UserPrincipalName)
+  | extend Activity = "4726 - A user account was deleted."
+  | extend TargetUserName = tostring(EventData.TargetUserName) 
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | project deletionTime = TimeGenerated, DeleteEventID = EventID, DeleteActivity = Activity, Computer, TargetUserName, UserPrincipalName, AccountUsedToDelete = SubjectAccount, SIDofAccountUsedToDelete = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid))
   ) on Computer, TargetAccount
   | where deletionTime - creationTime < spanoftime
   | extend TimeDelta = deletionTime - creationTime
@@ -58,5 +93,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
