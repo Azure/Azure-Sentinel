@@ -4,12 +4,12 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com 
 
+This playbook is intended to be run from an Azure Sentinel alert. It will pull email addresses from the account entities in an alert and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient specified upon deployment.
+
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS_Alert_Spiderfoot_Scan%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/AS_Alert_Spiderfoot_Scan/azuredeploy.json" target="_blank"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/></a>
-
-This playbook is intended to be run from an Azure Sentinel alert. It will pull email addresses from the account entities in an alert and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient specified upon deployment.
 
 #
 
