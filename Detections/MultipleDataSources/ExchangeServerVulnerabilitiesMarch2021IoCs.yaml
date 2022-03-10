@@ -53,6 +53,9 @@ requiredDataConnectors:
   - connectorId: InfobloxNIOS
     dataTypes: 
       - Syslog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes: 
+      - Syslog
   - connectorId: GCPDNSDataConnector
     dataTypes: 
       - GCP_DNS_CL
@@ -135,6 +138,16 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by SourceIP, DestinationIP, DeviceProduct, DeviceAction, Message, Protocol, SourcePort, DestinationPort, DeviceAddress, DeviceName, IPMatch
   | extend timestamp = StartTimeUtc, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "IP in Message Field")
   ),
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
+  | where SourceIP in (ips) or DestinationIP in (ips)
+  | extend IPMatch = case( SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", "None")
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
+  ),
   (WireData
   | where isnotempty(RemoteIP)
   | where RemoteIP in (ips)
@@ -144,6 +157,11 @@ query: |
   | where isnotempty(cIP)
   | where cIP in (ips)
   | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName
+  ),
+  (
+  WindowsFirewall
+  | where SourceIP in (ips) or DestinationIP in (ips)
+  | extend IPMatch = case( SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", "None")
   ),
   (
     _Im_NetworkSession(srcipaddr_has_any_prefix=ips) 
