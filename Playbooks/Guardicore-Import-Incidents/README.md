@@ -27,8 +27,6 @@ You will need the following items to enter in the playbook settings during deplo
 
 Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
-![Deploy](Images/GitDeploy.png)
-
 In the **BASICS** section:  
 
 * Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.  
