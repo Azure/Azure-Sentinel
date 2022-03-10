@@ -29,7 +29,7 @@ You will need the following items to enter into the template settings during dep
  #
 To configure and deploy this playbook:
 
-Click the “Deploy to Azure” button at the bottom and it will bring you to the Custom Deployment Template.
+Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
 In the first section:  
 
