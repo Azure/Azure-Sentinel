@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 2-17-2022
+        LASTEDIT: 3-9-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -129,8 +129,9 @@ function Get-RequiredModules {
                     }
                 }
                 else {
-                    Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
-                    Import-Module -Name $Module -Force
+                    $latestVersion = [Version](Get-Module -Name $Module).Version               
+                    Write-Log -Message "Importing module $Module with version $latestVersion" -LogFileName $LogFileName -Severity Information
+                    Import-Module -Name $Module -RequiredVersion $latestVersion -Force
                 }
             }
             else {                
@@ -401,7 +402,7 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
 
 function BuildArmTemplate($playbookResource) {
     Try {
-        $armTemplate = @{
+        $armTemplate = [ordered] @{
             '$schema'= "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
             "contentVersion"= "1.0.0.0"
             "parameters"= $templateParameters
@@ -410,7 +411,7 @@ function BuildArmTemplate($playbookResource) {
         }
 
         if ($GenerateForGallery) {
-            $armTemplate.metadata = @{
+            $armTemplate.metadata = [ordered] @{
                 "title"= ""
                 "description"= ""
                 "prerequisites"= ""
