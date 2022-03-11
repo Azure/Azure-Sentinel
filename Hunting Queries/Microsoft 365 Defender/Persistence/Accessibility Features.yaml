@@ -1,0 +1,55 @@
+id: a5649d8b-e54b-4e2b-925a-106bf838d69c
+name: Accessibility Features
+description: |
+  This query looks for persistence or priviledge escalation done using Windows Accessibility features.
+  It covers some of the techniques that could be used to utilize these features for malicious purposes,.
+  Including attaching a debugger using a registry config or overwriting these files.
+  Note: some developers might use such hacks for all sort of troubleshooting and testing purposes,.
+  But this better be prohibited, as it allows any account with access to the machine to run processes as SYSTEM.
+  Read more here: https://attack.mitre.org/wiki/Technique/T1015.
+  Tags: #AccessibilityFeatures, #StickyKeys, #ImageFileExecutionOptions, #Debugger, #PriviledgeEscalation, #Persistence.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceRegistryEvents
+  - DeviceFileEvents
+  - DeviceProcessEvents
+query: |
+  let minTime = ago(7d);
+  let accessibilityProcessNames = dynamic(["utilman.exe","osk.exe","magnify.exe","narrator.exe","displayswitch.exe","atbroker.exe","sethc.exe", "helppane.exe"]);
+  // Query for debuggers attached using a Registry setting to the accessibility processes
+  let attachedDebugger =
+      DeviceRegistryEvents
+      | where Timestamp > minTime
+      and RegistryKey startswith @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\"
+      and RegistryValueName =~ "debugger"
+  	// Parse the debugged process name from the registry key
+      | parse RegistryKey with @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\" FileName
+      | where FileName in~ (accessibilityProcessNames) and isnotempty(RegistryValueData)
+      | project Technique="AttachedDebugger", FileName, AttachedDebuggerCommandline=RegistryValueData, InitiatingProcessCommandLine, Timestamp, DeviceName;
+  // Query for overwrites of the accessibility files
+  let fileOverwiteOfAccessibilityFiles =
+      DeviceFileEvents
+      | where Timestamp > minTime
+          and FileName in~ (accessibilityProcessNames)
+          and FolderPath contains @"Windows\System32" 
+      | project Technique="OverwriteFile", Timestamp, DeviceName, FileName, SHA1, InitiatingProcessCommandLine;
+  // Query for unexpected hashes of processes with names matching the accessibility processes.
+  // Specifically, query for hashes matching cmd.exe and powershell.exe, as these MS-signed general-purpose consoles are often used with this technique.
+  let executedProcessIsPowershellOrCmd =
+      DeviceProcessEvents 
+      | project Technique="PreviousOverwriteFile", Timestamp, DeviceName, FileName, SHA1 
+      | where Timestamp > minTime
+      | where FileName in~ (accessibilityProcessNames)
+      | join kind=leftsemi(
+          DeviceProcessEvents  
+          | where Timestamp > ago(14d) and (FileName =~ "cmd.exe" or FileName =~ "powershell.exe")
+          | summarize MachinesCount = dcount(DeviceName) by SHA1  
+          | where MachinesCount > 5
+          | project SHA1
+      ) on SHA1;
+  // Union all results together. 
+  // An outer union is used because the schemas are a bit different between the tables - and we want to get the superset of all tables combined.
+  attachedDebugger
+  | union kind=outer fileOverwiteOfAccessibilityFiles
+  | union kind=outer executedProcessIsPowershellOrCmd

@@ -43,6 +43,9 @@ requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
       - DnsEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -58,10 +61,18 @@ query: |
   let sha256s = (iocs | where Type =~ "sha256" | project IoC);
   let ips = (iocs | where Type =~ "ip" | project IoC);
   let domains = (iocs | where Type =~ "domainname" | project IoC);
+  let dyndomains = todynamic(toscalar((domains | summarize make_set(IoC))));
   union isfuzzy=true
   (SecurityEvent
   | where EventID == 4663
   | where ObjectName in (file_paths)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (WindowsEvent
+  | where EventID == 4663 and EventData has_any (file_paths)
+  | extend ObjectName = tostring(EventData.ObjectName) 
+  | where ObjectName in (file_paths)
+  | extend Account = strcat(tostring(EventData.SubjectDomainName), "\\", tostring(EventData.SubjectUserName))
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
   (imFileEvent
@@ -143,8 +154,7 @@ query: |
   | where Name has_any (domains)
   | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer
   ),
-  (
-  imDns(domain_has_any=domains)
+  (imDns(domain_has_any=dyndomains)
   | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Dvc
   )
 entityMappings:
@@ -164,5 +174,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.4.0
+version: 1.6.0
 kind: Scheduled
