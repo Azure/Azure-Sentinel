@@ -8,7 +8,7 @@ The Advanced Security Information Model (ASIM) enables you to use and create sou
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM Authentication normalization schema reference](https://aka.ms/ASimAuthenticationDoc)
 
