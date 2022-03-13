@@ -1,11 +1,8 @@
-# Source Agnostic ASIM RegistryEvent Normalization Parser
+# Microsoft ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Source Agnostic.
+This template deploys the ASIM RegistryEvent schema parser for Microsoft. The parser is a part of the Advanced Security Information Model.
 
-The purpose of this KQL function is to generate and make available the default schema columns for the ASIM Registry Event schema
-
-
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

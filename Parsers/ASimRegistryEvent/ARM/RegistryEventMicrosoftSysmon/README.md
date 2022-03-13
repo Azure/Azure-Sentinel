@@ -1,10 +1,8 @@
 # Microsoft Windows Events Sysmon ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Microsoft Windows Events Sysmon.
+This template deploys the ASIM RegistryEvent schema parser for Microsoft Windows Events Sysmon. The parser is a part of the Advanced Security Information Model.
 
-ASIM Sysmon Registry Creation Event Parser (event number 12, 13, 14) from "Event" and "WindowsEvent" tables.
-
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

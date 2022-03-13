@@ -1,10 +1,8 @@
 # Microsoft 365 Defender ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Microsoft 365 Defender.
+This template deploys the Microsoft 365 Defender ASIM RegistryEvent schema parser. The parser is a part of the Advanced Security Information Model.
 
-ASIM M365 Defender for endpoint Registry Events Parser
-
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

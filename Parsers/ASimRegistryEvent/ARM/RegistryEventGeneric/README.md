@@ -1,11 +1,8 @@
 # Source Agnostic ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Source Agnostic.
+This template deploys the ASIM RegistryEvent schema parser for Source Agnostic. The parser is a part of the Advanced Security Information Model.
 
-ASIM Source Agnostic Registry Events Parser
-
-
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
