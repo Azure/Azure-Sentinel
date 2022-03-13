@@ -5,7 +5,7 @@ This template deploys the ASIM Authentication schema parser for Azure active dir
 This Query Parser maps Azure Active Directory Non Interactive sign in logs (AADNonInteractiveUserSignInLogs) to the Advanced Security Information Model authenticaion schema.
 
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

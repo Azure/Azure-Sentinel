@@ -13,7 +13,8 @@ For more information, see:
 
 To deploy all parsers to your workspace using ARM templates use the button below:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuthenticationARMgov)
+
 
 <br>
 

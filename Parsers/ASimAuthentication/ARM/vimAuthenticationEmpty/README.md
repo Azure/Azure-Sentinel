@@ -5,7 +5,7 @@ This template deploys the ASIM Authentication schema parser for Microsoft Sentin
 The purpose of this KQL function is to generate and make available the default schema columns for the ASIM Authentication schema.
 
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
