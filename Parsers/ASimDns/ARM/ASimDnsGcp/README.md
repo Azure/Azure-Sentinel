@@ -1,12 +1,15 @@
 # GCP Cloud DNS ASIM Dns Normalization Parser
 
-This template deploys the ASIM DNS schema parser for GCP Cloud DNS. The parser is a part of the Advanced Security Information Model.
+This template deploys the ASIM Dns schema parser for GCP Cloud DNS.
+
+Normalize Google cloud platform (GCP) DNS logs to the ASIM DNS activity normalized schema.
+
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM Dns normalization schema reference](https://aka.ms/ASimDnsDoc)
 

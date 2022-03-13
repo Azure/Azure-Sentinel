@@ -1,6 +1,6 @@
 # Native ASIM Dns Normalization Parser
 
-This template deploys the ASIM DNS schema parser for Native. The parser is a part of the Advanced Security Information Model.
+This template deploys the ASIM Dns schema parser for Native.
 
 This ASIM parser supports filtering and normalizing the native Microsoft Sentinel DNS table (ASimDnsActivityLogs) to the ASIM DNS activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabiliteis, such as aliases, available only at query time. 
 
@@ -9,7 +9,7 @@ The Advanced Security Information Model (ASIM) enables you to use and create sou
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM Dns normalization schema reference](https://aka.ms/ASimDnsDoc)
 

@@ -1,6 +1,6 @@
 # Microsoft ASIM Dns Normalization Parser
 
-This template deploys the ASIM DNS schema parser for Microsoft.m  The parser is a part of the Advanced Security Information Model.
+This template deploys the ASIM Dns schema parser for Microsoft.
 
 This function returns an empty ASIM DNS activity schema
 
@@ -9,7 +9,7 @@ The Advanced Security Information Model (ASIM) enables you to use and create sou
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM Dns normalization schema reference](https://aka.ms/ASimDnsDoc)
 
