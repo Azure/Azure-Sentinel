@@ -1,11 +1,10 @@
 # Infoblox NIOS ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Infoblox NIOS.
-
-Normalize Infoblox NIOS DNS logs to the ASIM DNS activity normalized schema.
+This template deploys the ASIM DNS schema parser for Infoblox NIOS. The parser is a part of the Advanced Security Information Model.
 
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

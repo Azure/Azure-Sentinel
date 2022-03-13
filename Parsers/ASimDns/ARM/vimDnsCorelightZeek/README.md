@@ -1,11 +1,11 @@
 # Corelight Zeek ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Corelight Zeek.
+This template deploys the ASIM DNS schema parser for Corelight Zeek. The parser is a part of the Advanced Security Information Model.
 
 Filter and normalize Corelight Zeek DNS logs to the ASIM DNS activity normalized schema.
 
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

@@ -1,11 +1,8 @@
-# Source agnostic ASIM Dns Normalization Parser
+# Source agnostic ASIM DNS Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Source agnostic.
+This template deploys the ASIM Source agnostic DNS schema parser. The parser is a part of the Advanced Security Information Model.
 
-This ASIM parser supports normalizing DNS activity logs from all supported sources to the ASIM DNS activity normalized schema.
-
-
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
