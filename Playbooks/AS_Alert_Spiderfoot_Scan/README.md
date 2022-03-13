@@ -1,10 +1,15 @@
 # AS_Alert_Spiderfoot_Scan
 
-Author: Arbala Security
+Author: Accelerynt
 
-For any technical questions, please contact info@arbalasystems.com   
+For any technical questions, please contact info@accelerynt.com 
 
 This playbook is intended to be run from an Azure Sentinel alert. It will pull email addresses from the account entities in an alert and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient specified upon deployment.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS_Alert_Spiderfoot_Scan%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/AS_Alert_Spiderfoot_Scan/azuredeploy.json" target="_blank"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/></a>
 
 #
 
@@ -23,15 +28,8 @@ You will need the following items to enter into the template settings during dep
 
  #
 To configure and deploy this playbook:
- 
-Open your browser and ensure you are logged into your Azure Sentinel workspace. In a separate tab, open the link to our playbook on the Arbala Security GitHub Repository:
 
-https://github.com/Arbala-Security/AS_Alert_Spiderfoot_Scan
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FAS_Alert_Spiderfoot_Scan%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FAS_Alert_Spiderfoot_Scan%2Fmaster%2Fazuredeploy.json)
-
-From there, click the “Deploy to Azure” button at the bottom and it will bring you to the Custom Deployment Template.
+Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
 In the first section:  
 
