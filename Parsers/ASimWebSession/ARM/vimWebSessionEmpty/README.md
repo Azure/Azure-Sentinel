@@ -2,10 +2,7 @@
 
 This template deploys the ASIM WebSession schema parser for Microsoft.
 
-This function returns an empty ASIM Web Session schema
-
-
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

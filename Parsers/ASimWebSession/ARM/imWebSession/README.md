@@ -2,10 +2,7 @@
 
 This template deploys the ASIM WebSession schema parser for Source agnostic.
 
-This ASIM parser supports filtering and normalizing Web Session logs from all supported sources to the ASIM Web Session normalized schema.
-
-
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
