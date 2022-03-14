@@ -1,8 +1,9 @@
-# Microsoft Defender for IoT - Endpoint ASIM Authentication Normalization Parser
+# Microsoft Defender for IoT ASIM Authentication Normalization Parser
 
-This template deploys the ASIM Authentication schema parser for Microsoft Defender for IoT - Endpoint.
+This template deploys the ASIM Authentication schema parser for Microsoft Defender for IoT.
 
-ASIM Azure Defender for IoT Authentication Parser
+This ASIM parser supports normalizing Microsoft Defender for IoT logs, produced by the Microsoft Defender for IoT connector, to the ASIM Authentication normalized schema.
+
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
@@ -14,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FvimAuthenticationMicrosoftMD4IoT%2FvimAuthenticationMicrosoftMD4IoT.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FvimAuthenticationMicrosoftMD4IoT%2FvimAuthenticationMicrosoftMD4IoT.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FRearrangement%2FAsimAuth%2FParsers%2FASimAuthentication%2FARM%2FvimAuthenticationMicrosoftMD4IoT%2FvimAuthenticationMicrosoftMD4IoT.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FRearrangement%2FAsimAuth%2FParsers%2FASimAuthentication%2FARM%2FvimAuthenticationMicrosoftMD4IoT%2FvimAuthenticationMicrosoftMD4IoT.json)

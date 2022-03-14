@@ -1,8 +1,8 @@
-# M365 Defender ASIM Authentication Normalization Parser
+# Microsoft 365 Defender for Endpoint ASIM Authentication Normalization Parser
 
-This template deploys the ASIM Authentication schema parser for M365 Defender.
+This template deploys the ASIM Authentication schema parser for Microsoft 365 Defender for Endpoint.
 
-This Query Parser maps M365 Defender Device Logon Events (DeviceLogonEvents) to the Advanced Security Information Model authenticaion schema.
+This ASIM parser supports normalizing Microsoft 365 Defender for Endpoint, produced by the Microsoft Defender for Endpoint connector, to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
@@ -15,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FASimAuthenticationM365Defender%2FASimAuthenticationM365Defender.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FASimAuthenticationM365Defender%2FASimAuthenticationM365Defender.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FRearrangement%2FAsimAuth%2FParsers%2FASimAuthentication%2FARM%2FASimAuthenticationM365Defender%2FASimAuthenticationM365Defender.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FRearrangement%2FAsimAuth%2FParsers%2FASimAuthentication%2FARM%2FASimAuthenticationM365Defender%2FASimAuthenticationM365Defender.json)
