@@ -17,4 +17,3 @@ This playbook allows users to validate any PLC programming command which is perf
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAD4IoT-TritonDetectionAndResponse%2Fazuredeploy.json"_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
-![image](https://user-images.githubusercontent.com/50611022/158230137-f48583e9-dff6-4682-b61c-ca564d6bcd36.png)
