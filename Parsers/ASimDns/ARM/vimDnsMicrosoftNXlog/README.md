@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Dns schema parser for MS DNS Events.
 
-Filter and normalize Windows DNS logs collected using NXlog to the ASIM DNS activity normalized schema.  
+This ASIM parser supports filtering and normalizing Microsoft DNS logs, collected using NXlog, to the ASIM Dns normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
@@ -15,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftNXlog%2FvimDnsMicrosoftNXlog.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftNXlog%2FvimDnsMicrosoftNXlog.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FRearrangement%2FAsimDns%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftNXlog%2FvimDnsMicrosoftNXlog.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FRearrangement%2FAsimDns%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftNXlog%2FvimDnsMicrosoftNXlog.json)
