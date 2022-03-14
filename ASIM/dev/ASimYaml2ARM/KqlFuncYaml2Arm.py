@@ -83,6 +83,8 @@ logger = logging.getLogger(__name__)
 if level == logging.DEBUG:
     sys.tracebacklimit = 1
 
+logging.info (f'Template directory is {templates_dir}.')
+
 # -- Generate file list from file and folder parameters
 folders = args.folders
 
@@ -90,7 +92,7 @@ if len(folders) == 0: # -- use current working directory as default if not files
     folders = [cwd]
 
 files = []
-logging.debug (f'Inspecting files and folders {folders}.')
+logging.info (f'Inspecting files and folders {folders}.')
 for f in folders:
     f = os.path.abspath(f)
     if Path(f).is_file():
@@ -118,9 +120,9 @@ if len(files) == 0:
     raise SystemExit ('No files to prcess.')
 
 # -- Read and prepare templates
-func_arm_template = json.load(open(os.path.join(args.templates_dir, 'func_arm_template.json'), 'r'))
+func_arm_template = json.load(open(os.path.join(templates_dir, 'func_arm_template.json'), 'r'))
 if package_mode:
-    package_arm_template = json.load(open(os.path.join(args.templates_dir, f'{package_type}_arm_template.json'), 'r'))
+    package_arm_template = json.load(open(os.path.join(templates_dir, f'{package_type}_arm_template.json'), 'r'))
     generic_element_template = (package_arm_template['resources']).pop()
     template_uri = generic_element_template['properties']['templateLink']['uri']
 
@@ -212,7 +214,7 @@ if package_mode:
         jf.write(json_txt.replace('{schema}', package_schema))
 
     logging.debug ('Generating full deployment readme (folder mode only)')
-    with open(os.path.join(scriptdir, f'{package_type}_readme.md'), 'r') as fdr:
+    with open(os.path.join(templates_dir, f'{package_type}_readme.md'), 'r') as fdr:
         package_readme = fdr.read().format (schema=package_schema, uri=encoded_uri, branch=encoded_branch)
         with open(os.path.join(dest, 'README.md'), 'w') as rm:
             rm.write(package_readme)
