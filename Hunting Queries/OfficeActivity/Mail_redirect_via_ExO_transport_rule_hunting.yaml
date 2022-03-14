@@ -18,31 +18,22 @@ query: |
   OfficeActivity
   | where OfficeWorkload == "Exchange"
   | where Operation in~ ("New-TransportRule", "Set-TransportRule")
-  | extend p = parse_json(Parameters)
+  | extend ParametersValues = extract_all(@'Name\":\"(?P<Name>\w+)\",\"Value\":\"(?P<Value>[^\"]*)', dynamic(["Name", "Value"]), Parameters)
+  | mv-apply ParametersValues on (summarize ParsedParameters = make_bag(pack(tostring(ParametersValues[0]), ParametersValues[1])))
   | extend RuleName = case(
-    Operation =~ "Set-TransportRule", tostring(OfficeObjectId),
-    Operation =~ "New-TransportRule", tostring(p[1].Value),
-    "Unknown"
-    ) 
-  | mvexpand p
-  | where (p.Name =~ "BlindCopyTo" or p.Name =~ "RedirectMessageTo") and isnotempty(p.Value)
-  | extend RedirectTo = p.Value
-  | extend ClientIPOnly = case( 
-    ClientIP has "." and ClientIP has ":", tostring(split(ClientIP,":")[0]), 
-    ClientIP has "." and ClientIP has "-", tostring(split(ClientIP,"-")[0]), 
-    ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
-    ClientIP
-    )  
-  | extend Port = case(
-    ClientIP has "." and ClientIP has ":", (split(ClientIP,":")[1]),
-    ClientIP has "." and ClientIP has "-", (split(ClientIP,"-")[1]),
-    ClientIP has "[" and ClientIP has ":", tostring(split(ClientIP,"]:")[1]),
-    ClientIP has "[" and ClientIP has "-", tostring(split(ClientIP,"]-")[1]),
-    ClientIP
-    )
-  | extend ClientIP = ClientIPOnly
-  | project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+      Operation =~ "Set-TransportRule", OfficeObjectId,
+      Operation =~ "New-TransportRule", ParsedParameters.Name,
+      "Unknown")
+  | mv-expand Parameters = todynamic(Parameters)
+  | where Parameters.Name in~ ("BlindCopyTo", "RedirectMessageTo") and isnotempty(Parameters.Value)
+  | extend RedirectTo = Parameters.Value
+  | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+  | project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, Operation, RuleName, ParsedParameters
+  | extend
+      timestamp = TimeGenerated,
+      AccountCustomEntity = UserId,
+      IPCustomEntity = IPAddress
+    
 entityMappings:
   - entityType: Account
     fieldMappings:
