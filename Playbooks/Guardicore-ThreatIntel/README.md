@@ -1,8 +1,8 @@
 # Integrating Guardicore Threat Intelligence into Azure Sentinel
 
-Author: Arbala Security
+Author: Accelerynt
 
-For any technical questions, please contact info@arbalasystems.com.
+For any technical questions, please contact info@accelerynt.com
 
 This playbook will pull the domain names and IPs from the threat intelligence that Guardicore shares every Sunday. It will create Azure Sentinel Threat Intelligence Indicators with the information gathered and send it to the tiIndicators API. This playbook is configured to run every Monday morning at 6:00 AM EST.
 
@@ -11,17 +11,14 @@ The Guardicore Cyber Threat Intelligence Service [Feed](https://threatintelligen
 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FGuardicore-ThreatIntel%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FGuardicore-ThreatIntel%2Fmaster%2Fazuredeploy.json)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGuardicore-ThreatIntel%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Guardicore-ThreatIntel/azuredeploy.json" target="_blank"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/></a>
+
   
  # 
-Open your browser and ensure you are logged into your Azure Sentinel workspace. In a separate tab, open the link to our playbook on the Arbala Security GitHub Repository:
-
-https://github.com/Arbala-Security/Guardicore-ThreatIntel
-
-From there, click the “Deploy to Azure” button at the bottom and it will bring you to the Custom Deployment Template.
-
-![Deploy](Images/deploy3.png)
+Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
 In the **BASICS** section:  
 
@@ -73,5 +70,3 @@ This process will not need to be repeated for the right hand branch.
 The branching for the same outer loops is necessary because not all Guardicore domains and IP addresses are in a format Microsoft Graph will accept as valid. 
 The branching allows a domain name and its associated IP addresses to be ingested separately.
 This way, an invalid domain name will not negate its associated valid IP addresses, or vice versa.
-
-For any technical questions, please contact info@arbalasystems.com.

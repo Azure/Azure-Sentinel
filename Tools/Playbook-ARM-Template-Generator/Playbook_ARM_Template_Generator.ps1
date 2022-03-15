@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 2-17-2022
+        LASTEDIT: 3-14-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -129,8 +129,9 @@ function Get-RequiredModules {
                     }
                 }
                 else {
-                    Write-Log -Message "Importing module $Module" -LogFileName $LogFileName -Severity Information
-                    Import-Module -Name $Module -Force
+                    $latestVersion = [Version](Get-Module -Name $Module).Version               
+                    Write-Log -Message "Importing module $Module with version $latestVersion" -LogFileName $LogFileName -Severity Information
+                    Import-Module -Name $Module -RequiredVersion $latestVersion -Force
                 }
             }
             else {                
@@ -149,26 +150,21 @@ function Get-RequiredModules {
     }
 }
 
-function Get-FolderName { 
-    param($initialDirectory) 
-    [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
-
+Function Get-FolderName {
+    Add-Type -AssemblyName System.Windows.Forms
+    $FolderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
+    $FolderBrowser.Description = 'Select the folder containing the data'
     Try {
-        $folderDiag = New-Object System.Windows.Forms.FolderBrowserDialog
-        $folderDiag.Description = "Select a folder to Export to"
-        $folderDiag.rootfolder = "MyComputer"
-        $folderDiag.SelectedPath = $initialDirectory
-
-        if($folderDiag.ShowDialog() -eq "OK")
-        {
-            $SelectedFolder += $folderDiag.SelectedPath
-        }
-        return $SelectedFolder
+        $result = $FolderBrowser.ShowDialog((New-Object System.Windows.Forms.Form -Property @{TopMost = $true; TopLevel = $true }))
+        if ($result -eq [Windows.Forms.DialogResult]::OK){
+            return $FolderBrowser.SelectedPath
+        } 
     }
     catch {
         Write-Log "Error occured in Get-FolderName :$($_)" -LogFileName $LogFileName -Severity Error
-    } 
-}
+        exit
+    }
+} #end function Get-FolderName
 #endregion
 
 
@@ -251,8 +247,8 @@ function GetPlaybookResource() {
     Try {    
         $playbookArmIdToUse = BuildPlaybookArmId
         $playbookResource = SendArmGetCall -relativeUrl "$($playbookArmIdToUse)?api-version=2017-07-01"
-
-        $templateParameters.Add("PlaybookName", @{
+        
+        $PlaybookARMParameters.Add("PlaybookName", @{
             "defaultValue"= $playbookResource.Name
             "type"= "string"
         })
@@ -401,10 +397,10 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
 
 function BuildArmTemplate($playbookResource) {
     Try {
-        $armTemplate = @{
+        $armTemplate = [ordered] @{
             '$schema'= "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
             "contentVersion"= "1.0.0.0"
-            "parameters"= $templateParameters
+            "parameters"= $PlaybookARMParameters
             "variables"= $templateVariables
             "resources"= @($playbookResource)+$apiConnectionResources
         }
@@ -526,6 +522,7 @@ foreach($GetSubscription in $GetSubscriptions) {
 
                 $apiConnectionResources = [System.Collections.ArrayList]@()
                 $templateParameters = @{}
+                $PlaybookARMParameters = [ordered] @{}
                 $templateVariables = @{}
 
                 $PlaybookSubscriptionId = $GetSubscription.id
@@ -533,12 +530,31 @@ foreach($GetSubscription in $GetSubscriptions) {
                 $PlaybookResourceGroupName = $LogicApp.ResourceGroupName
 
                 $playbookResource = GetPlaybookResource
+                
                 $null = MkDir "$($FolderName)\$($PlaybookResourceName)" -Force
+                
+                # Remove Parameter default values                
+                foreach($PlaybookParameter in $playbookResource.properties.definition.parameters.PSObject.Properties) {
+                    
+                    if ($PlaybookParameter.Name -ne '$connections') {                        
+                        $playbookResource.properties.definition.parameters.PSObject.Properties.Remove($PlaybookParameter.Name)                        
+                        $playbookResource.properties.definition.parameters | Add-Member -MemberType NoteProperty -Name $($PlaybookParameter.Name) -Value @{"defaultValue"="parameters('$($PlaybookParameter.Name)')" 
+                        "type"= "string" }     
+                        
+                        $PlaybookARMParameters.Add($($PlaybookParameter.Name), @{                            
+                            "type"= "string"
+                            "metadata"= @{
+                                "description"="Enter value for $($PlaybookParameter.Name)"
+                            }
+                        })
+                    }
+                }
+                               
                 # Add changes for API connection resources
                 Foreach ($apiConnectionReference in $playbookResource.properties.parameters.'$connections'.value.PsObject.Properties) {
                     HandlePlaybookApiConnectionReference -apiConnectionReference $apiConnectionReference -playbookResource $playbookResource
                 }
-
+                
                 # Create and export the ARM template
                 $armTemplateOutput = BuildArmTemplate -playbookResource $playbookResource | ConvertTo-Json -Depth 100
                 $armTemplateOutput = $armTemplateOutput -replace "\\u0027", "'" # ConvertTo-Json escapes quotes, which we don't want
