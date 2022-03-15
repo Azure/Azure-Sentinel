@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -50,6 +53,7 @@ ParserQuery: |
     , endtime:datetime=datetime(null)
     , srcipaddr_has_any_prefix:dynamic=dynamic([])
     , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , ipaddr_has_any_prefix:dynamic=dynamic([])
     , dstportnumber:int=int(null)
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
@@ -74,6 +78,10 @@ ParserQuery: |
            and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
            and (isnull(endtime) or TimeGenerated<=endtime) 
            and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
+           and (array_length(ipaddr_has_any_prefix)==0 
+                or has_any_ipv4_prefix(RemoteIP,ipaddr_has_any_prefix)
+                or has_any_ipv4_prefix(LocalIP ,ipaddr_has_any_prefix)
+                )
            and (array_length(srcipaddr_has_any_prefix)==0 
                 or has_any_ipv4_prefix(RemoteIP,srcipaddr_has_any_prefix)
                 or has_any_ipv4_prefix(LocalIP ,srcipaddr_has_any_prefix)
@@ -134,7 +142,7 @@ ParserQuery: |
     RawNetworkEvents (true)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==RemotePort)
-        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any))
+        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any) or DvcHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
     | project-rename
        DstIpAddr = RemoteIP,
@@ -190,7 +198,7 @@ ParserQuery: |
     RawNetworkEvents (false)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==LocalPort)
-        and (array_length(hostname_has_any)==0 or DvcHostname has_any (hostname_has_any))
+        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any) or DvcHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
     | project-rename
        SrcIpAddr = RemoteIP,
@@ -242,10 +250,20 @@ ParserQuery: |
        DstAppType = "Process"
   ;
   union InboundNetworkEvents, OutboundNetworkEvents
+  |extend  ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr",
+                                  ""
+                              ),
+            ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
+                                  SrcHostname has_any(hostname_has_any), "SrcHostname",
+                                  DstHostname has_any(hostname_has_any), "DstHostname",
+                                  ""
+                              )
   | extend // aliases
      Hostname = UrlHostname,
      IpAddr = SrcIpAddr,
      Src = SrcIpAddr,
      Dst = DstIpAddr 
   };
-  M365Defender (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  M365Defender (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

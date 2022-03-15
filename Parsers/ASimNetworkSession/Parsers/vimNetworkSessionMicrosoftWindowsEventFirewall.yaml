@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -96,6 +99,7 @@ ParserQuery: |
     , endtime:datetime=datetime(null)
     , srcipaddr_has_any_prefix:dynamic=dynamic([])
     , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , ipaddr_has_any_prefix:dynamic=dynamic([])
     , dstportnumber:int=int(null)
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
@@ -113,6 +117,9 @@ ParserQuery: |
           |where (isnull(starttime) or TimeGenerated>=starttime)
             and  (isnull(endtime) or TimeGenerated<=endtime)
             and  (isnull(dstportnumber) or EventData has tostring(dstportnumber) ) 
+            and  (array_length(ipaddr_has_any_prefix)==0 
+                  or has_any_ipv4_prefix(EventData ,ipaddr_has_any_prefix)
+                ) 
             and  (array_length(srcipaddr_has_any_prefix)==0 
                   or has_any_ipv4_prefix(EventData ,srcipaddr_has_any_prefix)
                 ) 
@@ -144,6 +151,9 @@ ParserQuery: |
             and  (isnull(dstportnumber) ) 
             and  (isnull(starttime) or TimeGenerated>=starttime)
             and  (isnull(endtime) or TimeGenerated<=endtime)
+            and  (array_length(ipaddr_has_any_prefix)==0 
+                  or has_any_ipv4_prefix(EventData ,ipaddr_has_any_prefix)
+                ) 
             and  (array_length(srcipaddr_has_any_prefix)==0 
                   or has_any_ipv4_prefix(EventData ,srcipaddr_has_any_prefix)
                 ) 
@@ -171,6 +181,9 @@ ParserQuery: |
           // ***************  Prefilterring *****************************************************************
           | where (isnull(starttime) or TimeGenerated>=starttime)
             and  (isnull(endtime) or TimeGenerated<=endtime)
+            and  (array_length(ipaddr_has_any_prefix)==0 
+                  or has_any_ipv4_prefix(EventData ,ipaddr_has_any_prefix)
+                )
             and  (array_length(srcipaddr_has_any_prefix)==0 
                   or has_any_ipv4_prefix(EventData ,srcipaddr_has_any_prefix)
                 )
@@ -224,6 +237,10 @@ ParserQuery: |
                   ) 
               and (array_length(dstipaddr_has_any_prefix)==0 
                     or has_any_ipv4_prefix(DstIpAddr,dstipaddr_has_any_prefix)
+                  )
+              and (array_length(ipaddr_has_any_prefix)==0 
+                    or has_any_ipv4_prefix(DstIpAddr,dstipaddr_has_any_prefix)
+                    or has_any_ipv4_prefix(SrcIpAddr ,srcipaddr_has_any_prefix)
                   ) 
           // *************** / Postfilterring *****************************************************************
       };
@@ -241,6 +258,9 @@ ParserQuery: |
       | where (isnull(starttime) or TimeGenerated>=starttime) 
               and (isnull(endtime) or TimeGenerated<=endtime) 
               and (isnull(dstportnumber) or EventData has tostring(dstportnumber)) 
+              and (array_length(ipaddr_has_any_prefix)==0 
+                      or has_any_ipv4_prefix(EventData,ipaddr_has_any_prefix)
+                   ) 
               and (array_length(srcipaddr_has_any_prefix)==0 
                       or has_any_ipv4_prefix(EventData,srcipaddr_has_any_prefix)
                    ) 
@@ -281,6 +301,10 @@ ParserQuery: |
                   ) 
               and (array_length(dstipaddr_has_any_prefix)==0 
                     or has_any_ipv4_prefix(DstIpAddr,dstipaddr_has_any_prefix)
+                  )
+              and (array_length(ipaddr_has_any_prefix)==0 
+                    or has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix)
+                    or has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix)
                   ) 
           // *************** / Postfilterring *****************************************************************
         };
@@ -304,7 +328,12 @@ ParserQuery: |
               EventStartTime = TimeGenerated,
               EventEndTime = TimeGenerated,
               EventOriginalUid = EventOriginId,
-              EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low")
+              EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low"),
+              ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr",
+                                  ""
+                              )
       // -- Aliases
       | extend 
           Dvc = DvcHostname,

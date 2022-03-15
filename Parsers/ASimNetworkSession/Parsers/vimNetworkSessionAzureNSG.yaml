@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -59,14 +62,15 @@ ParserQuery: |
   ];
   let parser = (
         starttime:datetime=datetime(null), 
-        endtime:datetime=datetime(null), 
+        endtime:datetime=datetime(null),
         srcipaddr_has_any_prefix:dynamic=dynamic([]), 
         dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
         dstportnumber:int=int(null), 
         hostname_has_any:dynamic=dynamic([]), 
         dvcaction:dynamic=dynamic([]), 
         eventresult:string='*', 
-        disabled:bool=false) 
+        disabled:bool=false)
   {
     let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM2_s:string)) { 
       T
@@ -76,7 +80,13 @@ ParserQuery: |
         and  (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) 
         and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIP_s ,srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcPublicIPs_s ,srcipaddr_has_any_prefix)) 
         and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestIP_s ,dstipaddr_has_any_prefix) or has_any_ipv4_prefix(DestPublicIPs_s ,dstipaddr_has_any_prefix))
-        and (array_length(hostname_has_any) == 0 or VM2_s has_any (hostname_has_any))
+        and  (array_length(ipaddr_has_any_prefix) == 0 
+                or has_any_ipv4_prefix(DestIP_s,ipaddr_has_any_prefix) 
+                or has_any_ipv4_prefix(DestPublicIPs_s,ipaddr_has_any_prefix) 
+                or has_any_ipv4_prefix(SrcIP_s,srcipaddr_has_any_prefix)
+                or has_any_ipv4_prefix(SrcPublicIPs_s,srcipaddr_has_any_prefix)
+            )
+        and (array_length(hostname_has_any) == 0 or VM2_s has_any (hostname_has_any) or VM1_s has_any (hostname_has_any))
       | lookup DvcActionLookup on FlowStatus_s
       | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
       | where (eventresult=='*' or EventResult == eventresult)
@@ -151,7 +161,18 @@ ParserQuery: |
         EventCount = toint(AllowedInFlows_d+DeniedInFlows_d+AllowedOutFlows_d+DeniedOutFlows_d),
         NetworkDuration = toint((((EventEndTime - datetime(1970-01-01)) / 1s) - ((EventStartTime - datetime(1970-01-01)) / 1s )) * 1000),
         Rule = NetworkRuleName,
-        SessionId = NetworkSessionId
+        SessionId = NetworkSessionId,
+          ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIP_s,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(SrcPublicIPs_s,ipaddr_has_any_prefix), "SrcIpAddr")
+                                  has_any_ipv4_prefix(DstIP_s,ipaddr_has_any_prefix), "DstIpAddr",
+                                  has_any_ipv4_prefix(DstPublicIPs_s,ipaddr_has_any_prefix), "DstIpAddr",
+                                  ""),
+        ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
+                                  SrcHostname has_any (hostname_has_any), "SrcHostname",
+                                  DstHostname has_any (hostname_has_any), "DstHostname",
+                                  ""
+                                )
     | extend 
         DstIpAddr = iff(isnotempty(DestIP_s),
                         DestIP_s,
@@ -182,4 +203,4 @@ ParserQuery: |
         TimeGenerated
     | project-away *_s
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

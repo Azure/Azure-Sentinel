@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -55,6 +58,9 @@ ParserQuery: |
             and (isnull(starttime) or TimeGenerated>=starttime) 
             and (isnull(endtime) or TimeGenerated<=endtime) 
             and (array_length(srcipaddr_has_any_prefix)==0 
+                  or has_any_ipv4_prefix(SyslogMessage,srcipaddr_has_any_prefix)
+                ) 
+            and (array_length(ipaddr_has_any_prefix)==0 
                   or has_any_ipv4_prefix(SyslogMessage,srcipaddr_has_any_prefix)
                 ) 
             and (array_length(dstipaddr_has_any_prefix)==0 
@@ -106,7 +112,7 @@ ParserQuery: |
       | where 
               (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DstIpAddr, dstipaddr_has_any_prefix))
           and (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
-          and (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any) )
+          and (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any) or SrcHostname has_any (hostname_has_any) )
           and  (isnull(dstportnumber) or DstPortNumber ==dstportnumber)
       // *************** Postfilterring ***************************************************************
       | extend
@@ -127,7 +133,7 @@ ParserQuery: |
           | where 
               (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DstIpAddr, dstipaddr_has_any_prefix))
           and (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
-          and (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any) )
+          and (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any)or SrcHostname has_any (hostname_has_any) )
           and  (isnull(dstportnumber) or DstPortNumber ==dstportnumber)
           // *************** Postfilterring ***************************************************************
           | extend
@@ -154,7 +160,18 @@ ParserQuery: |
               EventSeverity = 'Informational',
               DvcOs = 'Linux',
               Protocol = toupper(Protocol),
-              EventOriginalType = '3' // Set with a constant value to avoid parsing
+              EventOriginalType = '3', // Set with a constant value to avoid parsing
+              ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
+                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix), "DstIpAddr",
+                                  ""
+                              ),
+              ASimMatchingHostname = case(
+                                  array_length(hostname_has_any) == 0 ,"",
+                                  SrcHostname has_any(hostname_has_any), "SrcHostname",
+                                  DstHostname has_any(hostname_has_any), "DstHostname",
+                                  ""
+                              )
           | project-rename 
               DvcIpAddr = HostIP,
               DvcHostname = SysmonComputer
