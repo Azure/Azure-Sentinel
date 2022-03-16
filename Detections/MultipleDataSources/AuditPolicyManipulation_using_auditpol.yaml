@@ -16,6 +16,9 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -35,7 +38,7 @@ query: |
   (union isfuzzy=true
   (
   SecurityEvent
-  | where TimeGenerated >= ago(timeframe)
+  | where TimeGenerated >= ago(timeframe) and EventID == '4688'
   //| where Process =~ "auditpol.exe" 
   | where CommandLine has_any (tokens)
   | where AccountType !~ "Machine" and Account !in~ (AccountAllowList)
@@ -43,6 +46,30 @@ query: |
   | extend SubCategory = tostring(split(subcategorytoken, "\"")[1]) , Toggle =  tostring(split(subcategorytoken, "\"")[2])
   | where SubCategory in~ (SubCategoryList) //use in~ for inclusion or !in~ for exclusion
   | where Toggle !in~ ("/failure:disable", " /success:enable /failure:disable") // use this filter if required to exclude certain toggles
+  | project TimeGenerated, Computer, Account, SubjectDomainName,  SubjectUserName, Process, ParentProcessName,  CommandLine, SubCategory, Toggle
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+   WindowsEvent
+  | where TimeGenerated >= ago(timeframe) and EventID == '4688'
+  | where EventData has_any (tokens) and EventData has_any (AccountAllowList)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine has_any (tokens)
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+  | where AccountType !~ "Machine" 
+  | extend Account = iff((isempty(EventData.SubjectDomainName) or EventData.SubjectDomainName == "-"),"", strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
+  | where  Account !in~ (AccountAllowList)
+  | parse CommandLine with * "/subcategory:" subcategorytoken
+  | extend SubCategory = tostring(split(subcategorytoken, "\"")[1]) , Toggle =  tostring(split(subcategorytoken, "\"")[2])
+  | where SubCategory in~ (SubCategoryList) //use in~ for inclusion or !in~ for exclusion
+  | where Toggle !in~ ("/failure:disable", " /success:enable /failure:disable") // use this filter if required to exclude certain toggles
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  //| where Process =~ "auditpol.exe" 
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
   | project TimeGenerated, Computer, Account, SubjectDomainName,  SubjectUserName, Process, ParentProcessName,  CommandLine, SubCategory, Toggle
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
@@ -89,5 +116,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
