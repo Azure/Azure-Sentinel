@@ -9,6 +9,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
@@ -20,22 +23,51 @@ relevantTechniques:
 query: |
   // Enter a reference list of hostnames for your DC servers
   //let DCServersList = dynamic (["DC01.simulandlabs.com","DC02.simulandlabs.com"]);
-  SecurityEvent
+  (union isfuzzy=true 
+  (SecurityEvent
   //| where Computer in (DCServersList)
   | where EventID == 4662 and ObjectServer == 'DS'
   | where AccountType != 'Machine'
   | where Properties has '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes
       or Properties has '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes-All
       or Properties has '89e95b76-444d-4c62-991a-0facbeda640c' //DS-Replication-Get-Changes-In-Filtered-Set
+  | project TimeGenerated, Account, Activity, Properties, SubjectLogonId, Computer),
+  (WindowsEvent
+  | where EventID == 4662 and EventData has_any ('1131f6aa-9c07-11d1-f79f-00c04fc2dcd2', '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2', '89e95b76-444d-4c62-991a-0facbeda640c')
+  | extend ObjectServer = tostring(EventData.ObjectServer)
+  | where ObjectServer == 'DS'
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+  | where AccountType != 'Machine'
+  | extend Properties = tostring(EventData.Properties)
+  | where Properties has '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes
+      or Properties has '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes-All
+      or Properties has '89e95b76-444d-4c62-991a-0facbeda640c' //DS-Replication-Get-Changes-In-Filtered-Set
+  | extend Account = iff((isempty(EventData.SubjectDomainName) or EventData.SubjectDomainName == "-"),"", strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
+  | extend Activity= "4622 - A security package has been loaded by the Local Security Authority."
+  | extend SubjectLogonId = tostring(EventData.SubjectLogonId)
   | project TimeGenerated, Account, Activity, Properties, SubjectLogonId, Computer
+  ))
   | join kind=leftouter
-  (
-      SecurityEvent
+  ( union isfuzzy=true 
+      (SecurityEvent
       //| where Computer in (DCServersList)
       | where EventID == 4624 and LogonType == 3
       | where AccountType != 'Machine'
+      | project TargetLogonId, IpAddress),
+      (WindowsEvent
+      //| where Computer in (DCServersList)
+      | where EventID == 4624
+      | extend LogonType = toint(EventData.LogonType)
+      | where LogonType == 3
+      | extend TargetUserSid = tostring(EventData.TargetUserSid)
+      | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User") 
+      |  where AccountType != 'Machine'
+      | extend TargetLogonId = tostring(EventData.TargetLogonId)
+      | extend IpAddress = tostring(EventData.IpAddress)
       | project TargetLogonId, IpAddress
-  )
+      )
+ )
   on $left.SubjectLogonId == $right.TargetLogonId
   | project-reorder TimeGenerated, Computer, Account, IpAddress
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, SourceAddress = IpAddress 
@@ -52,5 +84,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceAddress
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
