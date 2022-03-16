@@ -1,0 +1,52 @@
+Parser:
+  Title: DNS activity ASIM parser for DNSmonster
+  Version: '0.1'
+  LastUpdated: Mar 11 2022
+Product:
+  Name: DNSmonster
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing DNSmonster logs to the ASIM DNS activity normalized schema.
+ParserName: ASimDnsDnsMonster
+ParserQuery: |
+ let rcodes = dynamic(["NOERROR","FORMERR","SERVFAIL","NXDOMAIN","NOTIMP","REFUSED","YXDOMAIN","YXRRSET","NXRRSET","NOTAUTH","NOTZONE","DSOTYPENI"]);
+ let rrcodes = dynamic(["RESV","A","NS","MD","MF","CNAME","SOA","MB","MG","MR","NULL","WKS","PTR","HINFO","MINFO","MX","TXT","RP","AFSDB","X25","ISDN","RT","NSAP","NSAP-PTR","SIG","KEY","PX","GPOS","AAAA","LOC","NXT","EID","NIMLOC","SRV","ATMA","NAPTR","KX","CERT","A6","DNAME","SINK","OPT","APL","DS","SSHFP","IPSECKEY","RRSIG","NSEC","DNSKEY","DHCID","NSEC3","NSEC3PARAM","TLSA","SMIMEA","UNASSIGN","HIP","NINFO","RKEY","TALINK","CDS","CDNSKEY","OPENPGPKEY","CSYNC","ZONEMD","SVCB","HTTPS"]);
+ let opcodes = dynamic(["Query","IQuery","Status","Unassigned","Notify","Update","DNS Stateful Operations"]);
+ let parser=(disabled:bool=false)
+  {
+    dnsmonster_CL | where not(disabled)
+    | where not(DNS_Response_b)
+    | extend DNS_Question = todynamic(DNS_Question_s)
+    | mv-expand DNS_Question
+    | extend EventType = opcodes[toint(DNS_Opcode_d)],
+             EventSubType = "request",
+            EventResultsDetails = rcodes[toint(DNS_Rcode_d)],
+            EventSchemaVersion = "0.1.3",
+            EventSchema = "Dns",
+            Src = SrcIP_s,
+            SrcPortNumber = SrcPort_d,
+            Dst = DstIP_s,
+            DstPortNumber = DstPort_d,
+            DnsQuery = DNS_Question.Name,
+            DnsQueryType = DNS_Question.Qtype,
+            DnsQueryTypeName = rrcodes[toint(DNS_Question.Qtype)],            
+            DnsQueryClass = DNS_Question.Qclass,
+            NetworkProtocol = Protocol_s,
+            DnsFlagsAuthenticated = DNS_AuthenticatedData_b,
+            DnsFlagsAuthoritative = DNS_Authoritative_b,
+            DnsFlagsCheckingDisabled = DNS_CheckingDisabled_b,
+            DnsFlagsRecursionAvailable = DNS_RecursionAvailable_b,
+            DnsFlagsRecursionDesired = DNS_RecursionDesired_b,
+            DnsFlagsTrucated = DNS_Truncated_b
+    | project EventType,EventSubType,EventResultsDetails,EventSchemaVersion,EventSchema,Src,SrcPortNumber,Dst,DstPortNumber,
+            DnsQuery,DnsQueryType,DnsQueryTypeName,DnsQueryClass,NetworkProtocol,
+            DnsFlagsAuthenticated,DnsFlagsAuthoritative,DnsFlagsCheckingDisabled,DnsFlagsRecursionAvailable,DnsFlagsRecursionDesired,DnsFlagsTrucated
+  };
+  parser
