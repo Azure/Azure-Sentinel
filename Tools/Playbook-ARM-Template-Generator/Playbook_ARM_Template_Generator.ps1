@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 3-14-2022
+        LASTEDIT: 3-16-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -30,7 +30,7 @@ param(
 )
 
 #region HelperFunctions
-function Write-Log {
+Function Write-Log {
     <#
     .DESCRIPTION 
     Write-Log is used to write information to a log file and to the console.
@@ -69,7 +69,7 @@ function Write-Log {
     }    
 }
 
-function Get-RequiredModules {
+Function Get-RequiredModules {
     <#
     .DESCRIPTION 
     Get-Required is used to install and then import a specified PowerShell module.
@@ -161,7 +161,7 @@ Function Get-FolderName {
         } 
     }
     catch {
-        Write-Log "Error occured in Get-FolderName :$($_)" -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Error occured in Get-FolderName :$($_)" -LogFileName $LogFileName -Severity Error
         exit
     }
 } #end function Get-FolderName
@@ -170,7 +170,7 @@ Function Get-FolderName {
 
 #region MainFunctions
 # Taken from https://stackoverflow.com/questions/56322993/proper-formating-of-json-using-powershell/56324939
-function FixJsonIndentation ($jsonOutput) {
+Function FixJsonIndentation ($jsonOutput) {
     Try {
         $currentIndent = 0
         $tabSize = 4
@@ -211,22 +211,22 @@ function FixJsonIndentation ($jsonOutput) {
         return $newString
     }
     catch {
-        Write-Log "Error occured in FixJsonIndentation :$($_)" -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Error occured in FixJsonIndentation :$($_)" -LogFileName $LogFileName -Severity Error
     }
 }
 
-function BuildPlaybookArmId() {
+Function BuildPlaybookArmId() {
     Try {
         if ($PlaybookSubscriptionId -and $PlaybookResourceGroupName -and $PlaybookResourceName) {
             return "/subscriptions/$PlaybookSubscriptionId/resourceGroups/$PlaybookResourceGroupName/providers/Microsoft.Logic/workflows/$PlaybookResourceName"
         }
     }
     catch {
-        Write-Log "Playbook full ARM id, or subscription, resource group and resource name are required: $($_)" -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Playbook full ARM id, or subscription, resource group and resource name are required: $($_)" -LogFileName $LogFileName -Severity Error
     }
 }
 
-function SendArmGetCall($relativeUrl) {
+Function SendArmGetCall($relativeUrl) {
     $authHeader = @{
         'Authorization'='Bearer ' + $tokenToUse
     }
@@ -243,7 +243,7 @@ function SendArmGetCall($relativeUrl) {
     } 
 }
 
-function GetPlaybookResource() {
+Function GetPlaybookResource() {
     Try {    
         $playbookArmIdToUse = BuildPlaybookArmId
         $playbookResource = SendArmGetCall -relativeUrl "$($playbookArmIdToUse)?api-version=2017-07-01"
@@ -307,11 +307,11 @@ function GetPlaybookResource() {
         return $playbookResource
     }
     Catch {
-        Write-Log "Error occured in GetPlaybookResource :$($_)" -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Error occured in GetPlaybookResource :$($_)" -LogFileName $LogFileName -Severity Error
     }
 }
 
-function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbookResource) {
+Function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbookResource) {
     Try {
         $connectionName = $apiConnectionReference.Name
         $connectionName = $connectionName -replace '[^a-zA-Z]', ''
@@ -362,7 +362,8 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
         if (!$apiConnectionResource.properties.parameterValueType) {
             $apiConnectionResource.properties.Remove("parameterValueType")
         }
-            $apiConnectionResources.Add($apiConnectionResource) | Out-Null
+            
+        $apiConnectionResources.Add($apiConnectionResource) | Out-Null
 
         # Update API connection reference in the playbook resource
         $apiConnectionReference.Value = @{
@@ -391,11 +392,11 @@ function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
         }
     }
     Catch {
-        Write-Log "Error occured in HandlePlaybookApiConnectionReference :$($_)" -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Error occured in HandlePlaybookApiConnectionReference :$($_)" -LogFileName $LogFileName -Severity Error
     }
 }
 
-function BuildArmTemplate($playbookResource) {
+Function BuildArmTemplate($playbookResource) {
     Try {
         $armTemplate = [ordered] @{
             '$schema'= "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
@@ -406,7 +407,7 @@ function BuildArmTemplate($playbookResource) {
         }
 
         if ($GenerateForGallery) {
-            $armTemplate.metadata = @{
+            $armTemplate.Insert(4, "metadata", @{
                 "title"= ""
                 "description"= ""
                 "prerequisites"= ""
@@ -420,13 +421,13 @@ function BuildArmTemplate($playbookResource) {
                 "author"= @{
                     "name"= ""
                 }
-            }
+            })
         }
 
         return $armTemplate
     }
     Catch {
-        Write-Log "Error occured in BuildArmTemplate :$($_)" -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Error occured in BuildArmTemplate :$($_)" -LogFileName $LogFileName -Severity Error
     }
 }
 
@@ -468,7 +469,7 @@ Get-RequiredModules("Az.OperationalInsights")
 
 # Check Powershell version, needs to be 5 or higher
 if ($host.Version.Major -lt 5) {
-    Write-Log "Supported PowerShell version for this script is 5 or above" -LogFileName $LogFileName -Severity Error    
+    Write-Log -Message "Supported PowerShell version for this script is 5 or above" -LogFileName $LogFileName -Severity Error    
     exit
 }
 
@@ -479,15 +480,15 @@ $LogFileName = '{0}_{1}.csv' -f "ARMTemplateGenerator", $TimeStamp
 Add-Type -AssemblyName System.Windows.Forms
 
 #disconnect exiting connections and clearing contexts.
-Write-Log "Clearing existing Azure connection" -LogFileName $LogFileName -Severity Information
+Write-Log -Message "Clearing existing Azure connection" -LogFileName $LogFileName -Severity Information
     
 $null = Disconnect-AzAccount -ContextName 'MyAzContext' -ErrorAction SilentlyContinue
     
-Write-Log "Clearing existing Azure context `n" -LogFileName $LogFileName -Severity Information
+Write-Log -Message "Clearing existing Azure context `n" -LogFileName $LogFileName -Severity Information
     
 get-azcontext -ListAvailable | ForEach-Object{$_ | remove-azcontext -Force -Verbose | Out-Null} #remove all connected content
     
-Write-Log "Clearing of existing connection and context completed." -LogFileName $LogFileName -Severity Information
+Write-Log -Message "Clearing of existing connection and context completed." -LogFileName $LogFileName -Severity Information
 Try {
     #Connect to tenant with context name and save it to variable
     Connect-AzAccount -Tenant $TenantID -ContextName 'MyAzContext' -Force -ErrorAction Stop
@@ -496,7 +497,7 @@ Try {
     $GetSubscriptions = Get-AzSubscription -TenantId $TenantID | Where-Object {($_.state -eq 'enabled') } | Out-GridView -Title "Select Subscription to Use" -PassThru       
 }
 catch {    
-    Write-Log "Error When trying to connect to tenant : $($_)" -LogFileName $LogFileName -Severity Error
+    Write-Log -Message "Error When trying to connect to tenant : $($_)" -LogFileName $LogFileName -Severity Error
     exit    
 }
 
@@ -504,16 +505,15 @@ foreach($GetSubscription in $GetSubscriptions) {
     Try {
         #Set context for subscription being built
         $azContext = Set-AzContext -Subscription $GetSubscription.id
-        Write-Log "`nWorking in Subscription: $($GetSubscription.Name)" -LogFileName $LogFileName -Severity Information        
-        Write-Log "Listing Azure Logic Apps workspace from $($GetSubscription.Name)" -LogFileName $LogFileName -Severity Information
+        Write-Log -Message "`nWorking in Subscription: $($GetSubscription.Name)" -LogFileName $LogFileName -Severity Information        
+        Write-Log -Message "Listing Azure Logic Apps workspace from $($GetSubscription.Name)" -LogFileName $LogFileName -Severity Information
         $AzureLogicApps = Get-AzResource -ResourceType "Microsoft.Logic/workflows" | Out-GridView -Title "Select Playbook to generate ARM Template" -PassThru 
         if($null -eq $AzureLogicApps){
-            Write-Log "No Azure Logic Apps workspace found in $($GetSubscription.Name)" -LogFileName $LogFileName -Severity Error 
+            Write-Log -Message "No Azure Logic Apps workspace found in $($GetSubscription.Name)" -LogFileName $LogFileName -Severity Error 
         }
         else {               
-            Write-Log "Creating ARM Template" -LogFileName $LogFileName -Severity Information
-            # VSCode Debugging more Get-FolderName doesnot work
-            # If you want to debug - hardcode $FolderName
+            Write-Log -Message "Creating ARM Template" -LogFileName $LogFileName -Severity Information
+            
             $FolderName = Get-FolderName -initialDirectory $PSScriptRoot
             
             foreach($LogicApp in $AzureLogicApps){                               
@@ -538,7 +538,7 @@ foreach($GetSubscription in $GetSubscriptions) {
                     
                     if ($PlaybookParameter.Name -ne '$connections') {                        
                         $playbookResource.properties.definition.parameters.PSObject.Properties.Remove($PlaybookParameter.Name)                        
-                        $playbookResource.properties.definition.parameters | Add-Member -MemberType NoteProperty -Name $($PlaybookParameter.Name) -Value @{"defaultValue"="parameters('$($PlaybookParameter.Name)')" 
+                        $playbookResource.properties.definition.parameters | Add-Member -MemberType NoteProperty -Name $($PlaybookParameter.Name) -Value @{"defaultValue"="[parameters('$($PlaybookParameter.Name)')]" 
                         "type"= "string" }     
                         
                         $PlaybookARMParameters.Add($($PlaybookParameter.Name), @{                            
@@ -559,12 +559,12 @@ foreach($GetSubscription in $GetSubscriptions) {
                 $armTemplateOutput = BuildArmTemplate -playbookResource $playbookResource | ConvertTo-Json -Depth 100
                 $armTemplateOutput = $armTemplateOutput -replace "\\u0027", "'" # ConvertTo-Json escapes quotes, which we don't want
                 FixJsonIndentation -jsonOutput $armTemplateOutput | Set-Content "$($FolderName)\$($PlaybookResourceName)\azuredeploy.json"
-                Write-Log "ARM Template created successfully at $("$FolderName\azuredeploy.json")" -LogFileName $LogFileName -Severity Information
+                Write-Log -Message "ARM Template created successfully at $("$FolderName\azuredeploy.json")" -LogFileName $LogFileName -Severity Information
             }
         }
     }
     catch {    
-        Write-Log "Error When trying to connect to Subscription : $($_)" -LogFileName $LogFileName -Severity Error
+        Write-Log -Message "Error When trying to connect to Subscription : $($_)" -LogFileName $LogFileName -Severity Error
         exit    
     }
 }
