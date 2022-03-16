@@ -90,10 +90,20 @@ ParserQuery: |
       SrcUsername = tostring(AccessRawLog[8]), 
       DstIpAddr = tostring(AccessRawLog[10]), 
       HttpContentType = tostring(AccessRawLog[11]) 
+    //
+    | extend 
+      ASimMatchingIpAddr = case( 
+        array_length(ipaddr_has_any_prefix) == 0             , "-",
+        has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix), "DstIpAddr",
+        has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix), "SrcIpAddr"
+                                                             , "No match"
+            )
     // Post Filter
     | where 
-        ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
-       and ((array_length(ipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix) or has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix))
+        (
+          (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+          and (ASimMatchingIpAddr != "No match")
+        )
     // -- Constant fields
     | extend 
       EventCount = int(1), 
@@ -118,10 +128,6 @@ ParserQuery: |
       DstHostname = tostring(DstFQDNparts[0]),
       DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),"."),
       DstDomainType = "FQDN",
-      ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
-                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
-                                   "DstIpAddr"
-                                )
     // -- aliases
     | extend 
       EventStartTime = EventEndTime,
