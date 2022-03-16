@@ -1,6 +1,6 @@
 # Log Analytics KQL function {title}
 
-This template deploys the Log Analytics KQL function {title}
+ARM template for deploying the Log Analytics KQL function {title}
 
 {description}
 
