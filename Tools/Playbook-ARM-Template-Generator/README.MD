@@ -24,3 +24,5 @@ To automate deployment of Microsoft Sentinel Playbooks (Azure LogicApps), this P
 	- Playbooks
 
 5.	After selecting playbooks, script prompts to select location on your local drive to save ARM Template
+   **Note**  
+   Tool converts microsoftsentinel connections to MSI during export
