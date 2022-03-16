@@ -74,19 +74,27 @@ ParserQuery: |
   {
     let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM2_s:string)) { 
       T
+      | extend ASimMatchingIpAddr = case(
+          array_length(ipaddr_has_any_prefix) == 0 ,"-",
+          has_any_ipv4_prefix(SrcIP_s,ipaddr_has_any_prefix), "SrcIpAddr",
+          has_any_ipv4_prefix(SrcPublicIPs_s,ipaddr_has_any_prefix), "SrcIpAddr",
+          has_any_ipv4_prefix(DestIP_s,ipaddr_has_any_prefix), "DstIpAddr", 
+          has_any_ipv4_prefix(DestPublicIPs_s,ipaddr_has_any_prefix) , "DstIpAddr",
+          "No match"
+          ),
+          ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"_",
+                                  VM1_s has_any (hostname_has_any), "SrcHostname",
+                                  VM2_s has_any (hostname_has_any), "DstHostname",
+                                  "No match"
+                                )
       | where
         (isnull(starttime) or TimeGenerated >= starttime)
         and  (isnull(endtime) or TimeGenerated <= endtime)
         and  (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) 
         and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIP_s ,srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcPublicIPs_s ,srcipaddr_has_any_prefix)) 
         and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestIP_s ,dstipaddr_has_any_prefix) or has_any_ipv4_prefix(DestPublicIPs_s ,dstipaddr_has_any_prefix))
-        and  (array_length(ipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(DestIP_s,ipaddr_has_any_prefix) 
-                or has_any_ipv4_prefix(DestPublicIPs_s,ipaddr_has_any_prefix) 
-                or has_any_ipv4_prefix(SrcIP_s,srcipaddr_has_any_prefix)
-                or has_any_ipv4_prefix(SrcPublicIPs_s,srcipaddr_has_any_prefix)
-            )
-        and (array_length(hostname_has_any) == 0 or VM2_s has_any (hostname_has_any) or VM1_s has_any (hostname_has_any))
+        and  ( ASimMatchingIpAddr  != "No match")
+        and  ( ASimMatchingHostname != "No match")
       | lookup DvcActionLookup on FlowStatus_s
       | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
       | where (eventresult=='*' or EventResult == eventresult)
@@ -161,16 +169,7 @@ ParserQuery: |
         EventCount = toint(AllowedInFlows_d+DeniedInFlows_d+AllowedOutFlows_d+DeniedOutFlows_d),
         NetworkDuration = toint((((EventEndTime - datetime(1970-01-01)) / 1s) - ((EventStartTime - datetime(1970-01-01)) / 1s )) * 1000),
         Rule = NetworkRuleName,
-        SessionId = NetworkSessionId,
-          ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
-                                  has_any_ipv4_prefix(SrcIP_s,ipaddr_has_any_prefix), "SrcIpAddr",
-                                  has_any_ipv4_prefix(SrcPublicIPs_s,ipaddr_has_any_prefix), "SrcIpAddr",
-                                  "DstIpAddr"
-                                  ),
-        ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
-                                  SrcHostname has_any (hostname_has_any), "SrcHostname",
-                                  "DstHostname"
-                                )
+        SessionId = NetworkSessionId
     | extend 
         DstIpAddr = iff(isnotempty(DestIP_s),
                         DestIP_s,

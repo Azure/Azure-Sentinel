@@ -79,13 +79,18 @@ ParserQuery: |
   CommonSecurityLog | where not(disabled)
   | where DeviceVendor == "Zscaler"
   | where DeviceProduct == "NSSFWlog"
+  | extend ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"-",
+                                  has_any_ipv4_prefix(SourceIP,ipaddr_has_any_prefix), "SrcIpAddr",
+                                  has_any_ipv4_prefix(DestinationIP,ipaddr_has_any_prefix), "DstIpAddr",
+                                  "No match"
+                              )
   // -- Pre-filtering
   |where
     (array_length(hostname_has_any) == 0) // No host name information, so always filter out if hostname filter used. 
     and (isnull(starttime) or TimeGenerated >= starttime)
     and  (isnull(endtime) or TimeGenerated <= endtime)
     and  (isnull(dstportnumber) or dstportnumber == DestinationPort) 
-    and  (array_length(ipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SourceIP ,ipaddr_has_any_prefix) or has_any_ipv4_prefix(DestinationIP ,ipaddr_has_any_prefix)) 
+    and  ( ASimMatchingIpAddr != "No match") 
     and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SourceIP ,srcipaddr_has_any_prefix)) 
     and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestinationIP ,dstipaddr_has_any_prefix))
   | project-rename DvcOriginalAction = DeviceAction
@@ -130,11 +135,7 @@ ParserQuery: |
     ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
     SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
     DstBytes = tolong(ReceivedBytes), 
-    SrcBytes = tolong(SentBytes),
-    ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"",
-                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
-                                  "DstIpAddr"
-                              )
+    SrcBytes = tolong(SentBytes)
   // -- Enrichment
   | extend
     DstAppType = "Service", 
