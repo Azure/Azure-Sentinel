@@ -9,12 +9,15 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Execution
 query: |
 
   let ProcessCreationEvents=() {
-  let processEvents=SecurityEvent
+  let processEvents=(union isfuzzy=true (SecurityEvent
   | where EventID==4688
   // filter out common randomly named files related to MSI installers and browsers
   | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{3}\.tmp")
@@ -23,7 +26,22 @@ query: |
   | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{4}\.tmp")
   | project TimeGenerated, ComputerName=Computer, AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
   FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, 
-  InitiatingProcessFileName=ParentProcessName, InitiatingProcessCommandLine="", InitiatingProcessParentFileName="";
+  InitiatingProcessFileName=ParentProcessName, InitiatingProcessCommandLine="", InitiatingProcessParentFileName=""),
+  (WindowsEvent
+  | where EventID==4688
+  // filter out common randomly named files related to MSI installers and browsers
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{4}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{4}\.tmp")
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | project TimeGenerated, ComputerName=Computer, AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
+  FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, 
+  InitiatingProcessFileName=ParentProcessName, InitiatingProcessCommandLine="", InitiatingProcessParentFileName="")));
   processEvents;
   };
   let normalizedProcesses = ProcessCreationEvents 
