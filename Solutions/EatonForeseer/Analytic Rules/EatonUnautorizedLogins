@@ -4,37 +4,37 @@ description: |
   'Detects Unauthorized Logins into Eaton Foreseer'
 severity: High
 requiredDataConnectors:
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
 queryFrequency: 15m
 queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-
+  - CredentialAccess
 relevantTechniques:
 
 query: |
-  Event
-  | where TimeGenerated > ago(15min)
-  // Look for all events relating to logins
+  SecurityEvent
+  | where TimeGenerated > ago(1d)
+  // Look for all events relating to user logins
   | where EventID in (4624,4625,4648,4675,4634,4647)
+  | where AccountType == "User"
   // Filter for data present
-  | where isnotempty(RenderedDescription)
-  // Create custom fields
-  | extend lenProcessName=(indexof(RenderedDescription,"Network Information:")-(indexof(RenderedDescription, "Process Name:")+17))
-  | extend ProcessName=substring(RenderedDescription, indexof(RenderedDescription, "Process Name:")+15, lenProcessName)
-  | extend lenUserName=(indexof(RenderedDescription,"Account Domain:") - (indexof(RenderedDescription, "Account Name:")+17))
-  | extend UserName=substring(RenderedDescription, indexof(RenderedDescription, "Account Name:")+15, lenUserName)
-  | extend lenIPAddress=(indexof(RenderedDescription,"Port:") - (indexof(RenderedDescription, "Network Address:")+19))
-  | extend IPAddress=substring(RenderedDescription, indexof(RenderedDescription, "Network Address:")+17, lenIPAddress)
+  | where isnotempty(ProcessName)
+  | where isnotempty(TargetUserName)
   // Look for all events that relate to the Eaton Foreseer application
   | where ProcessName contains "Foreseer"
   // Ignore known user accounts (please edit based on your allowed users)
-  | where UserName !in ("johndoe", "janedoe")
+  | where TargetUserName !in ("janedoe", "johndoe")
   | project
       TimeGenerated,
-      EventID,
-      IPAddress,
-      UserName,
+      WindowsEventID = EventID,
+      IPCustomEntity = IpAddress,
+      HostCustomEntity = Computer,
+      UserEntity = TargetUserName,
+      Process,
       ProcessName
 entityMappings:
   - entityType: UserName
