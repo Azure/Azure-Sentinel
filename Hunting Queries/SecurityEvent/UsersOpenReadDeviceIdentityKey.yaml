@@ -9,6 +9,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Credential Access
 relevantTechniques:
@@ -29,7 +32,9 @@ query: |
   // Machine Keys:
   //   f686aace6942fb7f7ceb231212eef4a4 -> TSSECKeySet1
   let filterList = dynamic(["TSSecKeySet1", "iisCngWasKey", "iisCngConfigurationKey", "ConfigMgrPrimaryKey"]);
-  SecurityEvent
+  (union isfuzzy=true 
+  (SecurityEvent
+  | where EventID == '5058'
   | where Activity == '5058 - Key file operation.'
   | extend EventData = parse_xml(EventData).EventData.Data
   | mv-expand bagexpansion=array EventData
@@ -39,4 +44,16 @@ query: |
   | where KeyType == '%%2499' and SubjectLogonId !in ('0x3e7', '0x3e4')
   | where KeyFilePath has 'Microsoft\\Crypto\\Keys\\'
   | where KeyName !in (filterList)
-  | extend ProcessId = ClientProcessId, KeyName = tostring(KeyName), SubjectLogonId = tostring(SubjectLogonId)
+  | extend ProcessId = ClientProcessId, KeyName = tostring(KeyName), SubjectLogonId = tostring(SubjectLogonId)),
+  (WindowsEvent
+  | where EventID == '5058' and EventData has '%%2499' and EventData has 'Microsoft\\Crypto\\Keys\\' and not(EventData has_any ('0x3e7', '0x3e4')) and not(EventData has_any (filterList))
+  | extend KeyType = tostring(EventData.KeyType)
+  | where KeyType == '%%2499'
+  | extend SubjectLogonId = tostring(EventData.SubjectLogonId)
+  | where SubjectLogonId !in ('0x3e7', '0x3e4')
+  | extend KeyFilePath = tostring(EventData.KeyFilePath)
+  | where KeyFilePath has 'Microsoft\\Crypto\\Keys\\'
+  | extend KeyName = tostring(EventData.KeyName)
+  | where KeyName !in (filterList)
+  // | extend ProcessId = ClientProcessId
+  ))
