@@ -12,7 +12,8 @@ requiredDataConnectors:
       - WindowsEvent
 tactics:
   - CredentialAccess
-query: |  // Create DataTable with your own values, example below shows dummy usernames and domain
+query: |  
+  // Create DataTable with your own values, example below shows dummy usernames and domain
   let List = datatable(VIPUser:string, Domain:string)["Bob", "Domain", "joe", "domain", "MATT", "DOMAIN", "administrator", ""];
   let timeframe = 10m;
   let StatusToStatusDesc = datatable(Status:string,StatusDesc:string) [  
@@ -38,70 +39,70 @@ query: |  // Create DataTable with your own values, example below shows dummy us
     "0xC0000224", "STATUS_PASSWORD_MUST_CHANGE",
     "0xC0000234", "STATUS_ACCOUNT_LOCKED_OUT",
     "0xC00002EE", "STATUS_UNFINISHED_CONTEXT_DELETED"
-  ];
-  let SubStatusToSubStatusDesc = datatable(SubStatus:string,SubStatusDesc:string) [ 
-   "0x80090325", "SEC_E_UNTRUSTED_ROOT",
-   "0xC0000008", "STATUS_INVALID_HANDLE",
-   "0xC0000022", "STATUS_ACCESS_DENIED",
-   "0xC0000064", "STATUS_NO_SUCH_USER",
-   "0xC000006A", "STATUS_WRONG_PASSWORD",
-   "0xC000006D", "STATUS_LOGON_FAILURE",
-   "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
-   "0xC000006F", "STATUS_INVALID_LOGON_HOURS",
-   "0xC0000070", "STATUS_INVALID_WORKSTATION",
-   "0xC0000071", "STATUS_PASSWORD_EXPIRED",
-   "0xC0000072", "STATUS_ACCOUNT_DISABLED",
-   "0xC0000073", "STATUS_NONE_MAPPED",
-   "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
-   "0xC0000133", "STATUS_TIME_DIFFERENCE_AT_DC",
-   "0xC000018D", "STATUS_TRUSTED_RELATIONSHIP_FAILURE",
-   "0xC0000193", "STATUS_ACCOUNT_EXPIRED",
-   "0xC0000380", "STATUS_SMARTCARD_WRONG_PIN",
-   "0xC0000381", "STATUS_SMARTCARD_CARD_BLOCKED",
-   "0xC0000382", "STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED",
-   "0xC0000383", "STATUS_SMARTCARD_NO_CARD",
-   "0xC0000384", "STATUS_SMARTCARD_NO_KEY_CONTAINER",
-   "0xC0000385", "STATUS_SMARTCARD_NO_CERTIFICATE",
-   "0xC0000386", "STATUS_SMARTCARD_NO_KEYSET",
-   "0xC0000387", "STATUS_SMARTCARD_IO_ERROR",
-   "0xC0000388", "STATUS_DOWNGRADE_DETECTED",
-   "0xC0000389", "STATUS_SMARTCARD_CERT_REVOKED"
-  ];
-  List
-  | project TargetUserName = tolower(VIPUser), TargetDomainName = toupper(Domain)
-  | join kind= rightsemi (union isfuzzy=true  
-  (SecurityEvent 
-  | where TimeGenerated > ago(2*timeframe) 
-  | where EventID == "4625"
-  | where AccountType == "User"
-  ),
-  (WindowsEvent
-  | where TimeGenerated > ago(2*timeframe) 
-  | where EventID == "4625"
-  | extend TargetUserSid = tostring(EventData.TargetUserSid)
-  | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
-  | where AccountType == "User"
-  | extend TargetUserName = tostring(EventData.TargetUserName)
-  | extend TargetDomainName = tostring(EventData.TargetDomainName)
-  | extend Activity= "4625 - An account failed to log on."
-  | extend WorkstationName = tostring(EventData.WorkstationName)
-  | extend Account = iff((isempty(EventData.TargetDomainName) or EventData.TargetDomainName == "-"),"", strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))) 
-  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
-  | extend TargetUserName = tostring(EventData.TargetUserName)
-  | extend TargetDomainName = tostring(EventData.TargetDomainName)
-  | extend LogonType = toint(EventData.LogonType)
-  | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
-  | extend LogonProcessName = tostring(EventData.LogonProcessName)
-  | extend Status= tostring(EventData.Status)
-  | extend SubStatus = tostring(EventData.SubStatus)
-  )) on TargetUserName, TargetDomainName
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FailedVIPLogons = count() by EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, SubStatus
-  | where FailedVIPLogons >= 6
-  // map the most common ntstatus codes
-  | lookup StatusToStatusDesc on Status
-  | extend coalesce(StatusDesc, strcat("See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55", Status))
-  | lookup SubStatusToSubStatusDesc on SubStatus
-  | extend coalesce(SubStatusDesc, strcat("See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55", SubStatus))
-  | project StartTimeUtc, EndTimeUtc, FailedVIPLogons, EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, StatusDesc, SubStatus, SubStatusDesc
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = Account
- 
+    ];
+    let SubStatusToSubStatusDesc = datatable(SubStatus:string,SubStatusDesc:string) [ 
+    "0x80090325", "SEC_E_UNTRUSTED_ROOT",
+    "0xC0000008", "STATUS_INVALID_HANDLE",
+    "0xC0000022", "STATUS_ACCESS_DENIED",
+    "0xC0000064", "STATUS_NO_SUCH_USER",
+    "0xC000006A", "STATUS_WRONG_PASSWORD",
+    "0xC000006D", "STATUS_LOGON_FAILURE",
+    "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+    "0xC000006F", "STATUS_INVALID_LOGON_HOURS",
+    "0xC0000070", "STATUS_INVALID_WORKSTATION",
+    "0xC0000071", "STATUS_PASSWORD_EXPIRED",
+    "0xC0000072", "STATUS_ACCOUNT_DISABLED",
+    "0xC0000073", "STATUS_NONE_MAPPED",
+    "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+    "0xC0000133", "STATUS_TIME_DIFFERENCE_AT_DC",
+    "0xC000018D", "STATUS_TRUSTED_RELATIONSHIP_FAILURE",
+    "0xC0000193", "STATUS_ACCOUNT_EXPIRED",
+    "0xC0000380", "STATUS_SMARTCARD_WRONG_PIN",
+    "0xC0000381", "STATUS_SMARTCARD_CARD_BLOCKED",
+    "0xC0000382", "STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED",
+    "0xC0000383", "STATUS_SMARTCARD_NO_CARD",
+    "0xC0000384", "STATUS_SMARTCARD_NO_KEY_CONTAINER",
+    "0xC0000385", "STATUS_SMARTCARD_NO_CERTIFICATE",
+    "0xC0000386", "STATUS_SMARTCARD_NO_KEYSET",
+    "0xC0000387", "STATUS_SMARTCARD_IO_ERROR",
+    "0xC0000388", "STATUS_DOWNGRADE_DETECTED",
+    "0xC0000389", "STATUS_SMARTCARD_CERT_REVOKED"
+    ];
+    List
+    | project TargetUserName = tolower(VIPUser), TargetDomainName = toupper(Domain)
+    | join kind= rightsemi (union isfuzzy=true  
+    (SecurityEvent 
+    | where TimeGenerated > ago(2*timeframe) 
+    | where EventID == "4625"
+    | where AccountType == "User"
+    ),
+    (WindowsEvent
+    | where TimeGenerated > ago(2*timeframe) 
+    | where EventID == "4625"
+    | extend TargetUserSid = tostring(EventData.TargetUserSid)
+    | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+    | where AccountType == "User"
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    | extend TargetDomainName = tostring(EventData.TargetDomainName)
+    | extend Activity= "4625 - An account failed to log on."
+    | extend WorkstationName = tostring(EventData.WorkstationName)
+    | extend Account = iff((isempty(EventData.TargetDomainName) or EventData.TargetDomainName == "-"),"", strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))) 
+    | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    | extend TargetDomainName = tostring(EventData.TargetDomainName)
+    | extend LogonType = toint(EventData.LogonType)
+    | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
+    | extend LogonProcessName = tostring(EventData.LogonProcessName)
+    | extend Status= tostring(EventData.Status)
+    | extend SubStatus = tostring(EventData.SubStatus)
+    )) on TargetUserName, TargetDomainName
+    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), FailedVIPLogons = count() by EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, SubStatus
+    | where FailedVIPLogons >= 6
+    // map the most common ntstatus codes
+    | lookup StatusToStatusDesc on Status
+    | extend coalesce(StatusDesc, strcat("See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55", Status))
+    | lookup SubStatusToSubStatusDesc on SubStatus
+    | extend coalesce(SubStatusDesc, strcat("See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55", SubStatus))
+    | project StartTimeUtc, EndTimeUtc, FailedVIPLogons, EventID, Activity, WorkstationName, Account, TargetAccount, TargetUserName, TargetDomainName, LogonType, LogonTypeName, LogonProcessName, Status, StatusDesc, SubStatus, SubStatusDesc
+    | extend timestamp = StartTimeUtc, AccountCustomEntity = Account
+  
