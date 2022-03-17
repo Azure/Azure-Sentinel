@@ -11,6 +11,12 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -20,12 +26,18 @@ tactics:
 relevantTechniques:
   - T1204
 query: |
-
   let endpointData = 
+  (union isfuzzy=true
   (SecurityEvent
     | where EventID == 4688
     | extend shortFileName = tostring(split(NewProcessName, '\\')[-1])
-    );
+    ),
+    (WindowsEvent
+    | where EventID == 4688
+    | extend  NewProcessName = tostring(EventData.NewProcessName)
+    | extend shortFileName = tostring(split(NewProcessName, '\\')[-1])
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    ));
   // Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints
   CommonSecurityLog
   | where DeviceVendor =~ "Trend Micro"
@@ -52,5 +64,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.0.0
+version: 1.1.2
 kind: Scheduled

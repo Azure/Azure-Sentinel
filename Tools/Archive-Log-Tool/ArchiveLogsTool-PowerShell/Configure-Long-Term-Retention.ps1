@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 2/18/2022
+        LASTEDIT: 3/9/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -183,7 +183,7 @@ function Get-LATables {
         }    
     }
     catch {
-        Write-Log $_ -LogFileName $LogFileName -Severity Error
+        Write-Log -Message $_ -LogFileName $LogFileName -Severity Error
         Write-Log -Message "An error occurred in querying table names from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error         
         exit
     }
@@ -201,7 +201,7 @@ function Set-TableConfiguration {
 	$SuccessTables = @()
     
     foreach($QTable in $QualifiedTables) {	
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-07-01-privatepreview"								
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-12-01-preview"								
 		
 		$TablesApiBody = @"
 			{
@@ -235,7 +235,7 @@ function Set-TableConfiguration {
 
 function Get-AllTables {		
 	$AllTables = @()	
-    $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-07-01-privatepreview"								
+    $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-12-01-preview"								
 	    		
     try {        
         $TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "GET" -Headers $LaAPIHeaders           			
@@ -275,7 +275,7 @@ function Update-TablesRetention {
     )
 	$UpdatedTablesRetention = @()
     foreach($tbl in $TablesForRetention) {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-07-01-privatepreview"		
+		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-12-01-preview"		
         $ArchiveDays = [int]($TotalRetentionInDays)
         
         $TablesApiBody = @"
@@ -559,7 +559,7 @@ foreach($CurrentSubscription in $GetSubscriptions)
     }
     catch [Exception]
     { 
-        Write-Log $_ -LogFileName $LogFileName -Severity Error                         		
+        Write-Log -Message $_ -LogFileName $LogFileName -Severity Error                         		
     }		 
 }
 #endregion DriverProgram 

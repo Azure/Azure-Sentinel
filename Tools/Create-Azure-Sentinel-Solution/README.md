@@ -49,6 +49,11 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * Description: Solution Description used in createUiDefinition.json. Can include markdown.
  * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
  * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
+ * SavedSearches: This input assumes a format of any of the following:
+ * -- Direct export via API (see https://docs.microsoft.com/rest/api/loganalytics/saved-searches/list-by-workspace)
+ * -- Array of SavedSearch resources
+ * -- Raw ARM template
+ *
  * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation
@@ -64,6 +69,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Analytic Rules": [],
   "Playbooks": [],
   "Parsers": [],
+  "SavedSearches": [],
   "Hunting Queries": [],
   "Data Connectors": [],
   "Watchlists": [],

@@ -80,6 +80,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $workbookCounter = 1
     $playbookCounter = 1
     $parserCounter = 1
+    $savedSearchCounter = 1
     $huntingQueryCounter = 1
     $watchlistCounter = 1
 
@@ -154,7 +155,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "workbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text = "This Azure Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Azure Sentinel and combine them into unified interactive experiences.";
+                                            text = "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences.";
                                             link = [PSCustomObject] @{
                                                 label = "Learn more";
                                                 uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data";
@@ -222,7 +223,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             name       = "[parameters('workbook$workbookCounter-id')]";
                             location   = "[parameters('workspace-location')]";
                             kind       = "shared";
-                            apiVersion = "2020-02-12";
+                            apiVersion = "2021-08-01";
                             properties = [PSCustomObject] @{
                                 displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
@@ -272,7 +273,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "playbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text = "This solution installs playbook resources.  A security playbook is a collection of procedures that can be run from Azure Sentinel in response to an alert. A security playbook can help automate and orchestrate your response, and can be run manually or set to run automatically when specific alerts are triggered. Security playbooks in Azure Sentinel are based on Azure Logic Apps, which means that you get all the power, customizability, and built-in templates of Logic Apps. Each playbook is created for the specific subscription you choose, but when you look at the Playbooks page, you will see all the playbooks across any selected subscriptions.";
+                                            text = "This solution installs playbook resources.  A security playbook is a collection of procedures that can be run from Microsoft Sentinel in response to an alert. A security playbook can help automate and orchestrate your response, and can be run manually or set to run automatically when specific alerts are triggered. Security playbooks in Microsoft Sentinel are based on Azure Logic Apps, which means that you get all the power, customizability, and built-in templates of Logic Apps. Each playbook is created for the specific subscription you choose, but when you look at the Playbooks page, you will see all the playbooks across any selected subscriptions.";
                                             link = [PSCustomObject] @{
                                                 label = "Learn more";
                                                 uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
@@ -357,6 +358,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         type      = "securestring";
                                         minLength = 1;
                                         metadata  = [PSCustomObject] @{ description = "Password to connect to $solutionName API"; }
+                                    }
+								)
+                            }
+							elseif ($param.Name.ToLower().contains("apikey")) {
+                                $playbookPasswordObject = [PSCustomObject] @{
+                                    name        = "playbook$playbookCounter-$paramName";
+                                    type        = "Microsoft.Common.PasswordBox";
+                                    label       = [PSCustomObject] @{password = "ApiKey"};
+                                    toolTip     = "ApiKey to connect to $solutionName API";
+                                    constraints = [PSCustomObject] @{ required = $true; };
+                                    options     = [PSCustomObject] @{ hideConfirmation = $true; };
+                                }
+                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
+                                        type      = "securestring";
+                                        minLength = 1;
+                                        metadata  = [PSCustomObject] @{ description = "ApiKey to connect to $solutionName API"; }
                                     })
                             }
                             else {
@@ -424,7 +442,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($variableValue -is [System.String]) {
                                 $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                             }
-                            if (($solutionName.ToLower() -eq "ciscomeraki") -and ($variableName.ToLower().contains("apikey")))
+                            if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey")))
                             {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$variableName" -NotePropertyValue "[$variableValue]"
                             }
@@ -649,11 +667,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                         $connectorDataType = $(getConnectorDataTypes $connectorData.dataTypes)
                         $isParserAvailable = $($contentToImport.Parsers -and ($contentToImport.Parsers.Count -gt 0))
-                        $baseDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Azure Sentinel workspace. Configure and enable this data connector in the Data Connector gallery after this Solution deploys."
-                        $parserText = "The Solution installs a parser that transforms the ingested data into Azure Sentinel normalized format. The normalized format enables better correlation of different types of data from different data sources to drive end-to-end outcomes seamlessly in security monitoring, hunting, incident investigation and response scenarios in Azure Sentinel."
-                        $customLogsText = "$baseDescriptionText This data connector creates custom log table(s) $(getAllDataTypeNames $connectorData.dataTypes) in your Azure Sentinel / Azure Log Analytics workspace."
-                        $syslogText = "$baseDescriptionText The logs will be received in the Syslog table in your Azure Sentinel / Azure Log Analytics workspace."
-                        $commonSecurityLogText = "$baseDescriptionText The logs will be received in the CommonSecurityLog table in your Azure Sentinel / Azure Log Analytics workspace."
+                        $baseDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Microsoft Sentinel workspace. Configure and enable this data connector in the Data Connector gallery after this Solution deploys."
+                        $parserText = "The Solution installs a parser that transforms the ingested data into Microsoft Sentinel normalized format. The normalized format enables better correlation of different types of data from different data sources to drive end-to-end outcomes seamlessly in security monitoring, hunting, incident investigation and response scenarios in Microsoft Sentinel."
+                        $customLogsText = "$baseDescriptionText This data connector creates custom log table(s) $(getAllDataTypeNames $connectorData.dataTypes) in your Microsoft Sentinel / Azure Log Analytics workspace."
+                        $syslogText = "$baseDescriptionText The logs will be received in the Syslog table in your Microsoft Sentinel / Azure Log Analytics workspace."
+                        $commonSecurityLogText = "$baseDescriptionText The logs will be received in the CommonSecurityLog table in your Microsoft Sentinel / Azure Log Analytics workspace."
                         $connectorDescriptionText = $(if ($connectorDataType -eq $commonSecurityLog) { $commonSecurityLogText } elseif ($connectorDataType -eq $syslog) { $syslogText } else { $customLogsText })
 
                         $baseDataConnectorStep = [PSCustomObject] @{
@@ -712,6 +730,43 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         # Update Connector Counter
                         $connectorCounter += 1
                     }
+                    elseif ($objectKeyLowercase -eq "savedsearches") {
+                        $isStandardTemplate = $false
+                        $searchData = $json # Assume input is basic array of SavedSearches to start
+                        # Check if SavedSearch input file uses direct structure given by export
+                        if ($searchData -isnot [System.Array] -and $searchData.value) {
+                            $searchData = $searchData.value 
+                        }
+                        # Check if SavedSearch input file uses standard template structure
+                        if ($searchData -isnot [System.Array] -and $searchData.resources) {
+                            $isStandardTemplate = $true
+                            $searchData = $searchData.resources
+                        }
+                        if($searchData -is [System.Array] -and !$isStandardTemplate) {
+                            foreach($search in $searchData) {
+                                $savedSearchIdParameterName = "savedsearch$savedSearchCounter-id"
+                                $savedSearchIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
+                                $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $savedSearchIdParameterName -Value $savedSearchIdParameter
+
+                                $savedSearchResource = [PSCustomObject]@{
+                                    type = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                                    apiVersion = "2020-08-01";
+                                    name = "[concat(parameters('workspace'),'/',parameters('$savedSearchIdParameterName'))]";
+                                    properties = [PSCustomObject]@{
+                                        category = $search.properties.category;
+                                        displayName = $search.properties.displayName;
+                                        query = $search.properties.query;
+                                        functionAlias = $search.properties.functionAlias;
+                                        version = $search.properties.version;
+                                    };
+                                }
+                                $baseMainTemplate.resources += $savedSearchResource
+                                $savedSearchCounter++
+                            }
+                        } elseif ($isStandardTemplate) {
+                            $baseMainTemplate.resources += $searchData
+                        }
+                    }
                     elseif ($objectKeyLowercase -eq "watchlists") {
                         $watchlistData = $json.resources[0]
 
@@ -740,7 +795,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "watchlists-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject]@{
-                                            text = "Azure Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Azure Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Azure Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.";
+                                            text = "Microsoft Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Microsoft Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Microsoft Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.";
                                             link = [PSCustomObject]@{
                                                 label = "Learn more";
                                                 uri   = "https://aka.ms/sentinelwatchlists";
@@ -837,7 +892,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             name    = "huntingqueries-text";
                                             type    = "Microsoft.Common.TextBlock";
                                             options = [PSCustomObject] @{
-                                                text = "This Azure Sentinel Solution installs hunting queries for $solutionName that you can run in Azure Sentinel. These hunting queries will be deployed in the Hunting gallery of your Azure Sentinel workspace. Run these hunting queries to hunt for threats in the Hunting gallery after this Solution deploys.";
+                                                text = "This Microsoft Sentinel Solution installs hunting queries for $solutionName that you can run in Microsoft Sentinel. These hunting queries will be deployed in the Hunting gallery of your Microsoft Sentinel workspace. Run these hunting queries to hunt for threats in the Hunting gallery after this Solution deploys.";
                                                 link = [PSCustomObject] @{
                                                     label = "Learn more";
                                                     uri   = "https://docs.microsoft.com/azure/sentinel/hunting"
@@ -929,7 +984,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             name    = "analytics-text";
                                             type    = "Microsoft.Common.TextBlock";
                                             options = [PSCustomObject] @{
-                                                text = "This Azure Sentinel Solution installs analytic rules for $solutionName that you can enable for custom alert generation in Azure Sentinel. These analytic rules will be deployed in disabled mode in the analytics rules gallery of your Azure Sentinel workspace. Configure and enable these rules in the analytic rules gallery after this Solution deploys.";
+                                                text = "This Microsoft Sentinel Solution installs analytic rules for $solutionName that you can enable for custom alert generation in Microsoft Sentinel. These analytic rules will be deployed in disabled mode in the analytics rules gallery of your Microsoft Sentinel workspace. Configure and enable these rules in the analytic rules gallery after this Solution deploys.";
                                                 link = [PSCustomObject] @{
                                                     label = "Learn more";
                                                     uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef";

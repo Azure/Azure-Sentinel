@@ -13,6 +13,12 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -25,12 +31,25 @@ relevantTechniques:
   - T1027
   - T1140
 query: |
-
   let ProcessCreationEvents=() {
-  let processEvents=SecurityEvent
+  let processEvents=(union isfuzzy=true
+  (SecurityEvent
   | where EventID==4688
   | where isnotempty(CommandLine)
-  | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, FileName = Process, CommandLine, ParentProcessName;
+  | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, FileName = Process, CommandLine, ParentProcessName
+  ),
+  (WindowsEvent
+  | where EventID==4688
+  | where EventData has_any (".decode('base64')", "base64 --decode", ".decode64(" )
+  | extend CommandLine = tostring(EventData.CommandLine)
+  | where isnotempty(CommandLine)
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend FileName=tostring(split(NewProcessName, '\\')[-1])
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, CommandLine, ParentProcessName
+  ));
   processEvents;
   };
   ProcessCreationEvents 
@@ -49,5 +68,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
+version: 1.1.1
 kind: Scheduled
