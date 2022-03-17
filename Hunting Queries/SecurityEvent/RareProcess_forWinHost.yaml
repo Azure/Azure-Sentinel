@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Execution
   - Persistence
@@ -19,8 +22,8 @@ query: |
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 30d;
-  let basic=materialize(
-    SecurityEvent
+  let basic=materialize( union isfuzzy=true 
+    (SecurityEvent
       | where TimeGenerated between(lookback..endtime)
       | where EventID == 4688
       | summarize FullCount = count()
@@ -28,7 +31,18 @@ query: |
                   , min_TimeGenerated=min(TimeGenerated)
                   , max_TimeGenerated=max(TimeGenerated)
                         by Computer, NewProcessName
-      | where Count > 0 and Count < 100);
+      | where Count > 0 and Count < 100),
+      (WindowsEvent
+            | where TimeGenerated between(lookback..endtime)
+      | where EventID == 4688
+      | extend NewProcessName = tostring(EventData.NewProcessName)
+      | summarize FullCount = count()
+                  , Count= countif(TimeGenerated between (starttime .. endtime))
+                  , min_TimeGenerated=min(TimeGenerated)
+                  , max_TimeGenerated=max(TimeGenerated)
+                        by Computer, NewProcessName
+      | where Count > 0 and Count < 100
+      ));
   let basic_avg = basic
       | summarize Avg = avg(FullCount) by  NewProcessName;
   basic | project-away FullCount
@@ -36,4 +50,4 @@ query: |
   basic_avg
     on NewProcessName | project-away NewProcessName1
     | where Count < 14 or (Count <= Avg*0.01 and Count < 100)
-    | extend HostCustomEntity=Computer
+    | extend HostCustomEntity=Computer   
