@@ -1,0 +1,45 @@
+id: 5a7fccb8-3ed0-44f2-8477-540af3ef4d92
+name: EatonForeseer - Unauthorized Logins
+description: |
+  'Detects Unauthorized Logins into Eaton Foreseer'
+severity: High
+requiredDataConnectors:
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+
+relevantTechniques:
+
+query: |
+  Event
+  | where TimeGenerated > ago(15min)
+  // Look for all events relating to logins
+  | where EventID in (4624,4625,4648,4675,4634,4647)
+  // Filter for data present
+  | where isnotempty(RenderedDescription)
+  // Create custom fields
+  | extend lenProcessName=(indexof(RenderedDescription,"Network Information:")-(indexof(RenderedDescription, "Process Name:")+17))
+  | extend ProcessName=substring(RenderedDescription, indexof(RenderedDescription, "Process Name:")+15, lenProcessName)
+  | extend lenUserName=(indexof(RenderedDescription,"Account Domain:") - (indexof(RenderedDescription, "Account Name:")+17))
+  | extend UserName=substring(RenderedDescription, indexof(RenderedDescription, "Account Name:")+15, lenUserName)
+  | extend lenIPAddress=(indexof(RenderedDescription,"Port:") - (indexof(RenderedDescription, "Network Address:")+19))
+  | extend IPAddress=substring(RenderedDescription, indexof(RenderedDescription, "Network Address:")+17, lenIPAddress)
+  // Look for all events that relate to the Eaton Foreseer application
+  | where ProcessName contains "Foreseer"
+  // Ignore known user accounts (please edit based on your allowed users)
+  | where UserName !in ("johndoe", "janedoe")
+  | project
+      TimeGenerated,
+      EventID,
+      IPAddress,
+      UserName,
+      ProcessName
+entityMappings:
+  - entityType: UserName
+    fieldMappings:
+      - identifier: UserName
+        columnName: UserName
+version: 1.0.0
+kind: Scheduled
