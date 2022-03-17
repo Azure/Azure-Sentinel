@@ -7,15 +7,19 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Execution
 query: |
-
+ 
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = totimespan((endtime-starttime)*7);
   let processEvents=
-  SecurityEvent
+  (union isfuzzy=true
+  (SecurityEvent
   | where TimeGenerated between(ago(lookback)..endtime)
   | where EventID==4688
   // excluding well known processes
@@ -45,6 +49,53 @@ query: |
   | where not(NewProcessName matches regex @"\\Packages\\Plugins\\Microsoft\.")
   | extend path_parts = parse_path(NewProcessName)
   | extend ProcessPath = tostring(path_parts.DirectoryPath)
+  ),
+  (WindowsEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4688 
+  |where not(EventData has_any (':\\Windows\\System32\\conhost.exe',
+                                ":\\Windows\\System32\\wuauclt.exe",
+                                "C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_", 
+                                ":\\Windows\\WinSxS\\amd64_microsoft-windows-servicingstack_",
+                                ":\\Windows\\WinSxS\\amd64_microsoft-windows-servicingstack_",
+                                ":\\WindowsAzure\\SecAgent\\WaSecAgentProv.exe",
+                                ":\\WindowsAzure\\GuestAgent_",
+                                ":\\WindowsAzure\\WindowsAzureNetAgent_",
+                                ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" ,
+                                 "\\MpCmdRun.exe",
+                                 ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\'  )) 
+  // excluding well known processes
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+  | where ParentProcessName !endswith ":\\Windows\\System32\\wuauclt.exe" and NewProcessName !startswith "C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_"
+  | where NewProcessName !has ":\\Windows\\WinSxS\\amd64_microsoft-windows-servicingstack_" and ParentProcessName !has ":\\Windows\\WinSxS\\amd64_microsoft-windows-servicingstack_"
+  | where NewProcessName !endswith ":\\WindowsAzure\\SecAgent\\WaSecAgentProv.exe"
+  | where ParentProcessName !has ":\\WindowsAzure\\GuestAgent_" and NewProcessName !has ":\\WindowsAzure\\GuestAgent_"
+  | where ParentProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_" and NewProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_"
+  | where ParentProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and ParentProcessName !endswith "\\MpCmdRun.exe"
+  | where NewProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and NewProcessName !endswith "\\MpCmdRun.exe"
+  | where NewProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\'
+  // filter out common randomly named paths and files
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{4}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{4}\.tmp")
+  | where not(NewProcessName matches regex @"\\Windows\\Temp\\[0-9A-Za-z-]*\\DismHost\.exe")
+  | where not(NewProcessName matches regex @"\\Users\\[0-9A-Za-z-_~\.]*\\AppData\\Local\\Temp\\[0-9A-Za-z-]*\\DismHost\.exe")
+  | where not(NewProcessName matches regex @"\\Windows\\Temp\\[0-9A-Za-z-]*\\MpSigStub\.exe")
+  | where not(NewProcessName matches regex @"\\[0-9A-Za-z]*\\amd64\\setup\.exe") and (ParentProcessName !has ":\\Windows\\SoftwareDistribution\\Download\\Install\\"
+  or ParentProcessName !has "\\AppData\\Local\\Temp\\mpam-")
+  | where not(NewProcessName matches regex @"\\Windows\\Microsoft.NET\\(Framework|Framework64)\\v[0-9].[0-9].[0-9]*\\(csc\.exe|cvtres\.exe|mscorsvw\.exe|ngentask\.exe|ngen\.exe)")
+  | where not(NewProcessName matches regex @"\\WindowsAzure\\GuestAgent_[0-9].[0-9].[0-9]*.[0-9]*_[0-9]*-[0-9]*-[0-9]*_[0-9]*\\")
+  and not(ParentProcessName matches regex @"\\WindowsAzure\\GuestAgent_[0-9].[0-9].[0-9]*.[0-9]*_[0-9]*-[0-9]*-[0-9]*_[0-9]*\\")
+  | where not(NewProcessName matches regex @"\\[0-9A-Za-z]*\\epplauncher.exe")
+  | where not(NewProcessName matches regex @"\\Packages\\Plugins\\Microsoft\.")
+  | extend path_parts = parse_path(NewProcessName)
+  | extend ProcessPath = tostring(path_parts.DirectoryPath)
+  | extend Account = iff((isempty(EventData.SubjectDomainName) or EventData.SubjectDomainName == "-"),"", strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  ))
   ;
   let normalizedProcessPath = processEvents
   | extend NormalizedProcessPath = ProcessPath
