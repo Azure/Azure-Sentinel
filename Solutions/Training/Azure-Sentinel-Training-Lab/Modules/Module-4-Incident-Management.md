@@ -88,7 +88,7 @@ We have 2 options to open the workbook:
 
 ![Select Microsoft incident creation rule](../Images/m5-workbook-validator.gif?raw=true)
 
-15. As the subject of the investigation is the suspicious IP from North Koriea. we want to see all the activity done by this IP
+15. As the subject of the investigation is the suspicious IP from North Korea. we want to see all the activity done by this IP
  so in the properties selector, switch on the **investigate by** to Entity.
 
  16. in the **Investigate IP Address** Tab, add the suspicious IP.
