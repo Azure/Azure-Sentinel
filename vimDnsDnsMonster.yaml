@@ -58,9 +58,10 @@ ParserQuery: |
     disabled:bool=false
     ) {
     dnsmonster_CL | where not(disabled)
-    | where not(DNS_Response_b)
-    | extend DNS_Question = todynamic(DNS_Question_s)
+    | where DNS_Response_b
+    | extend DNS_Question = todynamic(DNS_Question_s), DNS_Answer = todynamic(DNS_Answer_s)
     | mv-expand DNS_Question
+    | mv-expand DNS_Answer
     | extend EventType = opcodes[toint(DNS_Opcode_d)],
         EventSubType = "request",
         EventResultDetails = rcodes[toint(DNS_Opcode_d)],
@@ -84,8 +85,8 @@ ParserQuery: |
     | where (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
         and (srcipaddr=='*' or SrcIP_s==srcipaddr)
-        and (response_has_ipv4=='*')
-        and (array_length(response_has_any_prefix) ==0)         
+        and (response_has_ipv4=='*' or ipv4_is_in_range(tostring(DNS_Answer.A),response_has_ipv4))
+        and (array_length(response_has_any_prefix) ==0 or has_ipv4_prefix(response_has_any_prefix,tostring(DNS_Answer.A)))         
         and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
         and (responsecodename=='*' or EventResultDetails == responsecodename)
         and (eventtype == "*" or eventtype == EventType or (eventtype == "lookup" and EventType == "Query"))
