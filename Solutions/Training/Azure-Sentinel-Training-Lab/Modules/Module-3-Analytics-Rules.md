@@ -83,7 +83,7 @@ In this exercise you will use Microsoft Sentinel analytics rule wizard to create
 
 **important note: in this lab we are using custom logs that replace the Out-off-the-box tables** 
 
-- Run the search query below to see the list of operation Microsoft Sentinel cupture in the last 24hr 
+- Run the search query below to see the list of activities Microsoft Sentinel captured in the last 24hr 
 	
     ```powershell
 	OfficeActivity_CL
@@ -136,10 +136,10 @@ To make your SOC more productive, save analyst time and effectively triage newly
 
 - In the **Alert Name Format** copy the above dynamic title **"Malicious Inbox Rule, affected user {{UserId__s}}"**
 
-4. In the **Query scheduling** set the **run query every** to **5 minutes** and the **Lookup data to last 12 Hours** (This scheduling are not ideal for production environment and should be tune).
+4. In the **Query scheduling** set the **run query every** to **5 minutes** and the **Lookup data to last 12 Hours** (This scheduling might not be ideal for production environment and should be tune). If you deployed the lab more than 12 hours ago, you will need to change the lookback period.
 5. In the **Suppression** leave it on **Off**
 6. Press the **Next:Incident settings(Preview)** 
-7. As your SOC is under stress, we want to reduce the number of alerts and be sure that when analyst handle a specific incident, he/she will see all related events or other incidents related to the same attack story. For that we will **implement Alert grouping** feature. to do so, follow the steps below: 
+7. As your SOC is under stress, we want to reduce the number of alerts and be sure that when analyst handle a specific incident, he/she will see all related events or other incidents related to the same attack story. For that we will **implement Alert grouping** feature. To do so, follow the steps below: 
 
 - In the **Incident settings (Preview)** under **Alert grouping** change it to **Enabled**.
 - Modify the **Limit the group to alerts created within the selected time frame** to **12 hours**.
