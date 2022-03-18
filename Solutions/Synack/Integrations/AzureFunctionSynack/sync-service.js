@@ -1,16 +1,16 @@
 const synackService = require("./synack-service");
 const azureService = require("./azure-service");
 
-exports.runSync = function runSync() {
+exports.runSync = function runSync(context) {
 
-    console.log(`trying to fetch vulnerabilities from Synack`)
-    synackService.fetchSynackVulns()
+    context.log(`trying to fetch vulnerabilities from Synack`)
+    synackService.fetchSynackVulns(context)
         .then((synackVulns) => {
 
-            console.log(`fetched total ${synackVulns.length} vulnerabilities from Synack`)
-            azureService.getAzureAuthenticationToken()
+            context.log(`fetched total ${synackVulns.length} vulnerabilities from Synack`)
+            azureService.getAzureAuthenticationToken(context)
                 .then((accessToken) => {
-                    console.log('got azure access token for synchronization')
+                    context.log('got azure access token for synchronization')
 
                     for (let i = 0; i < synackVulns.length; i++) {
                         let vulnJson = synackVulns[i]
@@ -26,14 +26,14 @@ exports.runSync = function runSync() {
                             status: incidentStatus
                         }
 
-                        azureService.createOrUpdateIncident(vulnJson, incidentDto, accessToken)
+                        azureService.createOrUpdateIncident(context, vulnJson, incidentDto, accessToken)
                             .then((incidentOperationResult) => {
-                                console.log(`${incidentOperationResult.status} incident ${incidentOperationResult.name}`)
+                                context.log(`${incidentOperationResult.status} incident ${incidentOperationResult.name}`)
                                 let incidentId = incidentOperationResult.name
 
-                                synackService.fetchComments(vulnJson['id'])
+                                synackService.fetchComments(context, vulnJson['id'])
                                     .then((synackCommentsJsonArray) => {
-                                        azureService.fetchComments(incidentId, accessToken)
+                                        azureService.fetchComments(context, incidentId, accessToken)
                                             .then((incidentCommentsJsonArray) => {
                                                 let incidentCommentsIds = []
                                                 for (let incidentComment of incidentCommentsJsonArray) {
@@ -44,17 +44,16 @@ exports.runSync = function runSync() {
                                                     if (!incidentCommentsIds.includes(sentinelCommentId)) {
                                                         let synackAuthorName = synackComment['User']['name']
                                                         let sentinelCommentBody = `**${synackAuthorName}** **(Synack):** ${synackComment.body}`
-                                                        azureService.createComment(incidentId, sentinelCommentId, sentinelCommentBody, accessToken)
+                                                        azureService.createComment(context, incidentId, sentinelCommentId, sentinelCommentBody, accessToken)
                                                             .then((commentOperationResult) => {
-                                                                    console.log(`${commentOperationResult.status} comment ${commentOperationResult.name}`)
-                                                                }
-                                                            )
+                                                                context.log(`${commentOperationResult.status} comment ${commentOperationResult.name}`)
+                                                            })
                                                             .catch((error) => {
-                                                                console.error(`Failed to create comment for incident ${incidentId}`)
-                                                                console.error(error)
+                                                                context.error(`Failed to create comment for incident ${incidentId}`)
+                                                                context.error(error)
                                                             })
                                                     } else {
-                                                        console.log(`comment ${sentinelCommentId} already exists`)
+                                                        context.log(`comment ${sentinelCommentId} already exists`)
                                                     }
                                                 }
                                             })
@@ -62,22 +61,22 @@ exports.runSync = function runSync() {
                                     })
                             })
                             .catch((error) => {
-                                console.error('error occurred while trying to create/update a Sentinel incident')
-                                console.error(error)
+                                context.error('error occurred while trying to create/update a Sentinel incident')
+                                context.error(error)
                             })
                     }
                 })
                 .catch((error) => {
-                    console.error(`error occurred while trying to get Azure authentication token \n ${error}`)
+                    context.error(`error occurred while trying to get Azure authentication token \n ${error}`)
                 })
         })
         .catch((error) => {
-            console.error(`The synchronization failed. Error occurred while trying to fetch vulnerabilities from Synack: ${error}`)
+            context.error(`The synchronization failed. Error occurred while trying to fetch vulnerabilities from Synack: ${error}`)
         })
 }
 
 function getIncidentStatus(synackStatusJson) {
-    // https://docs.microsoft.com/en-us/rest/api/securityinsights/incidents/create-or-update#incidentclassification
+    // https://docs.microsoft.com/rest/api/securityinsights/stable/incidents/create-or-update#incidentstatus
     let synackFlowType = synackStatusJson['flow_type']
     let synackStatusName = synackStatusJson['text']
     switch (synackFlowType) {

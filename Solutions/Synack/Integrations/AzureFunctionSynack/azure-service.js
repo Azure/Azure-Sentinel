@@ -7,10 +7,10 @@ const CLIENT_ID = process.env.AZURE_CLIENT_ID
 const CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET
 const TENANT_ID = process.env.AZURE_TENANT_ID
 
-exports.getAzureAuthenticationToken = function getAzureAuthenticationToken() {
+exports.getAzureAuthenticationToken = function getAzureAuthenticationToken(context) {
 
     let secretForLog = CLIENT_SECRET == null ? '' : CLIENT_SECRET.replace(/./g, '*')
-    console.log(`trying to get access token for: \n >>Subscription ID: ${SUBSCRIPTION_ID}\n >>Resource Group: ${RESOURCE_GROUP_NAME}\n >>Application (client) ID: ${CLIENT_ID}\n >>Client Secret\: ${secretForLog}\n`)
+    context.log(`trying to get access token for: \n >>Subscription ID: ${SUBSCRIPTION_ID}\n >>Resource Group: ${RESOURCE_GROUP_NAME}\n >>Application (client) ID: ${CLIENT_ID}\n >>Client Secret\: ${secretForLog}\n`)
     return new Promise(((resolve, reject) => {
 
         let requestBody = `grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}&resource=https://management.azure.com/`
@@ -30,7 +30,7 @@ exports.getAzureAuthenticationToken = function getAzureAuthenticationToken() {
                     responseContent += chunk
                 })
                 response.on('error', function (error) {
-                    console.error(`ERROR: ${error}`)
+                    context.error(`ERROR: ${error}`)
                     reject(error)
                 })
                 response.on('end', function () {
@@ -49,7 +49,7 @@ exports.getAzureAuthenticationToken = function getAzureAuthenticationToken() {
 
 }
 
-exports.createOrUpdateIncident = function createOrUpdateIncident(vulnJson, incidentDto, accessToken) {
+exports.createOrUpdateIncident = function createOrUpdateIncident(context, vulnJson, incidentDto, accessToken) {
 
     return new Promise(((resolve, reject) => {
 
@@ -84,7 +84,7 @@ exports.createOrUpdateIncident = function createOrUpdateIncident(vulnJson, incid
                 responseContent += chunk
             })
             response.on('error', function (error) {
-                console.error(`ERROR: ${error}`)
+                context.error(`ERROR: ${error}`)
                 reject(error)
             })
             response.on('end', function () {
@@ -103,7 +103,7 @@ exports.createOrUpdateIncident = function createOrUpdateIncident(vulnJson, incid
     }))
 }
 
-exports.createComment = function createComment(incidentId, commentId, commentBody, accessToken) {
+exports.createComment = function createComment(context, incidentId, commentId, commentBody, accessToken) {
 
     return new Promise(((resolve, reject) => {
 
@@ -132,7 +132,7 @@ exports.createComment = function createComment(incidentId, commentId, commentBod
                 responseContent += chunk
             })
             response.on('error', function (error) {
-                console.error(`ERROR: ${error}`)
+                context.error(`ERROR: ${error}`)
                 reject(error)
             })
             response.on('end', function () {
@@ -151,7 +151,7 @@ exports.createComment = function createComment(incidentId, commentId, commentBod
     }))
 }
 
-exports.fetchComments = function fetchComments(incidentId, accessToken) {
+exports.fetchComments = function fetchComments(context, incidentId, accessToken) {
 
     return new Promise(((resolve, reject) => {
 
@@ -172,7 +172,7 @@ exports.fetchComments = function fetchComments(incidentId, accessToken) {
                 responseContent += chunk
             })
             response.on('error', function (error) {
-                console.error(`ERROR: ${error}`)
+                context.error(`ERROR: ${error}`)
                 reject(error)
             })
             response.on('end', function () {
