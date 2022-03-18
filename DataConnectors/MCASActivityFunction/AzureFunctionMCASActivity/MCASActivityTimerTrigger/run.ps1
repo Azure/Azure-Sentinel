@@ -4,7 +4,7 @@
     Version:        1.0
     Author:         Nicholas DiCola
     Modified By:       Sreedhar Ande
-    Last Modified:  12/16/2021
+    Last Modified:  3/18/2022
     
     DESCRIPTION
     This Function App calls the MCAS Activity REST API (https://docs.microsoft.com/cloud-app-security/api-activities) to pull the MCAS
@@ -227,7 +227,8 @@ $headers = @{
     'Content-Type' = "application/json"
 }
 
-$EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
+#$EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
+$EndEpoch = ([int64](($currentUTCtime) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
 # Retrieve Timestamp from last executions 
 # Check if Table has already been created and if not create it to maintain state between executions of Function
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage.Trim().ToString()
@@ -249,7 +250,7 @@ if($null -ne $LastRunExecutionsTableRow.lastRunEpoch){
     $StartEpoch = $LastRunExecutionsTableRow.lastRunEpoch    
 }
 else {
-    $StartEpoch = ([int64]((Get-Date -Date $StartTime).AddMinutes(-$Lookback) - (get-date "1/1/1970")).TotalMilliseconds)
+    $StartEpoch = ([int64](($currentUTCtime).AddMinutes(-$Lookback) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
 }
 
 #Build query
