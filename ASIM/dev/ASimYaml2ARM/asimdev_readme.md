@@ -1,12 +1,12 @@
-# Azure Sentinel Information Model (ASIM) {schema} parsers 
+# Advaced Security Information Model (ASIM) {schema} parsers 
 
 This template deploys all ASIM {schema} parsers.
 
-The Advanced SIEM Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM {schema} normalization schema reference](https://aka.ms/ASim{schema}Doc)
 

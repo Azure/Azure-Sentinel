@@ -13,6 +13,9 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Collection
 relevantTechniques:
@@ -41,6 +44,17 @@ query: |
     (SecurityEvent
     | where EventID == '4688'
     | where (CommandLine has_all (xcopy_tokens)) or (CommandLine has_all (archive_tokens))
+    | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
+    | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+    ),
+    (WindowsEvent
+    | where EventID == '4688' and (EventData has_all (xcopy_tokens) or EventData has_all (archive_tokens))
+    | extend CommandLine = tostring(EventData.CommandLine) 
+    | where (CommandLine has_all (xcopy_tokens)) or (CommandLine has_all (archive_tokens))
+    | extend NewProcessName = tostring(EventData.NewProcessName)
+    | extend ParentProcessName = tostring(EventData.ParentProcessName)
+    | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+    | extend NewProcessId = tostring(EventData.NewProcessId)
     | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
     | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
     )
