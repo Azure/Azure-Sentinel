@@ -1,0 +1,232 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Get System Info - Palo Alto PAN-OS XML API",
+    "description": "This playbook gets a threat PCAP from the Panorama machine for a particular threat. ",
+    "mainSteps": [
+      "1.For each alert, check if the alert is a Palo Alto alert.",
+      "2. If it is, extract the firewall device name.",
+      "3. Make a call to the device, and get the system info.",
+      "4. Create a Sentinel Incident for the alert.",
+      "5. Update the Sentinel Incident with the system info."
+    ],
+    "prerequisites": [
+      "1. Palo Alto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region.",
+      "2. Generate an API key.[Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)"
+    ],
+    "prerequisitesDeployTemplateFile": "../../PaloAltoCustomConnector/azuredeploy.json",
+    "lastUpdateTime": "2021-07-28T00:00:00.000Z",
+    "entities": [ "Ip" ],
+    "tags": [ "Remediation", "Response from teams" ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Smitha Sundareswaran"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "PaloAlto-PAN-OS-GetSystemInfo",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    },
+    "CustomConnectorName": {
+      "defaultValue": "PAN-OSXmlApiCustomConnector",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with PAN-OS"
+      }
+    },
+    "LogAnalyticsResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the cLog Analytics Resource group for logging"
+      }
+    },
+    "LogAnalyticsResourceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the cLog Analytics instance for logging"
+      }
+    }
+  },
+  "variables": {
+    "subscriptionId": "[subscription().subscriptionId]",
+    "location": "[resourceGroup().location]",
+    "AzureSentinelConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuresentinel')]",
+    "AzureMonitorLogsConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuremonitorlogs')]",
+    "PaloAltoConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', parameters('CustomConnectorName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "westus2",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_alert": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "actions": {
+            "For_each": {
+              "foreach": "@body('Run_query_and_list_results')?['value']",
+              "actions": {
+                "If_alert_is_a_Palo_Alto_alert": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)": {
+                      "runAfter": {
+                        "Alert_-_Get_incident": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                          "message": "<p>@{body('Query_Palo_Alto_XML_API')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    },
+                    "Alert_-_Get_incident": {
+                      "runAfter": {
+                        "Query_Palo_Alto_XML_API": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                      }
+                    },
+                    "Query_Palo_Alto_XML_API": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['paloaltoconnector']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/api/",
+                        "queries": {
+                          "cmd": "<show><system><info></info></system></show>",
+                          "device_name": "@{items('For_each')['MonitoringDeviceName']}",
+                          "type": "op"
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "expression": {
+                    "and": [
+                      {
+                        "contains": [
+                          "@items('For_each')['AlertSource']",
+                          "@string('PaloAlto')"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Run_query_and_list_results": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Run_query_and_list_results": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@{triggerBody()?['ExtendedProperties']?['Query']}\n| limit 10",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/queryData",
+                "queries": {
+                  "resourcegroups": "[parameters('LogAnalyticsResourceGroup')]",
+                  "resourcename": "[parameters('LogAnalyticsResourceName')]",
+                  "resourcetype": "Log Analytics Workspace",
+                  "subscriptions": "[variables('subscriptionId')]",
+                  "timerange": "Set in query"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuremonitorlogs": {
+                "connectionId": "[variables('AzureMonitorLogsConnector')]",
+                "connectionName": "azuremonitorlogs",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azuremonitorlogs')]"
+              },
+              "azuresentinel": {
+                "connectionId": "[variables('AzureSentinelConnector')]",
+                "connectionName": "azuresentinel",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azuresentinel')]"
+              },
+              "paloaltoconnector": {
+                "connectionId": "[variables('PaloAltoConnector')]",
+                "connectionName": "paloaltoconnector",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
