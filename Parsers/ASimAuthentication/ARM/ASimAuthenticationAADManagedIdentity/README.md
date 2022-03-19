@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for Microsoft AAD (managed identity signin logs).
 
-This ASIM parser supports normalizing Microsoft AAD managed identity logs, produced by the Microsoft AAD connector, to the ASIM Authentication normalized schema.
+This ASIM parser supports normalizing Microsoft AAD managed identity authentication logs, produced by the Microsoft AAD connector, to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

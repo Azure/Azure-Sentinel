@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for Microsoft Windows Events.
 
-This Query creates an empty table of the authentication schema.
+This ASIM parser supports normalizing Web Session logs from all supported sources to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

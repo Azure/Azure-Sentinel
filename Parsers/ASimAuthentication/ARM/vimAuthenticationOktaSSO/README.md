@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for Okta identity management.
 
-This Query Parser maps Okta sign in logs (Okta_CL) to the Advanced Security Information Model authenticaion schema.
+This ASIM parser supports filtering and normalizing Okta logs to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

@@ -1,8 +1,8 @@
-# Azure active directory nonInteractive signin logs ASIM Authentication Normalization Parser
+# Microsoft AAD (non-interactive authentication) ASIM Authentication Normalization Parser
 
-This template deploys the ASIM Authentication schema parser for Azure active directory nonInteractive signin logs.
+This template deploys the ASIM Authentication schema parser for Microsoft AAD (non-interactive authentication).
 
-This Query Parser maps Azure Active Directory Non Interactive sign in logs (AADNonInteractiveUserSignInLogs) to the Advanced Security Information Model authenticaion schema.
+This ASIM parser supports filtering and normalizing Microsoft AAD non-interactive authentication logs, produced by the Microsoft AAD connector, to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

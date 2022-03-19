@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for M365 Defender.
 
-This Query Parser maps M365 Defender Device Logon Events (DeviceLogonEvents) to the Advanced Security Information Model authenticaion schema.
+This ASIM parser supports filtering and normalizing Microsoft 365 Defender for Endpoint, produced by the Microsoft Defender for Endpoint connector, to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for Amazon web services cloud trail.
 
-This Query Parser maps Amazon Web Service sign in logs (AWSCloudTrail) to the Advanced Security Information Model authenticaion schema.
+This ASIM parser supports filtering and normalizing AWS CloudTrail logs, produced by the Amazon Web Services connector, to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for Microsoft Defender for IoT.
 
-This ASIM parser supports normalizing Microsoft Defender for IoT logs, produced by the Microsoft Defender for IoT connector, to the ASIM Authentication normalized schema.
+This ASIM parser supports filtering and normalizing Microsoft Defender for IoT logs to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

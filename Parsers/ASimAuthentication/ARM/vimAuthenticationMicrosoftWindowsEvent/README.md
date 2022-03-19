@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for Microsoft Windows Events.
 
-This Query Parser maps Windows sign in logs (WindowsEvent) to the Advanced Security Information Model authenticaion schema.
+This ASIM parser supports filtering and normalizing Microsoft WindowsEvent logs (event number 4624, 4625, 4634, 4647), produced by the Windows Forwarded Events connector, to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

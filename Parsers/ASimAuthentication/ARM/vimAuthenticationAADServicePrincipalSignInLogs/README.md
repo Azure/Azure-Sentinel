@@ -2,7 +2,7 @@
 
 This template deploys the ASIM Authentication schema parser for Azure active directory service principal signin logs.
 
-This Query Parser maps Azure Active Directory Service Principal sign in logs (AADServicePrincipalSignInLogs) to the Advanced Security Information Model authentication schema.
+This ASIM parser supports filtering and normalizing Microsoft AAD service principal authentication logs, produced by the Microsoft AAD connector, to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
