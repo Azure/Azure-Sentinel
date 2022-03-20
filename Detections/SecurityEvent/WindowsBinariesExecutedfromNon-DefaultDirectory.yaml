@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -18,9 +21,19 @@ relevantTechniques:
   - T1059
 query: |
    let procList = externaldata(Process:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Microsoft_Lolbas_Execution_Binaries.csv"] with (format="csv", ignoreFirstRecord=True);
-   SecurityEvent
+   union isfuzzy=true 
+   (SecurityEvent
    | where EventID == 4688 and Process has_any (procList) and not (NewProcessName has ("C:\\Windows\\"))
-   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, NewProcessName, Process, CommandLine
+   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, NewProcessName, Process, CommandLine)
+   ,(WindowsEvent
+   | where EventID == 4688 and EventData has_any (procList) and not (EventData has ("C:\\Windows\\"))
+   | extend NewProcessName = tostring(EventData.NewProcessName)
+   | where not (NewProcessName has ("C:\\Windows\\"))
+   | extend Process=tostring(split(NewProcessName, '\\')[-1])
+   | where Process has_any (procList)
+   | extend SubjectUserName = tostring(EventData.SubjectUserName)
+   | extend CommandLine = tostring(EventData.CommandLine) 
+   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, NewProcessName, Process, CommandLine)
 entityMappings:
   - entityType: Account
     fieldMappings:
