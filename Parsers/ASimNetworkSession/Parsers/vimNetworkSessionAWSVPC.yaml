@@ -221,37 +221,34 @@ ParserQuery: |
         disabled:bool=false
         )
     {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); // 5G is about 400M ip prefixes. 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); // 
     AWSVPCFlow | where not(disabled)
     | where LogStatus != "NODATA"
-    | extend ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"-",
-                                  has_any_ipv4_prefix(DstAddr,ipaddr_has_any_prefix), "DstIpAddr",
-                                  has_any_ipv4_prefix(SrcAddr,ipaddr_has_any_prefix), "SrcIpAddr",
-                                  "No match")
-      // -- Pre-filtering:
+    // -- Pre-filtering:
     | where
-            (array_length(hostname_has_any) == 0)
-            and (isnull(starttime) or TimeGenerated >= starttime)
-            and (isnull(endtime) or TimeGenerated <= endtime)
-            and 
-            (
-              ASimMatchingIpAddr != "No match"
-            )
-            and 
-            (
-                array_length(srcipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(SrcAddr,srcipaddr_has_any_prefix)
-            )
-            and 
-            (
-                array_length(dstipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(DstAddr,dstipaddr_has_any_prefix)
-            )
-            and (isnull(dstportnumber) or (DstPort == dstportnumber))
-        | extend EventResult = iff (Action=="ACCEPT","Success","Failure")
-        | where (eventresult == "*" or eventresult == EventResult) 
-        | lookup ActionLookup on Action
-        | where  (array_length(dvcaction) == 0 or DvcAction in (dvcaction))
-        // -- End pre-filtering
+          (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime)   or TimeGenerated <= endtime)
+      and (isnull(dstportnumber) or (DstPort == dstportnumber))
+      and (array_length(hostname_has_any) == 0)
+    | extend isSrcMatch=has_any_ipv4_prefix(SrcAddr,src_or_any)
+           , isDstMatch=has_any_ipv4_prefix(DstAddr,dst_or_any)
+    | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (isSrcMatch and isDstMatch), "Both" // has to be checked before the individual 
+            , isSrcMatch, "SrcIpAddr"
+            , isDstMatch, "DstIpAddr"
+            , "No match"
+    )
+    | where 
+         (
+           ASimMatchingIpAddr != "No match"
+         ) 
+    | extend EventResult = iff (Action=="ACCEPT","Success","Failure")
+    | where (eventresult == "*" or eventresult == EventResult) 
+    | lookup ActionLookup on Action
+    | where  (array_length(dvcaction) == 0 or DvcAction in (dvcaction))
+    // -- End pre-filtering
     | extend
         EventVendor="AWS", 
         EventProduct="VPC",
@@ -273,7 +270,7 @@ ParserQuery: |
         DstPortNumber = DstPort, 
         SrcNatIpAddr=PktSrcAddr, 
         DstNatIpAddr=PktDstAddr, 
-        SrcPortNumber = SrcPort, 
+        SrcPortNumber = SrcPort,  
         SrcIpAddr = SrcAddr, 
         EventEndTime = End, 
         DvcInboundInterface = InterfaceId,
