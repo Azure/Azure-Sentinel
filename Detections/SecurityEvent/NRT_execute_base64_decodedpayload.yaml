@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Execution
   - DefenseEvasion
@@ -18,13 +21,29 @@ relevantTechniques:
   - T1027
   - T1140
 query: |
-  SecurityEvent
+  union isfuzzy=true 
+  (SecurityEvent
   | where EventID==4688
   | where isnotempty(CommandLine)
   | project TimeGenerated, Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName, FileName = Process, CommandLine, ParentProcessName
   | where CommandLine contains ".decode('base64')"
           or CommandLine contains "base64 --decode"
           or CommandLine contains ".decode64("
+  ),
+  (WindowsEvent
+  | where EventID==4688
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where isnotempty(CommandLine)
+  | where CommandLine contains ".decode('base64')"
+          or CommandLine contains "base64 --decode"
+          or CommandLine contains ".decode64("
+  | extend Account= tostring(EventData.SubjectUserName)
+  | extend AccountDomain= tostring(EventData.SubjectDomainName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend FileName=tostring(split(NewProcessName, '\\')[-1])
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | project TimeGenerated, Computer, Account, AccountDomain, FileName, CommandLine, ParentProcessName
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -34,5 +53,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.0
+version: 1.1.0
 kind: NRT
