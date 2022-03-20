@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Execution
 relevantTechniques:
@@ -17,21 +20,45 @@ query: |
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
-  let known_procs = (
-  SecurityEvent
+  let known_procs = ( union isfuzzy=false 
+  (SecurityEvent
   | where TimeGenerated between(lookback..starttime)
   | where EventID == 4688
   | where ParentProcessName hassuffix "w3wp.exe"
   | extend ProcessHost = strcat(Process, "-", Computer)
-  | summarize by ProcessHost);
-  SecurityEvent
+  | summarize by ProcessHost),
+  (WindowsEvent
+  | where TimeGenerated between(lookback..starttime)
+  | where EventID == 4688 and EventData has "w3wp.exe"
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where ParentProcessName hassuffix "w3wp.exe"
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | extend ProcessHost = strcat(Process, "-", Computer)
+  | summarize by ProcessHost
+  ));
+  ( union isfuzzy=true 
+  ( SecurityEvent
   | where TimeGenerated between(starttime..endtime)
   | where EventID == 4688
   | where ParentProcessName hassuffix "w3wp.exe"
   | extend ProcessHost = strcat(Process, "-", Computer)
   | where ProcessHost !in (known_procs)
   | project-reorder TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account ),
+  ( WindowsEvent
+  | where TimeGenerated between(starttime..endtime)
+  | where EventID == 4688 and EventData has "w3wp.exe"
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where ParentProcessName hassuffix "w3wp.exe"
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | extend ProcessHost = strcat(Process, "-", Computer)
+  | where ProcessHost !in (known_procs)
+  | extend Account = iff((isempty(EventData.SubjectDomainName) or EventData.SubjectDomainName == "-"),"", strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
+  | extend NewProcessId = tostring(EventData.NewProcessId)
+  | project-reorder TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account ))
 entityMappings:
   - entityType: Account
     fieldMappings:
