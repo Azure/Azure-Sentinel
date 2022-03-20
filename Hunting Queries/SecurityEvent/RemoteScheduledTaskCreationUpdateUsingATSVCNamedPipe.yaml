@@ -8,14 +8,26 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Persistence
 relevantTechniques:
   - T1053.002
 query: |
-  SecurityEvent
+  union isfuzzy=true  ( SecurityEvent
   | where EventID == 5145 and ShareName=="\\\\*\\IPC$" and RelativeTargetName == "atsvc"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, ShareName, RelativeTargetName, IpAddress
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, ShareName, RelativeTargetName, IpAddress)
+  ,( WindowsEvent
+  | where EventID == 5145 and EventData has "\\\\*\\IPC$" and EventData has "atsvc"
+  | extend ShareName = tostring(EventData.ShareName)
+  | where ShareName=="\\\\*\\IPC$"
+  | extend RelativeTargetName= tostring(EventData.RelativeTargetName)
+  | where RelativeTargetName == "atsvc"
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SubjectUserName, ShareName, RelativeTargetName, IpAddress)
 entityMappings:
 - entityType: Account
   fieldMappings:
