@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Execution
 relevantTechniques:
@@ -14,13 +17,24 @@ relevantTechniques:
 query: |
   // Enter a reference list for writable user paths"
   let WritableUserPaths = dynamic (["\"C:\\Users\\","\"C:\\ProgramData\\"]);
-  SecurityEvent
+  union isfuzzy=true 
+  (SecurityEvent
   | where EventID in (4698,4702) and EventData has_any (WritableUserPaths)
   | parse EventData with * 'Command&gt;' Command "&lt" *
   | parse EventData with * 'Arguments&gt;' Arguments "&lt" *
   | where Command has_any (WritableUserPaths) or Arguments has_any (WritableUserPaths)
   | parse EventData with * 'SubjectUserName">' SubjectUserName "<" * 'SubjectDomainName">' SubjectDomainName "<" * 'TaskName">' TaskName "<" *
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Activity, Computer, SubjectUserName, SubjectDomainName, TaskName, Command, Arguments
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Activity, Computer, SubjectUserName, SubjectDomainName, TaskName, Command, Arguments),
+  (WindowsEvent
+  | where EventID in (4698,4702) and EventData has_any (WritableUserPaths)
+  | extend Command = tostring(EventData.Command)
+  | extend Arguments = tostring(EventData.Arguments)
+  | where Command has_any (WritableUserPaths) or Arguments has_any (WritableUserPaths)
+  | extend Activity=case(EventID=="4698", "4698 - A scheduled task was created.",EventID=="4702", "4702 - A scheduled task was updated.", tostring(EventID) )
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend TaskName = tostring(EventData.TaskName)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Activity, Computer, SubjectUserName, SubjectDomainName, TaskName, Command, Arguments)
 entityMappings:
 - entityType: Account
   fieldMappings:
