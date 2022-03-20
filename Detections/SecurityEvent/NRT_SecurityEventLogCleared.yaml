@@ -11,14 +11,23 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - DefenseEvasion
 relevantTechniques:
   - T1070
 query: |
-  SecurityEvent
+  union isfuzzy=true ( SecurityEvent
   | where EventID == 1102 and EventSourceName == "Microsoft-Windows-Eventlog"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity),
+  (WindowsEvent
+  | where EventID == 1102 and Provider == "Microsoft-Windows-Eventlog"
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+  | extend Activity= "1102 - The audit log was cleared."
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity)
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -28,5 +37,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.0
+version: 1.1.0
 kind: NRT
