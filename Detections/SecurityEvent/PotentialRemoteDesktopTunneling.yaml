@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -17,9 +20,18 @@ tactics:
 relevantTechniques:
   - T1572
 query: |
- SecurityEvent
+    union isfuzzy=true ( SecurityEvent
     | where EventID in (4624,4625) and LogonType in (10) and IpAddress in ("::1","127.0.0.1")
-    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonType, IpAddress
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonType, IpAddress),
+    ( WindowsEvent
+    | where EventID in (4624,4625)  and EventData  has_any ("::1","127.0.0.1")
+    | extend LogonType = toint(EventData.LogonType)
+    | where LogonType == 10
+    | extend IpAddress = tostring(EventData.IpAddress)
+    | where IpAddress in ("::1","127.0.0.1")
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    | extend TargetLogonId = tostring(EventData.TargetLogonId)
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, TargetUserName, TargetLogonId, LogonType, IpAddress)
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -33,5 +45,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IpAddress
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
