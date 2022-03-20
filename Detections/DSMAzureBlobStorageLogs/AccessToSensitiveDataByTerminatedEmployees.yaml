@@ -1,0 +1,83 @@
+id: 5feef89a-d632-4294-a05c-988a1c64da23
+name: Access to sensitive data by terminated employees
+description: |
+  This query detects access to data that has classification insights (link below) and/or sensitivity label insights (link below), by users that are marked as terminated employees.
+  Classification insights: https://docs.microsoft.com/en-us/azure/purview/classification-insights
+  Sensitivty label insigths: https://docs.microsoft.com/en-us/azure/purview/sensitivity-insights
+requiredDataConnectors: []
+severity: Medium  # detections
+queryPeriod: 7d   # detections
+queryFrequency: 7d  # detections
+triggerOperator: gt # detections
+triggerThreshold: 0 # detections
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1530
+query: |
+
+  // accesses to labeled and/or classified data
+  let AccessLogs = DSMAzureBlobStorageLogs
+      | where isnotempty(CorrelationId)
+      | project
+          Asset = tostring(parse_url(Uri).Path),
+          UserObjectId=RequesterObjectId,
+          StatusCode,
+          AggregationCount,
+          CorrelationId,
+          TimeGenerated;
+  let ScanDataLookback = now() - 30d;
+  // labeled data
+  let Sensitivity = 
+      DSMDataLabelingLogs
+      | where TimeGenerated > ScanDataLookback
+      | where isnotempty(SensitivityLabelName)
+      | project
+          SensitivityLabelName = replace(@'\[|\]|\"', @'', SensitivityLabelName),
+          CorrelationId
+      | distinct *;
+  // classified data
+  let Classification = 
+      DSMDataClassificationLogs
+      | where TimeGenerated > ScanDataLookback
+      | where isnotempty(ClassificationDetails)
+      | mv-expand ClassificationDetails
+      | project
+          ClassificationName = tostring(ClassificationDetails.Name),
+          UniqueCount = tostring(ClassificationDetails.UniqueCount),
+          Confidence = tostring(ClassificationDetails.Confidence),
+          CorrelationId
+      | distinct *;
+  // all labeled and/or classified data
+  let ScanData = Classification
+      | join kind=fullouter Sensitivity
+          on CorrelationId;
+  // a list of terminated employees by user's object id
+  let TerminatedEmployees = _GetWatchlist("TerminatedEmployees")
+      | project UserObjectId = tostring(["User AAD Object Id"])
+      | distinct UserObjectId;
+  AccessLogs
+  | join kind=inner ScanData on CorrelationId
+  | join kind=inner TerminatedEmployees on UserObjectId
+  | summarize
+      AccessCount = sum(AggregationCount),
+      StartTime = min(TimeGenerated),
+      EndTime = max(TimeGenerated)
+      by
+      UserObjectId,
+      ClassificationName,
+      UniqueCount,
+      Confidence,
+      SensitivityLabelName,
+      StatusCode,
+      Asset
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: ObjectGuid
+        columnName: UserObjectId
+kind: Scheduled # detections
+
+
