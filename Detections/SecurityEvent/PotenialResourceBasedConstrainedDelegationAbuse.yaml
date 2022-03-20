@@ -9,6 +9,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -18,13 +21,25 @@ tactics:
 relevantTechniques:
   - T1134
 query: |
- SecurityEvent
+  (union isfuzzy=true 
+  ( SecurityEvent
  | where EventID == 5136 
  | parse EventData with * 'ObjectClass">' ObjectClass "<" *
  | parse EventData with * 'AttributeLDAPDisplayName">' AttributeLDAPDisplayName "<" *
  | where ObjectClass == "computer" and AttributeLDAPDisplayName == "msDS-AllowedToActOnBehalfOfOtherIdentity"
  | parse EventData with * 'ObjectDN">' ObjectDN "<" *
- | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName
+ | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName),
+ (WindowsEvent
+ | where EventID == 5136  and EventData has "computer" and EventData has "msDS-AllowedToActOnBehalfOfOtherIdentity" 
+ | extend ObjectClass = tostring(EventData.ObjectClass)
+ | where ObjectClass == "computer" 
+ | extend AttributeLDAPDisplayName = tostring(EventData.AttributeLDAPDisplayName)
+ | where  AttributeLDAPDisplayName == "msDS-AllowedToActOnBehalfOfOtherIdentity"
+ | extend SubjectAccount = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+ | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+ | extend SubjectLogonId = tostring(EventData.SubjectLogonId)
+ | extend ObjectDN = tostring(EventData.ObjectDN)
+ | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName))
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -34,5 +49,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
