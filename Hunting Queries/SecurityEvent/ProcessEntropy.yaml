@@ -12,6 +12,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Execution
 query: |
@@ -26,11 +29,18 @@ query: |
   let procLimit = 3*24;
   // Decrease possibility of hitting memory limit by removing high process count items across all machines (default every 10 minutes for 24 hours - 6*24 = 144)
   let maxLimit = 6*24;
-  let removeHigh = SecurityEvent 
+  let removeHigh =( union isfuzzy=true( SecurityEvent 
   | where TimeGenerated >= ago(1d)
   | where EventID == 4688 | summarize count() by NewProcessName = tolower(NewProcessName) | where count_ > maxLimit
-  | summarize make_set(NewProcessName);
-  let SecEvents = SecurityEvent
+  | summarize make_set(NewProcessName))
+  ,(WindowsEvent 
+  | where TimeGenerated >= ago(1d)
+  | where EventID == 4688 
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | summarize count() by NewProcessName = tolower(NewProcessName) 
+  | where count_ > maxLimit
+  | summarize make_set(NewProcessName)));
+  let SecEvents = (union isfuzzy=true (SecurityEvent
   | where TimeGenerated >= ago(1d)
   | where EventID == 4688 | where tolower(NewProcessName) !in~ (removeHigh)
   // removing common items that may still show up in small environments, add here if you have additional exclusions 
@@ -48,7 +58,58 @@ query: |
   | where NewProcessName !has ':\\Windows\\servicing\\trustedinstaller.exe' 
   | where ParentProcessName !has ':\\Program Files\\Microsoft Dependency Agent\\bin\\MicrosoftDependencyAgent.exe' 
   | where ParentProcessName !has ':\\Program Files (x86)\\Microsoft\\EdgeUpdate\\MicrosoftEdgeUpdate.exe'
-  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId, SourceComputerId;
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId, SourceComputerId),
+  (
+  WindowsEvent
+  | where TimeGenerated >= ago(1d)
+  | where EventID == 4688 and not(EventData has_any (removeHigh))
+  | where not(EventData has_any (':\\Windows\\System32\\conhost.exe', 
+                                 ':\\Windows\\System32\\wuauclt.exe',
+                                 'C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_' ,
+                                 ':\\WindowsAzure\\GuestAgent_',
+                                 ':\\WindowsAzure\\WindowsAzureNetAgent_',
+                                 ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\',
+                                 "\\Windows Defender Advanced Threat Protection\\SenseCncProxy.exe",
+                                 "\\Windows Defender Advanced Threat Protection\\SenseIR.exe.exe",
+                                 ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\',
+                                 ':\\Windows\\Microsoft.NET\\Framework',
+                                 '\\ngentask.exe',
+                                 '\\ngen.exe',
+                                 ':\\Windows\\System32\\taskhostw.exe',
+                                 ':\\Windows\\SoftwareDistribution\\Download\\Install\\',
+                                 '\\MpSigStub.exe',
+                                 ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\Health Service State\\',
+                                 ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe' ,
+                                 ':\\Windows\\servicing\\trustedinstaller.exe',
+                                 ':\\Program Files\\Microsoft Dependency Agent\\bin\\MicrosoftDependencyAgent.exe',
+                                 ':\\Program Files (x86)\\Microsoft\\EdgeUpdate\\MicrosoftEdgeUpdate.exe'
+                                    ))
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | where tolower(NewProcessName) !in~ (removeHigh)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  // removing common items that may still show up in small environments, add here if you have additional exclusions 
+  | where NewProcessName !has ':\\Windows\\System32\\conhost.exe' and ParentProcessName !has ':\\Windows\\System32\\conhost.exe' 
+  | where ParentProcessName !has ':\\Windows\\System32\\wuauclt.exe' and NewProcessName !has':\\Windows\\System32\\wuauclt.exe' and NewProcessName !startswith 'C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_' 
+  | where ParentProcessName !has ':\\WindowsAzure\\GuestAgent_' and NewProcessName !has ':\\WindowsAzure\\GuestAgent_' 
+  | where ParentProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_' and NewProcessName !has ':\\WindowsAzure\\WindowsAzureNetAgent_' 
+  | where ParentProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\' and NewProcessName !has "\\Windows Defender Advanced Threat Protection\\SenseCncProxy.exe" and NewProcessName !has "\\Windows Defender Advanced Threat Protection\\SenseIR.exe.exe" 
+  | where NewProcessName !has ':\\ProgramData\\Microsoft\\Windows Defender\\platform\\' 
+  | where NewProcessName !has ':\\Windows\\Microsoft.NET\\Framework' and not(NewProcessName endswith '\\ngentask.exe' or NewProcessName endswith '\\ngen.exe') 
+  | where ParentProcessName !has ':\\Windows\\Microsoft.NET\\Framework' and not(ParentProcessName endswith '\\ngentask.exe' or ParentProcessName endswith '\\ngen.exe') 
+  | where NewProcessName !has ':\\Windows\\System32\\taskhostw.exe' and ParentProcessName !has ':\\Windows\\System32\\taskhostw.exe' 
+  | where ParentProcessName !has ':\\Windows\\SoftwareDistribution\\Download\\Install\\' and not(NewProcessName endswith '\\MpSigStub.exe') 
+  | where NewProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\Health Service State\\' and ParentProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe' 
+  | where NewProcessName !has ':\\Windows\\servicing\\trustedinstaller.exe' 
+  | where ParentProcessName !has ':\\Program Files\\Microsoft Dependency Agent\\bin\\MicrosoftDependencyAgent.exe' 
+  | where ParentProcessName !has ':\\Program Files (x86)\\Microsoft\\EdgeUpdate\\MicrosoftEdgeUpdate.exe'
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend Account = iff((isempty(EventData.TargetDomainName) or EventData.TargetDomainName == "-"),"", strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName)))
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+  | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | project TimeGenerated, EventID, Computer, SubjectUserSid, Account, AccountType, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId
+  ));
   let Exclude = SecEvents 
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ExcludeCompCount = dcount(Computer), ExcludeProcCount = count() by Process 
   // Removing general limit for noise in one day 
@@ -126,4 +187,3 @@ query: |
   Process, NewProcessName, CommandLine, ParentProcessName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, SourceComputerId
   | sort by Weight asc, ProcessEntropy asc, NewProcessName asc 
   | extend timestamp = StartTime, HostCustomEntity = Computer, AccountCustomEntity = Account
-  
