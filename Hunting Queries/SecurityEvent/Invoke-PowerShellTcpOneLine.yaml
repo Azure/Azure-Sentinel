@@ -6,16 +6,31 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - Exfiltration
 relevantTechniques:
   - T1011
 query: |
-  SecurityEvent
+ union isfuzzy=true 
+  (SecurityEvent
   | where EventID == 4688
   | where Process has_any ("powershell.exe", "PowerShell_ISE.exe", "cmd.exe")
   | where CommandLine has "$client = New-Object System.Net.Sockets.TCPClient"
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress),
+  (WindowsEvent
+  | where EventID == 4688 and EventData has_any ("powershell.exe", "PowerShell_ISE.exe", "cmd.exe") and EventData has "$client = New-Object System.Net.Sockets.TCPClient"
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | where Process has_any ("powershell.exe", "PowerShell_ISE.exe", "cmd.exe")
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine has "$client = New-Object System.Net.Sockets.TCPClient"
+  | extend Account = iff((isempty(EventData.SubjectDomainName) or EventData.SubjectDomainName == "-"),"", strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
+  | extend IpAddress = tostring(EventData.IpAddress)
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  )
 entityMappings:
   - entityType: Account
     fieldMappings:
