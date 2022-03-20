@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 tactics:
   - InitialAccess
   - LateralMovement
@@ -14,10 +17,62 @@ relevantTechniques:
   - T1078
 query: |
 
-  let starttime = todatetime('{{StartTimeISO}}');
+   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
-  let AllLogonEvents = materialize(
+  let StatusToStatusDesc = datatable(Status:string,StatusDesc:string) [  
+    "0x80090302", "SEC_E_UNSUPPORTED_FUNCTION",
+    "0x80090308", "SEC_E_INVALID_TOKEN",
+    "0x8009030E", "SEC_E_NO_CREDENTIALS",
+    "0xC0000008", "STATUS_INVALID_HANDLE",
+    "0xC0000017", "STATUS_NO_MEMORY",
+    "0xC0000022", "STATUS_ACCESS_DENIED",
+    "0xC0000034", "STATUS_OBJECT_NAME_NOT_FOUND",
+    "0xC000005E", "STATUS_NO_LOGON_SERVERS",
+    "0xC000006A", "STATUS_WRONG_PASSWORD",
+    "0xC000006D", "STATUS_LOGON_FAILURE",
+    "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+    "0xC0000073", "STATUS_NONE_MAPPED",
+    "0xC00000FE", "STATUS_NO_SUCH_PACKAGE",
+    "0xC000009A", "STATUS_INSUFFICIENT_RESOURCES",
+    "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+    "0xC0000106", "STATUS_NAME_TOO_LONG",
+    "0xC000010B", "STATUS_INVALID_LOGON_TYPE",
+    "0xC000015B", "STATUS_LOGON_TYPE_NOT_GRANTED",
+    "0xC000018B", "STATUS_NO_TRUST_SAM_ACCOUNT",
+    "0xC0000224", "STATUS_PASSWORD_MUST_CHANGE",
+    "0xC0000234", "STATUS_ACCOUNT_LOCKED_OUT",
+    "0xC00002EE", "STATUS_UNFINISHED_CONTEXT_DELETED"
+    ];
+  let SubStatusToSubStatusDesc = datatable(SubStatus:string,SubStatusDesc:string) [ 
+    "0x80090325", "SEC_E_UNTRUSTED_ROOT",
+    "0xC0000008", "STATUS_INVALID_HANDLE",
+    "0xC0000022", "STATUS_ACCESS_DENIED",
+    "0xC0000064", "STATUS_NO_SUCH_USER",
+    "0xC000006A", "STATUS_WRONG_PASSWORD",
+    "0xC000006D", "STATUS_LOGON_FAILURE",
+    "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
+    "0xC000006F", "STATUS_INVALID_LOGON_HOURS",
+    "0xC0000070", "STATUS_INVALID_WORKSTATION",
+    "0xC0000071", "STATUS_PASSWORD_EXPIRED",
+    "0xC0000072", "STATUS_ACCOUNT_DISABLED",
+    "0xC0000073", "STATUS_NONE_MAPPED",
+    "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
+    "0xC0000133", "STATUS_TIME_DIFFERENCE_AT_DC",
+    "0xC000018D", "STATUS_TRUSTED_RELATIONSHIP_FAILURE",
+    "0xC0000193", "STATUS_ACCOUNT_EXPIRED",
+    "0xC0000380", "STATUS_SMARTCARD_WRONG_PIN",
+    "0xC0000381", "STATUS_SMARTCARD_CARD_BLOCKED",
+    "0xC0000382", "STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED",
+    "0xC0000383", "STATUS_SMARTCARD_NO_CARD",
+    "0xC0000384", "STATUS_SMARTCARD_NO_KEY_CONTAINER",
+    "0xC0000385", "STATUS_SMARTCARD_NO_CERTIFICATE",
+    "0xC0000386", "STATUS_SMARTCARD_NO_KEYSET",
+    "0xC0000387", "STATUS_SMARTCARD_IO_ERROR",
+    "0xC0000388", "STATUS_DOWNGRADE_DETECTED",
+    "0xC0000389", "STATUS_SMARTCARD_CERT_REVOKED"
+    ];
+  let AllLogonEvents = (union isfuzzy=true (
   SecurityEvent
   | where TimeGenerated between (lookback..starttime)
   | where EventID in (4624, 4625)
@@ -32,65 +87,39 @@ query: |
   DayNumberofWeek == "4.00:00:00", "Thursday",
   DayNumberofWeek == "5.00:00:00", "Friday",
   DayNumberofWeek == "6.00:00:00", "Saturday","InvalidTimeStamp")
-  // map the most common ntstatus codes
-  | extend StatusDesc = case(
-  Status =~ "0x80090302", "SEC_E_UNSUPPORTED_FUNCTION",
-  Status =~ "0x80090308", "SEC_E_INVALID_TOKEN",
-  Status =~ "0x8009030E", "SEC_E_NO_CREDENTIALS",
-  Status =~ "0xC0000008", "STATUS_INVALID_HANDLE",
-  Status =~ "0xC0000017", "STATUS_NO_MEMORY",
-  Status =~ "0xC0000022", "STATUS_ACCESS_DENIED",
-  Status =~ "0xC0000034", "STATUS_OBJECT_NAME_NOT_FOUND",
-  Status =~ "0xC000005E", "STATUS_NO_LOGON_SERVERS",
-  Status =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
-  Status =~ "0xC000006D", "STATUS_LOGON_FAILURE",
-  Status =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
-  Status =~ "0xC0000073", "STATUS_NONE_MAPPED",
-  Status =~ "0xC00000FE", "STATUS_NO_SUCH_PACKAGE",
-  Status =~ "0xC000009A", "STATUS_INSUFFICIENT_RESOURCES",
-  Status =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
-  Status =~ "0xC0000106", "STATUS_NAME_TOO_LONG",
-  Status =~ "0xC000010B", "STATUS_INVALID_LOGON_TYPE",
-  Status =~ "0xC000015B", "STATUS_LOGON_TYPE_NOT_GRANTED",
-  Status =~ "0xC000018B", "STATUS_NO_TRUST_SAM_ACCOUNT",
-  Status =~ "0xC0000224", "STATUS_PASSWORD_MUST_CHANGE",
-  Status =~ "0xC0000234", "STATUS_ACCOUNT_LOCKED_OUT",
-  Status =~ "0xC00002EE", "STATUS_UNFINISHED_CONTEXT_DELETED",
-  EventID == 4624, "Success",
-  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
-  )
-  | extend SubStatusDesc = case(
-  SubStatus =~ "0x80090325", "SEC_E_UNTRUSTED_ROOT",
-  SubStatus =~ "0xC0000008", "STATUS_INVALID_HANDLE",
-  SubStatus =~ "0xC0000022", "STATUS_ACCESS_DENIED",
-  SubStatus =~ "0xC0000064", "STATUS_NO_SUCH_USER",
-  SubStatus =~ "0xC000006A", "STATUS_WRONG_PASSWORD",
-  SubStatus =~ "0xC000006D", "STATUS_LOGON_FAILURE",
-  SubStatus =~ "0xC000006E", "STATUS_ACCOUNT_RESTRICTION",
-  SubStatus =~ "0xC000006F", "STATUS_INVALID_LOGON_HOURS",
-  SubStatus =~ "0xC0000070", "STATUS_INVALID_WORKSTATION",
-  SubStatus =~ "0xC0000071", "STATUS_PASSWORD_EXPIRED",
-  SubStatus =~ "0xC0000072", "STATUS_ACCOUNT_DISABLED",
-  SubStatus =~ "0xC0000073", "STATUS_NONE_MAPPED",
-  SubStatus =~ "0xC00000DC", "STATUS_INVALID_SERVER_STATE",
-  SubStatus =~ "0xC0000133", "STATUS_TIME_DIFFERENCE_AT_DC",
-  SubStatus =~ "0xC000018D", "STATUS_TRUSTED_RELATIONSHIP_FAILURE",
-  SubStatus =~ "0xC0000193", "STATUS_ACCOUNT_EXPIRED",
-  SubStatus =~ "0xC0000380", "STATUS_SMARTCARD_WRONG_PIN",
-  SubStatus =~ "0xC0000381", "STATUS_SMARTCARD_CARD_BLOCKED",
-  SubStatus =~ "0xC0000382", "STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED",
-  SubStatus =~ "0xC0000383", "STATUS_SMARTCARD_NO_CARD",
-  SubStatus =~ "0xC0000384", "STATUS_SMARTCARD_NO_KEY_CONTAINER",
-  SubStatus =~ "0xC0000385", "STATUS_SMARTCARD_NO_CERTIFICATE",
-  SubStatus =~ "0xC0000386", "STATUS_SMARTCARD_NO_KEYSET",
-  SubStatus =~ "0xC0000387", "STATUS_SMARTCARD_IO_ERROR",
-  SubStatus =~ "0xC0000388", "STATUS_DOWNGRADE_DETECTED",
-  SubStatus =~ "0xC0000389", "STATUS_SMARTCARD_CERT_REVOKED",
-  EventID == 4624, "Success",
-  "See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55"
-  )
-  | project StartTime = TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, StatusDesc, SubStatusDesc
-  );
+  | project StartTime = TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName
+  ),
+  (
+   WindowsEvent
+  | where TimeGenerated between (lookback..starttime)
+  | where EventID in (4624, 4625) and not (EventData has_any ("Window Manager","Font Driver Host"))
+  | extend LogonType = toint(EventData.LogonType)
+  | where LogonType in ('2', '10')
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+  | extend AccountType=case(EventData.TargetUserName endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+  | where AccountType =~ 'User'
+  | extend HourOfLogin = hourofday(TimeGenerated), DayNumberofWeek = dayofweek(TimeGenerated)
+  | extend DayofWeek = case(
+  DayNumberofWeek == "00:00:00", "Sunday",
+  DayNumberofWeek == "1.00:00:00", "Monday",
+  DayNumberofWeek == "2.00:00:00", "Tuesday",
+  DayNumberofWeek == "3.00:00:00", "Wednesday",
+  DayNumberofWeek == "4.00:00:00", "Thursday",
+  DayNumberofWeek == "5.00:00:00", "Friday",
+  DayNumberofWeek == "6.00:00:00", "Saturday","InvalidTimeStamp")
+  | extend Activity=case(EventID=='4624', '4624 - An account was successfully logged on', EventID == '4625', '4625 - An account failed to log on.', tostring(EventID) )
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | extend WorkstationName = tostring(EventData.WorkstationName)
+  | extend TargetUserName = tostring(EventData.TargetUserName)
+  | extend TargetDomainName = tostring(EventData.TargetDomainName)
+  | extend ProcessName = tostring(EventData.ProcessName)
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend PrivilegeList = tostring(EventData.PrivilegeList)
+  | extend Status= tostring(EventData.Status)
+  | extend SubStatus = tostring(EventData.SubStatus)
+  | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
+  | project StartTime = TimeGenerated, DayofWeek, HourOfLogin, EventID, Activity, IpAddress, WorkstationName, Computer, TargetUserName, TargetDomainName, ProcessName, SubjectUserName, PrivilegeList, LogonTypeName, Status, SubStatus
+  ));
   AllLogonEvents
   | where TargetDomainName !in ("Window Manager","Font Driver Host")
   | summarize max(HourOfLogin), min(HourOfLogin), historical_DayofWeek=make_set(DayofWeek) by TargetUserName
@@ -104,6 +133,11 @@ query: |
   | where HourOfLogin > max_HourOfLogin or HourOfLogin < min_HourOfLogin
   // Also populating additional column showing historical days of week when logon was seen
   | extend historical_DayofWeek = tostring(historical_DayofWeek)
+    // map the most common ntstatus codes
+  | lookup StatusToStatusDesc on Status
+  | extend coalesce(StatusDesc, strcat("See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55", Status))
+  | lookup SubStatusToSubStatusDesc on SubStatus
+  | extend coalesce(SubStatusDesc, strcat("See - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55", SubStatus))
   | summarize Total= count(), max(HourOfLogin), min(HourOfLogin), current_DayofWeek =make_set(DayofWeek), StartTime=max(StartTime), EndTime = min(StartTime), SourceIP = make_set(IpAddress), SourceHost = make_set(WorkstationName), SubjectUserName = make_set(SubjectUserName), HostLoggedOn = make_set(Computer) by EventID, Activity, TargetDomainName, TargetUserName , ProcessName , LogonTypeName, StatusDesc, SubStatusDesc, historical_DayofWeek
   | extend historical_DayofWeek = todynamic(historical_DayofWeek)
   | extend timestamp = StartTime, AccountCustomEntity = TargetUserName
