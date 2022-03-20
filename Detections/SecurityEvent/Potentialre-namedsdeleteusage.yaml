@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -19,11 +22,19 @@ relevantTechniques:
   - T1485
   - T1036
 query: |
-  SecurityEvent
+union isfuzzy=true ( SecurityEvent
     | where EventID == 4688
     | where Process !~ "sdelete.exe"
     | where CommandLine has_all ("accepteula", "-r", "-s", "-q", "c:/")
-    | where CommandLine !has ("sdelete")
+    | where CommandLine !has ("sdelete")),
+    ( WindowsEvent
+    | where EventID == 4688 and not(EventData has "sdelete.exe") and EventData has_all ("accepteula", "-r", "-s", "-q", "c:/") and not(EventData has "sdelete)
+    | extend NewProcessName = tostring(EventData.NewProcessName)
+    | extend Process=tostring(split(NewProcessName, '\\')[-1])
+    | where Process !~ "sdelete.exe"
+    | extend CommandLine = tostring(EventData.CommandLine) 
+    | where CommandLine has_all ("accepteula", "-r", "-s", "-q", "c:/")
+    | where CommandLine !has ("sdelete"))
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -33,5 +44,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.1
+version: 1.1.0
 kind: scheduled
