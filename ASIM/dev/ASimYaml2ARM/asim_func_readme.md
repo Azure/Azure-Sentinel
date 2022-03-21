@@ -1,6 +1,6 @@
 # {product} ASIM {schema} Normalization Parser
 
-This template deploys the ASIM {schema} schema parser for {product}.
+ARM template for ASIM {schema} schema parser for {product}.
 
 {description}
 
