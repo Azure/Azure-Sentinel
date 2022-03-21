@@ -71,6 +71,9 @@ class SOne():
     def results_array_join(self, result_element, api_req_name):
         for element in result_element['data']:
             element['event_name'] = api_req_name
+            if "data" in element:
+                element["DataFields"] = str(json.dumps(element['data']))
+                del element['data']
             self.results_array.append(element)
 
     def reports_list(self):
