@@ -1,7 +1,7 @@
-id: fcbbd670-d4e6-4f3a-9008-d8905e84cf79
-name: ZN Access Orchestrator - Inbound Block Rules Deleted
+id: 3dd14edf-788d-4f42-868f-28f3208b92a9
+name: ZN Access Orchestrator - Excessive access by user
 description: |
-  'Query searches for inbound block rules deleted by non AI.'
+  'Find users who gained access to the largest number of target assets in the selected time range'
 severity: Medium
 requiredDataConnectors:
   - connectorId: ZeroNetworksAccessOrchestratorAuditFunction
@@ -11,18 +11,23 @@ requiredDataConnectors:
     dataTypes:
       - ZNAccessOrchestratorAuditNativePoller_CL
 tactics:
-  - DefenseEvasion
+  - LateralMovement
 relevantTechniques:
-  - T1562
+  - T1210
+  - T1570
+  - T0866
 query: |
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   ZNAccessOrchestratorAudit
   | where TimeGenerated > ago(endtime-starttime)
-  | where AuditTypeId == 34
-  | where EnforcementSource != "AI"
+  | where AuditTypeId in (9,12,20,22,23,24)
+  | where DestinationEntityId !startswith "b:"
+  | summarize AffectedEntities=make_set(DestinationEntityName) by PerformedByName
+  | extend numOfTargetEntities=array_length(AffectedEntities)
+  | order by numOfTargetEntities desc
   | extend Account_0_FullName = PerformedByName
-  | extend Host_0_NetBiosName = DestinationEntityName
+  | extend Host_0_NetBiosName = AffectedEntities
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -31,4 +36,4 @@ entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: NetBiosName
-        columnName: DestinationEntityName
+        columnName: AffectedEntities
