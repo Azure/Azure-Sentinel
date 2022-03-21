@@ -1,4 +1,4 @@
-# AS-PagerDuty-Integration
+# CylancePROTECT
 
 Author: acnccd, Accelerynt
 
