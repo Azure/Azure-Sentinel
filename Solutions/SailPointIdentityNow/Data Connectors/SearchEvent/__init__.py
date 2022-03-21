@@ -13,7 +13,6 @@ import base64
 import re
 from azure.cosmosdb.table.tableservice import TableService
 
-
 tenant_id = os.environ["TENANT_ID"]
 grant_type = os.environ["GRANT_TYPE"]
 client_id = os.environ["CLIENT_ID"]
@@ -26,39 +25,47 @@ logAnalyticsUri = os.environ.get('logAnalyticsUri')
 # Get the customer ID to your Log Analytics workspace Id.
 customer_id = os.environ["CUSTOMER_ID"]
 
-# For the shared key, use either the primary or the secondary Connected Sources client authentication key. 
+# For the shared key, use either the primary or the secondary Connected Sources client authentication key.
 shared_key = os.environ["SHARED_KEY"]
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
-match = re.match(pattern,str(logAnalyticsUri))
-if(not match):
+match = re.match(pattern, str(logAnalyticsUri))
+if (not match):
     raise Exception("Invalid Log Analytics Uri.")
+
 
 # Function to determine if the current timestamp should be used instead of the value stored in the checkpoint file.
 # Will return 'true' if the checkpoint time is 1 or more days in the past.
 def use_current(now, old) -> bool:
     ret = False
 
-    current_time = datetime.datetime.strptime(now, '%Y-%m-%dT%H:%M:%S.%fZ')
-    old_time = datetime.datetime.strptime(old, '%Y-%m-%dT%H:%M:%S.%fZ')
-        
+    try:
+        current_time = datetime.datetime.strptime(now, '%Y-%m-%dT%H:%M:%S.%fZ')
+    except ValueError:
+        current_time = datetime.datetime.strptime(now, '%Y-%m-%dT%H:%M:%SZ')
+
+    try:
+        old_time = datetime.datetime.strptime(old, '%Y-%m-%dT%H:%M:%S.%fZ')
+    except ValueError:
+        old_time = datetime.datetime.strptime(old, '%Y-%m-%dT%H:%M:%SZ')
+
     diff = current_time - old_time
     delta_days = diff.days
-    
-    if(int(delta_days) > 0):
+
+    if (int(delta_days) > 0):
         ret = True
-        
+
     return ret
 
 
-# Function to build the API signature.
+# Build the API signature
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource) -> str:
     x_headers = 'x-ms-date:' + date
     string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-    bytes_to_hash = bytes(string_to_hash, encoding="utf-8")  
+    bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
     decoded_key = base64.b64decode(shared_key)
     encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
     authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
@@ -73,7 +80,7 @@ def post_data(customer_id, shared_key, body, log_type, logAnalyticsUri) -> None:
     rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    
+
     uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
     headers = {
         'content-type': content_type,
@@ -85,8 +92,9 @@ def post_data(customer_id, shared_key, body, log_type, logAnalyticsUri) -> None:
     if (response.status_code < 200 or response.status_code >= 300):
         logging.error("Unable to Write... " + format(response.status_code))
 
+    # Executor
 
-# Executor
+
 def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = datetime.datetime.utcnow().replace(
         tzinfo=datetime.timezone.utc).isoformat()
@@ -130,13 +138,13 @@ def main(mytimer: func.TimerRequest) -> None:
             oauth_response.raise_for_status()
             access_token = oauth_response.json()["access_token"]
             headers = {
-                'Content-Type' : 'application/json',
-                'Authorization' : "Bearer " + access_token
+                'Content-Type': 'application/json',
+                'Authorization': "Bearer " + access_token
             }
         except (HTTPError, KeyError, ValueError):
             logging.error("No access token received..." + str(oauth_response.status_code))
             return 0
-    
+
     partial_set = False
     audit_events = []
 
@@ -146,11 +154,11 @@ def main(mytimer: func.TimerRequest) -> None:
 
     # Number of Events to return per call to the search API.
     limit = int(os.environ["LIMIT"])
-    
+
     while True:
         if partial_set == True:
             break
-    
+
         # Standard query params, but include limit for result set size.
         queryparams = {
             "count": "true",
@@ -174,10 +182,12 @@ def main(mytimer: func.TimerRequest) -> None:
         }
         audit_url = f'https://{tenant_id}.api.identitynow.com/v3/search/events'
 
-        # Initiate request 
-        audit_events_response = requests.request("POST", url=audit_url, params=queryparams, json=searchpayload, headers=headers)
+        # Initiate request
+        audit_events_response = requests.request("POST", url=audit_url, params=queryparams, json=searchpayload,
+                                                 headers=headers)
 
-        # API Gateway saturated / rate limit encountered.  Delay and try again. Delay will either be dictated by IdentityNow server response or 5000 seconds
+        # API Gateway saturated / rate limit encountered.  Delay and try again. Delay will either be dictated by
+        # IdentityNow server response or 5000 seconds
         if audit_events_response.status_code == 429:
 
             retryDelay = 5000
@@ -190,7 +200,9 @@ def main(mytimer: func.TimerRequest) -> None:
 
         elif audit_events_response.ok:
 
-            # Check response headers to get toal number of search results - if this value is 0 there is nothing to parse, if it is less than the limit value then we are caught up to most recent, and can exit the query loop
+            # Check response headers to get total number of search results - if this value is 0 there is nothing to
+            # parse, if it is less than the limit value then we are caught up to most recent, and can exit the query
+            # loop
             x_total_count = int(audit_events_response.headers['X-Total-Count'])
             if x_total_count > 0:
                 try:
