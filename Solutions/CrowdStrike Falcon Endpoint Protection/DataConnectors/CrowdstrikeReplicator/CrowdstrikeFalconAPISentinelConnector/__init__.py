@@ -12,6 +12,7 @@ import time
 import aiohttp
 import logging
 import azure.functions as func
+from .state_manager import StateManager
 
 WORKSPACE_ID = os.environ['WorkspaceID']
 SHARED_KEY = os.environ['WorkspaceKey']
@@ -22,6 +23,7 @@ AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
 QUEUE_URL = os.environ['QUEUE_URL']
 VISIBILITY_TIMEOUT = 1800
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
+connection_string = os.environ['AzureWebJobsStorage']
 
 # Defines how many files can be processed simultaneously
 MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 20))
@@ -36,6 +38,8 @@ pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern, str(LOG_ANALYTICS_URI))
 if not match:
     raise Exception("Invalid Log Analytics Uri.")
+
+drop_files_array = []
 
 def _create_sqs_client():
     sqs_session = get_session()
@@ -59,7 +63,6 @@ def _create_s3_client():
 
 def customize_event(line):
     element = json.loads(line)
-    # Ingesting only the fields required
     required_fileds = [
                         "timestamp", "aip", "aid", "EventType", "LogonType", "HostProcessType", "UserPrincipal", "DomainName",
                         "RemoteAddressIP", "ConnectionDirection", "TargetFileName", "LocalAddressIP4", "IsOnRemovableDisk",
@@ -85,7 +88,11 @@ def customize_event(line):
     return event
 
 async def main(mytimer: func.TimerRequest):
+    global drop_files_array
+    drop_files_array.clear()
     script_start_time = int(time.time())
+    filepath = f'{script_start_time}_file'
+    state = StateManager(connection_string=connection_string, share_name='funcstatemarkershare', file_path=filepath)
     logging.info("Creating SQS connection")
     async with _create_sqs_client() as client:
         async with aiohttp.ClientSession() as session:
@@ -113,6 +120,9 @@ async def main(mytimer: func.TimerRequest):
                     logging.info('No messages in queue. Re-trying to check...')
             except KeyboardInterrupt:
                 pass
+    if len(drop_files_array) > 0:
+        logging.info("list of files that were not processed: {}".format(drop_files_array))
+        state.post(str(drop_files_array))
 
 async def process_file(bucket, s3_path, client, semaphore, session):
     async with semaphore:
@@ -126,31 +136,36 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                                                 LOG_TYPE, 
                                                 queue_size=MAX_BUCKET_SIZE
                                                 )
-        response = await client.get_object(Bucket=bucket, Key=s3_path)
-        s = ''
-        async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
-            s += decompressed_chunk.decode(errors='ignore')
-            lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
-            for n, line in enumerate(lines):
-                if n < len(lines) - 1:
-                    if line:
-                        try:
-                            event = customize_event(line)
-                        except ValueError as e:
-                            logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                            raise e
-                        await sentinel.send(event)
-            s = line
-        if s:
-            try:
-                event = customize_event(line)
-            except ValueError as e:
-                logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                raise e
-            await sentinel.send(event)
-        await sentinel.flush()
-        total_events += sentinel.successfull_sent_events_number
-        logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
+        
+        try:
+            response = await client.get_object(Bucket=bucket, Key=s3_path)
+            s = ''
+            async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
+                s += decompressed_chunk.decode(errors='ignore')
+                lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                for n, line in enumerate(lines):
+                    if n < len(lines) - 1:
+                        if line:
+                            try:
+                                event = customize_event(line)
+                            except ValueError as e:
+                                logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                                raise e
+                            await sentinel.send(event)
+                s = line
+            if s:
+                try:
+                    event = customize_event(line)
+                except ValueError as e:
+                    logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                    raise e
+                await sentinel.send(event)
+            await sentinel.flush()
+            total_events += sentinel.successfull_sent_events_number
+            logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
+        except Exception as e:
+            logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
+            drop_files_array.append(s3_path)
 
 async def download_message_files(msg, session):
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSING_FILES)
