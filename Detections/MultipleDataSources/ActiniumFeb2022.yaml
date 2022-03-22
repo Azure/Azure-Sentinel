@@ -38,6 +38,9 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 6h 
 queryPeriod: 6h 
 triggerOperator: gt 
@@ -51,7 +54,7 @@ tags:
    - Schema: ASIMFileEvent
      SchemaVersion: 0.1.0
 query:  |  
-  let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ActiniumIOC.csv"] with (format="csv", ignoreFirstRecord=True);
+let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ActiniumIOC.csv"] with (format="csv", ignoreFirstRecord=True);
   let domains = (iocs | where Type =~ "domainname"| project IoC);
   let sha256Hashes = (iocs | where Type =~ "sha256" | project IoC);
   (union isfuzzy=true
@@ -65,6 +68,18 @@ query:  |
   ( SecurityEvent
   | where EventID == 4688
   | where (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr "wscript.exe') and CommandLine has ('"%PUBLIC%\\Pictures\\') and CommandLine has ('//e:VBScript //b" /F')) or (CommandLine has ('wscript.exe C:\\Users\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b'))
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+  ),
+  ( WindowsEvent
+  | where EventID == 4688
+  | where (EventData has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and EventData has ('/tr "wscript.exe') and EventData has ('"%PUBLIC%\\Pictures\\') and EventData has ('//e:VBScript //b" /F')) or (EventData has ('wscript.exe C:\\Users\\') and EventData has ('.wav') and  EventData has ('//e:VBScript //b'))
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where (CommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and CommandLine has ('/tr "wscript.exe') and CommandLine has ('"%PUBLIC%\\Pictures\\') and CommandLine has ('//e:VBScript //b" /F')) or (CommandLine has ('wscript.exe C:\\Users\\') and CommandLine has ('.wav') and  CommandLine has ('//e:VBScript //b'))
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend Account = iff((isempty(EventData.SubjectDomainName) or EventData.SubjectDomainName == "-"),"", strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
+  | extend NewProcessId = tostring(EventData.NewProcessId)
   | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
   ),
@@ -144,5 +159,5 @@ entityMappings:
     fieldMappings:
       - identifier: ProcessId
         columnName: ProcessCustomEntity
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
