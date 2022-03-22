@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -19,10 +22,19 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-   SecurityEvent
+   union isfuzzy=true 
+   (SecurityEvent
    | where EventID == 5136 and EventData contains "<Data Name=\"ObjectDN\">CN=AdminSDHolder,CN=System"
    | parse EventData with * 'ObjectDN">' ObjectDN "<" *
-   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN
+   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN),
+   (WindowsEvent
+   | where EventID == 5136 and EventData has "<CN=AdminSDHolder,CN=System"
+   | extend ObjectDN = tostring(EventData.ObjectDN)
+   | where ObjectDN has "<CN=AdminSDHolder,CN=System"
+   | extend SubjectAccount = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+   | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+   | extend SubjectLogonId = tostring(EventData.SubjectLogonId)
+   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN)
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -32,5 +44,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.1
+version: 1.1.0
 kind: Scheduled
