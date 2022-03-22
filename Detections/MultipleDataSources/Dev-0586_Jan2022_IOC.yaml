@@ -20,6 +20,9 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 6h 
 queryPeriod: 6h 
 triggerOperator: gt 
@@ -46,6 +49,18 @@ query:  |
   ( SecurityEvent
   | where EventID == 4688
   | where ( CommandLine has (@'127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line))
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+  ),
+  ( WindowsEvent
+  | where EventID == 4688
+  | where ( EventData has (@'127.0.0.1\\ADMIN$') and EventData has_any (Command_Line))
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where ( CommandLine has (@'127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line))
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend Account = iff((isempty(EventData.SubjectDomainName) or EventData.SubjectDomainName == "-"),"", strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName)))
+  | extend NewProcessId = tostring(EventData.NewProcessId)
   | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
   ),
@@ -93,5 +108,5 @@ entityMappings:
         columnName: FileHashAlgo
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
