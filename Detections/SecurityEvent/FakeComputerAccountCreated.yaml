@@ -9,6 +9,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -18,9 +21,19 @@ tactics:
 relevantTechniques:
   - T1564
 query: |
-  SecurityEvent
+  union isfuzzy=true 
+  (SecurityEvent
   | where EventID == 4720 and TargetUserName endswith "$"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectUserName, SubjectUserSid, SubjectLogonId, TargetUserName, TargetSid
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectUserName, SubjectUserSid, SubjectLogonId, TargetUserName, TargetSid),
+  (WindowsEvent
+  | where EventID == 4720 
+  | extend TargetUserName = tostring(EventData.TargetUserName)
+  | where  TargetUserName endswith "$"
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+  | extend SubjectLogonId = tostring(EventData.SubjectLogonId)
+  | extend TargetSid = tostring(EventData.TargetSid)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectUserName, SubjectUserSid, SubjectLogonId, TargetUserName, TargetSid)
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -30,5 +43,5 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
