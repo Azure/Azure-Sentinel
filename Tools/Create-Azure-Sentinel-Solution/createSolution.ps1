@@ -223,7 +223,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     name         = "workbook$workbookCounter-name";
                                     type         = "Microsoft.Common.TextBox";
                                     label        = "Display Name";
-                                    defaultValue = $solutionRename;
+                                    defaultValue = $solutionRename.trimEnd();
                                     toolTip      = "Display name for the workbook.";
                                     constraints  = [PSCustomObject] @{
                                         required          = $true;
@@ -237,7 +237,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
-                        $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $solutionRename; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+                        $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $solutionRename.trimEnd(); minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
 
                         # Create Workbook Resource Object
                         $newWorkbook = [PSCustomObject]@{
