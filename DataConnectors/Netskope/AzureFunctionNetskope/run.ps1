@@ -68,7 +68,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         if($netskopetimediff.TotalSeconds -ge 300)
         {
            Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
-           $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(300)) -UFormat %s)
+           $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
            Write-Host "For Logtype $($logtype) new modified endtime is $($endTime)"
         }
         $alleventobjs = @()
