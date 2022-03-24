@@ -1,0 +1,296 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "User enrichment - Okta", 
+    "description": "This playbook will collect user information from Okta and post a report on the incident.",
+    "prerequisites": ["1. Okta Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+      "2. Generate an API key. [Learn how](https://developer.okta.com/docs/guides/create-an-api-token/overview/)"],
+    "prerequisitesDeployTemplateFile": "../../OktaCustomConnector/azuredeploy.json",
+    "lastUpdateTime": "2021-07-28T00:00:00.000Z", 
+    "entities": ["Account"], 
+    "tags": ["Enrichment"], 
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "Accenture"
+    }
+},
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Okta-EnrichIncidentWithUserDetails",
+      "type": "string",
+	   "metadata": {
+          "description": "Name of the Logic Apps resource to be created"
+        }
+    },
+    "CustomConnectorName":{
+      "defaultValue": "OktaCustomConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with Okta"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "OKTAConnectionName": "[concat('oktaconnector-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('OKTAConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+          "displayName": "[variables('AzureSentinelConnectionName')]",
+          "customParameterValues": {},
+          "parameterValueType": "Alternative",
+          "api": {
+              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+          }
+      }
+  },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "UserEnrichment-Okta",
+        "hidden-SentinelTemplateVersion": "1.0",
+        "LogicAppsCategory": "security"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+    },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('OKTAConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+         
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_Accounts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/account"
+              }
+             
+            },
+            "For_each-risky_account_received_from_the_incident": {
+              "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+              "actions": {
+                "Add_a_comment_to_the_incident_with_the_information_collected": {
+                  "runAfter": {
+                    "Create_HTML_table_format_of_user_group_details": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><strong>OKTA Playbook performed the following actions:</strong><br>\n<br>\n<strong>Got User information from OKTA :</strong><br>\n<br>\n<strong>User id: </strong>&nbsp;@{body('Get_User')?['id']}<br>\n<strong>User name: </strong>&nbsp; @{body('Get_User')?['credentials']?['provider']?['name']}<br>\n<strong>User login:</strong> @{body('Get_User')?['profile']?['login']}<br>\n<strong>User email: </strong>@{body('Get_User')?['profile']?['email']}<br>\n<strong>User status:</strong> @{body('Get_User')?['status']}<br>\n<strong>User created: </strong>@{body('Get_User')?['created']}<br>\n<strong>User activated: </strong>@{body('Get_User')?['activated']}<br>\n<strong>User statusChanged:</strong> @{body('Get_User')?['statusChanged']}<br>\n<strong>User lastLogin: </strong>@{body('Get_User')?['lastLogin']}<br>\n<strong>User lastUpdated: </strong>@{body('Get_User')?['lastUpdated']}<br>\n<strong>User passwordChanged:</strong> @{body('Get_User')?['passwordChanged']}<br>\n<br>\n<strong>User is part of below Groups :<br>\n</strong><strong>@{body('Create_HTML_table_format_of_user_group_details')}</strong><strong></strong></p>"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment"
+                  }
+                },
+                "Create_HTML_table_format_of_user_group_details": {
+                  "runAfter": {
+                    "For_each_user_group": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Table",
+                  "inputs": {
+                    "columns": [
+                      {
+                        "header": "GroupID",
+                        "value": "@item()?['GroupId']"
+                      },
+                      {
+                        "header": "GroupName",
+                        "value": "@item()?['GroupName']"
+                      },
+                      {
+                        "header": "GroupDescription",
+                        "value": "@item()?['GroupDescription']"
+                      }
+                    ],
+                    "format": "HTML",
+                    "from": "@variables('User Groups')"
+                  },
+                  "description": "prepare html table format to attach in the incident"
+                },
+                "For_each_user_group": {
+                  "foreach": "@body('Get_User_Groups')",
+                  "actions": {
+                    "Append_groups_to_group_array_variable": {
+                      "runAfter": {
+                        "Compose_array_of_groups_for_updating_incident_with_group_details": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "User Groups",
+                        "value": "@outputs('Compose_array_of_groups_for_updating_incident_with_group_details')"
+                      }
+                    },
+                    "Compose_array_of_groups_for_updating_incident_with_group_details": {
+                      "runAfter": {},
+                      "type": "Compose",
+                      "inputs": {
+                        "GroupDescription": "@items('For_each_user_group')?['profile']?['description']",
+                        "GroupId": "@items('For_each_user_group')?['id']",
+                        "GroupName": "@items('For_each_user_group')?['profile']?['name']"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Get_User_Groups": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach",
+                  "description": "For each user group preparing the list of groups with required details to comment in the incident"
+                },
+                "Get_User": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/api/v1/users/@{encodeURIComponent(items('For_each-risky_account_received_from_the_incident')?['Name'])}"
+                  },
+                  "description": "This gets the user details from Okta"
+                },
+                "Get_User_Groups": {
+                  "runAfter": {
+                    "Get_User": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/api/v1/users/@{encodeURIComponent(items('For_each-risky_account_received_from_the_incident')?['Name'])}/groups"
+                  },
+                  "description": "This gets the user groups from Okta"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_to_collect_group_details": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Initialize_variable_to_collect_group_details": {
+              "runAfter": {
+                "Entities_-_Get_Accounts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "User Groups",
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "OktaCustomConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OKTAConnectionName'))]",
+                "connectionName": "[variables('OKTAConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                      "type": "ManagedServiceIdentity"
+                  }
+              }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

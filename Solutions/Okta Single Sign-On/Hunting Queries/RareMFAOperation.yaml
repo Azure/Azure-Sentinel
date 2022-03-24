@@ -1,0 +1,36 @@
+id: 18667b4a-18e5-4982-ba75-92ace62bc79c
+name: Rare MFA Operations (Okta)
+description: |
+  'Multi-Factor Authentication (MFA) helps prevent credential compromise.This query searches for rare MFA operations like deactivating, updating, resetting and attempts to bypass MFA.
+   Adversaries often attempt these operations to compromise networks and high-value accounts.Please verify that the behavior is known and filter out anything that is expected.
+   Refrence: https://developer.okta.com/docs/reference/api/event-types/'
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes: 
+      - Okta_CL
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let Events = dynamic(["user.mfa.factor.update", "system.mfa.factor.deactivate", "user.mfa.attempt_bypass", "user.mfa.factor.reset_all"]);
+  Okta_CL
+  | where isnotempty(eventType_s)
+  | where eventType_s in (Events)
+  | where outcome_result_s =~ "SUCCESS"
+  | extend Target=parsejson(target_s)
+  | mvexpand bagexpansion=array (Target)
+  | evaluate bag_unpack(Target)
+  | extend Target_Id = id, Target_type = type, Target_user = displayName, Target_alternateId = alternateId
+  | project-away id, type, displayName, alternateId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: actor_displayName_s
+      - identifier: FullName
+        columnName: Target_user
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: client_ipAddress_s
