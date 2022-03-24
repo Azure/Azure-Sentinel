@@ -23,28 +23,28 @@ query: |
     let starttime = 14d;
     let endtime = 1d;
     let timeframe = 1h;
-    let TotalEventsThreshold = 25; 
-    let TimeSeriesData = 
-    AzureActivity 
+    let TotalEventsThreshold = 25; 
+    let TimeSeriesData = 
+    AzureActivity 
    | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-    | where Category == "Administrative" and ActivityStatus == "Succeeded" 
-    | where OperationNameValue endswith "delete" 
-    | project TimeGenerated, Caller 
-    | make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller; 
-     let TimeSeriesAlerts = materialize(TimeSeriesData 
-    | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') 
-    | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) 
-    | where anomalies > 0 
-    | project Caller, TimeGenerated, Total, baseline, anomalies, score 
-    | where Total > TotalEventsThreshold and baseline > 0 ); 
-    TimeSeriesAlerts 
-    | where TimeGenerated > (ago(endtime)) 
-    | project TimeGenerated, Caller 
-    | join (AzureActivity 
-    | where TimeGenerated > (ago(endtime)) 
-    | where Category == "Administrative" and ActivityStatus == "Succeeded" 
-    | where OperationNameValue endswith "delete" 
-    | summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller 
+   | where Category == "Administrative" and ActivityStatus == "Succeeded" 
+   | where OperationNameValue endswith "delete" 
+   | project TimeGenerated, Caller 
+   | make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller; 
+  let TimeSeriesAlerts = materialize(TimeSeriesData 
+    | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') 
+    | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) 
+    | where anomalies > 0 
+    | project Caller, TimeGenerated, Total, baseline, anomalies, score 
+    | where Total > TotalEventsThreshold and baseline > 0 ); 
+    TimeSeriesAlerts 
+    | where TimeGenerated > (ago(endtime)) 
+    | project TimeGenerated, Caller 
+    | join (AzureActivity 
+    | where TimeGenerated > (ago(endtime)) 
+    | where Category == "Administrative" and ActivityStatus == "Succeeded" 
+    | where OperationNameValue endswith "delete" 
+    | summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller 
     | extend timestamp = TimeGenerated, AccountCustomEntity = Caller
 
 entityMappings:
