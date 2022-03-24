@@ -18,23 +18,18 @@ tactics:
 relevantTechniques:
   - T1213
 query: |
-  // l_min_tokens_created - minimum tokens created per repository per day to consider
-  let l_min_tokens_created = 1;
-  // Earliest date from GitLab Audit logs - adapt if too far away - for instance, replace by ago(30d)
-  let min_t = toscalar(GitLabAudit
-  | summarize min(TimeGenerated));
-  // Most recent date from GitLab Audit logs 
-  let max_t = toscalar(GitLabAudit
-  | summarize max(TimeGenerated));
-  // Graph Interval
+  // l_min_tokens_created - minimum tokens created per repository per user per day to consider
+  let l_min_tokens_created = 0;
   let interval = 1d;
   GitLabAudit
   | where TargetType == "PersonalAccessToken"
-  | project Severity, EventDay = bin(todatetime(EventTime),1d), AuthorName, IPAddress, Repository = EntityPath, Action, TargetType
-  | summarize sumTokens = count() by Repository, EventDay
-  | where sumTokens > l_min_tokens_created
-  | make-series num=sum(sumTokens) default=0 on EventDay in range(min_t, max_t, interval) by Repository
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(num, 1.5, -1, 'linefit')
-  | render timechart
+  | project Severity, TimeGenerated = bin(todatetime(EventTime),1d), AuthorName, IPAddress, Repository = EntityName, Action, TargetType
+  | summarize total = count() by Repository, TimeGenerated, AuthorName
+  | where total >= l_min_tokens_created
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AuthorName
 version: 1.0.0
 kind: Scheduled
