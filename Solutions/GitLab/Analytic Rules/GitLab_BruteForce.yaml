@@ -17,25 +17,23 @@ relevantTechniques:
   - T1110
 query: |
   let LearningPeriod = 7d; 
+  let EndLearningTime = now();
   let BinTime = 1h; 
   let RunTime = 1h; 
-  let StartTime = 1h; 
-  let NumberOfStds = 3; 
   let MinThreshold = 3.0; 
-  let EndLearningTime = StartTime + LearningPeriod;
   let GitLabFailedLogins = (GitLabApp
   | where FailedLogin == 1
   | parse kind=regex Message with "Failed Login: username=" User "ip=" IpAddress 
   | project TimeGenerated, EventTime, Computer, User, HostName, HostIP, IpAddress);
   GitLabFailedLogins 
-  | where EventTime between (ago(EndLearningTime) .. ago(StartTime)) 
+  | where EventTime between (ago(LearningPeriod) .. EndLearningTime) 
   | summarize FailedLoginsCountInBinTime = count() by User, bin(EventTime, BinTime) 
   | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User 
-  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold) 
+  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning, MinThreshold) 
   | join kind=innerunique ( GitLabFailedLogins 
-  | summarize FailedLoginsCountInRunTime = count() by User, IpAddress ) on User 
+  | summarize FailedLoginsCountInRunTime = count() by User, IpAddress, EventTime = bin(EventTime, BinTime) ) on User 
   | where FailedLoginsCountInRunTime >= LearningThreshold
-  | extend User, IpAddress
+  | project User, IpAddress, EventTime, FailedLoginsCountInRunTime, LearningThreshold
 entityMappings:
   - entityType: IP
     fieldMappings:
