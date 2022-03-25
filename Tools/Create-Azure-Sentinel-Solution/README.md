@@ -46,8 +46,11 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * Name: Solution Name - Ex. "Symantec Endpoint Protection"
  * Author: Author Name+Email of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com"
  * Logo: Link to the Logo used in createUiDefinition.json
+ * - NOTE: This field is only recommended for Azure Global Cloud. It is not recommended for solutions in Azure Government Cloud as the image will not be shown properly.
  * Description: Solution Description used in createUiDefinition.json. Can include markdown.
- * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
+ * WorkbookDescription: Workbook description(s), generally from Workbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
+ * PlaybookDescription: Playbook description(s), generally from Playbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
+ * WatchlistDescription: Watchlist description(s), generally from Watchlists' Property data. This field can be a string if 1 description is used across all, and an array if multiple are used. This field is used if the description from the Watchlist resource is not desired in the Create-UI.
  * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
  * SavedSearches: This input assumes a format of any of the following:
  * -- Direct export via API (see https://docs.microsoft.com/rest/api/loganalytics/saved-searches/list-by-workspace)
@@ -58,6 +61,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
+ * TemplateSpec: Boolean value used to determine whether the package should be generated as a template spec
  */
 {
   "Name": "{SolutionName}",
@@ -68,14 +72,17 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Workbooks": [],
   "Analytic Rules": [],
   "Playbooks": [],
+  "PlaybookDescription": ["{Description of playbook}"],
   "Parsers": [],
   "SavedSearches": [],
   "Hunting Queries": [],
   "Data Connectors": [],
   "Watchlists": [],
+  "WatchlistDescription": [],
   "BasePath": "{Path to Solution Content}",
   "Version": "1.0.0",
   "Metadata": "{Name of Solution Metadata file}",
+  "TemplateSpec": false
 }
 
 ```
@@ -107,7 +114,8 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   ],
   "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/",
   "Version": "1.0.0",
-  "Metadata": "SolutionMetadata.json"
+  "Metadata": "SolutionMetadata.json",
+  "TemplateSpec": false
 }
 ```
 

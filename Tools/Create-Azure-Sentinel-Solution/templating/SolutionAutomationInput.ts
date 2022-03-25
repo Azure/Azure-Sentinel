@@ -16,10 +16,14 @@ interface SolutionAutomationInput {
   Workbooks?: string[];
   "Analytic Rules"?: string[];
   Playbooks?: string[];
+  PlaybookDescription?: string|string[];
   Parsers?: string[];
   SavedSearches?: string[];
   "Hunting Queries"?: string[];
   "Data Connectors"?: string[];
   Watchlists?: string[];
+  WatchlistDescription?: string|string[];
   BasePath?: string; //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
+  Metadata: string;
+  TemplateSpec: boolean;
 }
