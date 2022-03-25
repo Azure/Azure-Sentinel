@@ -6,7 +6,7 @@ Date Created: 6/10/2019 16:19
 import certifi, json, requests, urllib3
 
 
-def epmAuth(dispatcher, username, password, version=None):
+def epmAuth(dispatcher, username, password):
     """
         EPM Authentication
         This method authenticates the user to EPM using username and password and returns
@@ -19,8 +19,7 @@ def epmAuth(dispatcher, username, password, version=None):
             diapatcher (str): The EPM SaaS site to get version information from and perform the initial logon
             username (str): Valid User ID with access to the Set(s)
             password (str): Password for the User ID logging into the Rest API
-            version (str): Current version of EPM SaaS, an optional parameter from getVersion function
-        
+
         Returns:
             list: Json list containing the EPMAuthenticationResult, ManagerURL, IsPasswordExpired (True/False)
     """
@@ -32,14 +31,12 @@ def epmAuth(dispatcher, username, password, version=None):
     logonBody = json.dumps(body)
 
     # build the header and url
-    if version == None:
-        myURL = dispatcher + "/EPM/API/Auth/EPM/Logon"
-    else:
-        myURL = dispatcher + "/EPM/API/" + version + "/Auth/EPM/Logon"
+    myURL = dispatcher + "/EPM/API/Auth/EPM/Logon"
     hdr = {'Content-Type': 'application/json'}
 
     # make the Rest API call
     urllib3.disable_warnings()
+
     return requests.post(myURL, headers=hdr, data=logonBody, verify=False)
 
 
@@ -90,7 +87,7 @@ def getSetsList(epmserver, epmToken, authType, version=None):
         Get Sets list
         This method enables the user to retrieve the list of Sets.
     """
-    # build the URL 
+    # build the URL
     if version == None:
         myURL = epmserver + "/EPM/API/Sets"
     else:
@@ -120,7 +117,8 @@ def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor=
     # build the URL
 
     if next_cursor is not None:
-        myURL = epmserver + "/EPM/API/Sets/" + setid + "/events/aggregations/search?nextCursor=" + next_cursor + "&limit=" + str(limit)
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/events/aggregations/search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
     else:
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/events/aggregations/search?limit=" + str(limit)
 
@@ -137,7 +135,7 @@ def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor=
     # make the Rest API call
     urllib3.disable_warnings()
     # this url can take a query, the parameters for the query should be in kwargs
-    # check to see if there are any keyword arguements passed in to this function
+    # check to see if there are any keyword arguments passed in to this function
     # if so, use them
     if len(kwargs) > 0:
         return requests.post(myURL, headers=hdr, verify=False, data=data, params=kwargs)
@@ -152,9 +150,10 @@ def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor
         to a predefined filter
     """
 
-    # build the URL 
+    # build the URL
     if next_cursor is not None:
-        myURL = epmserver + "/EPM/API/Sets/" + setid + "/Events/Search?nextCursor=" + next_cursor + "&limit=" + str(limit)
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/Events/Search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
     else:
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/Events/Search?limit=" + str(limit)
 
@@ -171,7 +170,78 @@ def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor
     # make the Rest API call
     urllib3.disable_warnings()
     # this url can take a query, the parameters for the query should be in kwargs
-    # check to see if there are any keyword arguements passed in to this function
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    if len(kwargs) > 0:
+        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+    else:
+        return requests.post(myURL, headers=hdr, verify=False, data=data)
+
+
+def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
+    """
+            Get aggregated policy audits
+            This method enables the user to retrieve aggregated policy audits from EPM according
+    """
+
+    # build the URL
+    if next_cursor is not None:
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/aggregations/search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
+    else:
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/aggregations/search?limit=" + str(limit)
+
+    # build the header
+    hdr = {}
+    hdr['Content-Type'] = 'application/json'
+    if authType == 'EPM':
+        authToken = 'basic ' + epmToken
+        hdr['Authorization'] = authToken
+    else:
+        authToken = epmToken
+        hdr['VFUser'] = authToken
+
+    # make the Rest API call
+    urllib3.disable_warnings()
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    if len(kwargs) > 0:
+        return requests.post(myURL, headers=hdr, params=kwargs, verify=False, data=data)
+    else:
+        return requests.post(myURL, headers=hdr, verify=False, data=data)
+
+
+def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000,
+                                  **kwargs):
+    """
+            Get policy audit raw event details
+            This method enables the user to retrieve policy audit raw event details from EPM according
+    """
+
+    # build the URL
+    if next_cursor is not None:
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
+    else:
+        myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/search?limit=" + str(limit)
+
+    # build the header
+    hdr = {}
+    hdr['Content-Type'] = 'application/json'
+    if authType == 'EPM':
+        authToken = 'basic ' + epmToken
+        hdr['Authorization'] = authToken
+    else:
+        authToken = epmToken
+        hdr['VFUser'] = authToken
+
+    # make the Rest API call
+    urllib3.disable_warnings()
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
     # if so, use them
 
     if len(kwargs) > 0:
