@@ -1,5 +1,5 @@
 import azure.functions as func
-import datetime
+import date
 import json
 import base64
 import hashlib
