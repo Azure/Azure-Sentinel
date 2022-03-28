@@ -179,7 +179,7 @@ class AgentInstallationVerifications:
     '''
     This class is for agent related verifications
     '''
-    Agent_installation_doc = "https://docs.microsoft.com/he-il/azure/azure-monitor/agents/azure-monitor-agent-manage"
+    Agent_installation_doc = "https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage"
 
     def verify_agent_is_running(self):
         '''
@@ -247,8 +247,8 @@ class DCRConfigurationVerifications:
     '''
     This class is for data collection rules verifications
     '''
-    DCR_doc = "https://docs.microsoft.com/he-il/azure/azure-monitor/agents/data-collection-rule-overview"
-    DCRA_doc = "https://docs.microsoft.com/en-us/rest/api/monitor/data-collection-rule-associations"
+    DCR_doc = "https://docs.microsoft.com/azure/azure-monitor/agents/data-collection-rule-overview"
+    DCRA_doc = "https://docs.microsoft.com/rest/api/monitor/data-collection-rule-associations"
     CEF_stream_name = "SECURITY_CEF_BLOB"
 
     def verify_DCR_exists(self):
@@ -419,7 +419,7 @@ class OperatingSystemVerifications:
     '''
     This class is for general operating system verifications
     '''
-    SELinux_documentation = "https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
+    SELinux_documentation = "https://access.redhat.com/documentation/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
 
     def verify_selinux_disabled(self):
         '''
