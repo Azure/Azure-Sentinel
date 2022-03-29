@@ -12,7 +12,7 @@
     LASTEDIT: 28-03-2022
 #>
 
-function New-AzureSentinelAlertRuleDeployment {
+function New-SentinelAlertRuleDeployment {
     param (
         $templatePath,
         $resourceGroupName,
