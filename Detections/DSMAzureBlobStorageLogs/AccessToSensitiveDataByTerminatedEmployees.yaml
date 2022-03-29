@@ -29,27 +29,28 @@ query: |
           CorrelationId,
           TimeGenerated;
   // labeled data
-  let ScanDataLookback = now() - 30d;
   let Sensitivity = 
       DSMDataLabelingLogs
-      | where TimeGenerated > ScanDataLookback
+      // to bypass the defined timeframe, we filter by TimeGenerated explicitly
+      | where TimeGenerated < now()
       | where isnotempty(SensitivityLabelName)
+      | summarize arg_max(TimeGenerated, SensitivityLabelName) by CorrelationId
       | project
           SensitivityLabelName = replace(@'\[|\]|\"', @'', SensitivityLabelName),
-          CorrelationId
-      | distinct *;
+          CorrelationId;
   // classified data
   let Classification = 
       DSMDataClassificationLogs
-      | where TimeGenerated > ScanDataLookback
+      // to bypass the defined timeframe, we filter by TimeGenerated explicitly
+      | where TimeGenerated < now()
       | where isnotempty(ClassificationDetails)
+      | summarize arg_max(TimeGenerated, ClassificationDetails) by CorrelationId
       | mv-expand ClassificationDetails
       | project
           ClassificationName = tostring(ClassificationDetails.Name),
           UniqueCount = tostring(ClassificationDetails.UniqueCount),
           Confidence = tostring(ClassificationDetails.Confidence),
-          CorrelationId
-      | distinct *;
+          CorrelationId;
   // all labeled and/or classified data
   let ScanData = Classification
       | join kind=fullouter Sensitivity
