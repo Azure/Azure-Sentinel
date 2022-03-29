@@ -6,7 +6,7 @@
     This way you don't need to loop over each ARM template which is time consuming.
     Result is that we speed up the deployment by creating the rules in parallel through Azure Resource Manager
 .EXAMPLE
-    New-AzureSentinelAlertRuleDeployment -templatePath "./rules" -resourceGroupName "RG Name" -workspaceName "WorkspaceName"
+    New-SentinelAlertRuleDeployment -templatePath "./rules" -resourceGroupName "RG Name" -workspaceName "WorkspaceName"
 .NOTES
     AUTHOR: Pouyan Khabazi
     LASTEDIT: 28-03-2022
