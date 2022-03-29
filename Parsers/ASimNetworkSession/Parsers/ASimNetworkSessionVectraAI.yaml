@@ -1,0 +1,90 @@
+Parser:
+  Title: Network Session ASIM parser for Vectra AI Streams
+  Version: '0.1'
+  LastUpdated: Mar 8, 2021
+Product:
+  Name: Vectra AI Streams
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Vectra AI Streams logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionVectraAI
+EquivalentBuiltInParser: _ASim_NetworkSession_VectraAI
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false) 
+  {
+    let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)[
+      false, true, 'Inbound',
+      true, false, 'Outbound',
+      true, true, 'Local',
+      false, false, 'External'];
+    let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
+    VectraStream_CL
+    | where metadata_type_s == 'metadata_isession'
+    | project-rename
+        DstIpAddr = id_resp_h_s,
+        DvcDescription = hostname_s,
+        DstDescription = resp_hostname_s,
+        SrcDescription = orig_hostname_s,
+        DstDvcId = resp_huid_s,
+        SrcDvcId = orig_huid_s,
+        DvcId = sensor_uid_s,
+        NetworkSessionId = community_id_s,
+        SrcIpAddr = id_orig_h_s
+    | extend
+        DstHostname = iff (DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "", DstDescription),
+        SrcHostname = iff (SrcDescription startswith "IP-" or not(SrcDescription matches regex HostnameRegex), "", SrcDescription),
+        DvcHostname = iff (DvcDescription startswith "IP-" or not(DvcDescription matches regex HostnameRegex), "", DvcDescription),
+        NetworkApplicationProtocol = toupper(service_s),
+        NetworkProtocol = toupper(protoName_s),
+        NetworkProtocolVersion = toupper(id_ip_ver_s),
+        Dst = DstIpAddr,
+        DstBytes = tolong(resp_ip_bytes_d),
+        DstPackets = tolong(resp_pkts_d),
+        DstPortNumber = toint(id_resp_p_d),
+        DstVlanId = tostring(toint(resp_vlan_id_d)),
+        EventCount = toint(1),
+        EventEndTime = unixtime_milliseconds_todatetime(ts_d),
+        EventOriginalSubType = split(metadata_type_s, '_')[1],
+        EventProduct = 'Vectra Stream',
+        EventResult = 'Success',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion='0.2.2',
+        EventSeverity = 'Informational',
+        EventStartTime = unixtime_milliseconds_todatetime(session_start_time_d),
+        EventType = 'NetworkSession',
+        EventVendor = 'Vectra AI',
+        SrcBytes = tolong(orig_ip_bytes_d),
+        SrcPackets = tolong(orig_pkts_d),
+        SrcPortNumber = toint(id_orig_p_d),
+        SrcVlanId = tostring(toint(orig_vlan_id_d)),
+        SrcDvcIdType = 'VectraId',
+        DstDvcIdType = 'VectraId',
+        DvcIdType = 'VectraId',
+        NetworkDuration = toint(duration_d)
+    | extend 
+        Hostname = DstHostname,
+        IpAddr = SrcIpAddr,
+        SessionId = NetworkSessionId,
+        Src = SrcIpAddr,
+        Dvc = DvcId,
+        Duration = NetworkDuration,
+        InnerVlanId = SrcVlanId,
+        NetworkBytes = SrcBytes + DstBytes,
+        NetworkPackets = SrcPackets + DstPackets,
+        OuterVlanId = DstVlanId
+    | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
+    | project-away
+        *_d, *_s, *_b, *_g
+  };
+  parser (disabled)
