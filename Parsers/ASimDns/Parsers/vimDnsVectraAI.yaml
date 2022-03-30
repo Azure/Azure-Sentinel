@@ -38,7 +38,9 @@ ParserQuery: |
         6, 'TCP',
         17, 'UDP'];
     let DnsClassLookup = datatable(DnsQueryClass:int, DnsQueryClassName: string)[
+        0, 'Reserved',
         1, 'IN',
+        2, 'Unassigned',
         3, 'CH',
         4, 'HS',
         254, 'None',
@@ -55,7 +57,7 @@ ParserQuery: |
     | where (responsecodename == '*' or rcode_name_s =~ responsecodename)
     | where (response_has_ipv4 == '*' or has_ipv4(answers_s, response_has_ipv4))
     | where (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(answers_s, response_has_any_prefix))
-    | where (eventtype == '*' or 'Query' =~ eventtype)
+    | where (eventtype == '*' or eventtype in~ ('Query', 'lookup'))
     | project-rename
         DvcDescription = hostname_s,
         DstDescription = resp_hostname_s,
@@ -97,7 +99,8 @@ ParserQuery: |
         DstDvcIdType = 'VectraId',
         DvcIdType = 'VectraId',
         SrcPortNumber = toint(id_orig_p_d),
-        TransactionIdHex = tostring(toint(trans_id_d))
+        TransactionIdHex = tostring(toint(trans_id_d)),
+        EventSubType = iff (saw_reply_b, "response", "request")
     | lookup DnsClassLookup on DnsQueryClass
     | lookup NetworkProtocolLookup on proto_d
     | extend
@@ -107,10 +110,9 @@ ParserQuery: |
         Domain = DnsQuery,
         Hostname = DstHostname,
         IpAddr = SrcIpAddr,
-        Dvc = DvcId,
+        Dvc = coalesce (DvcId, DvcDescription),
         Src = SrcIpAddr,
-        Dst = DstIpAddr,
-        IpAddr = SrcIpAddr
+        Dst = DstIpAddr
     | project-away
         *_d, *_s, *_b, *_g
       };

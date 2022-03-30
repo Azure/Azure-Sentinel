@@ -12,6 +12,17 @@ References:
   Link: https://aka.ms/ASimDnsDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
+Exceptions:
+- Field: DnsQuery 
+  Exception: May have values such as "1164-ms-7.1440-9fdc2aab.3b2bd806-978e-11ec-8bb3-aad815b5cd42" which are not valid domains names. Those are are related to TKEY RR requests.
+- Field: DnsQuery
+  Exception: May be empty for requests for root servers and for requests for RR type DNSKEY
+- Field: EventOriginalUid
+  Exception: Is empty for events of subtype request. 
+- Field: DvcId
+  Exception: Is empty for events of subtype request. 
+- Field: DnsSessionId
+  Exception: Is empty for events of subtype request. 
 Description: |
   This ASIM parser supports normalizing Vectra AI Steams logs to the ASIM DNS normalized schema.
 ParserName: ASimDnsVectraAI
@@ -26,7 +37,9 @@ ParserQuery: |
         6, 'TCP',
         17, 'UDP'];
     let DnsClassLookup = datatable(DnsQueryClass:int, DnsQueryClassName: string)[
+        0, 'Reserved',
         1, 'IN',
+        2, 'Unassigned',
         3, 'CH',
         4, 'HS',
         254, 'None',
@@ -52,7 +65,9 @@ ParserQuery: |
         DstDvcId = resp_huid_s,
         SrcDvcId = orig_huid_s,
         DvcId = sensor_uid_s,
-        EventOriginalUid = uid_s
+        EventOriginalUid = uid_s,
+        SrcSessionId = orig_sluid_s,
+        DstSessionId = resp_sluid_s
     | extend
         DstHostname = iff (DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "", DstDescription),
         SrcHostname = iff (SrcDescription startswith "IP-" or not(SrcDescription matches regex HostnameRegex), "", SrcDescription),
@@ -76,7 +91,8 @@ ParserQuery: |
         DstDvcIdType = 'VectraId',
         DvcIdType = 'VectraId',
         SrcPortNumber = toint(id_orig_p_d),
-        TransactionIdHex = tostring(toint(trans_id_d))
+        TransactionIdHex = tostring(toint(trans_id_d)),
+        EventSubType = iff (saw_reply_b, "response", "request")
     | lookup DnsClassLookup on DnsQueryClass
     | lookup NetworkProtocolLookup on proto_d
     | extend
@@ -86,10 +102,9 @@ ParserQuery: |
         Domain = DnsQuery,
         Hostname = DstHostname,
         IpAddr = SrcIpAddr,
-        Dvc = DvcId,
+        Dvc = coalesce (DvcId, DvcDescription),
         Src = SrcIpAddr,
-        Dst = DstIpAddr,
-        IpAddr = SrcIpAddr
+        Dst = DstIpAddr
     | project-away
         *_d, *_s, *_b, *_g
       };
