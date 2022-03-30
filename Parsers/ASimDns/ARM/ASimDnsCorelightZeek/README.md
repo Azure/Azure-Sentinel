@@ -1,6 +1,6 @@
 # Corelight Zeek ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Corelight Zeek.
+ARM template for ASIM Dns schema parser for Corelight Zeek.
 
 This ASIM parser supports normalizing Corelight Zeek DNS logs to the ASIM Dns normalized schema.
 
@@ -15,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FASimDnsCorelightZeek%2FASimDnsCorelightZeek.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FASimDnsCorelightZeek%2FASimDnsCorelightZeek.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FASimDnsCorelightZeek%2FASimDnsCorelightZeek.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FASimDnsCorelightZeek%2FASimDnsCorelightZeek.json)

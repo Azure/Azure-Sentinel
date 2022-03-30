@@ -1,6 +1,6 @@
 # Microsoft ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Microsoft.
+ARM template for ASIM Dns schema parser for Microsoft.
 
 This function returns an empty ASIM DNS activity schema.
 
@@ -15,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsEmpty%2FvimDnsEmpty.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsEmpty%2FvimDnsEmpty.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FvimDnsEmpty%2FvimDnsEmpty.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FvimDnsEmpty%2FvimDnsEmpty.json)

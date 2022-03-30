@@ -1,6 +1,6 @@
 # Microsoft Windows Events Sysmon ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Microsoft Windows Events Sysmon.
+ARM template for ASIM Dns schema parser for Microsoft Windows Events Sysmon.
 
 This ASIM parser supports filtering and normalizing Sysmon for Windows DNS logs (event number 22),collected using the Log Analytics agent, to the ASIM Dns normalized schema.<br>The parser supports events collected to both the Event and WindowsEvent tables.The parser supports events collected to both the Event and WindowsEvent tables.
 
@@ -15,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftSysmon%2FvimDnsMicrosoftSysmon.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftSysmon%2FvimDnsMicrosoftSysmon.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftSysmon%2FvimDnsMicrosoftSysmon.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftSysmon%2FvimDnsMicrosoftSysmon.json)

@@ -1,6 +1,6 @@
 # MS DNS Events ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for MS DNS Events.
+ARM template for ASIM Dns schema parser for MS DNS Events.
 
 This ASIM parser supports filtering and normalizing Windows DNS logs, collected using the Log Analytics agent, to the ASIM Dns normalized schema.
 
@@ -15,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftOMS%2FvimDnsMicrosoftOMS.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftOMS%2FvimDnsMicrosoftOMS.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftOMS%2FvimDnsMicrosoftOMS.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fvectra-ai-dns%2FParsers%2FASimDns%2FARM%2FvimDnsMicrosoftOMS%2FvimDnsMicrosoftOMS.json)
