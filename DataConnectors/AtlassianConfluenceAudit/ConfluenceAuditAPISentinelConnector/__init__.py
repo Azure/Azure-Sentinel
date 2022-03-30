@@ -30,16 +30,21 @@ if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
 def generate_date():
-    current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
+    # current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
+    current_timestamp = int(datetime.datetime.utcnow().timestamp)
     state = StateManager(connection_string=connection_string)
-    past_time = state.get()
-    if past_time is not None:
-        logging.info("The last time point is: {}".format(past_time))
+    past_timestamp = state.get()
+    if past_timestamp is not None:
+        logging.info("The last time point is: {}".format(past_timestamp))
     else:
         logging.info("There is no last time point, trying to get events for last hour.")
-        past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        # past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        past_timestamp = (current_timestamp - 3600) #3600s
+    # state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    state.post(current_timestamp)
+    # return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    logging.info("generate time {} ~ {}".format(past_timestamp, current_timestamp))
+    return (past_timestamp, current_timestamp)
 
 
 def get_result_request(offset,limit,from_time,to_time):
@@ -124,3 +129,4 @@ def main(mytimer: func.TimerRequest)  -> None:
         logging.info('The timer is past due!')
     logging.info('Starting program')
     get_result(generate_date())
+
