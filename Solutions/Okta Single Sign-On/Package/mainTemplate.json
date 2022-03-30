@@ -214,10 +214,127 @@
     "_OktaSingleSignOn_workbook": "[variables('OktaSingleSignOn_workbook')]",
     "workbook-source": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]",
     "_workbook-source": "[variables('workbook-source')]",
+	"AdminPrivilegeGrant_HuntingQueries": "AdminPrivilegeGrant_HuntingQueries",
+    "_AdminPrivilegeGrant_HuntingQueries": "[variables('AdminPrivilegeGrant_HuntingQueries')]",
+    "workspace-dependency": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
+    "CreateAPIToken_HuntingQueries": "CreateAPIToken_HuntingQueries",
+    "_CreateAPIToken_HuntingQueries": "[variables('CreateAPIToken_HuntingQueries')]",
+    "ImpersonationSession_HuntingQueries": "ImpersonationSession_HuntingQueries",
+    "_ImpersonationSession_HuntingQueries": "[variables('ImpersonationSession_HuntingQueries')]",
+    "RareMFAOperation_HuntingQueries": "RareMFAOperation_HuntingQueries",
+    "_RareMFAOperation_HuntingQueries": "[variables('RareMFAOperation_HuntingQueries')]",
     "sourceId": "azuresentinel.azure-sentinel-solution-okta",
     "_sourceId": "[variables('sourceId')]"
   },
   "resources": [
+	{
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2020-08-01",
+      "name": "[parameters('workspace')]",
+      "location": "[parameters('workspace-location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Okta Single Sign-On Hunting Query 1",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Admin privilege granted (Okta)",
+            "category": "Hunting Queries",
+            "query": "let Events = dynamic([\"group.privilege.grant\", \"user.account.privilege.grant\"]);\nOkta_CL\n| where eventType_s in (Events)\n| where outcome_result_s =~ \"SUCCESS\"\n| extend Target=parsejson(target_s)\n| mvexpand bagexpansion=array (Target)\n| evaluate bag_unpack(Target)\n| extend Target_Id = tostring(column_ifexists('id', \"\")), Target_type = tostring(column_ifexists('type', \"\")), Target_user = tostring(column_ifexists('displayName', \"\")), Target_alternateId = tostring(column_ifexists('alternateId', \"\"))\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_id_s, actor_type_s, actor_alternateId_s, actor_displayName_s, Target_alternateId, Target_Id, Target_type, Target_user,debugContext_debugData_privilegeGranted_s,domain_s,\n authenticationContext_externalSessionId_s, eventType_s, displayMessage_s, transaction_id_s, uuid_g\n",
+            "version": 1,
+            "tags": [
+              {
+                "name": "description",
+                "value": "This query searches for successful grant of administrator permissions to user/groups."
+              },
+              {
+                "name": "tactics",
+                "value": "Persistence"
+              }
+            ]
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Okta Single Sign-On Hunting Query 2",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Create API Token (Okta)",
+            "category": "Hunting Queries",
+            "query": "let Events = dynamic([\"system.api_token.create\"]);\nOkta_CL\n| where eventType_s in (Events)\n| where outcome_result_s =~ \"SUCCESS\"\n",
+            "version": 1,
+            "tags": [
+              {
+                "name": "description",
+                "value": "Okta API tokens are used to authenticate requests to Okta APIs."
+              },
+              {
+                "name": "tactics",
+                "value": "PrivilegeEscalation"
+              }
+            ]
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Okta Single Sign-On Hunting Query 3",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Initiate impersonation session (Okta)",
+            "category": "Hunting Queries",
+            "query": "let Events = dynamic([\"user.session.impersonation.initiate\", \"user.session.impersonation.grant\", \"user.session.impersonation.extend\", \"user.session.impersonation.end\", \"user.session.impersonation.revoke\"]);\nOkta_CL\n| where eventType_s in (Events)\n| where outcome_result_s =~ \"SUCCESS\"\n",
+            "version": 1,
+            "tags": [
+              {
+                "name": "description",
+                "value": "User.session.impersonation are generally speaking rare events normally triggered when an Okta Support person requests admin access for troubleshooting."
+              },
+              {
+                "name": "tactics",
+                "value": "InitialAccess"
+              }
+            ]
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Okta Single Sign-On Hunting Query 4",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Rare MFA Operations (Okta)",
+            "category": "Hunting Queries",
+            "query": "let Events = dynamic([\"user.mfa.factor.update\", \"system.mfa.factor.deactivate\", \"user.mfa.attempt_bypass\", \"user.mfa.factor.reset_all\"]);\nOkta_CL\n| where eventType_s in (Events)\n| where outcome_result_s =~ \"SUCCESS\"\n| extend Target=parsejson(target_s)\n| mvexpand bagexpansion=array (Target)\n| evaluate bag_unpack(Target)\n| extend Target_Id = tostring(column_ifexists('id', \"\")), Target_type = tostring(column_ifexists('type', \"\")), Target_user = tostring(column_ifexists('displayName', \"\")), Target_alternateId = tostring(column_ifexists('alternateId', \"\"))\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_id_s, actor_type_s, actor_alternateId_s, actor_displayName_s, Target_alternateId, Target_Id, Target_type, Target_user,debugContext_debugData_requestUri_s,\n  debugContext_debugData_requestId_s, domain_s, authenticationContext_externalSessionId_s, eventType_s, displayMessage_s, transaction_id_s, uuid_g, client_userAgent_rawUserAgent_s, client_userAgent_os_s, client_userAgent_browser_s, \n  client_ipAddress_s, client_geographicalContext_city_s, client_geographicalContext_state_s, client_geographicalContext_country_s, securityContext_isp_s\n",
+            "version": 1,
+            "tags": [
+              {
+                "name": "description",
+                "value": "Multi-Factor Authentication (MFA) helps prevent credential compromise."
+              },
+              {
+                "name": "tactics",
+                "value": "Persistence"
+              }
+            ]
+          }
+        }
+      ]
+    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
@@ -2674,6 +2791,26 @@
             {
               "kind": "Workbook",
               "contentId": "[variables('_OktaSingleSignOn_workbook')]",
+              "version": "1.0.1"
+            },
+			{
+              "kind": "HuntingQuery",
+              "contentId": "[variables('_AdminPrivilegeGrant_HuntingQueries')]",
+              "version": "1.0.1"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('_CreateAPIToken_HuntingQueries')]",
+              "version": "1.0.1"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('_ImpersonationSession_HuntingQueries')]",
+              "version": "1.0.1"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('_RareMFAOperation_HuntingQueries')]",
               "version": "1.0.1"
             }
           ]
