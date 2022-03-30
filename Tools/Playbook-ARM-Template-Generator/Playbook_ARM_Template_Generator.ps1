@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 3-16-2022
+        LASTEDIT: 3-29-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -419,8 +419,9 @@ Function BuildArmTemplate($playbookResource) {
                 "lastUpdateTime"= ""
                 "entities"= @()
                 "tags"= @()
-                "support"= @{
-                    "tier"= "community" 
+                "support"= [ordered] @{
+                    "tier"= "community"
+                    "armtemplate" = "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
                 }
                 "author"= @{
                     "name"= ""
