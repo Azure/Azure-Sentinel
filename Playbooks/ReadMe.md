@@ -24,7 +24,7 @@ You can now edit the playbook in Logic apps.
 ## Instructions for templatizing a playbook  
 ## Option 1: Azure Logic App/Playbook ARM Template Generator  
 1. Download tool and run the PowerShell script  
-   [![Download](./images/Download.png)](https://aka.ms/Playbook-ARM-Template-Generator)  
+   [![Download](./Download.png)](https://aka.ms/Playbook-ARM-Template-Generator)  
    
 2. Extract the folder and open "Playbook_ARM_Template_Generator.ps1" either in Visual Studio Code/Windows PowerShell/PowerShell Core
 
