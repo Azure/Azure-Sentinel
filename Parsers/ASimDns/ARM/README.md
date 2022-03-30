@@ -1,8 +1,8 @@
-# Advaced Security Information Model (ASIM) Dns parsers 
+# Advanced Security Information Model (ASIM) Dns parsers 
 
 This template deploys all ASIM Dns parsers.
 
-The Advanced Security Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
@@ -12,5 +12,6 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fverctra-ai-dns%2FParsers%2FASimDns%2FARM%2FFullDeploymentDns.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fasim%2Fverctra-ai-dns%2FParsers%2FASimDns%2FARM%2FFullDeploymentDns.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDnsARM) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimDnsARMgov)
+
 <br>
