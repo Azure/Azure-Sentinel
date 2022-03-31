@@ -5,11 +5,10 @@
     "title": "Get System Info - Palo Alto PAN-OS XML API",
     "description": "This playbook gets a threat PCAP from the Panorama machine for a particular threat. ",
     "mainSteps": [
-      "1.For each alert, check if the alert is a Palo Alto alert.",
+      "1. For each incident, check if the alert is a Palo Alto incident.",
       "2. If it is, extract the firewall device name.",
       "3. Make a call to the device, and get the system info.",
-      "4. Create a Sentinel Incident for the alert.",
-      "5. Update the Sentinel Incident with the system info."
+      "4. Update the Sentinel Incident with the system info."
     ],
     "prerequisites": [
       "1. Palo Alto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region.",
@@ -50,23 +49,62 @@
     "LogAnalyticsResourceName": {
       "type": "string",
       "metadata": {
-        "description": "Name of the cLog Analytics instance for logging"
+        "description": "Name of the Log Analytics instance for logging"
       }
     }
   },
   "variables": {
     "subscriptionId": "[subscription().subscriptionId]",
     "location": "[resourceGroup().location]",
-    "AzureSentinelConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuresentinel')]",
-    "AzureMonitorLogsConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuremonitorlogs')]",
-    "PaloAltoConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', parameters('CustomConnectorName'))]"
+    "AzureMonitorConnectionName": "[concat('azuremonitor-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "PaloAltoConnectorConnectionName": "[concat('PaloAltoConnector-', parameters('PlaybookName'))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('PaloAltoConnectorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureMonitorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+        }
+      }
+    },
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
       "name": "[parameters('PlaybookName')]",
-      "location": "westus2",
+      "location": "[variables('location')]",
       "identity": {
         "type": "SystemAssigned"
       },
@@ -82,7 +120,7 @@
             }
           },
           "triggers": {
-            "Microsoft_Sentinel_alert": {
+            "Microsoft_Sentinel_incident": {
               "type": "ApiConnectionWebhook",
               "inputs": {
                 "body": {
@@ -101,18 +139,18 @@
             "For_each": {
               "foreach": "@body('Run_query_and_list_results')?['value']",
               "actions": {
-                "If_alert_is_a_Palo_Alto_alert": {
+                "If_incident_is_a_Palo_Alto_incident": {
                   "actions": {
                     "Add_comment_to_incident_(V3)": {
                       "runAfter": {
-                        "Alert_-_Get_incident": [
+                        "Query_Palo_Alto_XML_API": [
                           "Succeeded"
                         ]
                       },
                       "type": "ApiConnection",
                       "inputs": {
                         "body": {
-                          "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
                           "message": "<p>@{body('Query_Palo_Alto_XML_API')}</p>"
                         },
                         "host": {
@@ -122,23 +160,6 @@
                         },
                         "method": "post",
                         "path": "/Incidents/Comment"
-                      }
-                    },
-                    "Alert_-_Get_incident": {
-                      "runAfter": {
-                        "Query_Palo_Alto_XML_API": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "ApiConnection",
-                      "inputs": {
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                          }
-                        },
-                        "method": "get",
-                        "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                       }
                     },
                     "Query_Palo_Alto_XML_API": {
@@ -209,17 +230,22 @@
           "$connections": {
             "value": {
               "azuremonitorlogs": {
-                "connectionId": "[variables('AzureMonitorLogsConnector')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorConnectionName'))]",
                 "connectionName": "azuremonitorlogs",
                 "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azuremonitorlogs')]"
               },
               "azuresentinel": {
-                "connectionId": "[variables('AzureSentinelConnector')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "connectionName": "azuresentinel",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azuresentinel')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
               },
               "paloaltoconnector": {
-                "connectionId": "[variables('PaloAltoConnector')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectorConnectionName'))]",
                 "connectionName": "paloaltoconnector",
                 "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
               }

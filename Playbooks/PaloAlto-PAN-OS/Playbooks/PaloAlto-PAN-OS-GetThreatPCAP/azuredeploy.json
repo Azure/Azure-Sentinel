@@ -5,12 +5,11 @@
     "title": "Get Threat PCAP - Palo Alto PAN-OS XML API",
     "description": "This playbook gets a threat PCAP from the Panorama machine for a particular threat. ",
     "mainSteps": [
-      "1.For each alert, check if the alert is a Palo Alto alert.",
+      "1. For each incident, check if the alert is a Palo Alto incident.",
       "2. If it is, extract the session ID, the PCAP ID, the firewall device name, the time at which the PCAP was generated.",
       "3. Make a call to the Panorama, and get the PCAP.",
       "4. Upload the PCAP to a blob storage account.",
-      "5. Create a Sentinel Incident for the alert.",
-      "6. Update the Sentinel Incident with a link to the blob store file."
+      "5. Update the Sentinel Incident with a link to the blob store file."
     ],
     "prerequisites": [
       "1. Palo Alto PAN-OS custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region.",
@@ -57,19 +56,133 @@
     }
   },
   "variables": {
+    "AzureBlobConnectionName": "[concat('azureblob-', parameters('PlaybookName'))]",
+    "AzureStorageName": "panosthreatpcapssa",
     "subscriptionId": "[subscription().subscriptionId]",
     "location": "[resourceGroup().location]",
-    "AzureSentinelConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuresentinel')]",
-    "AzureBlobConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azureblob')]",
-    "AzureMonitorLogsConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuremonitorlogs')]",
-    "PaloAltoConnector": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', parameters('CustomConnectorName'))]"
+    "AzureMonitorConnectionName": "[concat('azuremonitor-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "ContainerName": "panosthreatpcaps",
+    "PaloAltoConnectorConnectionName": "[concat('PaloAltoConnector-', parameters('PlaybookName'))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('AzureStorageName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "accessTier": "Hot",
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": "true",
+        "allowBlobPublicAccess": "false",
+        "allowSharedKeyAccess": "true",
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "defaultAction": "Allow",
+          "ipRules": []
+        }
+      }
+    },
+    {
+      "name": "[concat(variables('AzureStorageName'), '/default')]",
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2021-02-01",
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', variables('AzureStorageName'))]"
+      ],
+      "properties": {
+        "deleteRetentionPolicy": {
+          "enabled": "false"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2019-06-01",
+      "name": "[concat(variables('AzureStorageName'), '/default/', variables('ContainerName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('AzureStorageName'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('AzureStorageName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureBlobConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/', variables('AzureStorageName'))]"
+      ],
+      "properties": {
+        "displayName": "[variables('AzureBlobConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
+        },
+        "parameterValues": {
+          "accountName": "[variables('AzureStorageName')]",
+          "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('AzureStorageName')), '2019-04-01').keys[0].value]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[parameters('PlaybookName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('PaloAltoConnectorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureMonitorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+        }
+      }
+    },
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
       "name": "[parameters('PlaybookName')]",
-      "location": "westus2",
+      "location": "[variables('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectorConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
       "identity": {
         "type": "SystemAssigned"
       },
@@ -85,7 +198,7 @@
             }
           },
           "triggers": {
-            "Microsoft_Sentinel_alert": {
+            "incident": {
               "type": "ApiConnectionWebhook",
               "inputs": {
                 "body": {
@@ -96,7 +209,7 @@
                     "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                   }
                 },
-                "path": "/subscribe"
+                "path": "/incident-creation"
               }
             }
           },
@@ -104,20 +217,20 @@
             "For_each": {
               "foreach": "@body('Run_query_and_list_results')?['value']",
               "actions": {
-                "If_alert_is_a_Palo_Alto_alert": {
+                "If_incident_is_a_Palo_Alto_incident": {
                   "actions": {
                     "If_PCAP_ID_Exists": {
                       "actions": {
                         "Add_comment_to_incident_(V3)": {
                           "runAfter": {
-                            "Alert_-_Get_incident": [
+                            "Create_blob_(V2)": [
                               "Succeeded"
                             ]
                           },
                           "type": "ApiConnection",
                           "inputs": {
                             "body": {
-                              "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
                               "message": "<p>@{body('Create_blob_(V2)')?['Path']}</p>"
                             },
                             "host": {
@@ -127,23 +240,6 @@
                             },
                             "method": "post",
                             "path": "/Incidents/Comment"
-                          }
-                        },
-                        "Alert_-_Get_incident": {
-                          "runAfter": {
-                            "Create_blob_(V2)": [
-                              "Succeeded"
-                            ]
-                          },
-                          "type": "ApiConnection",
-                          "inputs": {
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                              }
-                            },
-                            "method": "get",
-                            "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                           }
                         },
                         "Create_blob_(V2)": {
@@ -167,7 +263,7 @@
                             "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('defendpaloaltopcapsdev'))}/files",
                             "queries": {
                               "folderPath": "pcapblobs-palo-alto",
-                              "name": "@{concat(string('paloalto',items('For_each')['PcapID']), string(triggerBody()?['TimeGenerated']), '.pcap')}",
+                              "name": "@{concat(string('paloalto',items('For_each')['PcapID']), string(items('For_each')['TimeGenerated']), '.pcap')}",
                               "queryParametersSingleEncoded": true
                             }
                           },
@@ -192,7 +288,7 @@
                               "category": "threat-pcap",
                               "device_name": "@items('For_each')['MonitoringDeviceName']",
                               "pcap-id": "@items('For_each')['PcapID']",
-                              "search-time": "@triggerBody()?['TimeGenerated']",
+                              "search-time": "@{items('For_each')['TimeGenerated']}",
                               "sessionId": "@items('For_each')['SessionID']",
                               "type": "export"
                             }
@@ -272,28 +368,28 @@
           "$connections": {
             "value": {
               "azureblob": {
-                "connectionId": "[variables('AzureBlobConnector')]",
-                "connectionName": "azureblob",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureBlobConnectionName'))]",
+                "connectionName": "[variables('AzureBlobConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azureblob')]"
+              },
+              "azuremonitorlogs": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorConnectionName'))]",
+                "connectionName": "[variables('AzureMonitorConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
                 "connectionProperties": {
                   "authentication": {
                     "type": "ManagedServiceIdentity"
                   }
-                },
-                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azureblob')]"
-              },
-              "azuremonitorlogs": {
-                "connectionId": "[variables('AzureMonitorLogsConnector')]",
-                "connectionName": "azuremonitorlogs",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azuremonitorlogs')]"
-              },
-              "azuresentinel": {
-                "connectionId": "[variables('AzureSentinelConnector')]",
-                "connectionName": "azuresentinel",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/azuresentinel')]"
+                }
               },
               "paloaltoconnector": {
-                "connectionId": "[variables('PaloAltoConnector')]",
-                "connectionName": "paloaltoconnector",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PaloAltoConnectorConnectionName'))]",
+                "connectionName": "[variables('PaloAltoConnectorConnectionName')]",
                 "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
               }
             }
