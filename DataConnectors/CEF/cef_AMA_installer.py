@@ -260,7 +260,7 @@ def is_syslog_ng():
 
 def set_syslog_ng_configuration():
     '''
-    syslog ng has a default configuration, which enables the incoming ports and defines that
+    syslog-ng has a default configuration, which enables the incoming ports and defines that
     the source pipe to the daemon will verify it is configured correctly.
     '''
     comment_line = False
@@ -287,11 +287,11 @@ def set_syslog_ng_configuration():
     o, e = write_new_content.communicate()
     if e is not None:
         handle_error(e,
-                     error_response_str="Error: could not change Rsyslog.conf configuration  in -" + syslog_ng_conf_path)
+                     error_response_str="Error: could not change syslog-ng.conf configuration  in -" + syslog_ng_conf_path)
         return False
     if not snet_found:
         append_content_to_file(line=syslog_ng_source_content, file_path=syslog_ng_conf_path)
-    print_ok("Rsyslog.conf configuration was changed to fit required protocol - " + syslog_ng_conf_path)
+    print_ok("syslog-ng.conf configuration was changed to fit required protocol - " + syslog_ng_conf_path)
     return True
 
 

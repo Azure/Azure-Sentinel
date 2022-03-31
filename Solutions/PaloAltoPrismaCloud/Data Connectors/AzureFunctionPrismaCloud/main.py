@@ -21,11 +21,10 @@ PASSWORD = os.environ['PrismaCloudSecretKey']
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 ALERT_LOG_TYPE = 'PaloAltoPrismaCloudAlert'
 AUDIT_LOG_TYPE = 'PaloAltoPrismaCloudAudit'
-
+LOGTYPE = os.environ.get('LogType',"alert, audit")
 
 # if ts of last event is older than now - MAX_PERIOD_MINUTES -> script will get events from now - MAX_PERIOD_MINUTES
 MAX_PERIOD_MINUTES = 60 * 24 * 7
-
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -43,9 +42,13 @@ async def main(mytimer: func.TimerRequest):
     prisma = PrismaCloudConnector(API_URL, USER, PASSWORD)
 
     tasks = [
-        prisma.process_alerts(),
-        prisma.process_audit_logs()
+        prisma.process_alerts()
     ]
+
+    logging.info('LOGTYPE value : {}'.format(LOGTYPE))
+    if LOGTYPE.lower().__contains__('audit') :
+        tasks.append(prisma.process_audit_logs())
+
     await asyncio.gather(*tasks)
 
     logging.info('Program finished. {} events have been sent.'.format(prisma.sentinel.successfull_sent_events_number))

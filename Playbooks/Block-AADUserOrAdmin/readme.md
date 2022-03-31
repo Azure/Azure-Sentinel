@@ -59,7 +59,7 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole4.Id
 ```
 
-3. Assign Global Administrator role from Azure Active Directory > Roles and administrators, search for Global Administrator and assign role to the playbook Managed Identity (Block-AADUserOrAdmin-Incident or Block-AADUserOrAdmin-Alert)
+3. Assign Global Administrator role to the managed identity. From Azure Active Directory > Roles and administrators, search for Global Administrator and assign role to the playbook Managed Identity (Block-AADUserOrAdmin-Incident or Block-AADUserOrAdmin-Alert)
 4. Open the playbook in the Logic App Designer and authorize Azure AD and Office 365 Outlook Logic App connections<br><br>
 
 ## Screenshots

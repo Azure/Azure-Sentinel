@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
 using YamlDotNet.Serialization;
+using Microsoft.Azure.Sentinel.ApiContracts.ModelValidation;
 
 namespace Kqlvalidations.Tests
 {
@@ -35,8 +36,8 @@ namespace Kqlvalidations.Tests
             var exception = Record.Exception(() =>
             {
                 var templateObject = JsonConvert.DeserializeObject<AnalyticsTemplateInternalModelBase>(ConvertYamlToJson(yaml));
-                var validationContext = new ValidationContext(templateObject);
-                Validator.ValidateObject(templateObject, validationContext, true);
+                var validationResults = DataAnnotationsValidator.ValidateObjectRecursive(templateObject);
+                DataAnnotationsValidator.ThrowExceptionIfResultsInvalid(validationResults);
             });
             string exceptionToDisplay = string.Empty;
             if (exception != null)

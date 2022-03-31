@@ -181,7 +181,7 @@ param (
             'Principal': {
                 'AWS': '$RoleArn'
             },
-            'Action': ['s3:Get*','s3:List*'],
+            'Action': ['s3:GetObject'],
             'Resource': 'arn:aws:s3:::$BucketName/*'
         }]}"
 			

@@ -38,18 +38,20 @@ query: |
   | join kind=innerunique (
       AzureDiagnostics
       | where TimeGenerated >= ago(dt_lookBack)
-      | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
-      | parse kind=regex flags=U msg_s with Protocol 'request from ' SourceHost 'to ' DestinationHost @'\.? Action:' Action
-      | extend SourceAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?',1,SourceHost)
-      | extend DestinationAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?',1,DestinationHost)
-      | where not(ipv4_is_private(DestinationAddress))
+      | where OperationName in ("AzureFirewallApplicationRuleLog", "AzureFirewallNetworkRuleLog")
+      | parse kind=regex flags=U msg_s with Protocol 'request from ' SourceHost 'to ' DestinationHost @'\.? Action: ' Firewall_Action @'\.' Rest_msg
+      | extend SourceAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?', 1, SourceHost)
+      | extend DestinationAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?', 1, DestinationHost)
+      | extend RemoteIP = case(not(ipv4_is_private(DestinationAddress)), DestinationAddress, not(ipv4_is_private(SourceAddress)), SourceAddress, "")
+      // Traffic that involves a public address, and in case this is the source address then the traffic was not denied
+      | where isnotempty(RemoteIP)
       | project-rename AzureFirewall_TimeGenerated = TimeGenerated
   )
-  on $left.TI_ipEntity == $right.DestinationAddress
+  on $left.TI_ipEntity == $right.RemoteIP
   | where AzureFirewall_TimeGenerated < ExpirationDateTime
-  | summarize AzureFirewall_TimeGenerated = arg_max(AzureFirewall_TimeGenerated, *) by IndicatorId, DestinationAddress
+  | summarize AzureFirewall_TimeGenerated = arg_max(AzureFirewall_TimeGenerated, *) by IndicatorId, RemoteIP
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore, AzureFirewall_TimeGenerated,
-  TI_ipEntity, Resource, Category, msg_s, SourceAddress, DestinationAddress, Action, Protocol, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  TI_ipEntity, Resource, Category, msg_s, SourceAddress, DestinationAddress, Firewall_Action, Protocol, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = AzureFirewall_TimeGenerated, IPCustomEntity = TI_ipEntity, URLCustomEntity = Url
 entityMappings:
   - entityType: IP
@@ -60,5 +62,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.1.0
+version: 1.1.2
 kind: Scheduled

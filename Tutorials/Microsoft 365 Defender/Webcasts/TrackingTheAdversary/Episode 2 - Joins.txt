@@ -1,0 +1,325 @@
+print Series = 'Tracking the Adversary with MTP Advanced Hunting', EpisodeNumber = 2, Topic = 'Joins', Presenter = 'Michael Melone, Tali Ash', Company = 'Microsoft'
+
+// Language Reference: https://docs.microsoft.com/azure/kusto/query/
+// Advanced Hunting Reference: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-schema-tables?view=o365-worldwide
+// ---------------
+
+// Joins
+// - Links two datasets together based on a common key
+// - Can heavily impact performance depending on how datasets are joined
+// - If datasets being joined are too large you may get an error
+
+// ---------------
+
+// The Join Statement
+// In the below example, we will find users in the Finance department and determine where they have logged on.  
+// We'll accomplish this using the IdentityInfo table (user information) and the IdentityLogonEvents
+// table.
+
+IdentityLogonEvents
+| take 100
+
+// IdentityLogonEvents
+// - Authentications performed against an on-prem DC or to Microsoft online services.
+// - Contains success \ fail information, logon type, application, identity information, and client information
+
+IdentityInfo
+| where Department == 'Finance'
+| join IdentityLogonEvents on AccountObjectId 
+
+// Note that we now have duplicate columns.
+// the duplicates have a '1' at the end of the column name to 
+// avoid errors.
+
+// This example uses two datasets, identified as "left" and "right"
+// based on their location relative to the join statement.
+
+// Left table:
+IdentityInfo
+| where Department == 'Finance'
+
+// Right table:
+IdentityLogonEvents
+| take 100
+
+// As long as the join column names match this should
+// work nicely.  If the column names do not match, we may
+// need to specify which columns to join...
+// We accomplish this by using $left. and $right.
+
+IdentityInfo
+| where Department == 'Finance'
+| project-rename objid = AccountObjectId 
+| join IdentityLogonEvents on $left.objid == $right.AccountObjectId
+
+// --------------------------------------------------------
+
+// JOIN TYPES
+// Now comes the fun part - understanding the default Kusto join.
+
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Hello",
+    0, "Hola",
+    1, "Salut",
+    1, "Ciao",
+    2, "Hallo"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    0, "World",
+    0, "Mundo",
+    1, "Monde",
+    1, "Mondo",
+    2, "Welt"
+];
+LeftTable
+| join RightTable on key
+
+// As you can see we are missing data.  The default Kusto join
+// deduplicates the left table based on the join column before
+// joining the datasets together.  Because of this, we lose
+// "Hola" and "Ciao".
+
+// This is important since it can directly result in missed
+// detections!  If you want to join data together using the
+// standard inner join (the default in SQL) you need to specify
+// kind = inner!
+
+// The default join can be handy from a performance perspective.  For
+// example, let's say we wanted to produce a list of users who logged 
+// on to Windows 10 devices.  The DeviceInfo table has duplicates (one
+// row for each checkin), but we don't need them represented.
+
+DeviceInfo
+| where OSPlatform == 'Windows10'
+| join DeviceLogonEvents on DeviceId 
+| distinct DeviceId, DeviceName, AccountDomain, AccountName, AccountSid
+
+// Specifying kind=inner enables us to return all rows from both tables
+
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Hello",
+    0, "Hola",
+    1, "Salut",
+    1, "Ciao",
+    2, "Hallo"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    0, "World",
+    0, "Mundo",
+    1, "Monde",
+    1, "Mondo",
+    2, "Welt"
+];
+LeftTable
+| join kind=inner RightTable on key
+
+// This comes in handy when you want to see every network communication within 5 minutes
+// of an alert event on the device
+
+AlertEvidence
+| where isnotempty(DeviceId)
+| project-rename AlertTimestamp = Timestamp 
+| join kind=inner DeviceNetworkEvents on DeviceId 
+| where Timestamp between (datetime_add('minute', -5, AlertTimestamp) .. datetime_add('minute', 5, AlertTimestamp))
+
+// Other types of joins
+// - left outer: all rows from the left table regardless if they match on the right
+// - right outer: all rows from the right table regardless if they match on the left
+
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Foo",
+    1, "Bar",
+    2, "Baz",
+    3, "Qux",
+    4, "Quux"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    0, "Wibble",
+    1, "Wobble",
+    2, "Wubble",
+];
+LeftTable
+| join kind=leftouter RightTable on key
+
+// For example, let’s say we wanted a list of all emails that the malware
+// filter detected as phishing paired with details about their attachments.
+
+// EmailEvents
+// ref: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-emailevents-table?view=o365-worldwide
+// Contains information about e-mails processed through Office ATP, including
+// - Standard email metadata
+// - Whether phish or malware detection identified the e-mail as malicious upon receipt
+// - Actions taken by Office ATP on the e-mail upon receipt
+
+// EmailAttachmentInfo
+// ref: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-emailattachmentinfo-table?view=o365-worldwide
+// Contains information about e-mail attachments
+
+EmailEvents
+| where ThreatTypes == "Phish"
+| join kind=leftouter EmailAttachmentInfo on NetworkMessageId, RecipientObjectId
+| take 100
+
+// EmailEvents can tell us what e-mails were picked up as phishing, but we won’t
+// have an entry in EmailAttachmentInfo for each since many are unlikely to have
+// an attachment.  To accomplish this we used left outer join.
+
+// ------------------------------------------
+// - full outer: all rows of both tables despite whether or not they match each other
+
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Foo",
+    1, "Bar",
+    2, "Baz",
+    3, "Qux",
+    4, "Quux"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    2, "Wibble",
+    3, "Wobble",
+    16, "Wubble",
+];
+LeftTable
+| join kind=fullouter RightTable on key
+
+// I use this in a query I use reporting on antimalware signature, engine, and platform versions.
+
+let StartDate = ago(30d);
+DeviceFileEvents 
+| where Timestamp > StartDate
+// Find signature \ engine update activity
+| where InitiatingProcessFileName =~ 'MpSigStub.exe' and InitiatingProcessCommandLine contains '/stub' and InitiatingProcessCommandLine contains '/payload'
+| summarize Timestamp = arg_max(Timestamp, InitiatingProcessCommandLine) by DeviceId, DeviceName
+| extend SplitCommand = split(InitiatingProcessCommandLine, ' ')
+// Locate stub and payload versions
+| extend EngineVersionLocation = array_index_of(SplitCommand, "/stub") + 1, DefinitionVersionLocation = array_index_of(SplitCommand, "/payload") + 1
+| project Timestamp, DeviceName, DeviceId, AMEngineVersion = SplitCommand[EngineVersionLocation], AntivirusSignatureVersion = SplitCommand[DefinitionVersionLocation]
+| join kind=fullouter (
+    DeviceProcessEvents
+    | where Timestamp > StartDate
+    // Find process creations for MsMpEng from the platform folder
+    | where FileName =~ 'MsMpEng.exe' and FolderPath contains @"\Microsoft\Windows Defender\Platform\"
+    | summarize arg_max(Timestamp, FolderPath) by DeviceId, DeviceName
+    // Go up two levels
+    | project DeviceId, DeviceName, AMServiceVersion = split(FolderPath, '\\')[-2]
+) on DeviceId
+// Re-projecting to make the UI happy
+| project DeviceId, DeviceName, AMEngineVersion, AntivirusSignatureVersion, AMServiceVersion
+
+// There are also anti joins and semi joins which are designed to quickly reduce datasets
+
+// anti joins will remove any matching rows and return only the left or right table
+// - leftanti: removes any rows that match between the two tables, only returns the left table
+
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Foo",
+    1, "Bar",
+    2, "Baz",
+    3, "Qux",
+    4, "Quux"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    2, "Wibble",
+    3, "Wobble",
+    16, "Wubble",
+];
+LeftTable
+| join kind=leftanti RightTable on key
+
+// rightanti - you guessed it. It removes matches and returns values from the right table
+
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Foo",
+    1, "Bar",
+    2, "Baz",
+    3, "Qux",
+    4, "Quux"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    2, "Wibble",
+    3, "Wobble",
+    16, "Wubble",
+];
+LeftTable
+| join kind=rightanti RightTable on key
+// Let’s say you wanted to see e-mails which were identified as either phishing
+// or malware which were likely still in user’s mailboxes. To achieve this, we
+// will use EmailEvents to identify the suspicious e-mails and filter the results
+// using the EmailPostDeliveryEvents table.
+
+// EmailPostDeliveryEvents
+// ref: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-emailpostdeliveryevents-table?view=o365-worldwide
+// contains information about post-delivery remediation actions such as manual administrator 
+// remediation, phish zap, or malware zap
+
+EmailEvents
+| where ThreatTypes in ('Phish', 'Malware') and EmailAction !in ('Replace attachment', 'Send to quarantine')
+| join kind=leftanti EmailPostDeliveryEvents on NetworkMessageId , RecipientEmailAddress  
+
+// For all of the joins, check out: https://docs.microsoft.com/azure/kusto/query/joinoperator
+
+// ---------------------------
+
+// union
+// Sometimes you want to "link" two queries together into one result instead of joining them based on a key.
+// To accomplish this you would use the union operator.  A union merges all rows from each query where the column
+// name and data type match.
+
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Foo",
+    1, "Bar",
+    2, "Baz",
+    3, "Qux",
+    4, "Quux"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    2, "Wibble",
+    3, "Wobble",
+    16, "Wubble",
+];
+LeftTable
+| union RightTable 
+
+// Notice we no longer have the extra columns from a join. This might be useful if you want to track
+// logon activity with devices (the DeviceLogonEvents table) and Active Directory \ Azure Active Directory
+// (the IdentityLogonEvents table) in one query.
+
+DeviceLogonEvents
+| extend Table = 'DeviceLogonEvents'
+| take 100
+| union (
+    IdentityLogonEvents 
+    | extend Table = 'IdentityLogonEvents'
+    | take 100
+)
+| project-reorder Timestamp, Table, AccountDomain, AccountName, AccountUpn, AccountSid 
+| order by Timestamp asc
+
+
+// --------------------------------------
+
+// Functions are a special sort of join which let you pull more static data about a file (more are
+// planned in the future, stay tuned!). This is really helpful when you want to get information about
+// file prevalence or antimalware detections.
+
+// Let's say we wanted information about rare files involved in a process creation event
+
+DeviceProcessEvents
+| invoke FileProfile() // Call the FileProfile function
+| where isnotempty(GlobalPrevalence) and GlobalPrevalence < 1000 // Note that in the real world you might want to include empty GlobalPrevalence
+| project-reorder DeviceName, FileName, ProcessCommandLine, FileSize, GlobalPrevalence, GlobalFirstSeen, GlobalLastSeen, ThreatName, Publisher, SoftwareName
+| top 100 by GlobalPrevalence asc 

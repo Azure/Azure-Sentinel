@@ -1,0 +1,310 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "**NOTE**: This data connector depends on a parser based on Kusto Function **TrendMicroCAS** to work as expected. [Follow steps to get this Kusto Function](https://aka.ms/sentinel-trendmicrocas-parser)"
+      },
+      "name": "text - 8"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "cd8447d9-b096-4673-92d8-2a1e8291a125",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "description": "Sets the time name for analysis",
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
+        "size": 0,
+        "title": "Events Over Time",
+        "color": "lightBlue",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart",
+        "graphSettings": {
+          "type": 0
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 12",
+      "styleSettings": {
+        "maxWidth": "55"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| where isnotempty(EventType)\r\n| summarize count() by EventType\r\n| join kind = inner (TrendMicroCAS\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType)\r\n on EventType\r\n| project-away EventType1, TimeGenerated\r\n| project Trend, count_, EventType = case(EventType =~ 'security_risk_scan', 'Security Risk',\r\n                                   EventType has 'virtual_analyzer', 'Virtual Analyzer',\r\n                                   EventType startswith 'ransomware', 'Ransomware',\r\n                                   EventType contains 'data', 'DLP',\r\n                                   'Other')",
+        "size": 3,
+        "title": "Event types",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "EventType",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 21,
+            "formatOptions": {
+              "palette": "purple"
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "25",
+      "name": "query - 0",
+      "styleSettings": {
+        "maxWidth": "30"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| summarize count() by EventCategoryType",
+        "size": 3,
+        "title": "Events by Service",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "25",
+      "name": "query - 3",
+      "styleSettings": {
+        "margin": "10",
+        "padding": "10"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| where EventCategoryType in~ ('exchange', 'gmail', 'exchangeserver')\r\n| extend Domain = extract(@'@(\\S+)\\>', 1, MailMessageSender)\r\n| summarize MessageCount = count() by Domain",
+        "size": 3,
+        "title": "Top domains",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "gridSettings": {
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "customWidth": "30",
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let t1 = TrendMicroCAS\n| where isnotempty(SecurityRiskName)\n| summarize EventCount=count() by ThreatName=SecurityRiskName;\nlet t2 = TrendMicroCAS\n| where isnotempty(VirusName)\n| order by DetectionTime\n| summarize EventCount=count() by ThreatName=VirusName;\nlet t3 = TrendMicroCAS\n| where isnotempty(RansomwareName)\n| order by DetectionTime\n| summarize EventCount=count() by ThreatName=RansomwareName;\nunion isfuzzy=true t1, t2, t3",
+        "size": 3,
+        "title": "Top Threats",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\n| where EventType =~ 'security_risk_scan'\n| where isnotempty(SecurityRiskName)\n| order by DetectionTime\n| project DetectionTime, File=case(isnotempty(SrcFileName), SrcFileName, MailMessageFileName), Result=strcat(iif(EventOriginalResultDetails contains 'Quarantine' or EventOriginalResultDetails contains 'Block', '✅ - Resolved', '❌ - Unknown'))",
+        "size": 0,
+        "title": "Latest files scanned",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "40",
+      "name": "query - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let m_files = TrendMicroCAS\r\n| where isnotempty(MailMessageFileName)\r\n| summarize count() by MailMessageFileName, EventCategoryType\r\n| project-rename Count=count_, File=MailMessageFileName, Service=EventCategoryType;\r\nlet o_files = TrendMicroCAS\r\n| where isnotempty(SrcFileName)\r\n| summarize count() by SrcFileName, EventCategoryType\r\n| project-rename Count=count_, File=SrcFileName, Service=EventCategoryType;\r\nunion isfuzzy=true m_files, o_files\r\n\r\n",
+        "size": 1,
+        "title": "Files most seen",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "customWidth": "35",
+      "name": "query - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| where EventCategoryType in~ ('exchange', 'gmail', 'exchangeserver')\r\n| where isnotempty(MailMessageFileName)\r\n| summarize count() by MailMessageFileName",
+        "size": 3,
+        "title": "Files from emails",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "TotalEvents",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "TotalEvents",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "customWidth": "33",
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\n| where EventCategoryType in~ ('sharepoint', 'onedrive', 'dropbox', 'box', 'googledrive')\n| where isnotempty(SrcFileName)\n| summarize count() by SrcFileName\n| project-rename Count=count_, File=SrcFileName",
+        "size": 3,
+        "title": "Files on fileshare services",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let t1 = TrendMicroCAS\r\n| where isnotempty(SecurityRiskName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=SecurityRiskName;\r\nlet t2 = TrendMicroCAS\r\n| where isnotempty(VirusName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=VirusName;\r\nlet t3 = TrendMicroCAS\r\n| where isnotempty(RansomwareName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=RansomwareName;\r\nunion isfuzzy=true t1, t2, t3",
+        "size": 1,
+        "title": "Latest acounts with threats",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "customWidth": "40",
+      "name": "query - 12",
+      "styleSettings": {
+        "maxWidth": "33"
+      }
+    }
+  ],
+  "fromTemplateId": "sentinel-TrendMicroCASWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

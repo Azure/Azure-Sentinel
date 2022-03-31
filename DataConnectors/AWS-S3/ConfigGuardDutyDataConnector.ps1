@@ -32,7 +32,7 @@ function Get-RoleAndGuardDutyS3Policy
             'Principal': {
                 'AWS': '$RoleArn'
             },
-            'Action': ['s3:Get*','s3:List*'],
+            'Action': ['s3:GetObject'],
             'Resource': 'arn:aws:s3:::$BucketName/*'
         },
 		{
@@ -130,11 +130,7 @@ function Get-GuardDutyAndRoleKmsPolicy
                 'AWS': ['$RoleArn']
             },
             'Action': [
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey'
+                'kms:Decrypt'
             ],
             'Resource': '*'
         }
@@ -160,9 +156,9 @@ function Enable-GuardDuty
         {
             Write-Output `n
             Write-Log -Message 'A detector already exists for the current account.' -LogFileName $LogFileName
-            Write-Log -Message 'List of existing detectors:' -LogFileName $LogFileName
             Write-Log -Message "Executing: aws guardduty list-detectors" -LogFileName $LogFileName -Severity Verbose
-            aws guardduty list-detectors
+            $detectors = (aws guardduty list-detectors | ConvertFrom-Json)."DetectorIds"  -join ', '
+            Write-Log -Message "List of existing detectors: $detectors" -LogFileName $LogFileName  
             
             $script:detectorId = Read-ValidatedHost 'Please enter detector Id from the above list'
             Write-Log -Message "Detector Id: $detectorId" -LogFileName $LogFileName

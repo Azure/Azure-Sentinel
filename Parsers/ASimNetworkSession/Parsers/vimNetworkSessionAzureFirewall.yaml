@@ -1,0 +1,183 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Azure Firewall logs
+  Version: '0.1'
+  LastUpdated: Feb 07, 2021
+Product:
+  Name: Azure Firewall
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Azure Firewall logs to the ASIM Network Session normalized schema. This parser is partially based on a work by [Koos Goossens](https://github.com/TheCloudScout).
+ParserName: vimNetworkSessionAzureFirewall
+EquivalentBuiltInParser: _Im_NetworkSession_AzureFirewall
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ICMPlookup = datatable (NetworkIcmpCode: int, NetworkIcmpType:string)
+      [
+      0,"Echo Reply",
+      1,"Unassigned",
+      2,"Unassigned",
+      3,"Destination Unreachable",
+      5,"Redirect",
+      8,"Echo",
+      9,"Router Advertisement",
+      10,"Router Solicitation",
+      11,"Time Exceeded",
+      12,"Parameter Problem",
+      13,"Timestamp",
+      14,"Timestamp Reply",
+      40,"Photuris",
+      42,"Extended Echo Request",
+      43,"Extended Echo Reply"
+      ];
+  let parser = (
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null), 
+        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        dstportnumber:int=int(null), 
+        hostname_has_any:dynamic=dynamic([]), 
+        dvcaction:dynamic=dynamic([]), 
+        eventresult:string='*', 
+        disabled:bool=false)
+  {
+      let AzureFirewallNetworkRuleLogs = 
+          AzureDiagnostics
+          | where not(disabled)
+          | where Category == "AzureFirewallNetworkRule"
+          | where isnotempty(msg_s);
+      let prefilter = (T: (msg_s:string, TimeGenerated:datetime, OperationName:string)) {
+        T | where  
+        (array_length(hostname_has_any) == 0)
+         and (isnull(starttime) or TimeGenerated>=starttime) 
+         and (isnull(endtime) or TimeGenerated<=endtime) 
+         and (
+            array_length(srcipaddr_has_any_prefix)==0 
+            or has_any_ipv4_prefix(msg_s,srcipaddr_has_any_prefix)
+          ) 
+          and (
+            array_length(dstipaddr_has_any_prefix)==0 
+            or has_any_ipv4_prefix(msg_s,dstipaddr_has_any_prefix)
+          ) 
+          and (isnull(dstportnumber) or msg_s has (tostring(dstportnumber))) 
+      };
+      let AzureFirewallSessionLogs = 
+          AzureFirewallNetworkRuleLogs
+          | where OperationName in ("AzureFirewallNetworkRuleLog","AzureFirewallThreatIntelLog")
+          // -- pre-filter
+          | where (array_length(dvcaction) == 0) or (msg_s has_any (dvcaction))
+          | where (eventresult == "*") or ((eventresult == "Success") and (msg_s has "Allow")) or ((eventresult == "Failure") and (msg_s has "Deny"))
+          | invoke prefilter()
+          // -- end pre-filter
+          | parse-where
+              msg_s with           NetworkProtocol:string 
+              " request from "     SrcIpAddr:string
+              ":"                  SrcPortNumber:int
+              " to "               DstIpAddr:string
+              ":"                  DstPortNumber:int
+              ". Action: "         DvcAction:string
+              "."                  *
+          | project-away msg_s
+          | extend NetworkIcmpCode = iff(NetworkProtocol startswith "ICMP", toint(extract ("type=(\\d+)",1,NetworkProtocol)), toint(0))
+          | extend NetworkProtocol = iff(NetworkProtocol startswith "ICMP", "ICMP", NetworkProtocol)
+          | lookup ICMPlookup on NetworkIcmpCode
+          | extend EventSeverity = case (
+              OperationName  == "AzureFirewallThreatIntelLog", "Medium",
+              DvcAction == "Deny", "Low",
+              "Informational")
+          | extend EventResult = iff(DvcAction == "Allow", "Success", "Failure")
+          ;
+      let AzureFirewallNATLogs = 
+          AzureFirewallNetworkRuleLogs
+          | where OperationName == "AzureFirewallNatRuleLog"
+          // -- pre-filter
+          | where (array_length(dvcaction) == 0) or ("Allow" in (dvcaction))
+          | where eventresult in ("*", "Success")
+          | invoke prefilter()
+          // -- end pre-filter
+          | parse-where
+              msg_s with           NetworkProtocol:string 
+              " request from "     SrcIpAddr:string
+              ":"                  SrcPortNumber:int
+              " to "               DstIpAddr:string
+              ":"                  DstPortNumber:int
+              " was DNAT'ed to "   DstNatIpAddr:string
+              ":"                  DstNatPortNumber:int
+          | project-away msg_s
+          | extend EventSeverity = "Informational"
+          | extend EventResult = "Success"
+          | extend DvcAction = "Allow"
+          ;
+      union AzureFirewallSessionLogs, AzureFirewallNATLogs
+      // -- Post-filtering
+      | where 
+          (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DstIpAddr, dstipaddr_has_any_prefix))
+          and (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+          and  (isnull(dstportnumber) or DstPortNumber ==dstportnumber)
+      // -- end post-filtering
+      | extend
+          EventVendor="Microsoft",
+          EventProduct="Azure Firewall",
+          EventType="NetworkSession",
+          EventCount=toint(1),
+          EventSchemaVersion="0.2.2",
+          EventSchema="NetworkSession",
+          DvcIdType = "AzureResourceId"
+      | project-rename
+          DvcSubscriptionId = SubscriptionId,
+          DvcId = ResourceId
+      // -- Aliases
+      | extend
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          Dvc = DvcId,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated // ??
+      | project-keep
+          Src*,
+          Dst*,
+          Event*,
+          Dvc*,
+          IpAddr,
+          NetworkIcmpCode,
+          NetworkIcmpType,
+          NetworkProtocol,
+          Type,
+          _ResourceId,
+          TimeGenerated
+  };
+  parser  (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

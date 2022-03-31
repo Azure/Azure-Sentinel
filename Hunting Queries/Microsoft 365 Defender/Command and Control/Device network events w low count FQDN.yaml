@@ -1,0 +1,26 @@
+id: df02a1ed-9019-40fc-9be1-c32ac4a016c0
+name: Device network events w low count FQDN
+description: |
+  Device Network Events Involving Low Count FQDNs.
+  This query reduces network events to only those with the RemoteURL column populated,.
+  Then parses the DNS name from the URL (if needed) and finds the least prevalent.
+  FQDNs.  The result is then joined with DeviceNetworkEvents to highlight anomalous.
+  Network communication.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+query: |
+  DeviceNetworkEvents
+  | where Timestamp > ago(1h)
+  | where InitiatingProcessFileName !in~ ('iexplore.exe','chrome.exe','opera.exe','safari.exe') // Remove web browsers
+      and isnotempty(RemoteUrl)
+  | extend FQDN = iff(RemoteUrl matches regex "^([a-zA-Z0-9._-])+$", tostring(RemoteUrl), parse_url(RemoteUrl).domain)
+  | top-nested 100 of FQDN by dcount(DeviceId) asc
+  | join kind=inner (
+      DeviceNetworkEvents
+      | where Timestamp > ago(1h)
+      | where isnotempty(RemoteUrl)
+      | extend FQDN = iff(RemoteUrl matches regex "^([a-zA-Z0-9._-])+$", tostring(RemoteUrl), parse_url(RemoteUrl).domain)
+  ) on FQDN
+  | order by aggregated_FQDN asc

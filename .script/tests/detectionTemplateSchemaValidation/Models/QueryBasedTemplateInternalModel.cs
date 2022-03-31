@@ -1,10 +1,9 @@
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model.ARM.ModelValidation;
 using Newtonsoft.Json;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Text;
+using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Contracts.Model;
 
 namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model
 {
@@ -27,6 +26,9 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         [JsonProperty("entityMappings", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
         [ValidEntityMappings(entityMappingsMinLength: 1, entityMappingsMaxLength: 5, fieldMappingsMinLength: 1, fieldMappingsMaxLength: 3)]
         public List<EntityMapping> EntityMappings { get; set; }
+
+        [JsonProperty("alertDetailsOverride", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
+        public AlertDetailsOverride AlertDetailsOverride { get; set; }
 
         [JsonProperty("version", Required = Required.Default)]
         [StringLength(20)] //Version should be quite short (for example "1.2.2")
