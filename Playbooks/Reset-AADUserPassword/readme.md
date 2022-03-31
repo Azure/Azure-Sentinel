@@ -26,11 +26,14 @@ After deployment, you can run this playbook manually on an alert or attach it to
 - You will need to grant User.ReadWrite.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
+$SubscriptionId = "<Enter your subsciption id here>"
+$ResourceGroup = "<Enter your resource group here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
 
 $GraphAppId = "00000003-0000-0000-c000-000000000000"
 $PermissionName = "User.ReadWrite.All" 
 $roleName="Password Administrator"
+$SentinelRoleName = "Microsoft Sentinel Responder"
 
 $GraphServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphAppId'"
 $AppRole = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
@@ -43,6 +46,8 @@ Enable-AzureADDirectoryRole -RoleTemplateId $roleTemplate.ObjectId
 $role = Get-AzureADDirectoryRole | Where {$_.displayName -eq $roleName}
 }
 Add-AzureADDirectoryRoleMember -ObjectId $role.ObjectId -RefObjectId $MI.ObjectID
+
+New-AzRoleAssignment -ObjectId $MIGuid -RoleDefinitionName $SentinelRoleName -Scope /subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup
 ```
 
 
