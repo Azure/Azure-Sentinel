@@ -17,16 +17,17 @@ relevantTechniques:
   - T1490
 query: |
   // Total time range for the query, includes detection and training data
-  let timeRange = 60d;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
   // Detection window, by default last 3 days
   let detectionWindow = 3d;
   // Used to exclude detection window from training window
-  let end = now() - detectionWindow;
+  let end = endtime - detectionWindow;
   // Minimum numbers of backups, remove instances where a test backup is made once or twice
   let backupEventThreshold = 10;
   let rawData = 
   AzureActivity
-  | where TimeGenerated > ago(timeRange)
+  | where TimeGenerated between(starttime .. endtime)
   | where ResourceProviderValue =~ "MICROSOFT.RECOVERYSERVICES"
   // Extract the resource name (in this case the VM name)
   | extend Resource = tostring(Properties_d.["entity Name"])
@@ -34,7 +35,7 @@ query: |
   | where isnotempty(Resource);
   // Process backups events in the training window
   rawData
-  | where TimeGenerated between (ago(timeRange) .. end)
+  | where TimeGenerated between (starttime) .. end)
   | summarize by Resource=tolower(Resource), ResourceGroup=tolower(ResourceGroup), bin(TimeGenerated, 1d)
   | order by TimeGenerated desc
   | summarize make_list(TimeGenerated), dcount(TimeGenerated) by Resource, ResourceGroup
@@ -52,7 +53,7 @@ query: |
   // Determine if the VM resource was deleted
   | join kind = leftouter(
       AzureActivity
-      | where TimeGenerated > ago(timeRange)
+      | where TimeGenerated between(starttime .. endtime)
       | where OperationNameValue =~ "Microsoft.Compute/virtualMachines/delete"
       | extend ResourceId = tolower(tostring(iff(isempty(ResourceId), _ResourceId, ResourceId)))
       | extend Deleted = iff(ActivityStatusValue has_any ('Success', 'Succeeded'), 1, 0)
@@ -62,3 +63,9 @@ query: |
   | project Resource, ResourceId, LastSeenBackup, DeletedDate=min_TimeGenerated, ResourceDeleted=tobool(max_Deleted), CorrelationId, PreviousBackups=list_TimeGenerated, TotalBackups=dcount_TimeGenerated
   // Optionally filter on retention periods that were reduced but the resource was not deleted
   //| where ResourceDeleted == False
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.0.0
