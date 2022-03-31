@@ -1,14 +1,22 @@
 id: 42436753-9944-4d70-801c-daaa4d19ddd2
 name: A host is potentially running PowerShell to send HTTP(S) requests (ASIM Web Session schema)
 description: |
-  'This rule identifies a web request with a user agent header known to belong PowerShell. <br>You can add custom Powershell indicating User-Agent headers using a watchlist, for more information refer to the [UnusualUserAgents Watchlist](https://aka.ms/ASimUnusualUserAgentsWatchlist).<br><br>This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM. To use this Analytics Rule, [deploy the Advanced Security Information Model (ASIM)](https://aka.ms/DeployASIM).'
+  'This rule identifies a web request with a user agent header known to belong PowerShell. <br>You can add custom Powershell indicating User-Agent headers using a watchlist, for more information refer to the [UnusualUserAgents Watchlist](https://aka.ms/ASimUnusualUserAgentsWatchlist).<br><br>
+   This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'
 severity: Medium
 tags:
-  - Id: b12b3dab-d973-45af-b07e-e29bb34d8db9
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/CiscoUmbrella/CiscoUmbrellaPowershellUserAgentDetected.yaml
     version: 1.0.0
   - Schema: ASimWebSession
     SchemaVersion: 0.2.1
-requiredDataConnectors: []
+requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+
 queryFrequency: 15m
 queryPeriod: 15m
 triggerOperator: gt
@@ -24,7 +32,7 @@ query: |
     let knownUserAgents=toscalar(knownUserAgentsIndicators | where Category==threatCategory | where isnotempty(UserAgent) | summarize make_list(UserAgent));
     let customUserAgents=toscalar(_GetWatchlist("UnusualUserAgents") | where SearchKey==threatCategory | extend UserAgent=column_ifexists("UserAgent","") | where isnotempty(UserAgent) | summarize make_list(UserAgent));
     let fullUAList = array_concat(knownUserAgents,customUserAgents);
-    imWebSession(httpuseragent_has_any=fullUAList)
+    _Im_WebSession(httpuseragent_has_any=fullUAList)
     | project SrcIpAddr, Url, TimeGenerated,HttpUserAgent, SrcUsername
 
 entityMappings:
@@ -49,6 +57,5 @@ customDetails:
 
 eventGroupingSettings:
   aggregationKind: AlertPerResult
-
-version: 1.0.6
+version: 1.1.0
 kind: Scheduled

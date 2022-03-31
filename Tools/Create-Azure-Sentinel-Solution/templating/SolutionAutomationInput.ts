@@ -17,6 +17,7 @@ interface SolutionAutomationInput {
   "Analytic Rules"?: string[];
   Playbooks?: string[];
   Parsers?: string[];
+  SavedSearches?: string[];
   "Hunting Queries"?: string[];
   "Data Connectors"?: string[];
   Watchlists?: string[];

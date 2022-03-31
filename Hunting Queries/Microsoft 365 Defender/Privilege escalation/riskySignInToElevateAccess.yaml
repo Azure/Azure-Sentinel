@@ -1,0 +1,28 @@
+id: 158b565b-411b-4dec-81de-2d2bcaf0c34c
+name: Risky Sign-in with ElevateAccess
+description: |
+  Looks for users who had a risky sign in (based on AAD Identity Protection risk score) and then performed and ElevateAccess action. ElevateAccess operations can be used by Global Admins to obtain permissions over Azure resources. 
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - AADSignInEventsBeta
+tactics:
+- PrivilegeEscalation
+query: |
+  let riskySignInLookback = 3d;
+  let elevatedUsers =
+  ( CloudAppEvents
+  | where Timestamp > ago(1d)
+  | where ApplicationId == 12260 // filter Azure Resource Manager events 
+  | where ActionType has "elevateAccess"
+  | project  elevatedOperationTimestamp = Timestamp, AccountObjectId);
+  let hasElevatedUsers = isnotempty(toscalar(elevatedUsers));
+  AADSignInEventsBeta
+  | where hasElevatedUsers
+  | where Timestamp > ago(riskySignInLookback)
+  | where ErrorCode == 0
+  | where RiskLevelDuringSignIn in (50, 100) //10 - low, 50 - medium, 100 - high)
+  | join elevatedUsers on AccountObjectId
+  | where elevatedOperationTimestamp > Timestamp
+  | project LoginTime = Timestamp, elevatedOperationTimestamp, AccountObjectId, AccountDisplayName, riskScore = RiskLevelDuringSignIn
