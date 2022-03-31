@@ -11,11 +11,14 @@ The playbook includes functionality to:
 ## Pre-requisites:
 Slack application with: 
 1. Webhook installed
+1.1 How to install webhook - https://api.slack.com/messaging/webhooks
 2. Interactivity Enbaled
 <br/><br/>
 ## Deployment:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]()
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Send-Slack-Message-Webhook/incident-trigger/azuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]()
 
 ## Post-deployment
