@@ -12,11 +12,12 @@ queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - CredentialAccess
+  - InitialAccess
 relevantTechniques:
-
+  - T1078
 query: |
   SecurityEvent
+  // Look for any events in the last 24 hours
   | where TimeGenerated > ago(1d)
   // Look for all events relating to user logins
   | where EventID in (4624,4625,4648,4675,4634,4647)
@@ -28,9 +29,10 @@ query: |
   | where ProcessName contains "Foreseer"
   // Ignore known user accounts (please edit based on your allowed users)
   | where TargetUserName !in ("janedoe", "johndoe")
+  // De-duplicate multiple entries for the same user accessing a particular device
+  | summarize TimeGenerated=arg_min(TimeGenerated, *) by TargetUserName, Computer
   | project
       TimeGenerated,
-      WindowsEventID = EventID,
       IPCustomEntity = IpAddress,
       HostCustomEntity = Computer,
       UserEntity = TargetUserName,
