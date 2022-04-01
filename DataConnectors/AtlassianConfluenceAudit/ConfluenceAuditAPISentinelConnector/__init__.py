@@ -33,8 +33,10 @@ def generate_date():
     # current_time = datetime.datetime.utcnow().replace(second=0, microsecond=0) - datetime.timedelta(minutes=10)
     current_timestamp = int(datetime.datetime.utcnow().timestamp()*1000)
     state = StateManager(connection_string=connection_string)
-    past_timestamp = int(state.get())
-    if past_timestamp is not None:
+    past_time = state.get()
+    past_timestamp = 0
+    if past_time is not None and past_time != "":
+        past_timestamp = int(past_time)
         logging.info("The last time point is: {}".format(past_timestamp))
     else:
         logging.info("There is no last time point, trying to get events for last hour.")
