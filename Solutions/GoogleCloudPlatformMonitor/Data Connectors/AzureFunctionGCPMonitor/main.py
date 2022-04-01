@@ -3,6 +3,7 @@ import asyncio
 import logging
 import time
 import re
+import aiohttp
 import azure.functions as func
 from google.cloud.monitoring_v3.services.metric_service import MetricServiceAsyncClient
 from google.cloud.monitoring_v3.types import TimeInterval
@@ -55,13 +56,14 @@ async def main(mytimer: func.TimerRequest):
 
     time_interval, last_ts = gen_time_interval(last_ts)
 
-    cors = []
-    client = MetricServiceAsyncClient()
-    for project in projects:
-        for metric in metrics:
-            cors.append(process_metric(client, project, metric, time_interval))
-    
-    await asyncio.gather(*cors)
+    async with aiohttp.ClientSession() as session:
+        cors = []
+        client = MetricServiceAsyncClient()
+        for project in projects:
+            for metric in metrics:
+                cors.append(process_metric(client, project, metric, time_interval, session))
+        
+        await asyncio.gather(*cors)
 
     logging.info('Saving last timestamp: {}'.format(last_ts))
     state_manager.post(str(last_ts))
@@ -101,10 +103,10 @@ def gen_time_interval(last_ts: int):
     return TimeInterval(interval), end_time
 
 
-async def process_metric(client: MetricServiceAsyncClient, project_name: str, metric_type: str, time_interval: TimeInterval):
+async def process_metric(client: MetricServiceAsyncClient, project_name: str, metric_type: str, time_interval: TimeInterval, session_sentinel: aiohttp.ClientSession):
     logging.info('Start processing metric: {} in {}'.format(metric_type, project_name))
 
-    sentinel = AzureSentinelConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=10000)
+    sentinel = AzureSentinelConnectorAsync(session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=10000)
 
     metric_string = 'metric.type = ' + '"' + metric_type + '"'
 
