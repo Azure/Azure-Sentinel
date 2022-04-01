@@ -38,9 +38,8 @@ class AzureSentinelConnectorAsync:
     async def _flush(self, data: list):
         if data:
             data = self._split_big_request(data)
-            async with self.session as session:
-                tasks = [self._post_data(session, self.workspace_id, self.shared_key, d, self.log_type) for d in data]
-                await asyncio.gather(*tasks)
+            tasks = [self._post_data(self.session, self.workspace_id, self.shared_key, d, self.log_type) for d in data]
+            await asyncio.gather(*tasks)
 
     def _build_signature(self, workspace_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
