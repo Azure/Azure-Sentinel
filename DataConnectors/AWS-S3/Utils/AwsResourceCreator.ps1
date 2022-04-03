@@ -67,39 +67,39 @@ function New-S3Bucket
         $isBucketNotExist = $null -ne $headBucketOutput
         if ($isBucketNotExist)
         {
-			$bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
-			Write-Log -Message "Creating new bucket: $bucketCreationConfirm " -LogFileName $LogFileName -Indent 2 
-			
-			if ($bucketCreationConfirm -eq 'y')
-			{     
-				if ($regionConfiguration -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
-				{
-					Write-Log -Message "Executing: aws s3api create-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
-					$tempForOutput = aws s3api create-bucket --bucket $bucketName 2>&1
-					Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
-				}
-				else
-				{
-					Write-Log "Executing: aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1" -LogFileName $LogFileName -Severity Verbose
-					$tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1
-					Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
-				}
-					
-				if ($lastexitcode -eq 0)
-				{
-					Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
-					Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
-					aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
-				}
-				elseif($error[0] -Match "InvalidBucketName")
-				{
-					 Write-Log -Message "Please see AWS bucket name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
-				}
-			}
-			else
-			{
-				exit
-			}
+            $bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
+            Write-Log -Message "Creating new bucket: $bucketCreationConfirm " -LogFileName $LogFileName -Indent 2 
+            
+            if ($bucketCreationConfirm -eq 'y')
+            {     
+                if ($regionConfiguration -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
+                {
+                    Write-Log -Message "Executing: aws s3api create-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
+                    $tempForOutput = aws s3api create-bucket --bucket $bucketName 2>&1
+                    Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+                }
+                else
+                {
+                    Write-Log "Executing: aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1" -LogFileName $LogFileName -Severity Verbose
+                    $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1
+                    Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+                }
+                    
+                if ($lastexitcode -eq 0)
+                {
+                    Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
+                    Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
+                    aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
+                }
+                elseif($error[0] -Match "InvalidBucketName")
+                {
+                        Write-Log -Message "Please see AWS bucket name documentation https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html" -LogFileName $LogFileName -Severity Error
+                }
+            }
+            else
+            {
+                exit
+            }
         }
     })
     
@@ -148,7 +148,15 @@ function Enable-S3EventNotification
         [Parameter(Mandatory=$true)][string]$DefaultEventNotificationPrefix,
         [Parameter()][bool]$IsCustomLog
         )
-        Write-Log -Message "Enabling S3 event notifications" -LogFileName $LogFileName -LinePadding 2
+        if($IsCustomLog -eq $true)
+        {
+            Write-Log -Message "Enabling S3 event notifications" -LogFileName $LogFileName -LinePadding 2
+        }
+        else
+        {
+            Write-Log -Message "Enabling S3 event notifications (for *.gz file)" -LogFileName $LogFileName -LinePadding 2
+        }
+
     
     Set-RetryAction({
         $eventNotificationName = ""

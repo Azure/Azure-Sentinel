@@ -29,7 +29,7 @@ $customMessage = "Changes S3: Set notifications"
 $s3RequiredPolicy = Get-RoleS3Policy -RoleArn $roleArn -BucketName $bucketName
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
- $logsPath = Read-ValidatedHost -Prompt "Please enter S3 objects full path"
+$logsPath = Read-ValidatedHost -Prompt "Please enter S3 objects full path"
 $eventNotificationPrefix = Enable-S3EventNotification -DefaultEventNotificationPrefix $logsPath -IsCustomLog $true 
  
 # Output information needed to configure Sentinel data connector
