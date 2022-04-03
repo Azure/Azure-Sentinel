@@ -3,7 +3,7 @@
 # Validate AWS configuration
 Test-AwsConfiguration
 
-Write-Log -Message "Starting C data connector configuration script" -LogFileName $LogFileName -Severity Verbose
+Write-Log -Message "Starting data connector configuration script" -LogFileName $LogFileName -Severity Verbose
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
 Write-ScriptNotes
 
@@ -15,11 +15,6 @@ Write-Log -Message $roleArn -LogFileName $LogFileName -Severity Verbose
 
 # Create S3 bucket for storing logs
 New-S3Bucket
-
-Write-Log -Message "Executing: (aws sts get-caller-identity | ConvertFrom-Json).Account" -LogFileName $LogFileName -Severity Verbose
-$callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
-Write-Log -Message $callerAccount -LogFileName $LogFileName -Severity Verbose
-
 
 New-SQSQueue
 Write-Log -Message "Executing: ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl" -LogFileName $LogFileName -Severity Verbose
@@ -34,7 +29,7 @@ $customMessage = "Changes S3: Set notifications"
 $s3RequiredPolicy = Get-RoleS3Policy -RoleArn $roleArn -BucketName $bucketName
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
- $script:logsPath = Read-ValidatedHost -Prompt "Please enter S3 objects full path"
+ $logsPath = Read-ValidatedHost -Prompt "Please enter S3 objects full path"
 $eventNotificationPrefix = Enable-S3EventNotification -DefaultEventNotificationPrefix $logsPath -IsCustomLog $true 
  
 # Output information needed to configure Sentinel data connector

@@ -75,7 +75,7 @@ switch ($AwsLogType)
     "VPC" {.\ConfigVpcFlowDataConnector.ps1; break}
     "CloudTrail" {.\ConfigCloudTrailDataConnector.ps1 ; break }
     "GuardDuty" {.\ConfigGuardDutyDataConnector.ps1 ; break }
-	"CustomLog" {.\ConfigCustomLogDataConnector.ps1 ; break }
+    "CustomLog" {.\ConfigCustomLogDataConnector.ps1 ; break }
     default {Write-Log -Message "Invalid log type" -LogFileName $LogFileName -Severity Error; exit}
 }
 

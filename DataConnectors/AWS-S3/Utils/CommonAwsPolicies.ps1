@@ -127,59 +127,38 @@ param (
 	[bool]
 	$IsCustomLog
 )  
+	$SqsSuffix = ""
 
-	if($true -eq $IsCustomLog)
+	if($true -ne $IsCustomLog)
 	{
-		$sqsEventConfig = "
-	{
-		'QueueConfigurations': [
-				{
-				'Id':'$EventNotificationName',
-				'QueueArn': '$SqsArn',
-				'Events': ['s3:ObjectCreated:*'],
-				'Filter': {
-					'Key': {
-					'FilterRules': [
-						{
-						'Name': 'prefix',
-						'Value': '$EventNotificationPrefix'
-						}
-					]
-					}
-				}
-				}
-			]
-		}"
-	}
-
-	else
-	{
-		$sqsEventConfig = "
-	{
-		'QueueConfigurations': [
-				{
-				'Id':'$EventNotificationName',
-				'QueueArn': '$SqsArn',
-				'Events': ['s3:ObjectCreated:*'],
-				'Filter': {
-					'Key': {
-					'FilterRules': [
-						{
-						'Name': 'prefix',
-						'Value': '$EventNotificationPrefix'
-						},
-						{
+		$SqsSuffix = ",{
 						'Name': 'suffix',
 						'Value': '.gz'
+						}"
+	}
+
+
+	$sqsEventConfig = "
+	{
+		'QueueConfigurations': [
+				{
+				'Id':'$EventNotificationName',
+				'QueueArn': '$SqsArn',
+				'Events': ['s3:ObjectCreated:*'],
+				'Filter': {
+					'Key': {
+					'FilterRules': [
+						{
+						'Name': 'prefix',
+						'Value': '$EventNotificationPrefix'
 						}
+						$SqsSuffix
 					]
 					}
 				}
 				}
 			]
-		}"
-
-	}
+	}"
 
 	return $sqsEventConfig.Replace("'",'"')
 }
