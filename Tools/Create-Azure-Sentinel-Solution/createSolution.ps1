@@ -659,7 +659,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $dataConnectorMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2021-03-01-preview";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('dataConnectorVersion$connectorCounter')))]";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId$connectorCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     parentId  = "[variables('_parentId')]";
                                     contentId = "[variables('_dataConnectorContentId$connectorCounter')]";
@@ -1243,7 +1243,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     # elseif($objectKeyLowercase -eq "parser") {
                         # Assume file is Parser due to parsers having inconsistent types. (.txt, .kql, or none)
                         Write-Host "Generating Data Parser using $file"
-                        if ($parserCounter -eq 1 -and $null -eq $baseMainTemplate.variables.'workspace-dependency') {
+                        if ($parserCounter -eq 1 -and $null -eq $baseMainTemplate.variables.'workspace-dependency' -and $contentToImport.TemplateSpec) {
                             # Add parser dependency variable once to ensure validation passes.
                             $baseMainTemplate.variables | Add-Member -MemberType NoteProperty -Name "workspace-dependency" -Value "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]"
                         }
