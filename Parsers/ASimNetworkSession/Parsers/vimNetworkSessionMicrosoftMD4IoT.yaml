@@ -48,32 +48,42 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
   let DirectionNetworkEvents =
     SecurityIoTRawEvent | where not(disabled)
+    | where RawEventName == "NetworkActivity"
     // ***************  Prefilterring *****************************************************************
     |where 
         (eventresult=='*' or eventresult=='Success')
         and (array_length(hostname_has_any)==0) 
         and (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
         and (isnull(starttime) or TimeGenerated>=starttime) 
-        and (isnull(endtime) or TimeGenerated<=endtime) 
-        and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
-        and (array_length(ipaddr_has_any_prefix)==0 
-             or has_any_ipv4_prefix(RemoteAddress,ipaddr_has_any_prefix)
-             or has_any_ipv4_prefix(LocalAddress ,ipaddr_has_any_prefix)
-            ) 
-        and (array_length(srcipaddr_has_any_prefix)==0 
-             or has_any_ipv4_prefix(RemoteAddress,srcipaddr_has_any_prefix)
-             or has_any_ipv4_prefix(LocalAddress ,srcipaddr_has_any_prefix)
-            ) 
-        and (array_length(dstipaddr_has_any_prefix)==0 
-             or has_any_ipv4_prefix(RemoteAddress,dstipaddr_has_any_prefix)
-             or has_any_ipv4_prefix(LocalAddress ,dstipaddr_has_any_prefix)
-            ) 
-    // *************** Prefilterring *****************************************************************
-    | where RawEventName == "NetworkActivity"
+        and (isnull(endtime) or TimeGenerated<=endtime)
+        and EventDetails has dstportnumber  
+        // *************** Prefilterring *****************************************************************
     | parse EventDetails with * ',"LocalPort":' LocalPort:int ',"RemotePort":' RemotePort:int ',' *
     | extend outbound = LocalPort > RemotePort
+    | where (isnull(dstportnumber) or (not(outbound) and dstportnumber == LocalPort) or (outbound and dstportnumber == RemotePort) ) 
+    | extend temp_isSrcMatch=( // only one of each pair has_any_ipv4_prefix is calculated
+                    (outbound and has_any_ipv4_prefix(LocalIP,src_or_any)
+                    or
+                    (not(outbound) and has_any_ipv4_prefix(RemoteIP,src_or_any)
+                    ) 
+           , temp_isDstMatch=(
+                    (not(outbound) and has_any_ipv4_prefix(LocalIP,dst_or_any)
+                    or
+                    (outbound and has_any_ipv4_prefix(RemoteIP,dst_or_any)
+                    ) 
+      | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+    ) 
+    | where ASimMatchingIpAddr != "No match"
+    | project-away temp_*
     ;
     let parser = (T: (EventDetails: string)) {
       T 
@@ -158,10 +168,6 @@ ParserQuery: |
         EventEndTime = TimeGenerated,  // Open question about timestamps
         EventResult = 'Success',
         EventSeverity = 'Informational',
-        ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"-",
-                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
-                                  "DstIpAddr"
-                              )
       | project-rename
         EventProductVersion = AgentVersion, // Not available in Windows
         _ResourceId = AssociatedResourceId, 
