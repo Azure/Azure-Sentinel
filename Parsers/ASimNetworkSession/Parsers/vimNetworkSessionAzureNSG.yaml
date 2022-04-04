@@ -72,33 +72,37 @@ ParserQuery: |
         eventresult:string='*', 
         disabled:bool=false)
   {
-    let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM2_s:string)) { 
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM2_s:string, VM1_s:string, VM2_s:string)) { 
       T
-      | extend ASimMatchingIpAddr = case(
-          array_length(ipaddr_has_any_prefix) == 0 ,"-",
-          has_any_ipv4_prefix(SrcIP_s,ipaddr_has_any_prefix), "SrcIpAddr",
-          has_any_ipv4_prefix(SrcPublicIPs_s,ipaddr_has_any_prefix), "SrcIpAddr",
-          has_any_ipv4_prefix(DestIP_s,ipaddr_has_any_prefix), "DstIpAddr", 
-          has_any_ipv4_prefix(DestPublicIPs_s,ipaddr_has_any_prefix) , "DstIpAddr",
-          "No match"
-          ),
-          ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"_",
-                                  VM1_s has_any (hostname_has_any), "SrcHostname",
-                                  VM2_s has_any (hostname_has_any), "DstHostname",
-                                  "No match"
-                                )
       | where
         (isnull(starttime) or TimeGenerated >= starttime)
         and  (isnull(endtime) or TimeGenerated <= endtime)
         and  (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) 
-        and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIP_s ,srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcPublicIPs_s ,srcipaddr_has_any_prefix)) 
-        and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestIP_s ,dstipaddr_has_any_prefix) or has_any_ipv4_prefix(DestPublicIPs_s ,dstipaddr_has_any_prefix))
-        and  ( ASimMatchingIpAddr  != "No match")
-        and  ( ASimMatchingHostname != "No match")
+      | extend dataSrcIPs = pack_array(SrcIP_s,SrcPublicIPs_s),
+               dataDstIPs = pack_array(DestIP_s,DestPublicIPs_s)
+      | extend isSrcMatch=has_any_ipv4_prefix(dataSrcIPs,src_or_any)
+             , isDstMatch=has_any_ipv4_prefix(dataDstIPs,dst_or_any)
+      | where isSrcMatch or isDstMatch
+      | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (isSrcMatch and isDstMatch), "Both" // has to be checked before the individual 
+            , isSrcMatch, "SrcIpAddr"
+            , isDstMatch, "DstIpAddr"
+            , "No match"
+          )
+      | extend
+          ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"-",
+                                  VM1_s has_any (hostname_has_any), "SrcHostname",
+                                  VM2_s has_any (hostname_has_any), "DstHostname",
+                                  "No match"
+                                )
+      | where ASimMatchingHostname != "No match"
       | lookup DvcActionLookup on FlowStatus_s
       | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
       | where (eventresult=='*' or EventResult == eventresult)
-    };
+    }; // prefilter ends
     let AzureNetworkAnalytics = 
       AzureNetworkAnalytics_CL
       | where not(disabled) and isnotempty(FlowType_s)
@@ -133,9 +137,9 @@ ParserQuery: |
       | project-rename
           SrcMacAddr = MACAddress_s
       | extend
-          SrcBytes = tolong(OutboundBytes_d), 
+          SrcBytes   = tolong(OutboundBytes_d), 
           SrcPackets = tolong(OutboundPackets_d),
-          DstBytes = tolong(InboundBytes_d),
+          DstBytes   = tolong(InboundBytes_d),
           DstPackets = tolong(InboundPackets_d),
           DstInterfaceName = split(NIC_s, '/')[1],
           DstGeoCountry = toupper(Country_s)
@@ -197,7 +201,8 @@ ParserQuery: |
         Duration,
         SessionId,
         _ResourceId,
-        TimeGenerated
+        TimeGenerated,
+        ASim*
     | project-away *_s
   };
   parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

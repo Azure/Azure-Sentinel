@@ -78,6 +78,7 @@ ParserQuery: |
         eventresult:string='*', 
         disabled:bool=false)
   {
+      let filtered_IPs=set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
       let AzureFirewallNetworkRuleLogs = 
           AzureDiagnostics
           | where not(disabled)
@@ -86,21 +87,12 @@ ParserQuery: |
       let prefilter = (T: (msg_s:string, TimeGenerated:datetime, OperationName:string)) {
         T | where  
         (array_length(hostname_has_any) == 0)
-         and (isnull(starttime) or TimeGenerated>=starttime) 
-         and (isnull(endtime) or TimeGenerated<=endtime) 
-         and (
-            array_length(ipaddr_has_any_prefix)==0 
-            or has_any_ipv4_prefix(msg_s,ipaddr_has_any_prefix)
+         and (isnull(starttime) or TimeGenerated >= starttime) 
+         and (isnull(endtime)   or TimeGenerated <= endtime) 
+         and (isnull(dstportnumber) or msg_s has (tostring(dstportnumber)))
+         and (array_length(filtered_IPs)==0 
+            or has_any_ipv4_prefix(msg_s,filtered_IPs)
           ) 
-         and (
-            array_length(srcipaddr_has_any_prefix)==0 
-            or has_any_ipv4_prefix(msg_s,srcipaddr_has_any_prefix)
-          ) 
-          and (
-            array_length(dstipaddr_has_any_prefix)==0 
-            or has_any_ipv4_prefix(msg_s,dstipaddr_has_any_prefix)
-          ) 
-          and (isnull(dstportnumber) or msg_s has (tostring(dstportnumber))) 
       };
       let AzureFirewallSessionLogs = 
           AzureFirewallNetworkRuleLogs
