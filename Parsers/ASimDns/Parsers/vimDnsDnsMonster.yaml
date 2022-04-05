@@ -59,11 +59,12 @@ ParserQuery: |
     ) {
     dnsmonster_CL | where not(disabled)
     | where DNS_Response_b
+        and (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
     | extend DNS_Question = todynamic(DNS_Question_s), DNS_Answer = todynamic(DNS_Answer_s)
-    | mv-expand DNS_Question
     | mv-expand DNS_Answer
     | extend EventType = opcodes[toint(DNS_Opcode_d)],
-        EventSubType = "request",
+        EventSubType = "response",
         EventResultDetails = rcodes[toint(DNS_Opcode_d)],
         EventSchemaVersion = "0.1.3",
         EventSchema = "Dns",
@@ -73,18 +74,20 @@ ParserQuery: |
         DstPortNumber = DstPort_d,
         DnsQuery = DNS_Question.Name,
         DnsQueryType = DNS_Question.Qtype,
-        DnsQueryTypeName = rrcodes[toint(DNS_Question.Qtype)],
-        DnsQueryClass = DNS_Question.Qclass,
+        DnsQueryTypeName = rrcodes[toint(DNS_Question[0].Qtype)],
+        DnsQueryClass = DNS_Question[0].Qclass,
         NetworkProtocol = Protocol_s,
         DnsFlagsAuthenticated = DNS_AuthenticatedData_b,
         DnsFlagsAuthoritative = DNS_Authoritative_b,
         DnsFlagsCheckingDisabled = DNS_CheckingDisabled_b,
         DnsFlagsRecursionAvailable = DNS_RecursionAvailable_b,
         DnsFlagsRecursionDesired = DNS_RecursionDesired_b,
-        DnsFlagsTrucated = DNS_Truncated_b
-    | where (isnull(starttime) or TimeGenerated >= starttime)
-        and (isnull(endtime) or TimeGenerated <= endtime)
-        and (srcipaddr=='*' or SrcIP_s==srcipaddr)
+        DnsFlagsTrucated = DNS_Truncated_b,
+        DnsResponseName = DNS_Answer_s
+    // Aliases
+    | extend Domain = DnsQuery,
+        DnsResponseCodeName = EventResultDetails
+    | where (srcipaddr=='*' or SrcIP_s==srcipaddr)
         and (response_has_ipv4=='*' or ipv4_is_in_range(tostring(DNS_Answer.A),response_has_ipv4))
         and (array_length(response_has_any_prefix) ==0 or has_ipv4_prefix(response_has_any_prefix,tostring(DNS_Answer.A)))         
         and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
@@ -92,6 +95,7 @@ ParserQuery: |
         and (eventtype == "*" or eventtype == EventType or (eventtype == "lookup" and EventType == "Query"))
     | project EventType, EventSubType, EventResultDetails, EventSchemaVersion, EventSchema, Src, SrcPortNumber, Dst, DstPortNumber,
         DnsQuery, DnsQueryType, DnsQueryTypeName, DnsQueryClass, NetworkProtocol,
-        DnsFlagsAuthenticated, DnsFlagsAuthoritative, DnsFlagsCheckingDisabled, DnsFlagsRecursionAvailable, DnsFlagsRecursionDesired, DnsFlagsTrucated
+        DnsFlagsAuthenticated, DnsFlagsAuthoritative, DnsFlagsCheckingDisabled, DnsFlagsRecursionAvailable, DnsFlagsRecursionDesired, DnsFlagsTrucated,
+        DnsResponseName, Domain, DnsResponseCodeName
   };
   parser (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)
