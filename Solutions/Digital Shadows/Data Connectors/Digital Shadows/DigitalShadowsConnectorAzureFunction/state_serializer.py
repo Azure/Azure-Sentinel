@@ -10,14 +10,14 @@ from . import constant
 logger = logging.getLogger("state_serializer")
 
 class State:
-    def __init__(self, connection_string, share_name = constant.SHARE_NAME, file_path = constant.FILE_PATH):
+    def __init__(self, connection_string, share_name):
         """ 
             initializes the parameters required to create file and upload and download it from fileshare 
         """
 
         self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
-        self.file_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=file_path)
-        self.file_event_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=constant.FILE_EVENT_PATH)
+        self.file_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=constant.FILE_LAST_POLL_TIME)
+        self.file_event_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=constant.FILE_LAST_EVENT_NUMBER)
 
     def post(self, marker_text: str):
         """ 

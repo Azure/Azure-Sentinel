@@ -1,4 +1,5 @@
 """ handles all DS api related functions """
+from distutils.log import error
 import logging
 import requests
 import base64
@@ -47,14 +48,15 @@ class api:
         response.raise_for_status()
         return response.json()
 
-    def get_triage_events(self, before_date, after_date):
+    def get_triage_events(self, before_date, after_date, classification_filter_operation, classification_list):
         """ 
             function for getting triage events,
             send only the DS converted dates using state serializer functions to get triage events
         """
-        params = {"limit": 20, "event-created-before": str(before_date), "event-created-after": str(after_date)}
-        triage_url = self.url + "triage-item-events"
+        params = self._get_classification_list(classification_filter_operation, classification_list)
+        triage_url = self.url + "triage-item-events?limit=20&event-created-before=" + str(before_date) + "&event-created-after=" +  str(after_date)
         response = self.session.get(triage_url, params=params)
+        logger.info("Response for url: %s \t is : %s" % (triage_url, response.text))
         response.raise_for_status()
         return response.json()
 
@@ -65,7 +67,6 @@ class api:
 
         items_url = self.url + "triage-items"
         params = dict(id=triage_ids)
-        params['limit'] = 1000
         response = self.session.get(items_url, params=params)
         response.raise_for_status()
         return response.json()
@@ -80,12 +81,26 @@ class api:
         response.raise_for_status()
         return response.json()
     
-    def get_triage_events_by_num(self, event):
+    def get_triage_events_by_num(self, event, classification_filter_operation, classification_list):
         """
             gets triage events by number
         """
-        params = {"limit": 20, "event-num-after": str(event)}
-        triage_url = self.url + "triage-item-events" 
+        triage_url = self.url + "triage-item-events?limit=20&event-num-after=" + str(event)
+        params = self._get_classification_list(classification_filter_operation, classification_list)
         response = self.session.get(triage_url, params=params)
-        response.raise_for_status()
         return response.json()
+
+    def _get_classification_list(self, classification_filter_operation, classification_list):
+        params = None
+        if classification_filter_operation == "include" and len(classification_list) > 0:
+            params = {
+                "classification": classification_list
+            }
+        elif classification_filter_operation == "exclude" and len(classification_list) > 0:
+            params = {
+                "classification-exclusion": classification_list,
+            }
+        else:
+            raise Exception("Invalid Classification Filter Operation: %s. Valid operations can be one of (include, exclude)" % classification_filter_operation)
+        return params
+        

@@ -56,7 +56,7 @@ class logs_api:
             'x-ms-date': rfc1123date
         }
 
-        response = requests.post(uri,data=body, headers=headers)
+        response = requests.post(uri, data=body, headers=headers)
         
         response.raise_for_status()
         logger.info('Accepted')

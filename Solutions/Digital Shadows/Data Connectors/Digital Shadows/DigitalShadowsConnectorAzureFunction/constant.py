@@ -1,6 +1,5 @@
 LOG_NAME = "DigitalShadows"
 DAYS = 5
 MINUTE = 15                                 #buffer time for current time
-SHARE_NAME = 'funcstatemarkershare'
-FILE_PATH = 'funcstatemarkerfile'
-FILE_EVENT_PATH = 'funceventstatemarkerfile'
+FILE_LAST_POLL_TIME = 'last_polled_time'
+FILE_LAST_EVENT_NUMBER = 'last_polled_event_number'

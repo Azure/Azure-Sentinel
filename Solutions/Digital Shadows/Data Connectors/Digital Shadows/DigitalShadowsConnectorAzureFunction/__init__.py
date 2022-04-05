@@ -15,6 +15,9 @@ secret = os.environ['DigitalShadowsSecret']
 connection_string = os.environ['AzureWebJobsStorage']
 historical_days = os.environ['HistoricalDays']
 url = os.environ['DigitalShadowsURL']
+classification_filter_operation = os.environ['ClassificationFilterOperation']
+high_variability_classifications = os.environ['HighVariabilityClassifications']
+function_name = os.environ['FUNCTION_NAME']
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -22,10 +25,11 @@ def main(mytimer: func.TimerRequest) -> None:
         tzinfo=datetime.timezone.utc).isoformat()
 
     if mytimer.past_due:
-        logger.info('The timer is past due!')
+        logging.info('The timer is past due!')
 
-    logger.info('Python timer trigger function ran at %s', utc_timestamp)
+    logging.info('Python timer trigger function ran at %s', utc_timestamp)
     
-    DSobj = DS_poller.poller(account_id, key, secret, customer_id, shared_key, connection_string, historical_days, url)
-    
-    DSobj.poll()
+    DSobj = DS_poller.poller(function_name, account_id, key, secret, customer_id, shared_key, connection_string, historical_days, url)
+    classification_list = high_variability_classifications.split(",")
+
+    DSobj.poll(classification_filter_operation, classification_list)
