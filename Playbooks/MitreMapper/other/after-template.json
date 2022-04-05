@@ -1,0 +1,986 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Mitre_Mappings",
+            "type": "String"
+        },
+        "SubscriptionID": {
+            "defaultValue": "Enter your subscription ID.",
+            "type": "string"
+        },
+        "WorkspaceResourceGroup": {
+            "defaultValue": "Enter workspace resource group name.",
+            "type": "string"
+        },
+        "WorkspaceName": {
+            "defaultValue": "Enter Azure Sentinel workspace name.",
+            "type": "string"
+        },
+        "WorkspaceID": {
+            "defaultValue": "Enter Azure Sentinel workspace ID.",
+            "type": "string"
+        }
+    }, 
+    "variables": {
+        "azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "azuremonitorlogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "properties": {
+                "customParameterValues": {},
+                "displayName": "[variables('azuremonitorlogsConnectionName')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                    }
+                },
+                "location": "[resourceGroup().location]",
+                "type": "Microsoft.Web/connections",
+                "kind": "V1"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinelConnectionName')]",
+            "properties": {
+                "customParameterValues": {},
+                "displayName": "[variables('azuresentinelConnectionName')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                    }
+                },
+                "location": "[resourceGroup().location]",
+                "type": "Microsoft.Web/connections",
+                "kind": "V1"
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+                ],
+            "tags": {
+                "displayName": "$safeitemname$"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)_2": {
+                            "runAfter": {
+                                "Delay_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "arm@{body('Alert_-_Get_incident')?['id']}",
+                                    "message": "<p>Technique Name: @{variables('TechniqueName')}<br>\nTechnique Description:<br>\n@{variables('TechniqueDescription')}<br>\nhttps://attack.mitre.org/techniques/@{variables('Technique')}<br>\nMitre Shield Values:<br>\n(replace with dte names and descriptions)<br>\n@{variables('all_dtes')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Alert_-_Get_incident": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "DOS": {
+                            "runAfter": {
+                                "Update_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let attack = _GetWatchlist('attack');\nattack\n|where Technique==\"@{variables('Technique')}\"\n|extend dte=Defense\n|project dte",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                    "timerange": "Last hour"
+                                }
+                            }
+                        },
+                        "DOSDescriptions": {
+                            "runAfter": {
+                                "DPRDescriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DOSDescriptions",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "DOS_comments": {
+                            "runAfter": {
+                                "DUC_comments": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                    "message": "<p>Mitre DOS:<br>\n@{variables('DOSDescriptions')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "DPR": {
+                            "runAfter": {
+                                "Update_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let attack = _GetWatchlist('attack');\nattack\n|where Technique==\"@{variables('Technique')}\"\n|extend dte=Defense\n|project dte",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                    "timerange": "Last hour"
+                                }
+                            }
+                        },
+                        "DPRDescriptions": {
+                            "runAfter": {
+                                "all_dtes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DPRDescriptions",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "DPR_comments": {
+                            "runAfter": {
+                                "Add_comment_to_incident_(V3)_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                    "message": "<p>Mitre DPR:<br>\n@{variables('DPRDescriptions')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "DUC": {
+                            "runAfter": {
+                                "Update_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let attack = _GetWatchlist('attack');\nattack\n|where Technique==\"@{variables('Technique')}\"\n|extend dte=Defense\n|project dte",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                    "timerange": "Last hour"
+                                }
+                            }
+                        },
+                        "DUCDescriptions": {
+                            "runAfter": {
+                                "DOSDescriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DUCDescriptions",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "DUC_comments": {
+                            "runAfter": {
+                                "DPR_comments": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                    "message": "<p>Mitre DUC:<br>\n@{variables('DUCDescriptions')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Delay": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Wait",
+                            "inputs": {
+                                "interval": {
+                                    "count": 5,
+                                    "unit": "Second"
+                                }
+                            }
+                        },
+                        "Delay_2": {
+                            "runAfter": {
+                                "For_each_9": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Wait",
+                            "inputs": {
+                                "interval": {
+                                    "count": 30,
+                                    "unit": "Second"
+                                }
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON')",
+                            "actions": {
+                                "Append_to_string_variable_7": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Technique",
+                                        "value": "@items('For_each')?['Url']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Delay": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 20
+                                }
+                            }
+                        },
+                        "For_each_10": {
+                            "foreach": "@body('Parse_JSON_7')",
+                            "actions": {
+                                "For_each_8": {
+                                    "foreach": "@body('Parse_JSON_6')",
+                                    "actions": {
+                                        "Append_to_string_variable_3": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "DUCDescriptions",
+                                                "value": "@items('For_each_8')['DUCDescription']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_6": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "NOTE_added_limit_so_DUCDescriptions_dont_exceed_3k_characters": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "let shield=_GetWatchlist('mitre_shield');\nshield\n|where DTE==\"@{items('For_each_10')['dte']}\"\n|project DUCDescription |where DUCDescription <> \"\"\n|limit 5",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                            "timerange": "Last hour"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON_6": {
+                                    "runAfter": {
+                                        "NOTE_added_limit_so_DUCDescriptions_dont_exceed_3k_characters": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('NOTE_added_limit_so_DUCDescriptions_dont_exceed_3k_characters')?['value']",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "DUCDescription": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "DUCDescription"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_7": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_2": {
+                            "foreach": "@body('Parse_JSON_3')",
+                            "actions": {
+                                "Append_to_string_variable_4": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "TechniqueName",
+                                        "value": "@items('For_each_2')['TechniqueName']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_4": {
+                            "foreach": "@body('Parse_JSON_3')",
+                            "actions": {
+                                "Append_to_string_variable_6": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "TechniqueDescription",
+                                        "value": "@items('For_each_4')['TechniqueDescription']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_5": {
+                            "foreach": "@body('Parse_JSON_8')",
+                            "actions": {
+                                "For_each_3": {
+                                    "foreach": "@body('Parse_JSON_4')",
+                                    "actions": {
+                                        "Append_to_string_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "DPRDescriptions",
+                                                "value": "@items('For_each_3')['DPRDescription']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_4": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_JSON_4": {
+                                    "runAfter": {
+                                        "Run_query_and_list_results_5": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_query_and_list_results_5')?['value']",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "DPRDescription": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "DPRDescription"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                },
+                                "Run_query_and_list_results_5": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "let shield=_GetWatchlist('mitre_shield');\nshield\n|where DTE==\"@{items('For_each_5')['dte']}\"\n|project DPRDescription |where DPRDescription <> \"\"\n|limit 5",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                            "timerange": "Last hour"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_8": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_6": {
+                            "foreach": "@body('Parse_JSON_2')",
+                            "actions": {
+                                "For_each_7": {
+                                    "foreach": "@body('Parse_JSON_5')",
+                                    "actions": {
+                                        "Append_to_string_variable_2": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "DOSDescriptions",
+                                                "value": "@items('For_each_7')['DOSDescription']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_5": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_JSON_5": {
+                                    "runAfter": {
+                                        "Run_query_and_list_results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_query_and_list_results')?['value']",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "DOSDescription": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "DOSDescription"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                },
+                                "Run_query_and_list_results": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "let shield=_GetWatchlist('mitre_shield');\nshield\n|where DTE==\"@{items('For_each_6')?['dte']}\"\n|project DOSDescription |where DOSDescription <> \"\"\n|limit 5",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                            "resourcename": "[parameters('WorkspaceName')]",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "[parameters('SubscriptionID')]",
+                                            "timerange": "Last hour"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_9": {
+                            "foreach": "@body('Parse_JSON_9')",
+                            "actions": {
+                                "Append_to_string_variable_5": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "all_dtes",
+                                        "value": "https://shield.mitre.org/techniques/@{items('For_each_9')['dte']}<br>"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_9": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "TechniqueName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TechniqueDescription",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['Entities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "$id": {
+                                                "type": "string"
+                                            },
+                                            "Address": {
+                                                "type": "string"
+                                            },
+                                            "Name": {
+                                                "type": "string"
+                                            },
+                                            "Type": {
+                                                "type": "string"
+                                            },
+                                            "Url": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "$id",
+                                            "Type"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Parse_JSON_2": {
+                            "runAfter": {
+                                "DOS": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('DOS')?['value']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "dte": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "dte"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Parse_JSON_3": {
+                            "runAfter": {
+                                "get_technique_and_description": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('get_technique_and_description')?['value']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "TechniqueDescription": {
+                                                "type": "string"
+                                            },
+                                            "TechniqueName": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "TechniqueName",
+                                            "TechniqueDescription"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Parse_JSON_7": {
+                            "runAfter": {
+                                "DUC": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('DUC')?['value']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "dte": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "dte"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Parse_JSON_8": {
+                            "runAfter": {
+                                "DPR": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('DPR')?['value']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "dte": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "dte"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Parse_JSON_9": {
+                            "runAfter": {
+                                "Run_query_and_list_results_66": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Run_query_and_list_results_66')?['value']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "dte": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "dte"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_66": {
+                            "runAfter": {
+                                "Update_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let attack=_GetWatchlist('attack');\nSecurityAlert\n|extend Severity = \"@{variables('Technique')}\"\n|join attack on $left.Severity == $right.Technique\n|extend dte=Defense\n|distinct dte",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                    "timerange": "Last hour"
+                                }
+                            }
+                        },
+                        "Technique": {
+                            "runAfter": {
+                                "DUCDescriptions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Technique",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "TechniqueName": {
+                            "runAfter": {
+                                "Technique": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TechniqueName",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Update_incident": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                    "tagsToAdd": {
+                                        "TagsToAdd": [
+                                            {
+                                                "Tag": "@variables('Technique')"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/Incidents"
+                            }
+                        },
+                        "all_dtes": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "all_dtes",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "get_technique_and_description": {
+                            "runAfter": {
+                                "Update_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "let attack=_GetWatchlist('attack');\nattack\n|where Technique==\"@{variables('Technique')}\"\n|project TechniqueName, TechniqueDescription\n|top 1 by TechniqueName",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                    "timerange": "Last hour"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('azuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

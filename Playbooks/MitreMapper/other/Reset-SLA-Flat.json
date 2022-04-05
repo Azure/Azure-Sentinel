@@ -1,0 +1,253 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Reset-SLA-Flat",
+            "type": "String"
+        },
+        "SubscriptionID": {
+            "defaultValue": "Enter your subscription ID.",
+            "type": "string"
+        },
+        "WorkspaceResourceGroup": {
+            "defaultValue": "Enter workspace resource group name.",
+            "type": "string"
+        },
+        "WorkspaceName": {
+            "defaultValue": "Enter Azure Sentinel workspace name.",
+            "type": "string"
+        },
+        "WorkspaceID": {
+            "defaultValue": "Enter Azure Sentinel workspace ID.",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "azuremonitorlogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "properties": {
+                "customParameterValues": {},
+                "displayName": "[variables('azuremonitorlogsConnectionName')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                    }
+                },
+                "location": "[resourceGroup().location]",
+                "type": "Microsoft.Web/connections",
+                "kind": "V1"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinelConnectionName')]",
+            "properties": {
+                "customParameterValues": {},
+                "displayName": "[variables('azuresentinelConnectionName')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                    }
+                },
+                "location": "[resourceGroup().location]",
+                "type": "Microsoft.Web/connections",
+                "kind": "V1"
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+                ],
+            "tags": {
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    },
+                    "ResouceGroupName": {
+                        "defaultValue": "[parameters('WorkspaceResourceGroup')]",
+                        "type": "String"
+                    },
+                    "SubscriptionID": {
+                        "defaultValue": "[parameters('SubscriptionID')]",
+                        "type": "String"
+                    },
+                    "WorkspaceID": {
+                        "defaultValue": "[parameters('WorkspaceID')]",
+                        "type": "String"
+                    }
+                },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 4
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 4
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Run_query_and_list_results')?['value']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Alert_-_Get_incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "message": "<p>SLA of 4 hours missed. Unassigning and setting new SLA of 2 hours.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Alert_-_Get_incident": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/Incidents/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('ResouceGroupName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceID'))}/alerts/@{encodeURIComponent(items('For_each')?['SystemAlertId'])}"
+                                    }
+                                },
+                                "Update_incident": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "owner": "@{body('Alert_-_Get_incident')?['properties']?['owner']}",
+                                            "ownerAction": "Unassign",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "SLAMissed"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SLAWindow",
+                                        "type": "integer",
+                                        "value": -4
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "SecurityAlert\n| where isnotempty(SystemAlertId)\n| extend AlertId = tostring(SystemAlertId)\n| join kind=inner (\nSecurityIncident\n| where Status == 'New'\n| where CreatedTime == LastModifiedTime\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\n| where LastModifiedTime between(datetime(@{formatDateTime(addHours(utcNow(),add(int(variables('SLAWindow')),-1)))}) .. datetime(@{formatDateTime(addHours(utcNow(),variables('SLAWindow')))}) )\n| where isnotempty(AlertIds)\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)) on AlertId\n| project-away AlertId1, Type1, SourceSystem1",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('WorkspaceResourceGroup')]",
+                                    "resourcename": "[parameters('WorkspaceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[parameters('SubscriptionID')]",
+                                    "timerange": "Set in query"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]",
+                                "connectionName": "[variables('azuremonitorlogs')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
