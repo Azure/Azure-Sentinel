@@ -10,6 +10,12 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceRegistryEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents  
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -30,6 +36,16 @@ query: |
   SecurityEvent
   | where EventID == 4657
   | where ObjectName has_any (reg_paths) and ObjectValueName has_any (reg_keys)
+  | summarize Count=count() by Computer, Account, ObjectName
+  | extend AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+  WindowsEvent
+  | where EventID == 4657 and EventData  has_any (reg_paths) and EventData has_any (reg_keys)
+  | extend ObjectName = tostring(EventData.ObjectName)
+  | extend ObjectValueName = tostring(EventData.ObjectValueName)
+  | where ObjectName has_any (reg_paths) and ObjectValueName has_any (reg_keys)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
   | summarize Count=count() by Computer, Account, ObjectName
   | extend AccountCustomEntity = Account, HostCustomEntity = Computer
   ),

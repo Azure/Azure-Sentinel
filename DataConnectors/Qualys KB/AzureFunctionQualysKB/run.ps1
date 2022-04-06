@@ -1,4 +1,4 @@
-<#  
+<#
     Title:          Qualys KnowledgeBase (KB) Data Connector
     Language:       PowerShell
     Version:        1.0
@@ -7,8 +7,8 @@
     Comment:        Initial Release
 
     DESCRIPTION
-    This Function App calls the Qualys Vulnerability Management (VM) - KnowledgeBase (KB) API (https://www.qualys.com/docs/qualys-api-vmpc-user-guide.pdf) to pull vulnerability data from the Qualys KB. 
-    The response from the Qualys API is recieved in XML format. This function will build the signature and authorization header 
+    This Function App calls the Qualys Vulnerability Management (VM) - KnowledgeBase (KB) API (https://www.qualys.com/docs/qualys-api-vmpc-user-guide.pdf) to pull vulnerability data from the Qualys KB.
+    The response from the Qualys API is recieved in XML format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. This Function App will the vulnerability records to the QualysKB_CL table in Azure Sentinel/Log Analytics
 #>
 
@@ -40,16 +40,16 @@ function Html-ToText {
     $html = $html -replace "( )+", " "
 
     # Add line breaks
-    @('div','p','blockquote','h[1-9]') | % { $html = $html -replace "</?$_[^>]*?>.*?</$_>", ("`n" + '$0' )} 
+    @('div','p','blockquote','h[1-9]') | % { $html = $html -replace "</?$_[^>]*?>.*?</$_>", ("`n" + '$0' )}
 
     # Add line breaks for self-closing tags
-    @('div','p','blockquote','h[1-9]','br') | % { $html = $html -replace "<$_[^>]*?/>", ('$0' + "`n")} 
+    @('div','p','blockquote','h[1-9]','br') | % { $html = $html -replace "<$_[^>]*?/>", ('$0' + "`n")}
 
-    #strip tags 
+    #strip tags
     $html = $html -replace "<[^>]*?>", ""
 
     # replace common entities
-    @( 
+    @(
     @("&amp;bull;", " * "),
     @("&amp;lsaquo;", "<"),
     @("&amp;rsaquo;", ">"),
@@ -71,18 +71,18 @@ function Html-ToText {
 }
  # Function to retrieve the checkpoint start time of the last successful API call for a given logtype. Checkpoint file will be created if none exists
 function GetStartTime($CheckpointFile, $timeInterval){
-   
+
     $firstStartTimeRecord = [datetime]::UtcNow.AddMinutes(-$timeInterval).ToString("yyyy-MM-ddTHH:mm:ssZ")
-    
+
     if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
         $CheckpointLog = @{}
-        $CheckpointLog.Add('LastSuccessfulTime', $firstStartTimeRecord)        
+        $CheckpointLog.Add('LastSuccessfulTime', $firstStartTimeRecord)
         $CheckpointLog.GetEnumerator() | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-        return $firstStartTimeRecord 
+        return $firstStartTimeRecord
     }
     else {
         $GetLastRecordTime = Import-Csv -Path $CheckpointFile
-        $startTime = $GetLastRecordTime | ForEach-Object{ 
+        $startTime = $GetLastRecordTime | ForEach-Object{
                         if($_.Key -eq 'LastSuccessfulTime'){
                             $_.Value
                         }
@@ -108,7 +108,7 @@ function UrlValidation{
 }
 
 function QualysKB {
-   
+
     $cwd = (Get-Location).Drive.Root
     $CheckpointFile = "$($cwd)home\site\QualysKBCheckpoint.csv"
     $endTime = [datetime]::UtcNow
@@ -125,7 +125,7 @@ function QualysKB {
     {
         $logAnalyticsUri = "https://" + $customerId + ".ods.opinsights.azure.com"
     }
-    
+
     # Returning if the Log Analytics Uri is in incorrect format.
     # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
     if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
@@ -139,104 +139,128 @@ function QualysKB {
         Write-Output "ERROR: Invalid URI format detected. Validated URI format before next execution. Function exiting..."
         exit
     }
-    
+
     # If filter parameters are defined, add a "&" prefix
     if($filterparameters -ne ""){
         $filterparameters = "&$filterparameters"
     }
 
     $startDate = GetStartTime -CheckpointFile $CheckPointFile  -timeInterval $timeInterval
-    $hdrs = @{"X-Requested-With"="powershell"}  
+    $hdrs = @{"X-Requested-With"="powershell"}
     $base = "$Uri/fo"
-    $body = "action=login&username=$username&password=$password" 
+    $body = "action=login&username=$username&password=$password"
 
-    Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body -SessionVariable sess  
+    Try {
+        Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body -SessionVariable sess
+    }
+    catch {
+        Write-Host "Error in initializing session StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Error -Message $_.Exception.Message
+    }
 
-    # Invoke the API Request and assign the response to a variable ($response)
-    $response = (Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters" -WebSession $sess) 
-    
+    Write-Host "Start Time :" $($startDate)
+    Write-Host " UTC current Time :" [datetime]::UtcNow
+    Write-Host "Constructed URL : $base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters"
+
+    $response = Try {
+        Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters" -WebSession $sess
+    }
+    catch {
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Error -Message $_.Exception.Message
+    }
+    # Really simple error check, if we get a 200 return the bearer token, ortherwise return false
+
     if($null -ne $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN){
-        # Iterate through each vulnerability recieved from the API call and assign the variables (Column Names in LA) to each XML variable and place each vulnerability as an object in the $objs array.
-        $objs = @()
-        0 .. $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length | ForEach-Object {  
-            if($null -eq $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID) {     # if the vuln ID is mull which will mean the entry is null, this occurs on the last entry of the response. Should only occur once.
-                Write-Host "A null line was excluded"
-            }
-            else {
-  
-                $DiagnosisParsed = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DIAGNOSIS."#cdata-section")
-                $ConsequenceParsed = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CONSEQUENCE."#cdata-section")
-                $SolutionParsed = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOLUTION."#cdata-section")
-  
-                $obj = @{'QID'= $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID
-                'Title' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].TITLE."#cdata-section"
-                'Category' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CATEGORY
-                'Consequence' = $ConsequenceParsed
-                'Diagnosis' = $DiagnosisParsed
-                'Last_Service_Modification_DateTime' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].LAST_SERVICE_MODIFICATION_DATETIME
-                'Patchable' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PATCHABLE
-                'CVE_ID' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.ID."#cdata-section"
-                'CVE_URL' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.URL."#cdata-section"
-                'Vendor_Reference_ID' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.ID."#cdata-section"
-                'Vendor_Reference_URL' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.URL."#cdata-section"
-                'PCI_Flag' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PCI_FLAG
-                'Published_DateTime' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PUBLISHED_DATETIME
-                'Severity_Level' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SEVERITY_LEVEL
-                'Software_Product' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.PRODUCT."#cdata-section"
-                'Software_Vendor' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.VENDOR."#cdata-section"
-                'Solution' = $SolutionParsed
-                'Vuln_Type' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VULN_TYPE
-                'Discovery_Additional_Info' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.ADDITIONAL_INFO
-                'Discovery_Auth_Type' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.AUTH_TYPE_LIST.AUTH_TYPE
-                'Discovery_Remote' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.REMOTE
+        Write-Host "Number of records returned after published Date $(startDate) : " $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length
+        try {
+            # Iterate through each vulnerability recieved from the API call and assign the variables (Column Names in LA) to each XML variable and place each vulnerability as an object in the $objs array.
+            $objs = @()
+            0 .. $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length | ForEach-Object {
+                if($null -eq $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID) {     # if the vuln ID is mull which will mean the entry is null, this occurs on the last entry of the response. Should only occur once.
+                    Write-Host "A null line was excluded"
                 }
+                else {
+                    $DiagnosisParsed = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DIAGNOSIS."#cdata-section")
+                    $ConsequenceParsed = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CONSEQUENCE."#cdata-section")
+                    $SolutionParsed = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOLUTION."#cdata-section")
 
-            $objs += $obj  
+                    $obj = @{'QID'= $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID
+                    'Title' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].TITLE."#cdata-section"
+                    'Category' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CATEGORY
+                    'Consequence' = $ConsequenceParsed
+                    'Diagnosis' = $DiagnosisParsed
+                    'Last_Service_Modification_DateTime' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].LAST_SERVICE_MODIFICATION_DATETIME
+                    'Patchable' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PATCHABLE
+                    'CVE_ID' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.ID."#cdata-section"
+                    'CVE_URL' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.URL."#cdata-section"
+                    'Vendor_Reference_ID' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.ID."#cdata-section"
+                    'Vendor_Reference_URL' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.URL."#cdata-section"
+                    'PCI_Flag' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PCI_FLAG
+                    'Published_DateTime' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PUBLISHED_DATETIME
+                    'Severity_Level' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SEVERITY_LEVEL
+                    'Software_Product' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.PRODUCT."#cdata-section"
+                    'Software_Vendor' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.VENDOR."#cdata-section"
+                    'Solution' = $SolutionParsed
+                    'Vuln_Type' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VULN_TYPE
+                    'Discovery_Additional_Info' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.ADDITIONAL_INFO
+                    'Discovery_Auth_Type' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.AUTH_TYPE_LIST.AUTH_TYPE
+                    'Discovery_Remote' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.REMOTE
+                    }
 
+                $objs += $obj
+                Write-Host "Individual Object is processed and assigned to Array"
+
+                }
             }
-        }
 
-    # Logout of the Session
-    Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body "action=logout" -WebSession $sess
+            Write-Host "Number of Objects processed : " $objs.Length
 
-    # Iterate through each vulnerabilty obj in the $objs array, covert it to JSON and POST it to the Log Analytics API individually 
-    $startInterval = $startDate
-    $endInterval = $endTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
-    $objsLength = $objs.Length       
-    if ($objs.Length -ne 0){
-        $jsonPayload = $objs | ConvertTo-Json
-        $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($objs)).Count/1024/1024          
-        # Check the payload size, if under 30MB post to Log Analytics.
-        if (($mbytes -le 30)){             
-                   
-            $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tablename 
-              
-            if ($responseCode -ne 200){
-                Write-Host "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
-            } 
+        # Logout of the Session
+        Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body "action=logout" -WebSession $sess
+
+        # Iterate through each vulnerabilty obj in the $objs array, covert it to JSON and POST it to the Log Analytics API individually
+        $startInterval = $startDate
+        $endInterval = $endTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
+        $objsLength = $objs.Length
+        if ($objs.Length -ne 0){
+            $jsonPayload = $objs | ConvertTo-Json
+            $mbytes = ([System.Text.Encoding]::UTF8.GetBytes($objs)).Count/1024/1024
+            # Check the payload size, if under 30MB post to Log Analytics.
+            if (($mbytes -le 30)){
+                $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tablename
+
+                if ($responseCode -ne 200){
+                    Write-Error -Message "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
+                }
+                else {
+                    Write-Host "SUCCESS: $objsLength Qualys KB vulnerability records found between $startInterval and $endInterval and posted to Log Analytics: $mbytes MB" -ForegroundColor Green
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
+                }
+            }
             else {
-                Write-Host "SUCCESS: $objsLength Qualys KB vulnerability records found between $startInterval and $endInterval and posted to Log Analytics: $mbytes MB" -ForegroundColor Green
-                UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime    
+                Write-Error "ERROR: Log Analytics POST failed due to paylog exceeding 30Mb: $mbytes"
+                }
             }
-            
-        }
-        else {
-            Write-Host "ERROR: Log Analytics POST failed due to paylog exceeding 30Mb: $mbytes"
+            else {
+            Write-Host INFO: "No new Qualys KB vulnerability records between $startInterval and $endInterval"
+            # UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
             }
+
         }
-        else {
-           Write-Host INFO: "No new Qualys KB vulnerability records between $startInterval and $endInterval"
-           UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime    
+        catch {
+            Write-Host "Error in initializing session StatusCode:" $_.Exception.Response.StatusCode.value__
+            Write-Error -Message $_.Exception.Message
         }
     }
     else {
          # Logout of the Session
         Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body "action=logout" -WebSession $sess
         $endInterval = $endTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
-        UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime    
+        # UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime
         Write-Host "INFO: No new Qualys KB vulnerability records between $startDate and $endInterval"
     }
- }    
+ }
 
 
 # Function to build the authorization signature to post to Log Analytics
@@ -254,7 +278,7 @@ function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     return $authorization;
 }
 
-# Function to POST the data payload to a Log Analytics workspace 
+# Function to POST the data payload to a Log Analytics workspace
 function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 {
     $TimeStampField = "DateValue"
