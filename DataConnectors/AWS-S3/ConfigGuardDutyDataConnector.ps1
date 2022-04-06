@@ -232,14 +232,13 @@ function Enable-GuardDuty
     [String[]]$allRegionsArray =  (aws ec2 describe-regions | ConvertFrom-Json)."Regions".RegionName
     $regionConfirmation = Read-ValidatedHost 'Do you want enable guardduty for all regions? [y/n]' -ValidationType Confirm
     if ($regionConfirmation -eq 'y')
-	{
-        
+    {     
         for($i = 0; $i -lt $allRegionsArray.length; $i++)
         { 
             Enable-GuardDuty-ForRegion -Region $allRegionsArray[$i]
             Set-GuardDutyPublishDestinationBucket -Region $allRegionsArray[$i]
         }
-	}
+    }
 	else
 	{
         [String[]]$selectedRegionsArray = Read-ValidatedHost -Prompt "Please enter list of regions seperated by space"
