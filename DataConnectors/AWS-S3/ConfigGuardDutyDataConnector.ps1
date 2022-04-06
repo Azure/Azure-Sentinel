@@ -239,8 +239,8 @@ function Enable-GuardDuty
             Set-GuardDutyPublishDestinationBucket -Region $allRegionsArray[$i]
         }
     }
-	else
-	{
+    else
+    {
         [String[]]$selectedRegionsArray = Read-ValidatedHost -Prompt "Please enter list of regions seperated by space"
         $selectedRegionsArray = $selectedRegionsArray.Split(' ') | Select-Object -Unique
 
@@ -258,7 +258,7 @@ function Enable-GuardDuty
             Enable-GuardDuty-ForRegion -Region $selectedRegionsArray[$i]
             Set-GuardDutyPublishDestinationBucket -Region $selectedRegionsArray[$i]
         }
-	}
+    }
 }
 
 
