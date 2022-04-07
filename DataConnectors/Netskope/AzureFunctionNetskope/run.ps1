@@ -23,6 +23,7 @@ if ($Timer.IsPastDue) {
 }
 
 $logAnalyticsUri = $env:logAnalyticsUri
+#$logAnalyticsUri = "https://059f037c-1b3b-42b1-bb90-e340e8c3142c.ods.opinsights.azure.com"
 
 # Function to call the Netskope API for different Event Types
 function CallNetskope($logtype) {
@@ -51,10 +52,12 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $pageLimit = 10000
         $skip = 0
         $cwd = (Get-Location).Drive.Root
-        $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
+         $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
         # $checkPointFile = "C:\Users\v-spadarthi\Downloads\NetskopeCheckpoint.csv"
-        $apikey = $env:apikey
-        $uri = $env:uri
+          $apikey = $env:apikey
+         #$apikey="c4bbd017a7c699d3e68483beae2489a8"
+         #$uri="https://alliances.goskope.com" 
+          $uri = $env:uri
         $tableName = "Netskope"
         $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
@@ -68,7 +71,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         if($netskopetimediff.TotalSeconds -ge 300)
         {
            Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
-           $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
+           $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(300)) -UFormat %s)
            Write-Host "For Logtype $($logtype) new modified endtime is $($endTime)"
         }
         $alleventobjs = @()
@@ -151,7 +154,9 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     function ProcessData($allEventsLength, $alleventobjs, $checkPointFile, $logtype, $endTime, $skip) {
         Write-Host "Process Data function:- EventsLength - $($allEventsLength), Logtype - $($logtype) and Endtime - $($endTime)"
         $customerId = $env:workspaceId
+        #$customerId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
         $sharedKey = $env:workspacekey
+        #$sharedKey = "JbqN4tGDM6gyCScT4oo0NQPW0Ap2UDbyoHHIloLo4Lr3NoKHs5MrXDmiXSOdtHQ5aPFjmkSXkKlRrBSNUtQXug=="
         $responseCode = 200
         if ($allEventsLength -ne 0) {
             $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
@@ -179,11 +184,11 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
     # Function to update the checkpoint time with the last successful API call end time
     function UpdateCheckpointTime($CheckpointFile, $LogType, $LastSuccessfulTime, $skip) {
-        try {
+        try 
+        {
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
             $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
-			if($mutex.WaitOne(2000)){
-            $mutex.WaitOne() > $null;
+            if($mutex.WaitOne(2000)){
             $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
             $checkpoints = Import-Csv -Path $CheckpointFile
             $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
@@ -191,14 +196,14 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
             Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
             $mutex.ReleaseMutex();
-           }
+            }
         } 
          catch [System.Threading.AbandonedMutexException] {
             $mutex.ReleaseMutex();
          }
-          $mutex.Dispose();
-    }
-
+         $mutex.Dispose();
+         
+       }
     function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip) {
         $url = GetUrl -Uri $Uri -ApiKey $ApiKey -StartTime $StartTime -EndTime $EndTime -logtype $LogType -Page $Page -Skip $Skip
         $obfurl = $url -replace "token=[a-z0-9]+\&", "token=<apiToken>&"
@@ -339,22 +344,26 @@ function Netskope () {
     Write-Host "PS Version : $($PSVersionTable.PSVersion)"
     $Time = [System.Diagnostics.Stopwatch]::StartNew()
     $loggingOptions = $env:logTypes
-    #"page,alert"
+   #$loggingOptions = "alert,page,application,audit,infrastructure,network"
+    #"page,alert" 
+    #modified
+    
     $apitypes = @($loggingOptions.split(",").Trim())
+     
     # foreach($iapiType in $apitypes)
     # {
-    #     CallNetskope($iapiType)
+        # CallNetskope($iapiType)
     # }
 
     # Get the function's definition *as a string*
-    $funcDef = $function:CallNetskope.ToString()
-    $job = $apitypes | ForEach-Object -Parallel {
-    # Define the function inside this thread...
-    $function:CallNetskope = $using:funcDef
-    CallNetskope($_)
-    #Start-Sleep 1
-    } -ThrottleLimit 50 -AsJob
-    $job | Receive-Job -Wait
+     $funcDef = $function:CallNetskope.ToString()
+     $job = $apitypes | ForEach-Object -Parallel {
+     # Define the function inside this thread...
+     $function:CallNetskope = $using:funcDef
+     CallNetskope($_)
+     #Start-Sleep 1
+     } -ThrottleLimit 50 -AsJob
+     $job | Receive-Job -Wait
     $CurrentTime = $Time.Elapsed
     write-host $([string]::Format("`rTotal Time Taken to execute: {0:d2}:{1:d2}:{2:d2}",
                                   $CurrentTime.hours,
