@@ -110,7 +110,7 @@ namespace Kqlvalidations.Tests
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(ParsersYamlFilesTestData))]
-        public void Validate_ParsersQueries_HaveValidKql(string fileName, string encodedFilePath)
+        public void Validate_ParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
         {
             Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
             var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml);
