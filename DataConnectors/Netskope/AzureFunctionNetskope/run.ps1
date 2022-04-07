@@ -188,11 +188,14 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         {
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
             $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
+			
             if($mutex.WaitOne(2000)){
             $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
             $checkpoints = Import-Csv -Path $CheckpointFile
+			Write-Host "Checkpoints : $($checkpoints)"
             $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
             # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+			
             $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
             Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
             $mutex.ReleaseMutex();
