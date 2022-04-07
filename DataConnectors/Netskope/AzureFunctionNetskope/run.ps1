@@ -52,7 +52,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $skip = 0
         $cwd = (Get-Location).Drive.Root
         $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
-        # $checkPointFile = "C:\Users\v-rucdu\Downloads\NetskopeCheckpoint.csv"
+        # $checkPointFile = "C:\Users\v-spadarthi\Downloads\NetskopeCheckpoint.csv"
         $apikey = $env:apikey
         $uri = $env:uri
         $tableName = "Netskope"
@@ -182,6 +182,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         try {
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
             $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
+			if($mutex.WaitOne(2000)){
             $mutex.WaitOne() > $null;
             $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
             $checkpoints = Import-Csv -Path $CheckpointFile
@@ -190,10 +191,12 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
             Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
             $mutex.ReleaseMutex();
-        }
-        catch {
-            Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
-        }
+           }
+        } 
+         catch [System.Threading.AbandonedMutexException] {
+            $mutex.ReleaseMutex();
+         }
+          $mutex.Dispose();
     }
 
     function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip) {
