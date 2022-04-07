@@ -53,11 +53,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $skip = 0
         $cwd = (Get-Location).Drive.Root
          $checkPointFile = "$($cwd)home\site\NetskopeCheckpoint.csv"
-        # $checkPointFile = "C:\Users\v-spadarthi\Downloads\NetskopeCheckpoint.csv"
-          $apikey = $env:apikey
-         #$apikey="c4bbd017a7c699d3e68483beae2489a8"
-         #$uri="https://alliances.goskope.com" 
-          $uri = $env:uri
+         $apikey = $env:apikey
+         $uri = $env:uri
         $tableName = "Netskope"
         $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
@@ -154,9 +151,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     function ProcessData($allEventsLength, $alleventobjs, $checkPointFile, $logtype, $endTime, $skip) {
         Write-Host "Process Data function:- EventsLength - $($allEventsLength), Logtype - $($logtype) and Endtime - $($endTime)"
         $customerId = $env:workspaceId
-        #$customerId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
         $sharedKey = $env:workspacekey
-        #$sharedKey = "JbqN4tGDM6gyCScT4oo0NQPW0Ap2UDbyoHHIloLo4Lr3NoKHs5MrXDmiXSOdtHQ5aPFjmkSXkKlRrBSNUtQXug=="
         $responseCode = 200
         if ($allEventsLength -ne 0) {
             $jsonPayload = $alleventobjs | ConvertTo-Json -Depth 3
@@ -190,6 +185,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
 			
             if($mutex.WaitOne(2000)){
+				Write-Host "Inside of waitone "
             $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
             $checkpoints = Import-Csv -Path $CheckpointFile
 			Write-Host "Checkpoints : $($checkpoints)"
@@ -198,12 +194,12 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 			
             $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
             Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
-            $mutex.ReleaseMutex();
-            }
+         }
         } 
          catch [System.Threading.AbandonedMutexException] {
             $mutex.ReleaseMutex();
          }
+		 $mutex.ReleaseMutex();
          $mutex.Dispose();
          
        }
