@@ -82,6 +82,9 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
                 $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip
                 $netskopeevents = $response.data
+				 # we need to handle 
+				  if($null -ne $netskopeevents)
+                {
                 $netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
                 $netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
                 $netskopeevents | Add-Member -MemberType NoteProperty connectionid -Value ""
@@ -90,8 +93,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
                 $netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
 
-                if($null -ne $netskopeevents)
-                {
+               
                     $netskopeevents | ForEach-Object{
                         if($_.dlp_incident_id -ne $NULL){
                                 $_.dlp_incidentid = [string]$_.dlp_incident_id
