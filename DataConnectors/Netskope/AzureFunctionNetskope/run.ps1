@@ -362,7 +362,7 @@ function Netskope () {
 
     # Get the function's definition *as a string*
      $funcDef = $function:CallNetskope.ToString()
-	  $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
+	 # $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
      $job = $apitypes | ForEach-Object -Parallel {
      # Define the function inside this thread...
      $function:CallNetskope = $using:funcDef
