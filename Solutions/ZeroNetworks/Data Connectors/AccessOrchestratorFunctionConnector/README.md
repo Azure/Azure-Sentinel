@@ -7,7 +7,7 @@ This folder contains the Azure function time trigger code for Zero Networks Acce
 ## Folders
 
 1. `Solutions/ZeroNetworks/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
-2. `DataConnectors/ZeroNetworks/AccessOrchestratorFuncationConnector/` - This contains the Azure function source code.
+2. `Solutions/ZeroNetworks/AccessOrchestratorFunctionConnector/` - This contains the Azure function source code.
 
 
 ## Installing for the users
