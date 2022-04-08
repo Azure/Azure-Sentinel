@@ -61,7 +61,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $LastRecordData = $LastRecordObject.Split("|");
         $startTime = [Int]($LastRecordData[0])
         $skip = $LastRecordData.Length -gt 1 ? [Int]($LastRecordData[1]) : $skip
-        Write-Host "For Logtype $($logtype) starttime is $($startTime)"
+        Write-Host "For Logtype $($logtype) starttime is $($startTime) for LastRecordObject is   $($LastRecordObject) for LastRecordData is  $($LastRecordData)"
         $netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
         $netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
         $netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
