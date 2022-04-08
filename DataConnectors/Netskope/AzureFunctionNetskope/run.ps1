@@ -254,10 +254,11 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 }
 				## Need to handle  not all log types  mentioned in the file
 				 if($null -eq $LastRecordObject)
-                  {
-				 return $firstStartTimeRecord.ToString() + "|" + 0
-			      }
-				
+				 {
+					$LastRecordObject = $firstStartTimeRecord.ToString() + "|" + 0
+					$GetLastRecordTime.Add($LogType, $LastRecordObject)
+					$GetLastRecordTime.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+				}		 		
             }
             return $LastRecordObject
         }
