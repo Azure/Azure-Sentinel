@@ -59,6 +59,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
         $LastRecordData = $LastRecordObject.Split("|");
+		Write-Host "For LastRecordData  $($LastRecordData.GetType())"
         $startTime = [Int]($LastRecordData[0])
         $skip = $LastRecordData.Length -gt 1 ? [Int]($LastRecordData[1]) : $skip
         Write-Host "For Logtype $($logtype) starttime is $($startTime) for LastRecordObject is   $($LastRecordObject) for LastRecordData is  $($LastRecordData)"
