@@ -58,8 +58,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $tableName = "Netskope"
         $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
-        if($LastRecordObject -ne $null)
-		{
+        # if($LastRecordObject -ne $null)
+		# {
 		$LastRecordData = $LastRecordObject.Split("|");
 		Write-Host "For LastRecordData  $($LastRecordData.GetType())"
         $startTime = [Int]($LastRecordData[0])
@@ -68,7 +68,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
         $netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
         $netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
-		}
+		# }
         if($netskopetimediff.TotalSeconds -ge 300)
         {
            Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
@@ -362,6 +362,7 @@ function Netskope () {
 
     # Get the function's definition *as a string*
      $funcDef = $function:CallNetskope.ToString()
+	  $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
      $job = $apitypes | ForEach-Object -Parallel {
      # Define the function inside this thread...
      $function:CallNetskope = $using:funcDef
