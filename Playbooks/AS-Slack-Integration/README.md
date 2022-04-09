@@ -4,15 +4,6 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Slack-Integration%2Fmain%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
-</a>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Slack-Integration%2Fmain%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>
-
-
 This playbook is intended to be run from a Microsoft Sentinel incident. It will create a Slack post with the related Microsoft Sentinel incident information including parsed entity information.
 
 ![Slack_Demo](Images/Slack_Demo.png)
@@ -36,6 +27,11 @@ To create a Slack App and obtain a Bot Token:
 From your Slack Workspace, navigate to https://api.slack.com/apps/ and click the "**Create a new Slack app**" button.
 
 ![Slack_App_1](Images/Slack_App_1.png)
+
+
+Select the "**From Scratch**" option.
+
+![Slack_App_1.5](Images/Slack_App_1.5.png)
 
 
 Enter in "**Microsoft Sentinel**" for the app name then add a description. 
@@ -93,12 +89,9 @@ https://app.slack.com/client/{workspace-id}/{**channel-id**}}
 
 To configure and deploy this playbook:
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Slack-Integration%2Fmain%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Slack-Integrationn%2Fmain%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>                                                 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Slack-Integration%2Fazuredeploy.json)
+
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Slack-Integration%2Fazuredeploy.json)                                                    
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
