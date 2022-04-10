@@ -52,14 +52,15 @@ ParserQuery: |
     let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
     let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);    
     let DirectionNetworkEvents =
-        Syslog | where not(disabled)
+        Syslog 
+        | where (isnull(starttime) or TimeGenerated>=starttime) 
+            and (isnull(endtime) or TimeGenerated<=endtime) 
+        | where not(disabled)
         | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>3</EventID>')
         | project-away ProcessName, ProcessID
         // ***************  Prefilterring *****************************************************************
         | where  
-                (isnull(starttime) or TimeGenerated>=starttime) 
-            and (isnull(endtime) or TimeGenerated<=endtime) 
-            and (eventresult=='*' or eventresult=='Success')
+                 (eventresult=='*' or eventresult=='Success')
             and (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
             and (array_length(ip_any)==0 
                   or has_any_ipv4_prefix(SyslogMessage,ip_any)
@@ -107,7 +108,7 @@ ParserQuery: |
       | where outbound
       | invoke parser ()
       | extend 
-             temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) // should I use has_any here?
+             temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
            , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
     | extend ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
@@ -116,7 +117,19 @@ ParserQuery: |
             , temp_isDstMatch, "DstIpAddr"
             , "No match"
     )
-      | extend
+     | where ASimMatchingIpAddr != "No match"
+     | extend temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
+            , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
+      | extend ASimMatchingHostname = case(
+            array_length(hostname_has_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcHostMatch and temp_isDstHostMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcHostMatch, "SrcHostname"
+            , temp_isDstHostMatch, "DstHostname"
+            , "No match"
+    )
+     | where ASimMatchingHostname != "No match"
+     | project-away temp_*
+     | extend
         SrcUsernameType = 'Simple',
         SrcUsername = User,
         SrcProcessId = ProcessId, 
@@ -131,12 +144,21 @@ ParserQuery: |
           | where not(outbound)
           | invoke parser ()
           // *************** Postfilterring ***************************************************************
-          | where 
-              (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DstIpAddr, dstipaddr_has_any_prefix))
-          and (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
-          and (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any)or SrcHostname has_any (hostname_has_any) )
+          | where (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any)or SrcHostname has_any (hostname_has_any) )
           and  (isnull(dstportnumber) or DstPortNumber ==dstportnumber)
           // *************** Postfilterring ***************************************************************
+          | extend 
+             temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
+           , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+          | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+        )
+        | where ASimMatchingIpAddr != "No match"
+        | project-away temp_*
           | extend
           DstUsernameType = 'Simple',
           DstUsername = User,
@@ -161,16 +183,7 @@ ParserQuery: |
               EventSeverity = 'Informational',
               DvcOs = 'Linux',
               Protocol = toupper(Protocol),
-              EventOriginalType = '3', // Set with a constant value to avoid parsing
-              ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0 ,"-",
-                                  has_any_ipv4_prefix(SrcIpAddr,ipaddr_has_any_prefix), "SrcIpAddr",
-                                  "DstIpAddr"
-                              ),
-              ASimMatchingHostname = case(
-                                  array_length(hostname_has_any) == 0 ,"",
-                                  SrcHostname has_any(hostname_has_any), "SrcHostname",
-                                  "DstHostname"
-                              )
+              EventOriginalType = '3' // Set with a constant value to avoid parsing
           | project-rename 
               DvcIpAddr = HostIP,
               DvcHostname = SysmonComputer

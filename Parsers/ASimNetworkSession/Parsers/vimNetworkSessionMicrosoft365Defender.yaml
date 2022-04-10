@@ -72,13 +72,14 @@ ParserQuery: |
   let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
   // -- Common preprocessing to both input and outbound events
   let RawNetworkEvents = (select_outbound:boolean) {
-    DeviceNetworkEvents | where not(disabled)
+    DeviceNetworkEvents 
+    | where    (isnull(starttime) or TimeGenerated>=starttime) 
+           and (isnull(endtime) or TimeGenerated<=endtime) 
+    | where not(disabled)
     | lookup DirectionLookup on ActionType
     | where Outbound == select_outbound
     // ***************  Prefilterring *****************************************************************
-    |where (isnull(starttime) or TimeGenerated>=starttime) 
-           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
-           and (isnull(endtime) or TimeGenerated<=endtime) 
+    |where  (array_length(dvcaction)==0 )     /// if filtered by action return nothing
            and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort)
            and (array_length(hostname_has_any)==0 
               or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any)
@@ -151,8 +152,13 @@ ParserQuery: |
     RawNetworkEvents (true)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==RemotePort)
-        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any) or DvcHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
+    |extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
+                                  UrlHostname has_any(hostname_has_any), "DstHostname",
+                                  DvcHostname, "SrcHostname",
+                                  "No match"
+                              )
+    | where ASimMatchingHostname != "No match"
     | project-rename
        DstIpAddr = RemoteIP,
        SrcIpAddr = LocalIP,
@@ -200,8 +206,13 @@ ParserQuery: |
     RawNetworkEvents (false)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==LocalPort)
-        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any) or DvcHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
+      |extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
+                                  UrlHostname has_any(hostname_has_any), "SrcHostname",
+                                  DvcHostname, "DstHostname",
+                                  "No match"
+                              )
+    | where ASimMatchingHostname != "No match"
     | project-rename
        SrcIpAddr = RemoteIP,
        DstIpAddr = LocalIP,
@@ -212,16 +223,15 @@ ParserQuery: |
        DstUserId = InitiatingProcessAccountSid,
        DstUserUpn = InitiatingProcessAccountUpn,
        DstUserDomain = InitiatingProcessAccountDomain
+       SrcDomain = UrlDomain,
+       SrcFQDN = UrlFQDN,
+       SrcDomainType = UrlDomainType
     | extend
        DstUsername = User,
        DstDvcId = DvcId,
        DstDvcIdType = 'MDEid',
        DstUserIdType = 'SID',
        SrcHostname = UrlHostname
-   | project-rename
-       SrcDomain = UrlDomain,
-       SrcFQDN = UrlFQDN,
-       SrcDomainType = UrlDomainType
     | extend  
        DstHostname = DvcHostname,
        DstDomain = DvcDomain,
@@ -245,10 +255,6 @@ ParserQuery: |
        DstAppType = "Process"
   ;
   union InboundNetworkEvents, OutboundNetworkEvents
-  |extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
-                                  SrcHostname has_any(hostname_has_any), "SrcHostname",
-                                  "DstHostname"
-                              )
   | extend // aliases
      Hostname = UrlHostname,
      IpAddr = SrcIpAddr,
