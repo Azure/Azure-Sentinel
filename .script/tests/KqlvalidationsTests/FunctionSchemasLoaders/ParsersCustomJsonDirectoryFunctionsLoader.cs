@@ -1,11 +1,8 @@
 ﻿using Microsoft.Azure.Sentinel.KustoServices.Contract;
 using Microsoft.Azure.Sentinel.KustoServices.Implementation;
-using Newtonsoft.Json;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using YamlDotNet.Serialization;
 
 namespace Kqlvalidations.Tests.FunctionSchemasLoaders
@@ -50,7 +47,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
             var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames();
             return parsersYamlFiles.Select(fileName =>
             {
-                var schema = fileName.Split("\\")[^3];
+                var schema = fileName.Split(Path.DirectorySeparatorChar)[^3];
                 var resultColumns = schemaToResultColumnsMapping[schema];
                 return GetParserFunctionSchema(fileName, resultColumns);
             });
