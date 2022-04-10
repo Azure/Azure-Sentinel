@@ -115,8 +115,17 @@ namespace Kqlvalidations.Tests
             Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
             var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml);
             var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
-            var id = (string)yaml["ParserName"];
-            ValidateKql(id, queryStr);
+
+            //Ignore known issues
+            object id;
+            yaml.TryGetValue("Id", out id);
+            if (id != null && ShouldSkipTemplateValidation((string)yaml["Id"]))
+            {
+                return;
+            }
+
+            var parserName = (string)yaml["ParserName"];
+            ValidateKql(parserName, queryStr);
         }
 
         private void ValidateKql(string id, string queryStr)
