@@ -821,13 +821,18 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 publisher             = $connectorData.publisher;
                                 descriptionMarkdown   = $connectorData.descriptionMarkdown;
                                 graphQueries          = $connectorData.graphQueries;
-                                sampleQueries         = $connectorData.sampleQueries;
                                 dataTypes             = $connectorData.dataTypes;
                                 connectivityCriterias = $connectorData.connectivityCriterias;
-                                availability          = $connectorData.availability;
-                                permissions           = $connectorData.permissions;
-                                instructionSteps      = $connectorData.instructionSteps
                             }
+
+                            if(!$contentToImport.Is1PConnector)
+                            {
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $connectorData.sampleQueries;
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "permissions" -NotePropertyValue $connectorData.permissions;
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "instructionSteps" -NotePropertyValue $connectorData.instructionSteps;
+                            }
+
                             if($contentToImport.TemplateSpec){
                                 $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
                             }
@@ -838,7 +843,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 apiVersion = "2021-03-01-preview";
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                                 location   = "[parameters('workspace-location')]";
-                                kind       = "GenericUI";
+                                kind       = $contentToImport.Is1PConnector ? "StaticUI" : "GenericUI";
                                 properties = [PSCustomObject]@{
                                     connectorUiConfig = $standardConnectorUiConfig
                                 }
@@ -1152,6 +1157,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     requiredDataConnectors = $yaml.requiredDataConnectors;
                                 }
                             }
+
+                            if($contentToImport.TemplateSpec)
+                            {
+                                $huntingQueryObj | Add-Member -NotePropertyName "id" -NotePropertyValue "[guid('$($(New-Guid).Guid)')]"
+                            }
                             $huntingQueryDescription = ""
                             if ($yaml.description) {
                                 $huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
@@ -1171,6 +1181,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     $tacticsObj.value = $tacticsObj.value -replace ' ', ''
                                 }
                                 $huntingQueryObj.properties.tags += $tacticsObj
+                            }
+
+                            if ($yaml.relevantTechniques -and $yaml.relevantTechniques.Count -gt 0) {
+                                $relevantTechniquesObj = [PSCustomObject]@{
+                                    name  = "techniques";
+                                    value = $yaml.relevantTechniques -join ","
+                                }
+                                if ($relevantTechniquesObj.value.ToString() -match ' ') {
+                                    $relevantTechniquesObj.value = $relevantTechniquesObj.value -replace ' ', ''
+                                }
+                                $huntingQueryObj.properties.tags += $relevantTechniquesObj
                             }
 
                             if($contentToImport.TemplateSpec) {
