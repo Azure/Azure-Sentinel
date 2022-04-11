@@ -96,7 +96,7 @@ async def main(mytimer: func.TimerRequest):
     logging.info("Creating SQS connection")
     async with _create_sqs_client() as client:
         async with aiohttp.ClientSession() as session:
-            logging.info('Trying to check messages off the queue...')
+            logging.info('Trying to check messages off the queue....')
             try:
                 response = await client.receive_message(
                     QueueUrl=QUEUE_URL,
