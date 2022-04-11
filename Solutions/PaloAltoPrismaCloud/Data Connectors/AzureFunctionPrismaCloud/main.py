@@ -168,7 +168,9 @@ class PrismaCloudConnector:
                 if response.status != 200:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                 res = await response.text()
+                logging.info('Get ALerts succeeded with response {}'.format(res.text()))
                 res = json.loads(res)
+                logging.info('response json after loading {}'.format(res['items'].length))
 
             for item in res['items']:
                 yield item
