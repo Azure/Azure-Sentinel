@@ -247,6 +247,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else
             {
+				  $GetLastRecordTime=@() 
                 $LastRecordObject = $GetLastRecordTime | ForEach-Object{
                     if($_.Key -eq $LogType){
                         $_.Value
@@ -256,7 +257,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 				 if($null -eq $LastRecordObject)
 				 {
 					$LastRecordObject = $firstStartTimeRecord.ToString() + "|" + 0
-                               
+                            
 					$GetLastRecordTime += [PSCustomObject]@{ "key" = $LogType
                       "value"= $LastRecordObject
                     };
