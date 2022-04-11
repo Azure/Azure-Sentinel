@@ -8,13 +8,7 @@ class TraceManager:
 
     @property
     def trace_id(self):
-        if not getattr(self.local, 'trace_id', None):
-            self.local.trace_id = str(uuid.uuid4())
-        return self.local.trace_id
-
-    @trace_id.setter
-    def trace_id(self, value):
-        self.local.trace_id = value
+        return str(uuid.uuid4())
 
     @property
     def task_id(self):
