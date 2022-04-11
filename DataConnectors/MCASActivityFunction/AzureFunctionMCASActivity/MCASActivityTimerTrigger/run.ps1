@@ -4,7 +4,7 @@
     Version:        1.0
     Author:         Nicholas DiCola
     Modified By:       Sreedhar Ande
-    Last Modified:  12/16/2021
+    Last Modified:  3/18/2022
     
     DESCRIPTION
     This Function App calls the MCAS Activity REST API (https://docs.microsoft.com/cloud-app-security/api-activities) to pull the MCAS
@@ -38,6 +38,7 @@ $workspaceKey = $env:WorkspaceKey
 $Lookback = $env:Lookback
 $MCASURL = $env:MCASURL
 $LAURI = $env:LAURI
+$LACustomTable = $env:LACustomTable							   
 $TblLastRunExecutions = "MCASLastRunLogs"
 
 
@@ -194,6 +195,32 @@ function SendToLogA ($Data, $customLogName) {
     }
 }
 
+function Convert-EpochToDateTime{    
+    [CmdletBinding()]
+    [OutputType([System.DateTime])]
+    Param
+    (
+        [Parameter(Mandatory=$true,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0)][Int64]$Epoch
+    )
+    PROCESS
+    {
+        [nullable[datetime]]$convertedDateTime = $null
+        try
+        {
+            $dt = [DateTime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)            
+            $convertedDateTime = $dt.AddMilliseconds($Epoch)
+        }
+        catch
+        {
+            Write-Host $_
+            Write-Error -Exception ([ArgumentException]::new("Unable to convert incoming value to DateTime.")) -Category InvalidArgument -ErrorAction Stop
+        }
+
+        return $convertedDateTime
+    }
+}
 
 # header for API calls
 $headers = @{
@@ -201,10 +228,13 @@ $headers = @{
     'Content-Type' = "application/json"
 }
 
-$EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
+#$EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
+$EndEpoch = ([int64](($currentUTCtime) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
+$Lookback = [Int16]($Lookback)							  
 # Retrieve Timestamp from last executions 
 # Check if Table has already been created and if not create it to maintain state between executions of Function
-$storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
+$storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage.Trim().ToString()
+
 
 $LastExecutionsTable = Get-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext -ErrorAction Ignore
 if($null -eq $LastExecutionsTable.Name) {  
@@ -222,11 +252,11 @@ if($null -ne $LastRunExecutionsTableRow.lastRunEpoch){
     $StartEpoch = $LastRunExecutionsTableRow.lastRunEpoch    
 }
 else {
-    $StartEpoch = ([int64]((Get-Date -Date $StartTime).AddDays(-$Lookback) - (get-date "1/1/1970")).TotalMilliseconds)
+    $StartEpoch = ([int64](($currentUTCtime).AddMinutes(-$Lookback) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
 }
 
 #Build query
-$body = @"
+$ActivityPayLoad = @"
 {
     "filters": {
         "date": {
@@ -248,47 +278,61 @@ $loopAgain = $true
 $totalRecords = 0
 do {
     $results = $null
-    $results = Invoke-RestMethod -Method Post -Uri $uri -Body $body -Headers $headers -ContentType "application/json" -UseBasicParsing
-    try {
-        $results = $results | ConvertFrom-Json
-    }
-    catch {
-        Write-Verbose "One or more property name collisions were detected in the response. An attempt will be made to resolve this by renaming any offending properties."
-        $results = $results.Replace('"Level":', '"Level_2":')
-        $results = $results.Replace('"EventName":', '"EventName_2":')
+    $results = Invoke-RestMethod -Method Post -Uri $uri -Body $ActivityPayLoad -Headers $headers -ContentType "application/json" -UseBasicParsing
+    $activitiesStart = Convert-EpochToDateTime -Epoch $StartEpoch
+    $activitiesEnd = Convert-EpochToDateTime -Epoch $EndEpoch
+    if (($results.data).Count -ne 0)
+    {
         try {
-            $results = $results | ConvertFrom-Json # Try the JSON conversion again, now that we hopefully fixed the property collisions
+            $results = $results | ConvertFrom-Json
         }
         catch {
-            throw $_
+            Write-Verbose "One or more property name collisions were detected in the response. An attempt will be made to resolve this by renaming any offending properties."
+            $results = $results.Replace('"Level":', '"Level_2":')
+            $results = $results.Replace('"EventName":', '"EventName_2":')
+            try {
+                $results = $results | ConvertFrom-Json # Try the JSON conversion again, now that we hopefully fixed the property collisions
+            }
+            catch {
+                Write-Verbose $_
+            }
+            Write-Verbose "Any property name collisions appear to have been resolved."
         }
-        Write-Verbose "Any property name collisions appear to have been resolved."
-    }
-    if(($results.data).Count -ne 0){
-        #write to log A to be added later 
-        Write-Host "Got some results: "($results.data.Count)
+        
+        Write-Host "Microsoft Defender for Cloud Apps Activities between $($activitiesStart) to $($activitiesEnd): "($results.data.Count)
         $totalRecords += ($results.data.Count)
-        Write-Host $totalRecords
-        SendToLogA -Data ($results.data) -customLogName "MCASActivity"
-    }
-    else{
-        Write-Host "No new logs"
-    }
-    $loopAgain = $results.hasNext
+		if ($null -ne $LACustomTable) {
+            SendToLogA -Data ($results.data) -customLogName $LACustomTable
+        } else {
+            $LACustomTable = "MCASActivity"
+            SendToLogA -Data ($results.data) -customLogName $LACustomTable
+        }
+		
+        $loopAgain = $results.hasNext
     
-    if($loopAgain -ne $false){
-        # if there is more data update the query
-        $newBody = $body | ConvertFrom-Json
-        If($null -eq $newBody.filters.date.lte){
-            $newBody.filters.date | Add-Member -Name lte -Value ($results.nextQueryFilters.date.lte) -MemberType NoteProperty
+        if($loopAgain -ne $false){
+            # if there is more data update the query
+            $PagingActivityPayLoad = $ActivityPayLoad | ConvertFrom-Json
+            If($null -eq $PagingActivityPayLoad.filters.date.lte){
+                $PagingActivityPayLoad.filters.date | Add-Member -Name lte -Value ($results.nextQueryFilters.date.lte) -MemberType NoteProperty
+            }
+            else {
+                $PagingActivityPayLoad.filters.date.lte = ($results.nextQueryFilters.date.lte)
+            }
+            $ActivityPayLoad = $PagingActivityPayLoad | ConvertTo-Json -Depth 4 
+            Write-Host $ActivityPayLoad
         }
         else {
-            $newBody.filters.date.lte = ($results.nextQueryFilters.date.lte)
+            Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting
         }
-        $Body = $newBody | ConvertTo-Json -Depth 4
-        Write-Host $body
     }
     else {
-        Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting
-    }
+        $loopAgain = $false
+		Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting																																													   
+        Write-Host "No Microsoft Defender for Cloud Apps Activities between $($activitiesStart) to $($activitiesEnd)"
+    }  
 } until ($loopAgain -eq $false)
+
+if ($totalRecords -ne 0) {
+	Write-Host "$($totalRecords) Microsoft Defender for Cloud Apps Activities ingested successfully"
+}

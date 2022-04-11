@@ -3,3 +3,6 @@
 - ARM template to deploy Azure Function for both Azure Commercial and Azure Gov
 - README.MD with instructions & filtering capabilities
 
+## 1.1
+- Fixed issue with regular expression module
+

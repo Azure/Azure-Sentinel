@@ -27,15 +27,17 @@ The following table lists these and provides a high-level overview to help provi
 
 | **Microsoft Sentinel Log Ingestion Format** | **Customer Experience** | **Why choose?** |
 | --- | --- | --- |
-| CEF (Preferred) | <ul><li>Log information is automatically ingested into standard CEF schema.</li><li>KQL Queries use strongly typed and well-known CEF schema.</li><li>Little or no additional parsing required by your customers</li><li>Your data will be meaningful to many queries.</li><li>Multi-step configuration - Customer needs to set up a machine / Azure VM to run an agent to push logs into Microsoft Sentinel </li></ul>|CEF results in the best query and analytics experience in Microsoft Sentinel as it will appear as the well know CEF (CommonSecurityLog) schema as columns in the Microsoft Sentinel Log tables.|
-| REST API | <ul><li>Log information is automatically ingested into custom tables with your schema.</li><li>	Custom queries required to use your data.</li><li> Customer must learn your schema.</li><li>Simple configuration - Customer does not need to set up a machine / Azure VM to run the agent </li></ul>|When you have data that does not conform to CEF or RAW Syslog formats you can create custom tables.<p>You want strict control over schema mapping and column names in Microsoft Sentinel tables on how you present your data.|
+| REST API (Push to Microsoft Sentinel) | <ul><li>Log information is automatically ingested into custom tables with your schema. Map to [Advanced Security Information Model / ASIM schema](https://docs.microsoft.com/azure/sentinel/normalization) for customers to instantly correlate with other log sources easily. </li><li>	Custom queries required to use your data.</li><li> Customer must learn your schema.</li><li>Simple configuration - Customer does not need to set up a machine / Azure VM to run the agent </li></ul>|When you have data that does not conform to CEF or RAW Syslog formats you can create custom tables.<p>You want strict control over schema mapping and column names in Microsoft Sentinel tables on how you present your data.|
+| Codeless Connector Platform (CCP) (Preview) / Native Microsoft Sentinel Polling | <ul><li>Use this to connect with your API endpoint to ingest logs automatically  into custom tables with your schema. Map to [Advanced Security Information Model / ASIM schema](https://docs.microsoft.com/azure/sentinel/normalization) for customers to instantly correlate with other log sources easily </li><li>	Custom queries required to use your data.</li><li>Simple configuration - Customer does not need to set up a machine / Azure VM to run the agent or host Azure Functions </li></ul> |  Cloud native approach to integrate with Microsoft Sentinel with maximum customer benefits. Connectors created using CCP are fully SaaS, without any requirements for service installations, and also include health monitoring and full support from Microsoft Sentinel. CCP is currently in Public Preview so reach out to [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) with any feedback you have while integrating with CCP.  |
+| REST API Polling (provider API using Azure Functions) | <ul><li>Use Azure Functions to connect with provider's API endpoint to ingest logs automatically  into custom tables with your schema. Map to [Advanced Security Information Model / ASIM schema](https://docs.microsoft.com/azure/sentinel/normalization) for customers to instantly correlate with other log sources easily </li><li>	Custom queries required to use your data.</li><li>Simple configuration - Customer does not need to set up a machine / Azure VM to run the agent </li></ul>  |  Approach to connect with provider APIs using Azure Functions to ingest data into Microsoft Sentinel. CCP is preferred over this approach. Use this as an alternative approach if you run into issues integrating with CCP. |
+| CEF | <ul><li>Log information is automatically ingested into standard CEF schema.</li><li>KQL Queries use strongly typed and well-known CEF schema.</li><li>Little or no additional parsing required by your customers</li><li>Your data will be meaningful to many queries.</li><li>Multi-step configuration - Customer needs to set up a machine / Azure VM to run an agent to push logs into Microsoft Sentinel </li></ul>|CEF will appear as the know CEF (CommonSecurityLog) schema as columns in the Microsoft Sentinel Log tables.|
 | Syslog (Least preferred) | <ul><li>RAW Syslog information is automatically ingested into simple log schema with a simple string.</li><li>	Queries are more complex as customers will need to parse the syslog messages using KQL Functions.</li><li>Multi-step configuration - Customer needs to set up a machine / Azure VM to run an agent to push logs into Microsoft Sentinel </li></ul>|You only can emit RAW Syslog at this point.|
 
 ## Send Data to Microsoft Sentinel
 
 Once you have decided on the type of data connector you plan to support, set the pipeline to send this data to Microsoft Sentinel as a POC before building the connector.  The process is described for each data connector type. Once you have a POC, send an email to [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) for the POC demo.
 
-### REST API Connectors
+### REST API Connectors (Push to Microsoft Sentinel)
 
 1. Use the [Azure Monitor Data Collector API](https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api) to send data to Azure Log Analytics. [This blog](https://zimmergren.net/building-custom-data-collectors-for-azure-log-analytics/) covers step by step instructions with screenshots to do so. If on prem, open port 443 (HTTPS/TLS) on your environment to talk to Microsoft Sentinel.
 2. Ensure the schema used for structuring the data in Log Analytics is locked. Any changes to the schema after the data connector is published will have a compatibility impact, hence need to have a new name for the connector data type.
@@ -56,6 +58,24 @@ Once you have decided on the type of data connector you plan to support, set the
 3. From a data quality perspective,
     1. Ensure the data you send is complete and contains the same fields available in your product.
     2. Ensure the data is valid and easy to query using Log Analytics.
+
+### Codeless Connector Platform (CCP) (Preview) / Native Microsoft Sentinel Polling  
+
+1. [Follow documentation](https://docs.microsoft.com/azure/sentinel/create-codeless-connector?tabs=deploy-via-arm-template%2Cconnect-via-the-azure-portal) to create a data connector using CCP. Use the template (ARM template) in step 2 of the *Build the connector* section below for quick start. Download and update for integrating with your API endpoint. 
+2. Ensure the schema used for structuring the data in Log Analytics is locked. Any changes to the schema after the data connector is published will have a compatibility impact, hence need to have a new name for the connector data type.
+3. Use the [ARM deploy mechanism](https://docs.microsoft.com/azure/azure-resource-manager/templates/quickstart-create-templates-use-the-portal) to upload the ARM template from step 1 for testing. 
+4. Pass the parameters in the configuration setting and establish connectivity. 
+5. These logs will appear in a Custom Log Analytics table **CustomLogs** -> **&lt;log name&gt;** where the log name is what you have as data type name in the template.  
+5. Design and validate a few key queries that lands the value of the data stream using Kusto Query Language. Share these as sample queries in the data connector.
+
+**Example connectors to refer to** : GitHub, [Lastpass](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/LastPass/Data%20Connectors/LastPassAPIConnector.json) (check in Content hub for the solution that has these data connectors)
+
+**Connector Validation Steps**
+1. Test the actual customer experience and validate if data flows as expected and appears in the expected Microsoft Sentinel Log Analytics custom table provided.
+2. From a data quality perspective,
+    1. Ensure the data you send is complete and contains the same fields available in your product.
+    2. Ensure the data is valid and easy to query using Log Analytics.
+    3. Ensure the schema aligns with [ASIM schema](https://docs.microsoft.com/azure/sentinel/normalization-about-schemas) as much as possible. Other non-mappable fields can land in as-is for complete product integration value to customers. 
 
 ### CEF Connector
 
@@ -151,10 +171,12 @@ Once you have a working POC, you are ready to build, validate the data connector
 
 1. **Review the [data connector template guidance](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Data%20Connectors%20Template%20Guidance.md)** - This is to help get familiarized with the nomenclature used in the templates and to enable filling out the json template easily.
 2. **Use the template** - Download the right template for your data connector type from the following, rename the json file to ‘ProviderNameApplianceName.json’ (no spaces in name) and fill out the template per the guidance mentioned above.
+   * [DataConnector_API_CCP_template.json (Preview)](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_API_CCP_template.json)
    * [Connector_CEF_Template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_CEF_template.json)
    * [Connector_REST_API_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_template.json)
    * [Connector_Syslog_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json)
    * [DataConnector_API_AzureFunctionApp_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json)
+  
 3. **Validate the Connector UX** – Follow these steps to render and validate the connector UX you just built
     1.	The test utility can be accessed by this URL - https://portal.azure.com/?feature.BringYourOwnConnector=true
     2.  Go to Microsoft Sentinel -> Data Connectors 

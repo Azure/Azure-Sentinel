@@ -1,7 +1,9 @@
 # Run-MDEAntivirus
 author: Nicholas DiCola
 
-This playbook will run a antivirus (full) scan on the machine in Microsoft Defender for Endpoint.
+This playbook will run a antivirus (full) scan on the machine in Microsoft Defender for Endpoint.  The AV scan only works on supported operating systems.  
+
+The template also deploys the permissions required to write comments to Microsoft Sentinel incidents.  The parameters will ask for the SubscriptionId and Resource Group name for where the Sentinel workspace resides. If they are left blank, it will use the Subscription Id and Resource Group where the playbook is being deployed.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
@@ -22,7 +24,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 ## Prerequisites
 
-- You will need to grant Machine.Scan permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
+- You will need to grant Machine.Scan, Machine.Read.All, and Machine.ReadWrite.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
@@ -34,6 +36,17 @@ $MDEServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$MDEAppId'
 $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
 New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
 -ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
+
+$PermissionName = "Machine.Read.All"
+$AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
+New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
+-ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
+
+$PermissionName = "Machine.ReadWrite.All"
+$AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
+New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
+-ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
+
 ```
 
 ## Screenshots

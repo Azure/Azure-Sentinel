@@ -1,8 +1,8 @@
 id: acc4c247-aaf7-494b-b5da-17f18863878a
-name: External guest invitations by default guest followed by Azure AD powershell signin
+name: External guest invitation followed by Azure AD PowerShell signin
 description: |
-  'By default guests have capability to invite more external guest user, who can do suspicious Azure AD enumeration. This detection will first look at guests 
-  inviting external guests users who are then logging via various powershell CLI after accepting invitation.
+  'By default guests have capability to invite more external guest users, guests also can do suspicious Azure AD enumeration. This detection look at guests
+  users, who have been invited or have invited recently, who also are logging via various PowerShell CLI.
   Ref : 'https://danielchronlund.com/2021/11/18/scary-azure-ad-tenant-enumeration-using-regular-b2b-guest-accounts/'
 severity: Medium
 requiredDataConnectors:
@@ -12,7 +12,7 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
-queryFrequency: 1d
+queryFrequency: 1h
 queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
@@ -25,17 +25,23 @@ relevantTechniques:
   - T1136.003
   - T1087.004
 query: |
-  AuditLogs 
-  | where OperationName in ("Invite external user", "Bulk invite users - started (bulk)","Invite external user with reset invitation status")
-  | extend InitiatedByUser = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
-    tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
-  | where InitiatedByUser has_any ("live.com#", "#EXT#")
+  let queryfrequency = 1h;
+  let queryperiod = 1d;
+  AuditLogs
+  | where TimeGenerated > ago(queryperiod)
+  | where OperationName in ("Invite external user", "Bulk invite users - started (bulk)", "Invite external user with reset invitation status")
+  | extend InitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
+  //| where InitiatedBy has_any ("live.com#", "#EXT#")
+  | extend InvitedUser = TargetResources[0].userPrincipalName
+  | mv-expand UserToCompare = pack_array(InitiatedBy, InvitedUser)
+  | where UserToCompare has_any ("live.com#", "#EXT#")
   | extend
-      parsedUser = iff(InitiatedByUser has "live.com#", tostring(split(InitiatedByUser, "#")[1]),tostring(split(InitiatedByUser, "#EXT#")[1])),
+      parsedUser = replace_string((iff(UserToCompare has "live.com#", tostring(split(UserToCompare, "#")[1]), tostring(split(UserToCompare, "#EXT#")[0]))), "@", "_"),
       InvitationTime = TimeGenerated
   | join (
-      SigninLogs
-      | where UserType == "Guest"
+      (union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs)
+      | where TimeGenerated > ago(queryfrequency)
+      | where UserType != "Member"
       | where AppId has_any
           ("1b730954-1685-4b74-9bfd-dac224a7b894",// Azure Active Directory PowerShell
            "04b07795-8ddb-461a-bbee-02f9e1bf7b46",// Microsoft Azure CLI
@@ -45,12 +51,16 @@ query: |
            "d1ddf0e4-d672-4dae-b554-9d5bdfd93547",// Microsoft Intune PowerShell
            "9bc3ab49-b65d-410a-85ad-de819febfddc",// Microsoft SharePoint Online Management Shell
            "12128f48-ec9e-42f0-b203-ea49fb6af367",// MS Teams Powershell Cmdlets
-           "89bee1f7-5e6e-4d8a-9f3d-ecd601259da7",// Office365 Shell WCSS-Client
-           "23d8f6bd-1eb0-4cc2-a08c-7bf525c67bcd" // Power BI PowerShell
+           "23d8f6bd-1eb0-4cc2-a08c-7bf525c67bcd",// Power BI PowerShell
+           "31359c7f-bd7e-475c-86db-fdb8c937548e" // PnP Management Shell
           )
-      | extend SigninTime = TimeGenerated
-  ) on $left.parsedUser == $right.UserPrincipalName
-  | project InvitationTime, SigninTime, InitiatedByUser, OperationName, AppDisplayName, IPAddress, UserType
+      | summarize arg_min(TimeGenerated, *) by UserPrincipalName
+      | extend
+          parsedUser = replace_string(UserPrincipalName, "@", "_"),
+          SigninTime = TimeGenerated
+      )
+      on parsedUser
+  | project InvitationTime, InvitatedBy = InitiatedBy, OperationName, InvitedUser, SigninTime, SigninCategory = Category1, SigninUserPrincipalName = UserPrincipalName, IPAddress, AppDisplayName, ResourceDisplayName, UserAgent, InvitationAdditionalDetails = AdditionalDetails, InvitationTargetResources = TargetResources
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -60,5 +70,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.1
+version: 1.0.3
 kind: Scheduled
