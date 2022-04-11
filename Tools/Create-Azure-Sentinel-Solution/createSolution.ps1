@@ -235,7 +235,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
                                 version        = "1.0";
-                                sourceId       = "[variables('_workbook-source')]";
+                                sourceId       = $contentToImport.TemplateSpec? "[variables('workspaceResourceId$workbookCounter')]" : "[variables('_workbook-source')]";
                                 category       = "sentinel"
                             }
                         }
@@ -272,7 +272,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $workbookMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2021-03-01-preview";
+                                apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('workbookResourceId$workbookCounter')))]";
                                 properties = [PSCustomObject]@{
                                     description = $workbookDescriptionText;
@@ -744,7 +744,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             };
                             $dataConnectorMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2021-03-01-preview";
+                                apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('dataConnectorVersion$connectorCounter')))]";
                                 properties = [PSCustomObject]@{
                                     parentId  = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]";
@@ -794,7 +794,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Add content-metadata item, in addition to template spec metadata item
                             $dataConnectorActiveContentMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2021-03-01-preview";
+                                apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId$connectorCounter'),'/'))))]";
                                 dependsOn  = @("[variables('_dataConnectorId$connectorCounter')]");
                                 properties = [PSCustomObject]@{
@@ -1228,7 +1228,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                                 $huntingQueryMetadata = [PSCustomObject]@{
                                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                    apiVersion = "2021-03-01-preview";
+                                    apiVersion = "2022-01-01-preview";
                                     name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('huntingQueryResourceId$huntingQueryCounter')))]";
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Hunting Query $huntingQueryCounter";
@@ -1374,6 +1374,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $index = $yamlPropertiesToCopyFrom.IndexOf($yamlProperty)
                                 $alertRule.$($yamlPropertiesToCopyTo[$index]) = $yaml.$yamlProperty
                             }
+
+                            if($yaml.requiredDataConnectors)
+                            {
+                                $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
+                            }
+
                             if (!$yaml.severity) {
                                 $alertRule.severity = "Medium"
                             }
@@ -1416,7 +1422,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
-                                type       = "Microsoft.OperationalInsights/workspaces/providers/alertRules";
+                                type       = $contentToImport.TemplateSpec ? "Microsoft.OperationalInsights/workspaces/providers/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
                                 apiVersion = "2021-03-01-preview";
                                 kind       = "Scheduled";
@@ -1458,7 +1464,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                                 $analyticRuleMetadata = [PSCustomObject]@{
                                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                    apiVersion = "2021-03-01-preview";
+                                    apiVersion = "2022-01-01-preview";
                                     name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('analyticRuleResourceId$analyticRuleCounter')))]";
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Analytics Rule $analyticRuleCounter";
@@ -1619,7 +1625,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $parserMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2021-03-01-preview";
+                                apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('parserName$parserCounter')))]";
                                 dependsOn  =  @(
                                     "[variables('_parserName$parserCounter')]"
@@ -1687,7 +1693,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $parserMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                                apiVersion = "2021-03-01-preview";
+                                apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
                                 dependsOn  =  @(
                                     "[variables('_parserId$parserCounter')]"
