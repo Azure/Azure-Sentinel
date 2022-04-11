@@ -247,7 +247,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else
             {
-				  $GetLastRecordTime= @{}
+				  #$GetLastRecordTime= @{}
                 $LastRecordObject = $GetLastRecordTime | ForEach-Object{
                     if($_.Key -eq $LogType){
                         $_.Value
@@ -258,7 +258,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 				 {
 					$LastRecordObject = $firstStartTimeRecord.ToString() + "|" + 0
                             
-					$GetLastRecordTime += [PSCustomObject]@{ "key" = $LogType
+					#$GetLastRecordTime += [PSCustomObject]@{ "key" = $LogType
+                    #  "value"= $LastRecordObject
+                   # };
+					$GetLastRecordTime += @{ "key" = $LogType
                       "value"= $LastRecordObject
                     };
                     $GetLastRecordTime.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
