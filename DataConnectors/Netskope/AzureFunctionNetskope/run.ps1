@@ -247,7 +247,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else
             {
-				  $GetLastRecordTime=@() 
+				  $GetLastRecordTime= @{}
                 $LastRecordObject = $GetLastRecordTime | ForEach-Object{
                     if($_.Key -eq $LogType){
                         $_.Value
