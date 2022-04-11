@@ -145,6 +145,7 @@ class PrismaCloudConnector:
     async def get_alerts(self, start_time):
         await self._authorize()
         uri = self.api_url + '/v2/alert'
+        logging.info('authorization done for get Alerts method')
         headers = {
             'x-redlock-auth': self._token,
             "Accept": "application/json; charset=UTF-8",
@@ -163,10 +164,13 @@ class PrismaCloudConnector:
                 "sortBy": ["alertTime:asc"],
                 "detailed": True
             }
+            logging.info('data object {}'.format(data))
             data = json.dumps(data)
+            logging.info('After json.dumps data object is {}'.format(data))
             async with session.post(uri, headers=headers, data=data) as response:
                 if response.status != 200:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
+                logging.info('Received logs')
                 res = await response.text()
                 logging.info('Get ALerts succeeded with response {}'.format(res.text()))
                 res = json.loads(res)
