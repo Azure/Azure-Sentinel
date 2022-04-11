@@ -12,7 +12,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
 {
     public static class ParsersDatabase
     {
-        public static ParserConfiguration[] Parsers => new ParserConfiguration[]
+        public static List<ParserConfiguration> Parsers => new List<ParserConfiguration>()
             {
                 new ParserConfiguration()
                 {
@@ -34,7 +34,13 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
 
     public class ParserConfiguration
     {
+        /// <summary>
+        /// The schema name
+        /// </summary>
         public string Schema { get; set; }
+        /// <summary>
+        /// A sample function for this schema. Parser functions that use this schema duplicate the result columns from the sample function.
+        /// </summary>
         public string SampleFunctionName { get; set; }
     }
 }

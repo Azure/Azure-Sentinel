@@ -117,8 +117,7 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
 
             //Ignore known issues
-            object id;
-            yaml.TryGetValue("Id", out id);
+            yaml.TryGetValue("Id", out object id);
             if (id != null && ShouldSkipTemplateValidation((string)yaml["Id"]))
             {
                 return;
@@ -183,10 +182,14 @@ namespace Kqlvalidations.Tests
             return (curlineIndex + 1, col);
         }
 
+        /// <summary>
+        /// Generate a string of function parameters as let statements.
+        /// </summary>
+        /// <param name="yaml">The parser's yaml file</param>
+        /// <returns>The function parameters as let statements</returns>
         private string GenerateFunctionParametersAsLetStatements(Dictionary<object, object> yaml)
         {
-            object parserParamsObject;
-            if (yaml.TryGetValue("ParserParams", out parserParamsObject))
+            if (yaml.TryGetValue("ParserParams", out object parserParamsObject))
             {
                 var parserParams = (List<object>)parserParamsObject;
                 return string.Join(Environment.NewLine, parserParams.Select(GenerateParamaterAsLetStatement).ToList());
@@ -194,11 +197,16 @@ namespace Kqlvalidations.Tests
             return "";
         }
 
+        /// <summary>
+        /// Convert function parameter to a let statement with the format 'let <parameterName>= <defaultValue>;
+        /// </summary>
+        /// <param name="parameter">A function parameter as an object</param>
+        /// <returns>A function parameter as a let statement</returns>
         private string GenerateParamaterAsLetStatement(object parameter)
         {
             var dictionary = (Dictionary<object, object>)parameter;
             string name = (string)dictionary["Name"];
-            string defaultValue = (string)dictionary["Type"] == "string" ? $"'{(string)dictionary["Default"]}'" : (string)dictionary["Default"];
+            string defaultValue = (string)dictionary["Type"] == "string" ? $"'{dictionary["Default"]}'" : (string)dictionary["Default"];
             return $"let {name}= {defaultValue};";
         }
     }

@@ -13,7 +13,6 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         {
         }
 
-
         public override IEnumerable<FunctionSchema> Load()
         {
             var sampleFunctions = base.Load();
@@ -78,9 +77,8 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         /// <returns>The parser's function parameters</returns>
         private List<FunctionParameter> GetFunctionParameters(dynamic yaml)
         {
-            object functionParamsObject;
             var functionParameters = new List<FunctionParameter>();
-            if (yaml.TryGetValue("ParserParams", out functionParamsObject))
+            if (yaml.TryGetValue("ParserParams", out object functionParamsObject))
             {
                 var parserParams = (List<object>)functionParamsObject;
                 functionParameters = parserParams.Select(ConvertObjectToFunctionParameter).ToList();
@@ -92,7 +90,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         /// <summary>
         /// Convert object to function parameter
         /// </summary>
-        /// <param name="parameter">The function parameter as a object</param>
+        /// <param name="parameter">The function parameter as an object</param>
         /// <returns>The function parameter</returns>
         private FunctionParameter ConvertObjectToFunctionParameter(object parameter)
         {
