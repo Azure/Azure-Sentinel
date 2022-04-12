@@ -73,7 +73,10 @@ ParserQuery: |
       and (array_length(hostname_has_any)==0)
         // dvcaction - post filterring
         and (eventresult=="*" or (DeviceAction=="allow" and eventresult=="Success") or (eventresult=="Failure"))
-    | parse AdditionalExtensions with "PanOSPacketsReceived=" DstPackets:long ",PanOSPacketsSent=" SrcPackets:long ",start="EventStartTime ",reason="*
+    | parse AdditionalExtensions with "PanOSPacketsReceived=" DstPackets:long * "PanOSPacketsSent=" SrcPackets:long *
+    // -- column_if_exists can be removed once the retention for old CommonSecurityLog format event is over.
+    | extend EventStartTime =  coalesce(StartTime, extract(@'start=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)))
+    | extend EventOriginalResultDetails = column_ifexists("Reason", extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)))
     | project-rename 
           EventProductVersion=DeviceVersion // Not Documented
         , Dvc=DeviceName   
@@ -92,7 +95,7 @@ ParserQuery: |
         ,EventProduct="PanOS"
         , DstBytes=tolong(ReceivedBytes) 
         , SrcBytes=tolong(SentBytes)      
-        , NetworkPackets=tolong(DeviceCustomNumber2) 
+        , NetworkPackets = tolong(column_ifexists("fieldDeviceCustomNumber2", column_ifexists ("DeviceCustomNumber2",long(null))))
         , NetworkProtocol=toupper(Protocol)
         , NetworkBytes=tolong(FlexNumber1)
         , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
@@ -100,12 +103,11 @@ ParserQuery: |
         , EventType="NetworkSession"
         , EventCount=toint(1)
         , EventResult=case(DeviceAction=="allow","Success","Failure")
-        , NetworkSessionId=tostring(DeviceCustomNumber1)
-        , NetworkDuration=toint(1000*DeviceCustomNumber3)
+        , NetworkSessionId = tostring(column_ifexists("fieldDeviceCustomNumber1", column_ifexists ("DeviceCustomNumber1","")))
+        , NetworkDuration=toint(1000*column_ifexists("fieldDeviceCustomNumber3", column_ifexists ("DeviceCustomNumber3",0)))
         , EventSchemaVersion="0.2.1"
         , EventSchema="NetworkSession"
         , EventSeverity = "Informational"
-        , EventStartTime=coalesce(todatetime(EventStartTime), TimeGenerated)
       | extend hostelements=split(Dvc,'.')
       | extend DvcHostname=tostring(hostelements[0])
             , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')

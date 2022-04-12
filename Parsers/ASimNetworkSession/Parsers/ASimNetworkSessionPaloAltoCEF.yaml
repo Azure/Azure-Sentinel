@@ -36,7 +36,10 @@ ParserQuery: |
     let NWParser=(disabled:bool=false){
     CommonSecurityLog | where not(disabled)
     | where DeviceVendor == "Palo Alto Networks" and DeviceProduct == "PAN-OS" and Activity == "TRAFFIC"
-    | parse AdditionalExtensions with "PanOSPacketsReceived=" DstPackets:long ",PanOSPacketsSent=" SrcPackets:long ",start="EventStartTime ",reason="*
+    | parse AdditionalExtensions with "PanOSPacketsReceived=" DstPackets:long * "PanOSPacketsSent=" SrcPackets:long *
+    // -- column_if_exists can be removed once the retention for old CommonSecurityLog format event is over.
+    | extend EventStartTime =  coalesce(StartTime, extract(@'start=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)))
+    | extend EventOriginalResultDetails = column_ifexists("Reason", extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)))
     | project-rename 
         EventProductVersion=DeviceVersion // Not Documented
       , Dvc=DeviceName   
@@ -55,7 +58,7 @@ ParserQuery: |
       ,EventProduct="PanOS" // Not Documented
       , SrcBytes=tolong(SentBytes)
       , DstBytes=tolong(ReceivedBytes) 
-      , NetworkPackets=tolong(DeviceCustomNumber2) 
+      , NetworkPackets = tolong(column_ifexists("fieldDeviceCustomNumber2", column_ifexists ("DeviceCustomNumber2",long(null))))
       , NetworkProtocol=toupper(Protocol)
       , NetworkBytes=tolong(FlexNumber1)
       , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
@@ -63,12 +66,11 @@ ParserQuery: |
       , EventType="NetworkSession"
       , EventCount=toint(1)
       , EventResult=case(DeviceAction=="allow","Success","Failure")
-      , NetworkSessionId=tostring(DeviceCustomNumber1)
-      , NetworkDuration=toint(1000*DeviceCustomNumber3)
+      , NetworkSessionId = tostring(column_ifexists("fieldDeviceCustomNumber1", column_ifexists ("DeviceCustomNumber1","")))
+      , NetworkDuration=toint(1000*column_ifexists("fieldDeviceCustomNumber3", column_ifexists ("DeviceCustomNumber3",0)))
       , EventSchemaVersion="0.2.1"
       , EventSchema="NetworkSession"
       , EventSeverity = "Informational"
-      , EventStartTime=coalesce(todatetime(EventStartTime), TimeGenerated)
     | extend hostelements=split(Dvc,'.')
     | extend DvcHostname=tostring(hostelements[0])
            , DvcDomain=strcat_array( array_slice(hostelements,1,-1), '.')
@@ -101,4 +103,4 @@ ParserQuery: |
     EventEndTime =EventStartTime,
     Src=SrcIpAddr
     };
-    NWParser(disabled)
+    NWParser (disabled)
