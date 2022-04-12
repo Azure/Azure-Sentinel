@@ -197,8 +197,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
             $mutex.ReleaseMutex();
         }
-        $mutex.ReleaseMutex();
-        $mutex.Dispose();
+       $mutex.Dispose();
     }
 
     function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip) {
