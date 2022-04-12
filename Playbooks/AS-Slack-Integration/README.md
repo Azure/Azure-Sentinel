@@ -34,8 +34,8 @@ Select the "**From Scratch**" option.
 ![Slack_App_1.5](Images/Slack_App_1.5.png)
 
 
-Enter in "**Microsoft Sentinel**" for the app name then add a description. 
-Finally, select a workspace and click "**Create App**" .
+Enter in "**Microsoft Sentinel**" for the app name and then select a workspace.  
+Finally, click "**Create App**" .
 
 ![Slack_App_2](Images/Slack_App_2.png)
 
@@ -62,7 +62,7 @@ Click "**Allow**" and then copy the entire value in the "**Bot User OAuth Token*
 ![Slack_App_6](Images/Slack_App_6.png)
 
 
-If you would like, you can also add the Microsoft Sentinel Logo under "**Display Information**".
+If you would like, you can also add the Microsoft Sentinel Logo under "**Display Information**". This section is located under the "**Basic Information**" menu option.
 
 ![Slack_App_7](Images/Slack_App_7.png)
 
@@ -104,6 +104,8 @@ In the **Instance Details** section:
 * **Playbook Name**: This can be left as “AS-Slack-Integration” or you may change it.  
 
 * **OAuth Token**: Enter the value of the Slack OAuth Token created from the first section.
+
+* **Channel Id**: Enter the value of the Slack channel id noted from the first section.
 
 Towards the bottom, click on “**Review + create**”. 
 
