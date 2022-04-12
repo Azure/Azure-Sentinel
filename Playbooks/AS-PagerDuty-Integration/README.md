@@ -31,12 +31,14 @@ Add a Name and optional Description like the following:
 ![PagerDuty_Create_Integration_Key_2](Images/PagerDuty_Create_Integration_Key_2.png)              
                                                                                        
                                                                                          
-Select an escalation policy for your service.
+Select an escalation policy for your service. In this example, the default is used.
 
 ![PagerDuty_Create_Integration_Key_3](Images/PagerDuty_Create_Integration_Key_3.png)
 
 
-There may be a step regarding noise reduction preferences. Here, it is reccomended that you use the "**Intelligent**" option.
+Select a noise reduction option for your service. The "**Intelligent**" option is reccomended.
+
+![PagerDuty_Create_Integration_Key_3.5](Images/PagerDuty_Create_Integration_Key_3.5.png)
 
                                                                                            
 Finally, select the Microsoft Azure option under the Integrations section, then click "**Create Service**".
