@@ -1,7 +1,7 @@
 id: 694c91ee-d606-4ba9-928e-405a2dd0ff0f
 name: Authentication Methods Changed for Privileged Account
 description: |
-  'Identifies authentication methods being changed for a privileged account. This could be an indicated of an attacker adding an auth method to the account so they can have continued access.
+  'Identifies authentication methods being changed for a privileged account. This could be an indication of an attacker adding an auth method to the account so they can have continued access.
   Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
 severity: High
 requiredDataConnectors:
@@ -28,11 +28,20 @@ query: |
       | mv-expand AssignedRoles
       | where AssignedRoles matches regex 'Admin'
       | summarize by tolower(AccountUPN));
-  AuditLogs
-  | where TimeGenerated > ago(queryfrequency)
-  | where Category =~ "UserManagement"
-  | where ActivityDisplayName =~ "User registered security info"
-  | where LoggedByService =~ "Authentication Methods"
+  let ChangedSecurityInfo =
+      AuditLogs
+      | where TimeGenerated > ago(queryfrequency)
+      | where OperationName has "security info" and OperationName has_any ("User", "Admin") and OperationName has_any ("registered","updated")
+      //| where Result == "success"
+      ;
+  let UpdateUserStrongAuthenticationMethod =
+      AuditLogs
+      | where TimeGenerated > ago(queryfrequency)
+      | where OperationName == "Update user"
+      //| where Result == "success"
+      | mv-expand modifiedProperty = TargetResources[0].modifiedProperties
+      | where modifiedProperty.displayName == "StrongAuthenticationMethod";
+  union isfuzzy=true ChangedSecurityInfo, UpdateUserStrongAuthenticationMethod
   | extend AccountCustomEntity = tolower(tostring(TargetResources[0].userPrincipalName)), IPCustomEntity = tostring(InitiatedBy.user.ipAddress)
   | where AccountCustomEntity in (VIPUsers)
 entityMappings:
@@ -44,5 +53,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.3
+version: 1.0.4
 kind: Scheduled
