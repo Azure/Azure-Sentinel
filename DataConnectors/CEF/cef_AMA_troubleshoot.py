@@ -10,6 +10,14 @@ COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
 FAILED_TESTS_COUNT = 0
 SCRIPT_VERSION = 1.0
+SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
+                      "Runs CEF validation tests on the collector machine and generate a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
+                      "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
+                      "     -h,             --help display the help and exit\n\n" \
+                      "Example:\n" \
+                      "     python cef_AMA_troubleshoot.py\n" \
+                      "     python cef_AMA_troubleshoot.py collect\n\n" \
+                      "This script verifies the installation of the CEF connector on the collector machine. It returns a status for each test and action items to fix detected issues."
 
 
 class ColorfulPrint:
@@ -654,38 +662,49 @@ class SystemInfo():
 
 
 def main():
-    feature_flag = "collect"
+    collection_feature_flag = "collect"
+    running_in_collect_mode = False
+    help_feature_flag = ['-h', '-H', '-help', '--help', '-Help', '--Help']
     printer = ColorfulPrint()
     o, e = subprocess.Popen(['id', '-u'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     if int(o) != 0:
         printer.print_error(
             "This script must be run in elevated privileges since some of the tests require root privileges")
         exit()
-    if len(sys.argv) > 1 and str(sys.argv[1]) == feature_flag:
-        printer.print_notice("Starting to collect data. This may take a couple of seconds")
-        time.sleep(2)
-        subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
-        system_info = SystemInfo()
-        system_info.handle_commands()
-        printer.print_notice(
-            "Finished collecting data \nPlease provide CSS with this file for further investigation- {} \n"
-            "In order to open a support case please browse: {}".format(
-                COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET))
-        time.sleep(1)
+    if len(sys.argv) > 1:
+        if str(sys.argv[1]) == collection_feature_flag:
+            running_in_collect_mode = True
+            printer.print_notice("Starting to collect data. This may take a couple of seconds")
+            time.sleep(2)
+            subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
+            system_info = SystemInfo()
+            system_info.handle_commands()
+            print(
+                "Finished collecting data \nPlease provide CSS with this file for further investigation- {} \n"
+                "In order to open a support case please browse: {}".format(
+                    COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET))
+            time.sleep(1)
+        elif str(sys.argv[1]) in help_feature_flag:
+            print(SCRIPT_HELP_MESSAGE)
+            exit()
+        else:
+            print("python cef_AMA_troubleshoot.py: unrecognized option '{}'\n"
+                                "Try 'python cef_AMA_troubleshoot.py --help' for more information.".format(str(sys.argv[1])))
+            exit()
     class_tests_array = [
-        (AgentInstallationVerifications(), "\n----- Starting validation tests for AMA -------------------------"),
-        (DCRConfigurationVerifications(), "\n----- Starting validation tests for data collection rules -------")
-        , (SyslogDaemonVerifications(), "\n----- Starting validation tests for the Syslog daemon -----------"),
-        (OperatingSystemVerifications(), "\n----- Starting validation tests for the operating system --------"),
-        (IncomingEventsVerifications(), "\n----- Starting validation tests for capturing incoming events ---")]
+        (AgentInstallationVerifications(), "Starting validation tests for AMA"),
+        (DCRConfigurationVerifications(), "Starting validation tests for data collection rules"),
+        (SyslogDaemonVerifications(), "Starting validation tests for the Syslog daemon"),
+        (OperatingSystemVerifications(), "Starting validation tests for the operating system"),
+        (IncomingEventsVerifications(), "Starting validation tests for capturing incoming events")]
     printer.print_notice("\nStarting to run the CEF validation script")
     time.sleep(1)
     subprocess.Popen(['rm', LOG_OUTPUT_FILE, '2>', '/dev/null'],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
     for class_test in class_tests_array:
-        printer.print_notice(str(class_test[1]))
+        printer.print_notice("\n----- {} {}".format(class_test[1], '-' * (60 - len(class_test[1]))))
         verification_object = class_test[0]
         verification_object.run_all_verifications()
     if FAILED_TESTS_COUNT > 0:
@@ -693,9 +712,9 @@ def main():
     else:
         printer.print_ok("All tests passed successfully")
     printer.print_notice("This script generated an output file located here - {}"
-                         "\nPlease review if you would like to get more information on failed tests.".format(
+                         "\nPlease review it if you would like to get more information on failed tests.".format(
         LOG_OUTPUT_FILE))
-    if not feature_flag:
+    if not running_in_collect_mode:
         printer.print_notice(
             "\nIf you would like to open a support case please run this script with the \'collect\' feature flag in order to collect additional system data for troubleshooting."
             "\'python cef_AMA_troubleshoot.py collect\'")
