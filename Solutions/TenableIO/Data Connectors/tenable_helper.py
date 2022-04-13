@@ -65,7 +65,8 @@ class TenableChunkPartitioner:
         This method divides export chunks received from Tenable.io response, into multiple sub-chunks
         such that each sub-chunk is <= 30MB.
         
-        This is necessary as per https://docs.microsoft.com/en-us/azure/azure-monitor/logs/data-collector-api#data-limits.
+        This is necessary as per
+        https://docs.microsoft.com/en-us/azure/azure-monitor/logs/data-collector-api#data-limits.
 
         Parameters:
             inputChunk (List[Dict]): List containing vuln/assets objects in chunk.
@@ -83,12 +84,20 @@ class TenableChunkPartitioner:
             sub_chunk_size = len(json.dumps(sub_chunk))
             sub_chunk_length = len(sub_chunk)
 
-            logging.info('Fetched sub-chunk from queue with %d elements & %d size(in bytes)', sub_chunk_length, sub_chunk_size)
+            logging.info(
+                'Fetched sub-chunk from queue with %d elements & %d size(in bytes)',
+                sub_chunk_length, sub_chunk_size
+            )
 
-            if (sub_chunk_size + TenableChunkPartitioner.MAX_REQUEST_HEADERS_OVERHEAD) <= TenableChunkPartitioner.MAX_UPLOAD_SIZE:
+            request_size = sub_chunk_size + TenableChunkPartitioner.MAX_REQUEST_HEADERS_OVERHEAD
+            if request_size <= TenableChunkPartitioner.MAX_UPLOAD_SIZE:
                 output_sub_chunks.append(sub_chunk)
 
-                logging.info('Added sub-chunk %d elements & %d size(in bytes) to list of output chunks.', sub_chunk_length, sub_chunk_size)
+                logging.info(
+                    'Added sub-chunk %d elements & %d size(in bytes) to list of output chunks.',
+                    sub_chunk_length,
+                    sub_chunk_size
+                )
             else:
                 divider_index = int(sub_chunk_length / 2)
                 left_chunk = sub_chunk[:divider_index]

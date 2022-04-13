@@ -56,12 +56,12 @@ def main(msg: func.QueueMessage) -> None:
                     logging.info('Uploading sub-chunk with size: %d', len(serialized_sub_chunk))
 
                     # Send to Azure Sentinel here
-                    az_sentienl = AzureSentinel(
+                    az_sentinel = AzureSentinel(
                         workspace_id, workspace_key, log_type, log_analytics_uri)
 
-                    az_code = az_sentienl.post_data(serialized_sub_chunk)
+                    az_code = az_sentinel.post_data(serialized_sub_chunk)
 
-                    logging.warn(
+                    logging.warning(
                         f'Azure Sentinel reports the following status code: {az_code}')
 
                 vuln_table.update_if_found(export_job_id, str(chunk_id), {
