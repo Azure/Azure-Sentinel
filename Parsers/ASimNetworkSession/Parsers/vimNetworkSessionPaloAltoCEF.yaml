@@ -74,9 +74,18 @@ ParserQuery: |
         // dvcaction - post filterring
         and (eventresult=="*" or (DeviceAction=="allow" and eventresult=="Success") or (eventresult=="Failure"))
     | parse AdditionalExtensions with "PanOSPacketsReceived=" DstPackets:long * "PanOSPacketsSent=" SrcPackets:long *
-    // -- column_if_exists can be removed once the retention for old CommonSecurityLog format event is over.
-    | extend EventStartTime =  coalesce(StartTime, extract(@'start=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)))
-    | extend EventOriginalResultDetails = column_ifexists("Reason", extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)))
+      // -- Adjustment to support both old and new CSL fields.
+    | extend 
+      EventStartTime =  coalesce(
+        StartTime, 
+        extract(@'start=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)),
+        datetime(null)
+      ),
+      EventOriginalResultDetails = coalesce(
+        column_ifexists("Reason", ""),
+        extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),
+        ""
+      )
     | project-rename 
           EventProductVersion=DeviceVersion // Not Documented
         , Dvc=DeviceName   
@@ -95,7 +104,6 @@ ParserQuery: |
         ,EventProduct="PanOS"
         , DstBytes=tolong(ReceivedBytes) 
         , SrcBytes=tolong(SentBytes)      
-        , NetworkPackets = tolong(column_ifexists("fieldDeviceCustomNumber2", column_ifexists ("DeviceCustomNumber2",long(null))))
         , NetworkProtocol=toupper(Protocol)
         , NetworkBytes=tolong(FlexNumber1)
         , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
@@ -103,8 +111,20 @@ ParserQuery: |
         , EventType="NetworkSession"
         , EventCount=toint(1)
         , EventResult=case(DeviceAction=="allow","Success","Failure")
-        , NetworkSessionId = tostring(column_ifexists("fieldDeviceCustomNumber1", column_ifexists ("DeviceCustomNumber1","")))
-        , NetworkDuration=toint(1000*column_ifexists("fieldDeviceCustomNumber3", column_ifexists ("DeviceCustomNumber3",0)))
+        // -- Adjustment to support both old and new CSL fields.
+        , NetworkPackets = coalesce(
+            tolong(column_ifexists("fieldDeviceCustomNumber2", long(null))),
+            tolong(column_ifexists("DeviceCustomNumber2",long(null)))
+          )
+        , NetworkSessionId = coalesce(
+            tostring(column_ifexists("fieldDeviceCustomNumber1", long(null))),
+            tostring(column_ifexists("DeviceCustomNumber1",long(null)))
+          )
+        , NetworkDuration= coalesce(
+            toint(1000*column_ifexists("fieldDeviceCustomNumber3", 0)),
+            toint(1000*column_ifexists("DeviceCustomNumber3",0)),
+            int(null)
+          )
         , EventSchemaVersion="0.2.1"
         , EventSchema="NetworkSession"
         , EventSeverity = "Informational"
