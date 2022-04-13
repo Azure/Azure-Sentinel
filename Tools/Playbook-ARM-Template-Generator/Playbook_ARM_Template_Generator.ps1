@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 3-16-2022
+        LASTEDIT: 3-29-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -58,7 +58,7 @@ Function Write-Log {
         "Error" { Write-Host $Message -ForegroundColor Red }
     } 											  
     try {
-        [PSCustomObject]@{
+        [PSCustomObject] [ordered] @{
             Time     = (Get-Date -f g)
             Message  = $Message
             Severity = $Severity
@@ -248,15 +248,19 @@ Function GetPlaybookResource() {
         $playbookArmIdToUse = BuildPlaybookArmId
         $playbookResource = SendArmGetCall -relativeUrl "$($playbookArmIdToUse)?api-version=2017-07-01"
         
-        $PlaybookARMParameters.Add("PlaybookName", @{
+        $PlaybookARMParameters.Add("PlaybookName", [ordered] @{
             "defaultValue"= $playbookResource.Name
             "type"= "string"
         })
 
         # Update properties to fit ARM template structure
         if ($GenerateForGallery) {
+            if (!("tags" -in $playbookResource.PSobject.Properties.Name)) {
+                Add-Member -InputObject $playbookResource -Name "tags" -Value @() -MemberType NoteProperty -Force
+            }
+
             if (!$playbookResource.tags) {
-                $playbookResource.tags = @{
+                $playbookResource.tags = [ordered] @{
                     "hidden-SentinelTemplateName"= $playbookResource.name
                     "hidden-SentinelTemplateVersion"= "1.0"
                 }
@@ -314,7 +318,7 @@ Function GetPlaybookResource() {
 Function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbookResource) {
     Try {
         $connectionName = $apiConnectionReference.Name
-        $connectionName = $connectionName -replace '[^a-zA-Z]', ''
+        $connectionName = $connectionName.Split('_')[0].ToString().Trim()
         $connectionVariableName = "$($connectionName)ConnectionName"        
         $templateVariables.Add($connectionVariableName, "[concat('$connectionName-', parameters('PlaybookName'))]")
         $connectorType = if ($apiConnectionReference.Value.id.ToLowerInvariant().Contains("/managedapis/")) { "managedApis" } else { "customApis" } 
@@ -344,17 +348,17 @@ Function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
         $existingConnectorProperties = SendArmGetCall -relativeUrl "$($apiConnectionReference.Value.id)?api-version=2016-06-01"
 
         # Create API connection resource
-        $apiConnectionResource = @{
+        $apiConnectionResource = [ordered] @{
             "type"= "Microsoft.Web/connections"
             "apiVersion"= "2016-06-01"
             "name"= "[variables('$connectionVariableName')]"
             "location"= "[resourceGroup().location]"
             "kind"= "V1"
-            "properties"= @{
+            "properties"= [ordered] @{
                 "displayName"= "[variables('$connectionVariableName')]"
-                "customParameterValues"= @{}
+                "customParameterValues"= [ordered] @{}
                 "parameterValueType"= $connectionAuthenticationType
-                "api"= @{
+                "api"= [ordered] @{
                     "id"= "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/$connectorType/$connectionName')]"
                 }
             }
@@ -366,7 +370,7 @@ Function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
         $apiConnectionResources.Add($apiConnectionResource) | Out-Null
 
         # Update API connection reference in the playbook resource
-        $apiConnectionReference.Value = @{
+        $apiConnectionReference.Value = [ordered] @{
             "connectionId"= "[resourceId('Microsoft.Web/connections', variables('$connectionVariableName'))]"
             "connectionName" = "[variables('$connectionVariableName')]"
             "id" = "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/$connectorType/$connectionName')]"
@@ -385,7 +389,7 @@ Function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
 
             $matchingConnectionValue = $existingConnectionProperties.properties.alternativeParameterValues.$($connectorParameter.Name)
 
-            $templateParameters.Add($connectorParameter.Name, @{
+            $templateParameters.Add($connectorParameter.Name, [ordered] @{
                 "defaultValue"= $matchingConnectionValue
                 "type"= $connectorParameter.Value.type
             })
@@ -407,7 +411,7 @@ Function BuildArmTemplate($playbookResource) {
         }
 
         if ($GenerateForGallery) {
-            $armTemplate.Insert(4, "metadata", @{
+            $armTemplate.Insert(2, "metadata", [ordered] @{
                 "title"= ""
                 "description"= ""
                 "prerequisites"= ""
@@ -415,8 +419,9 @@ Function BuildArmTemplate($playbookResource) {
                 "lastUpdateTime"= ""
                 "entities"= @()
                 "tags"= @()
-                "support"= @{
-                    "tier"= "community" 
+                "support"= [ordered] @{
+                    "tier"= "community"
+                    "armtemplate" = "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
                 }
                 "author"= @{
                     "name"= ""
@@ -521,9 +526,9 @@ foreach($GetSubscription in $GetSubscriptions) {
                 $armHostUrl = $azContext.Environment.ResourceManagerUrl
 
                 $apiConnectionResources = [System.Collections.ArrayList]@()
-                $templateParameters = @{}
+                $templateParameters = [ordered] @{}
                 $PlaybookARMParameters = [ordered] @{}
-                $templateVariables = @{}
+                $templateVariables = [ordered] @{}
 
                 $PlaybookSubscriptionId = $GetSubscription.id
                 $PlaybookResourceName = $LogicApp.Name
@@ -541,7 +546,7 @@ foreach($GetSubscription in $GetSubscriptions) {
                         $playbookResource.properties.definition.parameters | Add-Member -MemberType NoteProperty -Name $($PlaybookParameter.Name) -Value @{"defaultValue"="[parameters('$($PlaybookParameter.Name)')]" 
                         "type"= "string" }     
                         
-                        $PlaybookARMParameters.Add($($PlaybookParameter.Name), @{                            
+                        $PlaybookARMParameters.Add($($PlaybookParameter.Name), [ordered] @{                            
                             "type"= "string"
                             "metadata"= @{
                                 "description"="Enter value for $($PlaybookParameter.Name)"

@@ -1,6 +1,6 @@
 # Zscaler ZIA ASIM WebSession Normalization Parser
 
-This template deploys the ASIM WebSession schema parser for Zscaler ZIA.
+ARM template for ASIM WebSession schema parser for Zscaler ZIA.
 
 This ASIM parser supports normalizing Zscaler ZIA proxy logs produced by the Microsoft Sentinel Zscaler connector to the ASIM Web Session normalized schema.
 
