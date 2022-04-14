@@ -273,10 +273,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $workbookMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(parameters('workbook$workbookCounter-id'),'/'))))]";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookResourceId$workbookCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     description = $workbookDescriptionText;
-                                    parentId  = "[variables('workspaceResourceId$workbookCounter')]"
+                                    parentId  = "[variables('workbookResourceId$workbookCounter')]"
                                     contentId = "[variables('_workbookContentId$workbookCounter')]";
                                     kind      = "Workbook";
                                     version   = "[variables('workbookVersion$workbookCounter')]";
@@ -730,7 +730,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $1pconnectorData = $connectorData
                                 $1pconnectorData = $1pconnectorData | Select-Object -Property id,title,publisher,descriptionMarkdown, graphQueries, connectivityCriterias,dataTypes
                             }
-                            $templateSpecConnectorUiConfig = $1pconnectorData
+                            $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $connectorData
                             $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$connectorCounter')]"
                             $dataConnectorContent = [PSCustomObject]@{
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$connectorCounter'))]";
@@ -750,7 +750,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $dataConnectorMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('dataConnectorVersion$connectorCounter')))]";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId'),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     parentId  = "[variables('_parentId')]";
                                     contentId = "[variables('_dataConnectorContentId$connectorCounter')]";
@@ -842,7 +842,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
                             }
                             $connectorObj = [PSCustomObject]@{
-                                id         = "[variables('_connector$connectorCounter-source')]";
+                                #id         = "[variables('_connector$connectorCounter-source')]";
                                 # id         = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
                                 name       = if ($contentToImport.TemplateSpec) { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$connectorCounter'))]" }else { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]" }
                                 apiVersion = "2021-03-01-preview";
@@ -1159,13 +1159,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     query       = $yaml.query;
                                     version     = $contentToImport.TemplateSpec ? 2 : 1;
                                     tags        = @();
-                                    requiredDataConnectors = $yaml.requiredDataConnectors;
                                 }
                             }
 
                             if($contentToImport.TemplateSpec)
                             {
                                 $huntingQueryObj | Add-Member -NotePropertyName "id" -NotePropertyValue "[guid('$($(New-Guid).Guid)')]"
+                            }
+                            if($yaml.requiredDataConnectors)
+                            {
+                                $huntingQueryObj | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
                             }
                             $huntingQueryDescription = ""
                             if ($yaml.description) {
@@ -1470,7 +1473,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $analyticRuleMetadata = [PSCustomObject]@{
                                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                     apiVersion = "2022-01-01-preview";
-                                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticalRule-', last(split(guid(variables('analyticRuleResourceId$huntingQueryCounter')),'/'))))]";
+                                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticalRule-', last(split(guid(variables('analyticRuleResourceId$analyticRuleCounter')),'/'))))]";
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Analytics Rule $analyticRuleCounter";
                                         parentId  = "[variables('analyticRuleResourceId$analyticRuleCounter')]";
@@ -1631,7 +1634,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $parserMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('parserName$parserCounter')))]";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
                                 dependsOn  =  @(
                                     "[variables('_parserName$parserCounter')]"
                                 );
