@@ -1,0 +1,26 @@
+id: 11b8daa5-fe15-4664-b332-8f26d3c0b3a7
+name: Code Repo Exfiltration
+description: |
+  Looks for accounts that uploaded multiple code repositories to external web domain.  
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+- Exfiltration
+query: |
+  let filesThreshold = 10;
+  let lookback = 1d;
+  let sourceDomainList = pack_array("github", "visualstudio", "gitlab", "bitbucket", "osdn"); //code repo url's
+  let excludeTargetDomainList = pack_array("office.net","visualstudio","github","gitlab","azure","dynamics","teams","sharepoint"); //exclude list for the target domain
+  CloudAppEvents
+  | where Timestamp > ago(lookback)
+  | where ApplicationId == 11161
+  | where  ActionType =~ "FileUploadedToCloud"
+  | project Timestamp, AccountObjectId, AccountDisplayName, extension = RawEventData.FileExtension, origin = RawEventData.OriginatingDomain, target = RawEventData.TargetDomain, file = RawEventData.ObjectId
+  | extend file = tostring(parse_path(tostring(file)).Filename)
+  | where extension =~ "zip" //filterting for zipped repos
+  | where origin has_any (sourceDomainList)
+  | where not(target has_any(excludeTargetDomainList))
+  | summarize uploadedFiles = dcount(file), files = make_set(file, 128) by AccountObjectId, AccountDisplayName
+  | where uploadedFiles > filesThreshold

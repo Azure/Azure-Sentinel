@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using Xunit;
 using YamlDotNet.Serialization;
 using Microsoft.Azure.Sentinel.KustoServices.Implementation;
+using Kqlvalidations.Tests.FunctionSchemasLoaders;
+using System;
 
 namespace Kqlvalidations.Tests
 {
@@ -20,6 +22,7 @@ namespace Kqlvalidations.Tests
                .WithSentinelDefaultTablesAndFunctionsSchemas()
                .WithCustomTableSchemasLoader(new CustomJsonDirectoryTablesLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomTables")))
                .WithCustomFunctionSchemasLoader(new CustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
+               .WithCustomFunctionSchemasLoader(new ParsersCustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
                .Build();
         }
 
@@ -40,7 +43,7 @@ namespace Kqlvalidations.Tests
 
             ValidateKql(id, queryStr);
         }
-        
+
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
@@ -104,6 +107,26 @@ namespace Kqlvalidations.Tests
         
         }
 
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
+        [ClassData(typeof(ParsersYamlFilesTestData))]
+        public void Validate_ParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
+            var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml);
+            var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
+
+            //Ignore known issues
+            yaml.TryGetValue("Id", out object id);
+            if (id != null && ShouldSkipTemplateValidation((string)yaml["Id"]))
+            {
+                return;
+            }
+
+            var parserName = (string)yaml["ParserName"];
+            ValidateKql(parserName, queryStr);
+        }
+
         private void ValidateKql(string id, string queryStr)
         {
             var validationResult = _queryValidator.ValidateSyntax(queryStr);
@@ -157,6 +180,34 @@ namespace Kqlvalidations.Tests
             }
             var col = (pos - curPos + 1);
             return (curlineIndex + 1, col);
+        }
+
+        /// <summary>
+        /// Generate a string of function parameters as let statements.
+        /// </summary>
+        /// <param name="yaml">The parser's yaml file</param>
+        /// <returns>The function parameters as let statements</returns>
+        private string GenerateFunctionParametersAsLetStatements(Dictionary<object, object> yaml)
+        {
+            if (yaml.TryGetValue("ParserParams", out object parserParamsObject))
+            {
+                var parserParams = (List<object>)parserParamsObject;
+                return string.Join(Environment.NewLine, parserParams.Select(GenerateParamaterAsLetStatement).ToList());
+            }
+            return "";
+        }
+
+        /// <summary>
+        /// Convert function parameter to a let statement with the format 'let <parameterName>= <defaultValue>;
+        /// </summary>
+        /// <param name="parameter">A function parameter as an object</param>
+        /// <returns>A function parameter as a let statement</returns>
+        private string GenerateParamaterAsLetStatement(object parameter)
+        {
+            var dictionary = (Dictionary<object, object>)parameter;
+            string name = (string)dictionary["Name"];
+            string defaultValue = (string)dictionary["Type"] == "string" ? $"'{dictionary["Default"]}'" : (string)dictionary["Default"];
+            return $"let {name}= {defaultValue};";
         }
     }
 

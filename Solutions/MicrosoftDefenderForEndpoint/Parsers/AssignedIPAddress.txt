@@ -1,0 +1,19 @@
+// This function queries to quickly obtain the latest IP addresses that have been assigned to a device. If you specify a timestamp //argument, this function obtains the most recent //IP addresses at the specified time.
+// Usage Instruction : 
+// This Function should be deployed via Solution install only from content hub
+// Syntax :: e.g. AssignedIPAddresses(x, y) .
+// Reference : https://docs.microsoft.com/microsoft-365/security/defender/advanced-hunting-assignedipaddresses-function?view=o365-worldwide
+let AssignedIPAddresses = (Device:string, Timestamp:datetime = datetime(null))
+{
+let t = coalesce(Timestamp, now());
+let adapters = materialize(
+    DeviceNetworkInfo 
+    | where Timestamp between(max_of(t - 1d, ago(30d)) .. t)
+    | where DeviceId == Device or DeviceName == Device
+    | top 500 by Timestamp);
+let lastReportId = tolong(toscalar(adapters | summarize arg_max(Timestamp, ReportId) | project ReportId));
+adapters | where ReportId == lastReportId
+| project Timestamp, NetworkAdapterType, IpAddresses = todynamic(tostring(IPAddresses)), ConnectedNetworks
+| mv-expand IpAddresses
+| project Timestamp, IPAddress = tostring(IpAddresses.IPAddress), IPType = tostring(IpAddresses.AddressType), NetworkAdapterType, ConnectedNetworks
+};

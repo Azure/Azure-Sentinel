@@ -19,8 +19,9 @@ To automate deployment of Microsoft Sentinel Playbooks (Azure LogicApps), this P
 3. Script prompts you to enter your Azure Tenant Id
 
 4. You are prompted to authenticate with credentials, once the user is authenticated, you will be prompted to choose 
-	- Subscription
-	- Log Analytics Workspace
+	- Subscription	
 	- Playbooks
 
-5.	After selecting playbooks, script prompts to select location on your local drive to save ARM Template
+5.	After selecting playbooks, script prompts to select location on your local drive to save ARM Template  
+   **Note**  
+   Tool converts microsoftsentinel connections to MSI during export
