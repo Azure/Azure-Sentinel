@@ -194,10 +194,8 @@ function Confirmation-Dlg {
     $logselectform.AcceptButton = $okb
     $logselectform.Controls.Add($okb)
 
-    $rs = $logselectform.ShowDialog((New-Object System.Windows.Forms.Form -Property @{TopMost = $true; TopLevel = $true }))
-    if ($rs -eq [System.Windows.Forms.DialogResult]::OK) {
-        exit
-    }
+    $logselectform.ShowDialog((New-Object System.Windows.Forms.Form -Property @{TopMost = $true; TopLevel = $true }))
+    
 }
 #endregion
 
@@ -605,9 +603,9 @@ foreach($GetSubscription in $GetSubscriptions) {
                 $armTemplateOutput = BuildArmTemplate -playbookResource $playbookResource | ConvertTo-Json -Depth 100
                 $armTemplateOutput = $armTemplateOutput -replace "\\u0027", "'" # ConvertTo-Json escapes quotes, which we don't want
                 FixJsonIndentation -jsonOutput $armTemplateOutput | Set-Content "$($FolderName)\$($PlaybookResourceName)\azuredeploy.json"
-                Write-Log -Message "ARM Template created successfully at $($FolderName)\$($PlaybookResourceName)\azuredeploy.json" -LogFileName $LogFileName -Severity Information
-                Confirmation-Dlg -DlgMessage "ARM Template created successfully at $($FolderName)\$($PlaybookResourceName)\azuredeploy.json"
+                Write-Log -Message "ARM Template created successfully at $($FolderName)\$($PlaybookResourceName)\azuredeploy.json" -LogFileName $LogFileName -Severity Information                
             }
+            Confirmation-Dlg -DlgMessage "ARM Template created successfully at $($FolderName)"
         }
     }
     catch {    
