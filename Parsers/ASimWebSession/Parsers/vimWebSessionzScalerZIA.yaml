@@ -96,14 +96,17 @@ ParserQuery: |
     and ((array_length(url_has_any) == 0) or (RequestURL has_any (remove_protocol_from_list(url_has_any))))
   // -- Parse
   | parse AdditionalExtensions with 
-      "reason=" EventResultOriginalDetails:string ";"
-      "outcome=" EventResultDetails:string ";"
-      "cat=" * ";"
-      "rulelabel=" RuleName:string ";"
+      * "rulelabel=" RuleName:string ";"
       "ruletype=" ruletype:string ";"
       "urlclass=" urlclass:string ";"
       "devicemodel=" * 
-  // -- Post filtering
+   // -- Post filtering
+  | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventResultDetails = coalesce(
+      column_ifexists("EventOutcome", ""),
+      extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    )
   | where
     ((array_length(eventresultdetails_in) == 0) or (EventResultDetails in (eventresultdetails_in)))
   | extend
@@ -112,6 +115,15 @@ ParserQuery: |
   // -- Event fields
   | lookup DvcActionLookup on DeviceAction
   | extend 
+    // -- Adjustment to support both old and new CSL fields.
+    EventOriginalResultDetails = coalesce(
+      column_ifexists("Reason", ""),
+      extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    ),
+    ThreatRiskLevel = coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
     EventCount=int(1), 
     EventStartTime=TimeGenerated,  
     EventVendor = "Zscaler", 
@@ -134,7 +146,6 @@ ParserQuery: |
     SrcUsername = SourceUserName,
     SrcNatIpAddr= SourceTranslatedAddress,
     SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
-    ThreatRiskLevel = DeviceCustomNumber1,
     UrlCategory = DeviceCustomString2,
     ThreatName = DeviceCustomString5,
     FileMD5 = DeviceCustomString6

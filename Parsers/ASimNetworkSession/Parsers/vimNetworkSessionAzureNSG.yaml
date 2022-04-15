@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -59,30 +62,53 @@ ParserQuery: |
   ];
   let parser = (
         starttime:datetime=datetime(null), 
-        endtime:datetime=datetime(null), 
+        endtime:datetime=datetime(null),
         srcipaddr_has_any_prefix:dynamic=dynamic([]), 
         dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
         dstportnumber:int=int(null), 
         hostname_has_any:dynamic=dynamic([]), 
         dvcaction:dynamic=dynamic([]), 
         eventresult:string='*', 
-        disabled:bool=false) 
+        disabled:bool=false)
   {
-    let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM2_s:string)) { 
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM1_s:string, VM2_s:string)) { 
       T
       | where
-        (isnull(starttime) or TimeGenerated >= starttime)
-        and  (isnull(endtime) or TimeGenerated <= endtime)
-        and  (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) 
-        and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SrcIP_s ,srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcPublicIPs_s ,srcipaddr_has_any_prefix)) 
-        and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestIP_s ,dstipaddr_has_any_prefix) or has_any_ipv4_prefix(DestPublicIPs_s ,dstipaddr_has_any_prefix))
-        and (array_length(hostname_has_any) == 0 or VM2_s has_any (hostname_has_any))
+        (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) 
+      | extend dataSrcIPs = strcat(SrcIP_s," ",SrcPublicIPs_s),
+               dataDstIPs = strcat(DestIP_s," ",DestPublicIPs_s)
+      | extend temp_isSrcMatch=has_any_ipv4_prefix(dataSrcIPs,src_or_any)
+             , temp_isDstMatch=has_any_ipv4_prefix(dataDstIPs,dst_or_any)
+      | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+          )
+      | where ASimMatchingIpAddr != "No match"
+      | extend temp_is_MatchSrcHostname = VM1_s has_any (hostname_has_any)
+              , temp_is_MatchDstHostname = VM2_s has_any (hostname_has_any)
+      | extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"-",
+                                  temp_is_MatchSrcHostname and temp_is_MatchDstHostname, "Both",
+                                  temp_is_MatchSrcHostname, "SrcHostname",
+                                  temp_is_MatchDstHostname, "DstHostname",
+                                  "No match"
+                                )
+      | where ASimMatchingHostname != "No match"
+      | project-away temp_*
       | lookup DvcActionLookup on FlowStatus_s
       | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
       | where (eventresult=='*' or EventResult == eventresult)
-    };
+    }; // prefilter ends
     let AzureNetworkAnalytics = 
       AzureNetworkAnalytics_CL
+      | where
+       (isnull(starttime) or TimeGenerated >= starttime)
+        and  (isnull(endtime) or TimeGenerated <= endtime)
       | where not(disabled) and isnotempty(FlowType_s)
       | lookup NetworkDirectionLookup on FlowDirection_s
     ;
@@ -115,9 +141,9 @@ ParserQuery: |
       | project-rename
           SrcMacAddr = MACAddress_s
       | extend
-          SrcBytes = tolong(OutboundBytes_d), 
+          SrcBytes   = tolong(OutboundBytes_d), 
           SrcPackets = tolong(OutboundPackets_d),
-          DstBytes = tolong(InboundBytes_d),
+          DstBytes   = tolong(InboundBytes_d),
           DstPackets = tolong(InboundPackets_d),
           DstInterfaceName = split(NIC_s, '/')[1],
           DstGeoCountry = toupper(Country_s)
@@ -179,7 +205,8 @@ ParserQuery: |
         Duration,
         SessionId,
         _ResourceId,
-        TimeGenerated
+        TimeGenerated,
+        ASim*
     | project-away *_s
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

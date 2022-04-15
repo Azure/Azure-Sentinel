@@ -1,7 +1,7 @@
 id: 694c91ee-d606-4ba9-928e-405a2dd0ff0f
 name: Authentication Methods Changed for Privileged Account
 description: |
-  'Identifies authentication methods being changed for a privileged account. This could be an indicated of an attacker adding an auth method to the account so they can have continued access.
+  'Identifies authentication methods being changed for a privileged account. This could be an indication of an attacker adding an auth method to the account so they can have continued access.
   Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
 severity: High
 requiredDataConnectors:
@@ -21,28 +21,30 @@ tags:
 query: |
   let queryperiod = 14d;
   let queryfrequency = 2h;
+  let security_info_actions = dynamic(["User registered security info", "User changed default security info", "User deleted security info", "Admin updated security info", "User reviewed security info", "Admin deleted security info", "Admin registered security info"]);
   let VIPUsers = (
       IdentityInfo
       | where TimeGenerated > ago(queryperiod)
-      | summarize arg_max(TimeGenerated, *) by AccountUPN
       | mv-expand AssignedRoles
       | where AssignedRoles matches regex 'Admin'
       | summarize by tolower(AccountUPN));
   AuditLogs
   | where TimeGenerated > ago(queryfrequency)
   | where Category =~ "UserManagement"
-  | where ActivityDisplayName =~ "User registered security info"
-  | where LoggedByService =~ "Authentication Methods"
-  | extend AccountCustomEntity = tolower(tostring(TargetResources[0].userPrincipalName)), IPCustomEntity = tostring(InitiatedBy.user.ipAddress)
-  | where AccountCustomEntity in (VIPUsers)
+  | where ActivityDisplayName in (security_info_actions)
+  | extend Initiator = tostring(InitiatedBy.user.userPrincipalName)
+  | extend IP = tostring(InitiatedBy.user.ipAddress)
+  | extend Target = tolower(tostring(TargetResources[0].userPrincipalName))
+  | where Target in (VIPUsers)
+  | summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason, MaxSize=8), Targets=make_set(Target, MaxSize=256) by Initiator, IP, Result
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Target
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.3
+        columnName: IP
+version: 1.0.5
 kind: Scheduled

@@ -39,31 +39,35 @@ if not match:
 
 async def main(mytimer: func.TimerRequest):
     logging.info('Script started.')
-    prisma = PrismaCloudConnector(API_URL, USER, PASSWORD)
+    async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession() as session_sentinel:
+            prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, session=session, session_sentinel=session_sentinel)
 
-    tasks = [
-        prisma.process_alerts()
-    ]
+            tasks = [
+                prisma.process_alerts()
+            ]
 
-    logging.info('LOGTYPE value : {}'.format(LOGTYPE))
-    if LOGTYPE.lower().__contains__('audit') :
-        tasks.append(prisma.process_audit_logs())
+            logging.info('LOGTYPE value : {}'.format(LOGTYPE))
+            if LOGTYPE.lower().__contains__('audit') :
+                tasks.append(prisma.process_audit_logs())
 
-    await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks)
 
     logging.info('Program finished. {} events have been sent.'.format(prisma.sentinel.successfull_sent_events_number))
 
 
 class PrismaCloudConnector:
-    def __init__(self, api_url, username, password):
+    def __init__(self, api_url, username, password, session: aiohttp.ClientSession, session_sentinel: aiohttp.ClientSession):
         self.api_url = api_url
         self.__username = username
         self.__password = password
+        self.session = session
+        self.session_sentinel = session_sentinel
         self._token = None
         self._auth_lock = asyncio.Lock()
         self.alerts_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastalert')
         self.auditlogs_state_manager = StateManagerAsync(FILE_SHARE_CONN_STRING, share_name='prismacloudcheckpoint', file_path='prismacloudlastauditlog')
-        self.sentinel = AzureSentinelMultiConnectorAsync(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
+        self.sentinel = AzureSentinelMultiConnectorAsync(self.session_sentinel, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, queue_size=10000)
         self.sent_alerts = 0
         self.sent_audit_logs = 0
         self.last_alert_ts = None
@@ -132,11 +136,10 @@ class PrismaCloudConnector:
                     'password': self.__password
                 }
                 data = json.dumps(data)
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(uri, data=data, headers=headers) as response:
-                        if response.status != 200:
-                            raise Exception('Error while getting Prisma Cloud auth token. HTTP status code: {}'.format(response.status))
-                        res = await response.text()
+                async with self.session.post(uri, data=data, headers=headers) as response:
+                    if response.status != 200:
+                        raise Exception('Error while getting Prisma Cloud auth token. HTTP status code: {}'.format(response.status))
+                    res = await response.text()
 
                 res = json.loads(res)
                 self._token = res['token']
@@ -150,41 +153,41 @@ class PrismaCloudConnector:
             "Accept": "application/json; charset=UTF-8",
             "Content-Type": "application/json; charset=UTF-8"
         }
-        async with aiohttp.ClientSession() as session:
-            unix_ts_now = (int(time.time()) - 10) * 1000
+
+        unix_ts_now = (int(time.time()) - 10) * 1000
+        data = {
+            "timeRange": {
+                "type": "absolute",
+                "value": {
+                    "startTime": start_time,
+                    "endTime": unix_ts_now
+                }
+            },
+            "sortBy": ["alertTime:asc"],
+            "detailed": True
+        }
+        data = json.dumps(data)
+        async with self.session.post(uri, headers=headers, data=data) as response:
+            if response.status != 200:
+                raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
+            res = await response.text()
+            res = json.loads(res)
+
+        for item in res['items']:
+            yield item
+
+        while 'nextPageToken' in res:
             data = {
-                "timeRange": {
-                    "type": "absolute",
-                    "value": {
-                        "startTime": start_time,
-                        "endTime": unix_ts_now
-                    }
-                },
-                "sortBy": ["alertTime:asc"],
-                "detailed": True
+                'pageToken': res['nextPageToken']
             }
             data = json.dumps(data)
-            async with session.post(uri, headers=headers, data=data) as response:
+            async with self.session.post(uri, headers=headers, data=data) as response:
                 if response.status != 200:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                 res = await response.text()
                 res = json.loads(res)
-
             for item in res['items']:
                 yield item
-
-            while 'nextPageToken' in res:
-                data = {
-                    'pageToken': res['nextPageToken']
-                }
-                data = json.dumps(data)
-                async with session.post(uri, headers=headers, data=data) as response:
-                    if response.status != 200:
-                        raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
-                    res = await response.text()
-                    res = json.loads(res)
-                for item in res['items']:
-                    yield item
 
     @staticmethod
     def clear_alert(alert):
@@ -200,21 +203,21 @@ class PrismaCloudConnector:
             "Accept": "*/*",
             "Content-Type": "application/json"
         }
-        async with aiohttp.ClientSession() as session:
-            unix_ts_now = (int(time.time()) - 10) * 1000
-            params = {
-                'timeType': 'absolute',
-                'startTime': start_time,
-                'endTime': unix_ts_now
-            }
-            async with session.get(uri, headers=headers, params=params) as response:
-                if response.status != 200:
-                    raise Exception('Error while getting audit logs. HTTP status code: {}'.format(response.status))
-                res = await response.text()
-                res = json.loads(res)
 
-            for item in res:
-                yield item
+        unix_ts_now = (int(time.time()) - 10) * 1000
+        params = {
+            'timeType': 'absolute',
+            'startTime': start_time,
+            'endTime': unix_ts_now
+        }
+        async with self.session.get(uri, headers=headers, params=params) as response:
+            if response.status != 200:
+                raise Exception('Error while getting audit logs. HTTP status code: {}'.format(response.status))
+            res = await response.text()
+            res = json.loads(res)
+
+        for item in res:
+            yield item
 
     async def save_alert_checkpoint(self):
         if self.last_alert_ts:
