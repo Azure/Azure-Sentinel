@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 3-29-2022
+        LASTEDIT: 4-14-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
