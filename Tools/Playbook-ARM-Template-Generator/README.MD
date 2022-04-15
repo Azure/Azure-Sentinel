@@ -1,6 +1,6 @@
 ## Playbook ARM Template Generator
 **Author : Sreedhar Ande, Itai Yankelevsky**  
-Export Microsoft Sentinel Playbooks (Azure LogicApps) in the quickest amount of time by sanitizing the JSON contains organizational information such as tenant ID, subscription information, connection strings, and other items that make sharing a Playbook is no longer a daunting technical challenge.  
+Export Microsoft Sentinel Playbooks (Azure LogicApps) in the quickest amount of time by sanitizing the JSON contains organizational information such as tenant ID, subscription information, connection strings, and other items that makes sharing a Playbook(Azure LogicApps) a daunting technical challenge.  
 
 This PowerShell utility first evaluates your Azure logic app and any API connections that the logic app uses then generates template resources with the necessary parameters for deployment.  
 
