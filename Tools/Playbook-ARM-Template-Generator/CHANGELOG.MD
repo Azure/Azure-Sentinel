@@ -1,3 +1,7 @@
+## 1.7
+- Removed confirmation dialogue from the loop
+- Updated Package
+
 ## 1.6
 - Added support for Linux OS users  
 - Added file structure  
