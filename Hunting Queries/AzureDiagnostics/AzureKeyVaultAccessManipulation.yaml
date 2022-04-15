@@ -1,0 +1,52 @@
+id: 8eff7055-9138-4edc-b8f0-48ea27e23c3c
+name: Azure Key Vault Access Policy Manipulation
+description: |
+  'Identifies when a user is added and then removed to an Azure Key Vault access policy within a short time period. 
+  This may be a sign of credential access and persistence.'
+requiredDataConnectors:
+  - connectorId: AzureKeyVault
+    dataTypes:
+      - AzureDiagnostics
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1555
+query: |
+
+  AzureDiagnostics
+  | where ResourceType == "VAULTS"
+  | where OperationName == "VaultPatch"
+  | where ResultType == "Success"
+  | extend UserObjectAdded = addedAccessPolicy_ObjectId_g
+  | extend AddedActor = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s
+  | extend KeyAccessAdded = tostring(addedAccessPolicy_Permissions_keys_s)
+  | extend SecretAccessAdded = tostring(addedAccessPolicy_Permissions_secrets_s)
+  | extend CertAccessAdded = tostring(addedAccessPolicy_Permissions_certificates_s)
+  | where isnotempty(UserObjectAdded)
+  | project AccessAddedTime=TimeGenerated, ResourceType, OperationName, ResultType, KeyVaultName=id_s, AddedActor, UserObjectAdded, KeyAccessAdded, SecretAccessAdded, CertAccessAdded
+  | join kind=inner 
+  ( 
+  AzureDiagnostics
+  | where ResourceType == "VAULTS"
+  | where OperationName == "VaultPatch"
+  | where ResultType == "Success"
+  | extend RemovedActor = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s
+  | extend UserObjectRemoved = removedAccessPolicy_ObjectId_g
+  | extend KeyAccessRemoved = tostring(removedAccessPolicy_Permissions_keys_s)
+  | extend SecretAccessRemoved = tostring(removedAccessPolicy_Permissions_secrets_s)
+  | extend CertAccessRemoved = tostring(removedAccessPolicy_Permissions_certificates_s)
+  | where isnotempty(UserObjectRemoved)
+  | project AccessRemovedTime=TimeGenerated, ResourceType, OperationName, ResultType, KeyVaultName=id_s, RemovedActor, UserObjectRemoved, KeyAccessRemoved, SecretAccessRemoved, CertAccessRemoved
+  )
+  on KeyVaultName
+  | extend TimeDelta = abs(AccessAddedTime - AccessRemovedTime)
+  | where TimeDelta < timeframe
+  | project KeyVaultName, AccessAddedTime, AddedActor, UserObjectAdded, KeyAccessAdded, SecretAccessAdded, CertAccessAdded, AccessRemovedTime, RemovedActor, UserObjectRemoved, KeyAccessRemoved, SecretAccessRemoved, CertAccessRemoved, TimeDelta
+  | extend timestamp = AccessAddedTime, AccountCustomEntity = UserObjectAdded
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountCustomEntity 
+version: 1.0.0

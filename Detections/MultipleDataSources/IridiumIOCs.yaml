@@ -4,6 +4,24 @@ description: |
   'IRIDIUM command and control IP. Identifies a match across various data feeds for IP IOCs related to the IRIDIUM activity group.'
 severity: High
 requiredDataConnectors:
+  - connectorId: AWSS3
+    datatypes:
+      - AWSVPCFlow
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
   - connectorId: Office365
     dataTypes:
      - OfficeActivity
@@ -40,6 +58,25 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
 tags:
   - Schema: ASIMDns
     SchemaVersion: 0.1.1
@@ -64,30 +101,21 @@ query:  |
   | where  SourceIPAddress in (IPList)
   | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account
   ),
-  (DnsEvents 
-  | extend DestinationIPAddress = IPAddresses,  Host = Computer
-  | where  DestinationIPAddress has_any (IPList) 
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host
-  ),
-  (imDns (response_has_any=IPList)
+  (_Im_Dns (response_has_any_prefix=IPList)
   | extend DestinationIPAddress = DnsResponseName,  Host = Dvc
+  | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Host, AccountCustomEntity=User
+  ),
+  (_Im_WebSession (srcipaddr_has_any_prefix=IPList)
+  | extend DestinationIPAddress = DstIpAddr,  Host = Dvc
   | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Host
   ),
-  (VMConnection 
-  | where isnotempty(SourceIp) or isnotempty(DestinationIp) 
-  | where SourceIp in (IPList) or DestinationIp in (IPList) 
-  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
-  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer
+  (_Im_NetworkSession (srcipaddr_has_any_prefix=IPList)
+  | extend DestinationIPAddress = DstIpAddr,  Host = Dvc
+  | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Host
   ),
-  (Event
-  | where Source == "Microsoft-Windows-Sysmon"
-  | where EventID == 3
-  | extend EvData = parse_xml(EventData)
-  | extend EventDetail = EvData.DataItem.EventData.Data
-  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
-  | where SourceIP in (IPList) or DestinationIP in (IPList) 
-  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
+  (_Im_NetworkSession (dstipaddr_has_any_prefix=IPList)
+  | extend DestinationIPAddress = DstIpAddr,  Host = Dvc
+  | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Host
   ),
   (SigninLogs
   | where isnotempty(IPAddress)
@@ -125,15 +153,15 @@ query:  |
   | extend DestinationIP = DestinationHost 
   | extend IPCustomEntity = SourceHost
   ),
-  (
-  AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallNetworkRule"
-  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
-  | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (IPList)  
-  | extend DestinationIP = DestinationHost 
-  | extend IPCustomEntity = SourceHost
+  (Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 3
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
+  | where SourceIP in (IPList) or DestinationIP in (IPList) 
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
   )
   )
 entityMappings:
@@ -149,5 +177,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.2.0
+version: 1.4.1
 kind: Scheduled

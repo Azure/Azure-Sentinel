@@ -1,10 +1,16 @@
 # Zscaler-add-Domains-to-URL-Category
 
-Author: Arbala Security
+Author: Accelerynt
 
-For any technical questions, please contact info@arbalasystems.com   
+For any technical questions, please contact info@accelerynt.com
 
 This ARM template will deploy an Integration Account and a Playbook. It will pull domains from Sentinel Incidents and add them to a Zscaler URL Category of your choice. URL Categories can be configured to Block and Allow domains in the Zscaler Access Policies. This is extremely useful when a Sentinel Incident identifies a malicious domain communication and you want to quickly add it to your Zscaler Block list. 
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZscaler-add-Domains-to-URL-Category%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Zscaler-add-Domains-to-URL-Category/azuredeploy.json" target="_blank"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/></a>
+
 
 #
 
@@ -35,8 +41,6 @@ You will need the following items to enter in to the template settings during de
 
 This deployment template contains two resources: An integration account and a logic app. The integration account is a requirement for executing javascript code, which is an operation used by the logicapp.
 
-([![Deploy to Azure](https://aka.ms/deploytoazurebutton)]()https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2Zscaler-add-Domains-to-URL-Category%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZscaler-add-Domains-to-URL-Category%2Fmaster%2Fazuredeploy.json)
  #
 
 First we will need to configure the Zscaler API Roles, API Admin Accounts, and gather the necessary information to fill in the ARM deployment template.  
@@ -94,17 +98,7 @@ The last thing we will need from the Zscaler Portal is the Custom URL category. 
  # 
 Up Next is the ARM template configuration and deployment. 
  
-Open your browser and ensure you are logged into your Azure Sentinel workspace. In a separate tab, open the link to our playbook on the Arbala Security GitHub Repository:
-
-https://github.com/Arbala-Security/Zscaler-add-Domains-to-URL-Category
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FZscaler-add-Domains-to-URL-Category%2Fmaster%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-
-From there, click the “Deploy to Azure” button at the bottom and it will bring you to the Custom Deployment Template.
-
-![Deploy](Images/deploy.png)
+Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
 In the **BASICS** section:  
 
@@ -179,10 +173,3 @@ As you can see below - the domain/subdomains were parsed from the URL Entity in 
 
 ![](Images/gitinc.png)
 ![](Images/gitinc1.png)
-
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FZscaler-add-Domains-to-URL-Category%2Fmaster%2Fazuredeploy.json" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton""/>
-</a>
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FZscaler-add-Domains-to-URL-Category%2Fmaster%2Fazuredeploy.json" target="_blank">
-<img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>

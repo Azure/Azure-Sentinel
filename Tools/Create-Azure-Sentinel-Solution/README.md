@@ -1,8 +1,8 @@
-# Azure Sentinel Solutions Packaging Tool Guidance
+# Microsoft Sentinel Solutions Packaging Tool Guidance
 
-Azure Sentinel Solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Azure Sentinel. This experience is powered by Azure Marketplace for Solutions' discoverability, deployment and enablement and Microsoft Partner Center for Solutions’ authoring and publishing. Refer to details in [Azure Sentinel solutions documentation](https://aka.ms/azuresentinelsolutionsdoc). Detailed partner guidance for authoring and publishing solutions is covered in [building Azure Sentinel solutions guidance](https://aka.ms/sentinelsolutionsbuildguide).
+Microsoft Sentinel Solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. This experience is powered by Azure Marketplace for Solutions' discoverability, deployment and enablement and Microsoft Partner Center for Solutions’ authoring and publishing. Refer to details in [Microsoft Sentinel solutions documentation](https://aka.ms/azuresentinelsolutionsdoc). Detailed partner guidance for authoring and publishing solutions is covered in [building Microsoft Sentinel solutions guidance](https://aka.ms/sentinelsolutionsbuildguide).
 
-The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Azure Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists.
+The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Microsoft Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists.
 
 ## Setup
 
@@ -49,6 +49,11 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * Description: Solution Description used in createUiDefinition.json. Can include markdown.
  * WorkbookDescription: Workbook description(s), generally from Workbooks Metadata. This field can be a string if 1 description is used, and an array if multiple are used.
  * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
+ * SavedSearches: This input assumes a format of any of the following:
+ * -- Direct export via API (see https://docs.microsoft.com/rest/api/loganalytics/saved-searches/list-by-workspace)
+ * -- Array of SavedSearch resources
+ * -- Raw ARM template
+ *
  * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation
@@ -64,6 +69,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Analytic Rules": [],
   "Playbooks": [],
   "Parsers": [],
+  "SavedSearches": [],
   "Hunting Queries": [],
   "Data Connectors": [],
   "Watchlists": [],
@@ -123,9 +129,10 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
  * firstPublishDate: Solution first published date
  * lastPublishDate: Latest published date of Solution
  * providers: Provider of the solution. Specify one or many providers as a comma separated list as applicable for the solution - Ex. Cisco, Checkpoint, Microsoft
- * categories: Domain and Vertical applicability of the solution. There can be multiple domain and/or vertical categories applicable to the same solution which can be represented as an array. For e.g. Domains - "Security - Network", "Application", etc. and Vertical - "Healthcare", "Finance". Refer to the [Azure Sentinel content and solutions categories documentation](https://aka.ms/sentinelcontentcategories) for a complete list of valid Azure Sentinel categories.
+ * categories: Domain and Vertical applicability of the solution. There can be multiple domain and/or vertical categories applicable to the same solution which can be represented as an array. For e.g. Domains - "Security - Network", "Application", etc. and Vertical - "Healthcare", "Finance". Refer to the [Microsoft Sentinel content and solutions categories documentation](https://aka.ms/sentinelcontentcategories) for a complete list of valid Microsoft Sentinel categories.
  * support: Name, Email, Tier and Link for the solution support details.
- * - NOTE: Additional metadata properties like Version, Author, etc. are used by the packaging tool based on the values provided in the input file. Format specified in the example below. Refer to [Azure Sentinel content and support documentation](https://aka.ms/sentinelcontentsupportmodel) for further information.
+ * - NOTE: Additional metadata properties like Version, Author, etc. are used by the packaging tool based on the values provided in the input file. Format specified in the example below. Refer to [Microsoft 
+ content and support documentation](https://aka.ms/sentinelcontentsupportmodel) for further information.
  */
 {
     "publisherId": {Id of Publisher},

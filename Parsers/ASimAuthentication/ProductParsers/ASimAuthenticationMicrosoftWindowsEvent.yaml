@@ -9,11 +9,11 @@ Normalization:
   Version: '0.1.0'
 References:
 - Title: ASIM Authentication Schema
-  Link: https://aka.ms/AzSentinelAuthenticationDoc
+  Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
-  Link: https:/aka.ms/AzSentinelNormalization
+  Link: https:/aka.ms/AboutASIM
 Description: |
-      This Query Parser maps Windows sign in logs (WindowsEvent) to the Advanced SIEM Information Model authenticaion schema.
+      This Query Parser maps Windows sign in logs (WindowsEvent) to the Advanced Security Information Model authenticaion schema.
 ParserName: ASimAuthenticationMicrosoftWindowsEvent
 ParserParams:
   - Name: disabled
@@ -90,13 +90,13 @@ ParserQuery: |
                       ActingProcessName = tostring(EventData.ProcessName),
                       Status = tostring(EventData.Status),
                       ActorSessionId = tostring(EventData.SubjectLogonId),
-                      ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
+                      ActorUsername = tostring(iff (EventData.SubjectDomainName in ('-',''), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
                       ActorUserId = tostring(EventData.SubjectUserSid),
                       SubStatus = tostring(EventData.SubStatus),
                       TargetDomainName = tostring(EventData.TargetDomainName),
                       TargetSessionId = tostring(EventData.TargetLogonId),
                       TargetUserId = tostring(EventData.TargetUserSid),
-                      TargetUsername = tostring(iff (EventData.TargetDomainName == '-', EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName))),
+                      TargetUsername = tostring(iff (EventData.TargetDomainName in ('-',''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName))),
                       SrcDvcHostname = tostring(EventData.WorkstationName),
                       EventProduct = "Security Events"
           | extend EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
@@ -109,8 +109,8 @@ ParserQuery: |
           | project-rename 
               TargetDvcHostname = Computer
           // , TargetUserType=AccountType - no AccountType in windowsEvents
-          // , EventOriginalUid = EventOriginId - no EventOriginalId in WindowsEvents
-          , EventOriginId=EventID
+              , EventOriginalUid=EventOriginId          
+              , EventOriginalType=EventID
           | extend  EventCount=int(1)
                   , EventSchemaVersion='0.1.0'
                   , ActorUserIdType='SID'
@@ -118,11 +118,9 @@ ParserQuery: |
                   , EventVendor='Microsoft'  
                   , EventStartTime =TimeGenerated
                   , EventEndTime=TimeGenerated
-                  , EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon')
-                  , ActorUsername = tostring(EventData.SubjectUserName)
-                  , ActorUsernameType= iff(EventData.SubjectDomainName == '-','Simple', 'Windows' )
-                  , TargetUsername = tostring(EventData.TargetUsername)
-                  , TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
+                  , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')                  
+                  , ActorUsernameType= iff(EventData.SubjectDomainName in ('-',''),'Simple', 'Windows' )                  
+                  , TargetUsernameType=iff(TargetDomainName in ('-',''), 'Simple', 'Windows')
                   , SrcDvcOs = 'Windows'
                   , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
           | lookup LogonStatus on EventStatus
@@ -149,46 +147,25 @@ ParserQuery: |
        , EventOriginalUid = EventOriginId
        , LogonProtocol=AuthenticationPackageName
        , SrcDvcIpAddr=IpAddress
-    | extend EventOriginId=EventID | project-away EventID 
-    | extend EventResult = iff(EventOriginId == 4625, 'Failure', 'Success')
+       , EventOriginalType=EventID
+    | extend EventResult = iff(EventOriginalType == 4625, 'Failure', 'Success')
       , EventCount=int(1)
       , EventSchemaVersion='0.1.0'
-      , EventProduct = "Security Event"
+      , EventProduct = "Security Events"
       , ActorUserIdType='SID'
       , TargetUserIdType='SID'
       , EventVendor='Microsoft' 
       , EventStartTime =TimeGenerated
       , EventEndTime=TimeGenerated
-      , EventType=iff(EventOriginId in (LogoffEvents), 'Logoff', 'Logon')
-      , ActorUsername = iff (SubjectDomainName == '-', SubjectUserName, SubjectAccount)
-      , ActorUsernameType= iff(SubjectDomainName == '-','Simple', 'Windows' )
-      , TargetUsername = iff (TargetDomainName == '-', trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
-      , TargetUsernameType=iff (TargetDomainName == '-', 'Simple', 'Windows')
+      , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')
+      , ActorUsername = iff (SubjectDomainName in ('-',''), SubjectUserName, SubjectAccount)
+      , ActorUsernameType= iff(SubjectDomainName in ('-',''), 'Simple', 'Windows' )
+      , TargetUsername = iff (TargetDomainName in ('-',''), trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
+      , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
       , SrcDvcOs = 'Windows'
       , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
     | lookup LogonStatus on EventStatus
     | lookup LogonTypes  on LogonType
-    | project-reorder 
-        TimeGenerated
-        , EventProduct
-        , EventMessage
-        , EventResult
-        , EventOriginalResultDetails
-        , EventStartTime
-        , EventEndTime
-        , EventType
-        , EventSubType
-        , ActorSessionId
-        , TargetSessionId
-        , ActorUserId
-        , ActorUsername
-        , TargetUserId
-        , TargetUsername
-        , TargetUserType
-        , SrcDvcOs
-        , TargetDvcHostname
-        , LogonProtocol
-        , ImpersonationLevel
     /// ** Aliases 
     | extend
          User=TargetUsername

@@ -74,8 +74,7 @@ These policies are required for all S3 connectors, regardless of AWS service.
         "AWS": "${roleArn}"
       },
       "Action": [
-        "s3:Get*",
-        "s3:List*"
+        "s3:GetObject",
       ],
       "Resource": "arn:aws:s3:::${bucketName}/*"
     }
@@ -90,7 +89,7 @@ These policies are required for all S3 connectors, regardless of AWS service.
 Apply the following additional policies if you are ingesting GuardDuty findings.
 
 ### KMS policy
-- Allows GuardDuty to encrypt and decrypt the logs it sends to S3.
+- Allows GuardDuty to decrypt the logs it sends to S3.
 
    | Placeholders | Value to enter |
    | ------------ | -------------- |
@@ -117,11 +116,7 @@ Apply the following additional policies if you are ingesting GuardDuty findings.
         ]
       },
       "Action": [
-        "kms:Encrypt",
         "kms:Decrypt",
-        "kms:ReEncrypt*",
-        "kms:GenerateDataKey*",
-        "kms:DescribeKey"
       ],
       "Resource": "*"
     }
@@ -237,11 +232,7 @@ Apply the following additional policies if you are ingesting CloudTrail logs.
         ]
       },
       "Action": [
-        "kms:Encrypt",
-        "kms:Decrypt",
-        "kms:ReEncrypt*",
-        "kms:GenerateDataKey*",
-        "kms:DescribeKey"
+        "kms:Decrypt"
       ],
       "Resource": "*"
     }

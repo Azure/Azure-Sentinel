@@ -1,4 +1,4 @@
-Build-Your-Own Machine Learning(BYO ML) package, currently in public preview, is provided by Azure Sentinel team to help organizations build or bring your own ML to tackle security problems specifically for your business. This folder contains the BYO ML package including the first ML algorithm  Azure Sentinel team shares.
+Build-Your-Own Machine Learning(BYO ML) package, currently in public preview, is provided by Microsoft Sentinel team to help organizations build or bring your own ML to tackle security problems specifically for your business. This folder contains the BYO ML package including the first ML algorithm  Microsoft Sentinel team shares.
 
 The package includes:
 
@@ -10,8 +10,8 @@ Notebooks:
 Following three Notebooks work with the collaborative filtering algorithm for Anomalous Resource Access (File Share Access as example) 
 
 - AnonymousRATraining.ipynb - This Notebook trains and stores the model in Blob Storage.
-- AnonymousRAScoring.ipynb - This Notebook schedules the scoring and writes the highest scored results into Log Analytics so the score can be used for hunting, detection, investigation in Azure Sentinel.
-- AnonymousRASampleData.ipynb - This notebook demonstrates the use of Anomalous Resource Access model in Sentinel. It generates training and testing data, trains the Anomalous Resource Access model and uses it to score the test data. The top predicted scores are submitted to Sentinel workspace.
+- AnonymousRAScoring.ipynb - This Notebook schedules the scoring and writes the highest scored results into Log Analytics so the score can be used for hunting, detection, investigation in Microsoft Sentinel.
+- AnonymousRASampleData.ipynb - This notebook demonstrates the use of Anomalous Resource Access model in Microsoft Sentinel. It generates training and testing data, trains the Anomalous Resource Access model and uses it to score the test data. The top predicted scores are submitted to Microsoft Sentinel workspace.
 		
 It is run from Azure Databricks
 - Standard_DS4_v2 (28 GB)
