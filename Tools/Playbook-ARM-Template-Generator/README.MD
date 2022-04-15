@@ -13,6 +13,8 @@ You can share it safely knowing that your organization’s information is stripp
 1. Download the script 
   
    [![Download](./images/Download.png)](https://aka.ms/Playbook-ARM-Template-Generator)
+   
+   > Note: Linux Users, added required dll's
 
 2. Extract the folder and open "Playbook_ARM_Template_Generator.ps1" either in Visual Studio Code/Windows PowerShell/PowerShell Core
 
@@ -29,5 +31,4 @@ You can share it safely knowing that your organization’s information is stripp
 	- Playbooks
 
 5. After selecting playbooks, script prompts to select location on your local drive to save ARM Template  
-   **Note**  
-   Tool converts microsoftsentinel connections to MSI during export
+   > Note: Tool converts microsoftsentinel connections to MSI during export
