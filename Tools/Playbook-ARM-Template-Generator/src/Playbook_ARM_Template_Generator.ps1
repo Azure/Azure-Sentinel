@@ -18,7 +18,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande, Itai Yankelevsky
-        LASTEDIT: 3-29-2022
+        LASTEDIT: 4-14-2022
 
     .EXAMPLE
         .\GenerateARMTemplate_V2 -TenantID xxxx -GenerateForGallery true 
@@ -165,6 +165,40 @@ Function Get-FolderName {
         exit
     }
 } #end function Get-FolderName
+
+function Confirmation-Dlg {
+    [CmdletBinding()]
+    param (        
+        [parameter(Mandatory = $true)] $DlgMessage        
+    )
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    $logselectform = New-Object System.Windows.Forms.Form
+    $logselectform.Text = 'Confirmation'
+    $logselectform.AutoSize = $false
+    $logselectform.Size = New-Object System.Drawing.Size(450,360)
+    $logselectform.StartPosition = 'CenterScreen'
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Location = New-Object System.Drawing.Point(10,20)
+    $label.Size = New-Object System.Drawing.Size(350,120)
+    $label.AutoSize = $false
+    $label.Text = $DlgMessage
+    $logselectform.Controls.Add($label)
+
+    $okb = New-Object System.Windows.Forms.Button
+    $okb.Location = New-Object System.Drawing.Point(165,225)
+    $okb.Size = New-Object System.Drawing.Size(75,25)
+    $okb.Text = 'Ok'
+    $okb.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $logselectform.AcceptButton = $okb
+    $logselectform.Controls.Add($okb)
+
+    $rs = $logselectform.ShowDialog((New-Object System.Windows.Forms.Form -Property @{TopMost = $true; TopLevel = $true }))
+    if ($rs -eq [System.Windows.Forms.DialogResult]::OK) {
+        exit
+    }
+}
 #endregion
 
 
@@ -319,8 +353,14 @@ Function HandlePlaybookApiConnectionReference($apiConnectionReference, $playbook
     Try {
         $connectionName = $apiConnectionReference.Name
         $connectionName = $connectionName.Split('_')[0].ToString().Trim()
-        $connectionVariableName = "$($connectionName)ConnectionName"        
-        $templateVariables.Add($connectionVariableName, "[concat('$connectionName-', parameters('PlaybookName'))]")
+        $connectionName = (Get-Culture).TextInfo.ToTitleCase($connectionName)
+        if ($connectionName -ieq "azuresentinel") {
+            $connectionVariableName = "MicrosoftSentinelConnectionName" 
+            $templateVariables.Add($connectionVariableName, "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]")           
+        } else {
+            $connectionVariableName = "$($connectionName)ConnectionName"
+            $templateVariables.Add($connectionVariableName, "[concat('$connectionName-', parameters('PlaybookName'))]")
+        }            
         $connectorType = if ($apiConnectionReference.Value.id.ToLowerInvariant().Contains("/managedapis/")) { "managedApis" } else { "customApis" } 
         $connectionAuthenticationType = if ($apiConnectionReference.Value.connectionProperties.authentication.type -eq "ManagedServiceIdentity") { "Alternative" } else  { $null }    
         
@@ -415,6 +455,7 @@ Function BuildArmTemplate($playbookResource) {
                 "title"= ""
                 "description"= ""
                 "prerequisites"= ""
+                "postDeployment" = @()
                 "prerequisitesDeployTemplateFile"= ""
                 "lastUpdateTime"= ""
                 "entities"= @()
@@ -564,7 +605,8 @@ foreach($GetSubscription in $GetSubscriptions) {
                 $armTemplateOutput = BuildArmTemplate -playbookResource $playbookResource | ConvertTo-Json -Depth 100
                 $armTemplateOutput = $armTemplateOutput -replace "\\u0027", "'" # ConvertTo-Json escapes quotes, which we don't want
                 FixJsonIndentation -jsonOutput $armTemplateOutput | Set-Content "$($FolderName)\$($PlaybookResourceName)\azuredeploy.json"
-                Write-Log -Message "ARM Template created successfully at $("$FolderName\azuredeploy.json")" -LogFileName $LogFileName -Severity Information
+                Write-Log -Message "ARM Template created successfully at $($FolderName)\$($PlaybookResourceName)\azuredeploy.json" -LogFileName $LogFileName -Severity Information
+                Confirmation-Dlg -DlgMessage "ARM Template created successfully at $($FolderName)\$($PlaybookResourceName)\azuredeploy.json"
             }
         }
     }
