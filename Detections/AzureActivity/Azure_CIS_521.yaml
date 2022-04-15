@@ -1,0 +1,48 @@
+id: bb2f34a3-39de-4cd9-9e56-31b8aafaacda
+name: CIS Benchmark 5.2.1 Ensure that Activity Log Alert exists for Create Policy Assignment
+description: |
+  'This query identifies creating an activity log alert for the Create Policy Assignment event.
+  Monitoring for create policy assignment events gives insight into changes done in "azure policy - assignments" and can reduce the time it takes to detect unsolicited changes.
+  For more information - https://www.cisecurity.org/benchmark/azure'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tags:
+  - AzureCISBenchmark
+query: |
+  AzureActivity
+  | where CategoryValue =~ "Administrative"
+  | where OperationNameValue =~ "microsoft.authorization/policyassignments/write"
+  | project TimeGenerated, Caller, CallerIpAddress, _ResourceId, ResourceGroup, SubscriptionId
+  | extend AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress, AzCustomEntity = _ResourceId
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: AzCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    lookbackDuration: PT1H
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails:
+      - DisplayName
+version: 1.0.0
+kind: Scheduled

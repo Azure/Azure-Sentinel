@@ -1,0 +1,50 @@
+id: 4154dfac-562a-426b-bc9c-f1c7d0bdf5bd
+name: CIS Benchmark 5.2.4 Ensure that Activity Log Alert exists for Delete Network Security Group
+description: |
+  'This query identifies creating an activity log alert for the Delete Network Security Group event.
+  Monitoring for "Delete Network Security Group" events gives insight into network access changes and may reduce the time it takes to detect suspicious activity.
+  For more information - https://www.cisecurity.org/benchmark/azure'
+severity: middle
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tags:
+  - AzureCISBenchmark
+query: |
+  AzureActivity
+  | where CategoryValue =~ "Administrative"
+  | where OperationNameValue =~ "Microsoft.Network/networkSecurityGroups/delete"
+  | project TimeGenerated, Caller, CallerIpAddress, _ResourceId, ResourceGroup, SubscriptionId
+  | extend AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress, AzCustomEntity = _ResourceId
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: AzCustomEntity
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    lookbackDuration: PT1H
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails:
+      - DisplayName
+version: 1.0.0
+kind: Scheduled
