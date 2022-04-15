@@ -66,7 +66,7 @@ class TenableChunkPartitioner:
         such that each sub-chunk is <= 30MB.
         
         This is necessary as per
-        https://docs.microsoft.com/en-us/azure/azure-monitor/logs/data-collector-api#data-limits.
+        https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api#data-limits.
 
         Parameters:
             inputChunk (List[Dict]): List containing vuln/assets objects in chunk.
