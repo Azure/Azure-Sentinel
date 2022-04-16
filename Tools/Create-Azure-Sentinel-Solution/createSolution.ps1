@@ -222,7 +222,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
                         $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $contentToImport.Name; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
 
-                        $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookIDParameterName -Value $workbookIDParameter
+                        if(!$contentToImport.TemplateSpec)
+                        {
+                            $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookIDParameterName -Value $workbookIDParameter
+                        }
                         $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
 
                         # Create Workbook Resource Object
@@ -277,7 +280,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookResourceId$workbookCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
-                                    description = $workbookDescriptionText;
                                     parentId  = "[variables('workbookResourceId$workbookCounter')]"
                                     contentId = "[variables('_workbookContentId$workbookCounter')]";
                                     kind      = "Workbook";
@@ -290,6 +292,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support
                                 }
+                            }
+
+                            if($workbookDescriptionText -ne "")
+                            {
+                                $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
                             }
 
                             # Add templateSpecs/versions resource to hold actual content
@@ -853,6 +860,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     connectorUiConfig = $standardConnectorUiConfig
                                 }
                             }
+
+                            if(!$contentToImport.TemplateSpec)
+                            {
+                                $connectorObj | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_connector$connectorCounter-source')]";
+                            }
                         }
                         elseif ($connectorData.resources -and
                             $connectorData.resources[0] -and
@@ -1288,9 +1300,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             else{
                                 if(!$contentToImport.TemplateSpec)
                                 {
-                                    dependsOn  = @(
+                                    $dependsOn  = @(
                                         "[variables('workspace-dependency')]"
                                     );
+
+                                    $huntingQueryObj | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue $dependsOn
                                 }
                                 $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $huntingQueryObj
                             }
@@ -1385,7 +1399,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             if($yaml.requiredDataConnectors)
                             {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticalRuleConnectorId$analyticRuleCounter" -NotePropertyValue $yaml.requiredDataConnectors.connectorId;
+                                # $requiredDataConnectors = @{
+                                #     connectorId = "[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
+                                #     dataTypes = $yaml.requiredDataConnectors.dataTypes;
+                                # }
                                 $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
+                                $alertRule.requiredDataConnectors[0].connectorId = "[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
                             }
 
                             if (!$yaml.severity) {
@@ -1430,9 +1450,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
-                                type       = $contentToImport.TemplateSpec ? "Microsoft.OperationalInsights/workspaces/providers/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
+                                type       = $contentToImport.TemplateSpec ? "Microsoft.SecurityInsights/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
-                                apiVersion = "2021-03-01-preview";
+                                apiVersion = "2022-02-01";
                                 kind       = "Scheduled";
                                 location   = "[parameters('workspace-location')]";
                                 properties = $alertRule;
@@ -1526,8 +1546,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 # Add Resource and Parameters to Template
                                 $baseMainTemplate.resources += $newAnalyticRule
                             }
-                            $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $alertRuleParameterName -Value $alertRuleParameter
 
+                            if(!$contentToImport.TemplateSpec)
+                            {
+                                $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $alertRuleParameterName -Value $alertRuleParameter
+                            }
                             $alertRuleUIParameter = [PSCustomObject] @{ name = "analytic$analyticRuleCounter"; type = "Microsoft.Common.Section"; label = $alertRule.displayName; elements = @( [PSCustomObject] @{ name = "analytic$analyticRuleCounter-text"; type = "Microsoft.Common.TextBlock"; options = @{ text = $alertRule.description; } } ) }
                             $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $alertRuleUIParameter
 
