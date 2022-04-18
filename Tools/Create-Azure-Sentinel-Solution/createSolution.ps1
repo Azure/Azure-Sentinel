@@ -98,6 +98,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseMetadata = Get-Content -Raw $metadataPath | Out-String | ConvertFrom-Json
 
     $DependencyCriteria = @();
+    $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
+                $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
+                $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
@@ -121,10 +124,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 catch {
                     $validJson = $false;
                 }
-
-                $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 
                 if ($validJson) {
                     # If valid JSON, must be Workbook or Playbook
@@ -1409,7 +1408,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 # }
                                 $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
                                 $alertRule.requiredDataConnectors[0].connectorId = "[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
-                                $alertRule.description += "Connector Id for Analytical Rule "+$(variables('analyticalRuleConnectorId$analyticRuleCounter'));
                             }
 
                             if (!$yaml.severity) {
