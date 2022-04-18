@@ -1,4 +1,5 @@
 import json
+from time import sleep, strptime
 from .rest_api import get_alerts, get_logs
 import requests
 import datetime
@@ -41,9 +42,9 @@ def generate_date():
         logging.info("The last time point is: {}".format(past_time))
     else:
         logging.info("There is no last time point, trying to get events for last hour.")
-        past_time = (current_time - timedelta(minutes=60))
-    state.post(current_time.strftime("%d.%m.%Y %H:%M:%S"))
-    return past_time, current_time
+        past_time = (current_time - timedelta(minutes=60)).strftime("%s")
+    state.post(current_time.strftime("%s"))
+    return past_time, current_time.strftime("%s")
 
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
@@ -109,9 +110,9 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.getLogger().setLevel(logging.INFO)
     logging.info('Starting program')
     start_time, end_time = generate_date()
-    logging.info('Data processing. Period(UTC): {} - {}'.format(start_time.strftime("%d.%m.%Y %H:%M:%S"), end_time.strftime("%d.%m.%Y %H:%M:%S")))
-    start_time_millisec = start_time.timestamp() * 1000
-    end_time_millisec = end_time.timestamp() * 1000
+    logging.info('Data processing. Period(UTC): {} - {}'.format(datetime.fromtimestamp(int(start_time)).strftime("%d.%m.%Y %H:%M:%S"), datetime.fromtimestamp(int(end_time)).strftime("%d.%m.%Y %H:%M:%S")))
+    start_time_millisec = int(start_time) * 1000
+    end_time_millisec = int(end_time) * 1000
 
     # get alerts
     logging.info('Collecting alerts...')
