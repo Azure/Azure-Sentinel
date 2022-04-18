@@ -1439,8 +1439,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "PT$field"
                                 }
                             }
-                            $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
-                            $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
+                            $alertRule.queryFrequency = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryFrequency.ToUpper())
+                            $alertRule.queryPeriod = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
 
                             # Handle optional fields
@@ -1454,7 +1454,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $newAnalyticRule = [PSCustomObject]@{
                                 type       = $contentToImport.TemplateSpec ? "Microsoft.SecurityInsights/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
-                                apiVersion = "2022-02-01";
+                                apiVersion = "2022-04-01-preview";
                                 kind       = "Scheduled";
                                 location   = "[parameters('workspace-location')]";
                                 properties = $alertRule;
@@ -1496,7 +1496,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $analyticRuleMetadata = [PSCustomObject]@{
                                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                     apiVersion = "2022-01-01-preview";
-                                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticalRule-', last(split(variables('analyticRuleId$analyticRuleCounter'),'/'))))]";
+                                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId$analyticRuleCounter'),'/'))))]";
                                     properties = [PSCustomObject]@{
                                         description = "$($solutionName) Analytics Rule $analyticRuleCounter";
                                         parentId  = "[variables('analyticRuleId$analyticRuleCounter')]";
