@@ -1463,7 +1463,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if($contentToImport.TemplateSpec) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleVersion$analyticRuleCounter" -NotePropertyValue $contentToImport.Version
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleContentId$analyticRuleCounter" -NotePropertyValue "$($solutionName.Replace(' ', '_'))_Analytic_Rule_$analyticRuleCounter"
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRuleContentId$analyticRuleCounter" -NotePropertyValue "[variables('AnalyticRuleContentId$analyticRuleCounter')]"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRuleContentId$analyticRuleCounter" -NotePropertyValue "[variables('analyticRuleContentId$analyticRuleCounter')]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleId$analyticRuleCounter" -NotePropertyValue "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRuleContentId$analyticRuleCounter'))]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-',variables('_analyticRuleContentId$analyticRuleCounter'))]"
                                 if (!$baseMainTemplate.variables.workspaceResourceId) {
