@@ -1585,7 +1585,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
 
                         $fileName = Split-Path $file -leafbase;
-                        $fileName = $fileName + "_Parser";
                         if ($contentToImport.Metadata) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
