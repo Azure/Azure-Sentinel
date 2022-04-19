@@ -52,7 +52,7 @@ def _create_sqs_client():
 
 def _create_s3_client():
     s3_session = get_session()
-    boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME)
+    boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME, retries = {'max_attempts': 10, 'mode': 'standard'})
     return s3_session.create_client(
                                     's3',
                                     region_name=AWS_REGION_NAME,
@@ -106,7 +106,7 @@ async def main(mytimer: func.TimerRequest):
                 if 'Messages' in response:
                     for msg in response['Messages']:
                         body_obj = json.loads(msg["Body"])
-                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
+                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}. Timestamp: {}.".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"], body_obj["timestamp"]))
                         await download_message_files(body_obj, session)
                         logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
                         try:
@@ -136,36 +136,45 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                                                 LOG_TYPE, 
                                                 queue_size=MAX_BUCKET_SIZE
                                                 )
-        
-        try:
-            response = await client.get_object(Bucket=bucket, Key=s3_path)
-            s = ''
-            async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
-                s += decompressed_chunk.decode(errors='ignore')
-                lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
-                for n, line in enumerate(lines):
-                    if n < len(lines) - 1:
-                        if line:
-                            try:
-                                event = customize_event(line)
-                            except ValueError as e:
-                                logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                                raise e
-                            await sentinel.send(event)
-                s = line
-            if s:
-                try:
-                    event = customize_event(line)
-                except ValueError as e:
-                    logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+        try_number = 1
+        while True:
+            try:
+                response = await client.get_object(Bucket=bucket, Key=s3_path)
+                s = ''
+                async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
+                    s += decompressed_chunk.decode(errors='ignore')
+                    lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                    for n, line in enumerate(lines):
+                        if n < len(lines) - 1:
+                            if line:
+                                try:
+                                    event = customize_event(line)
+                                except ValueError as e:
+                                    logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                                    raise e
+                                await sentinel.send(event)
+                    s = line
+                if s:
+                    try:
+                        event = customize_event(line)
+                    except ValueError as e:
+                        logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                        raise e
+                    await sentinel.send(event)
+                await sentinel.flush()   
+            except Exception as e:
+                if try_number < 3:
+                    await asyncio.sleep(try_number)
+                    try_number += 1
+                    logging.warn('Error while getting data from file {}. Try number: {}. Trying one more time. {}'.format(s3_path,try_number, e))
+                else:
+                    logging.error('Error. File was not read after few attempts. Adding file name to temp bucket. File: {}'.format(s3_path))
+                    drop_files_array.append({"bucket": bucket, "path": s3_path})
                     raise e
-                await sentinel.send(event)
-            await sentinel.flush()
-            total_events += sentinel.successfull_sent_events_number
-            logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
-        except Exception as e:
-            logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
-            drop_files_array.append(s3_path)
+            else:
+                total_events += sentinel.successfull_sent_events_number
+                logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))         
+                break
 
 async def download_message_files(msg, session):
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSING_FILES)

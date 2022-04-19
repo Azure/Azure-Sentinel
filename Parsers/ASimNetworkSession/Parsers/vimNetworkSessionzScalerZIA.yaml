@@ -33,6 +33,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -67,22 +70,34 @@ ParserQuery: |
     , endtime:datetime=datetime(null)
     , srcipaddr_has_any_prefix:dynamic=dynamic([])
     , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , ipaddr_has_any_prefix:dynamic=dynamic([])
     , dstportnumber:int=int(null)
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
     , eventresult:string='*'
     , disabled:bool=false) {
-  CommonSecurityLog | where not(disabled)
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  CommonSecurityLog 
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+     and  (isnull(endtime) or TimeGenerated <= endtime)
+  | where not(disabled)
   | where DeviceVendor == "Zscaler"
   | where DeviceProduct == "NSSFWlog"
-  // -- Pre-filtering
   |where
     (array_length(hostname_has_any) == 0) // No host name information, so always filter out if hostname filter used. 
-    and (isnull(starttime) or TimeGenerated >= starttime)
-    and  (isnull(endtime) or TimeGenerated <= endtime)
-    and  (isnull(dstportnumber) or dstportnumber == DestinationPort) 
-    and  (array_length(srcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(SourceIP ,srcipaddr_has_any_prefix)) 
-    and  (array_length(dstipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(DestinationIP ,dstipaddr_has_any_prefix))
+    and   (isnull(dstportnumber) or dstportnumber == DestinationPort) 
+  | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any), temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
+  | extend ASimMatchingIpAddr=case(
+                                  array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+                                  temp_SrcMatch and temp_DstMatch, "Both",
+                                  temp_SrcMatch, "SrcIpAddr",
+                                  temp_DstMatch, "DstIpAddr",
+                                  "No match"
+                              )
+  // -- Pre-filtering
+  | where ASimMatchingIpAddr != "No match"
+  | project-away temp_*
   | project-rename DvcOriginalAction = DeviceAction
   | lookup ActionLookup on DvcOriginalAction 
   | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
@@ -90,7 +105,6 @@ ParserQuery: |
   | where (eventresult=='*' or EventResult == eventresult)
   // -- Event fields
   | extend 
-    EventCount=DeviceCustomNumber1, 
     EventStartTime=TimeGenerated, 
     EventVendor = "Zscaler", 
     EventProduct = "ZIA Firewall", 
@@ -116,12 +130,20 @@ ParserQuery: |
     SrcNatPortNumber = SourceTranslatedPort, 
     SrcUserDepartment = DeviceCustomString1,  // Not in standard schema
     SrcUserLocation = SourceUserPrivileges,  // Not in standard schema
-    NetworkDuration = DeviceCustomNumber1, 
     ThreatName = DeviceCustomString6, 
     ThreatCategory = DeviceCustomString5, 
     RuleName = Activity 
   // -- Calculated fields
   | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventCount=coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber2", int(null))), 
+      toint(column_ifexists("DeviceCustomNumber2",int(null)))
+    ),
+    NetworkDuration = coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
     ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
     SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
     DstBytes = tolong(ReceivedBytes), 
@@ -141,4 +163,4 @@ ParserQuery: |
   | project-away 
     DeviceCustom*
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

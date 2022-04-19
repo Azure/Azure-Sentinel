@@ -33,6 +33,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -61,38 +64,61 @@ ParserQuery: |
     endtime:datetime=datetime(null), 
     srcipaddr_has_any_prefix:dynamic=dynamic([]), 
     dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+    ipaddr_has_any_prefix:dynamic=dynamic([]), 
     dstportnumber:int=int(null), 
     hostname_has_any:dynamic=dynamic([]), 
     dvcaction:dynamic=dynamic([]), 
     eventresult:string='*', 
     disabled:bool=false)
   {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
     let outbound = 
         VMConnection
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
         | where not (disabled)
+        | where array_length(hostname_has_any)==0 
+        or (Computer has_any (hostname_has_any)) or ( RemoteDnsCanonicalNames has_any (hostname_has_any))
         | where Direction == "outbound"
         // -- Pre-filtering:
         | where
             eventresult in ("*", "Success") 
             and array_length(dvcaction) == 0
-            and (isnull(starttime) or TimeGenerated >= starttime)
-            and (isnull(endtime) or TimeGenerated <= endtime)
-            and 
-            (
-                array_length(srcipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(SourceIp,srcipaddr_has_any_prefix)
+            and  (isnull(dstportnumber) or (DestinationPort == dstportnumber))
+        | extend temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any)
+           , temp_isDstMatch=has_any_ipv4_prefix(DestinationIp,dst_or_any)
+        | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
             )
-            and 
-            (
-                array_length(dstipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(DestinationIp,dstipaddr_has_any_prefix)
-            )
-            and (isnull(dstportnumber) or (DestinationPort == dstportnumber))
-            and (
-                array_length(hostname_has_any) == 0
-                or RemoteDnsCanonicalNames has_any (hostname_has_any)
-            )
+        | where ASimMatchingIpAddr != "No match"
+        | extend hostelements = split(Computer,'.')
+        | extend 
+            SrcHostname = tostring(hostelements[0]),
+            SrcDomain = strcat_array(array_slice(hostelements,1,-1), '.')
         // -- End pre-filtering
+        | extend DstFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+        | extend DstDomainType = iff(DstFQDN != "", "FQDN", "")
+        | extend hostelements = split(DstFQDN,'.')
+        | extend 
+            DstHostname = iff(DstFQDN != "", tostring(hostelements[0]), ""),
+            DstDomain = iff(DstFQDN != "", strcat_array(array_slice(hostelements,1,-1), '.'), "")
+        | project-away temp_*
+        | extend temp_isMatchSrcHostname= SrcHostname has_any (hostname_has_any)
+              ,  temp_isMatchDstHostname = DstHostname has_any (hostname_has_any)
+        | extend ASimMatchingHostname = case(
+            array_length(hostname_has_any) == 0 , "-"
+            , (temp_isMatchSrcHostname and temp_isMatchDstHostname), "Both" 
+            , temp_isMatchSrcHostname, "SrcHostname"
+            , temp_isMatchDstHostname, "DstHostname"
+            , "No match"
+            )
+            | where ASimMatchingHostname != "No match"
+            | project-away temp_*
         | extend
             SrcAppType = "Process",
             SrcHostnameType = "Simple",
@@ -103,11 +129,7 @@ ParserQuery: |
             SrcAppName = ProcessName,
             SrcHostname = Computer,
             SrcDvcId = Machine
-        | extend hostelements = split(Computer,'.')
-        | extend 
-            SrcHostname = tostring(hostelements[0]),
-            SrcDomain = strcat_array(array_slice(hostelements,1,-1), '.')
-        | extend
+       | extend
             SrcDomainType = iff(SrcDomain != "", "FQDN", ""),
             SrcFQDN = iff(SrcDomain != "", Computer, "")
         | extend DstFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
@@ -130,28 +152,49 @@ ParserQuery: |
     ;
     let inbound =
         VMConnection
+        | where (starttime == datetime(null) or TimeGenerated >= starttime)
+            and (endtime == datetime(null) or TimeGenerated <= endtime)
         | where not (disabled)
         | where Direction == "inbound"
         // -- Pre-filtering:
         | where
             eventresult  in ("*", "Success") 
             and array_length(dvcaction) == 0
-            and (starttime == datetime(null) or TimeGenerated >= starttime)
-            and (endtime == datetime(null) or TimeGenerated <= endtime)
-            and (
-                array_length(srcipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(SourceIp,srcipaddr_has_any_prefix)
+            and  (dstportnumber==int(null) or DestinationPort == dstportnumber)
+            and (array_length(hostname_has_any)==0 
+                 or Computer has_any (hostname_has_any) or RemoteDnsCanonicalNames has_any (hostname_has_any)
+                 )
+        | extend temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any)
+           , temp_isDstMatch=has_any_ipv4_prefix(DestinationIp,dst_or_any)
+        | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
             )
-            and (
-                array_length(dstipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(DestinationIp,dstipaddr_has_any_prefix)
-            )
-            and (dstportnumber==int(null) or DestinationPort == dstportnumber)
-            and (
-                array_length(hostname_has_any)==0 
-                or Computer has_any (hostname_has_any)
-            )
+        | where ASimMatchingIpAddr != "No match"
+        | project-away temp_*
         // -- End pre-filtering
+        | extend hostelements = split(Computer,'.')
+        | extend 
+            DstHostname = tostring(hostelements[0]),
+            DstDomain = strcat_array(array_slice(hostelements,1,-1), '.')
+        | extend SrcFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+        | extend 
+            SrcHostname = iff(SrcFQDN != "", tostring(hostelements[0]), ""),
+            SrcDomain = iff(SrcFQDN != "", strcat_array(array_slice(hostelements,1,-1), '.'), "")
+                | extend temp_isMatchSrcHostname= SrcHostname has_any (hostname_has_any)
+              ,  temp_isMatchDstHostname = DstHostname has_any (hostname_has_any)
+        | extend ASimMatchingHostname = case(
+            array_length(hostname_has_any) == 0 , "-"
+            , (temp_isMatchSrcHostname and temp_isMatchDstHostname), "Both" 
+            , temp_isMatchSrcHostname, "SrcHostname"
+            , temp_isMatchDstHostname, "DstHostname"
+            , "No match"
+            )
+            | where ASimMatchingHostname != "No match"
+            | project-away temp_*
         | extend
             DstAppType = "Process",
             DstDvcIdType = "VMConnectionId",
@@ -161,19 +204,11 @@ ParserQuery: |
             DstAppId = Process,
             DstAppName = ProcessName,
             DstDvcId = Machine
-        | extend hostelements = split(Computer,'.')
-        | extend 
-            DstHostname = tostring(hostelements[0]),
-            DstDomain = strcat_array(array_slice(hostelements,1,-1), '.')
         | extend
             DstDomainType = iff(DstDomain != "", "FQDN", ""),
             DstFQDN = iff(DstDomain != "", Computer, "")
-        | extend SrcFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
         | extend SrcDomainType = iff(SrcFQDN != "", "FQDN", "")
         | extend hostelements = split(SrcFQDN,'.')
-        | extend 
-            SrcHostname = iff(SrcFQDN != "", tostring(hostelements[0]), ""),
-            SrcDomain = iff(SrcFQDN != "", strcat_array(array_slice(hostelements,1,-1), '.'), "")
         | project-away hostelements
         | extend
             RemoteFQDN = SrcFQDN,
@@ -239,4 +274,4 @@ ParserQuery: |
       Duration = NetworkDuration,
       SessionId = NetworkSessionId
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

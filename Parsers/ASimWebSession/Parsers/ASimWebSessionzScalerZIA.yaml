@@ -57,22 +57,31 @@ ParserQuery: |
     SrcUsername = SourceUserName,
     SrcNatIpAddr= SourceTranslatedAddress,
     SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
-    ThreatRiskLevel = DeviceCustomNumber1,
     UrlCategory = DeviceCustomString2,
     ThreatName = DeviceCustomString5,
     FileMD5 = DeviceCustomString6
   // -- Parse
   | parse AdditionalExtensions with 
-      "reason=" EventResultOriginalDetails:string ";"
-      "outcome=" EventResultDetails:string ";"
-      "cat=" * ";"
-      "rulelabel=" RuleName:string ";"
+      * "rulelabel=" RuleName:string ";"
       "ruletype=" ruletype:string ";"
       "urlclass=" urlclass:string ";"
       "devicemodel=" * 
   // -- Calculated fields
   | lookup DvcActionLookup on DeviceAction
   | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventOriginalResultDetails = coalesce(
+      column_ifexists("Reason", ""),
+      extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    ),
+    EventResultDetails = coalesce(
+      column_ifexists("EventOutcome", ""),
+      extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    ),
+    ThreatRiskLevel = coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
     DvcHostname = tostring(Computer),
     SrcBytes = toint(SentBytes),
     DstBytes = toint(ReceivedBytes),

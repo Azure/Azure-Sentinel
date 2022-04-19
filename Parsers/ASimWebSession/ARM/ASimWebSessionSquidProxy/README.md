@@ -1,6 +1,6 @@
 # Squid Proxy ASIM WebSession Normalization Parser
 
-This template deploys the ASIM WebSession schema parser for Squid Proxy.
+ARM template for ASIM WebSession schema parser for Squid Proxy.
 
 This ASIM parser supports normalizing Squid Proxy logs produced by the Microsoft Sentinel Squid Connector to the ASIM Web Session normalized schema. The parser supports squid native log format.
 

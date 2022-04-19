@@ -86,6 +86,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
     # Convenience Variables
     $solutionName = $contentToImport.Name
+	
 
     # Base JSON Object Paths
     $baseMainTemplatePath = "$PSScriptRoot/templating/baseMainTemplate.json"
@@ -124,15 +125,35 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 catch {
                     $validJson = $false;
                 }
+				#Replace the special characters in the solution name.
+				function Replace-SpecialChars {
+				param($InputString,$Type)
+					if ($Type.ToLower() -eq 'solutionname') {
+						$SpecialChars = '[#?\{\[\(\)\]\}]'
+						$Replacement  = ' '
+					}
+					elseif ($Type.ToLower() -eq 'filename') {
+						$SpecialChars = '[#?\{\[\(\)\]\}]'
+						$Replacement  = ''
+					}
+					else {
+						$SpecialChars = '[#?\{\[\(\)\]\}]'
+						$Replacement  = ''
+					}
+				return $InputString -replace $SpecialChars,$Replacement
+				}
 
                 if ($validJson) {
                     # If valid JSON, must be Workbook or Playbook
                     $objectKeyLowercase = $objectProperties.Name.ToLower()
                     if ($objectKeyLowercase -eq "workbooks") {
                         Write-Host "Generating Workbook using $file"
-
+						#$solutionName = $solutionName -replace '[(]',' ' -replace '[)]','';
+						$solutionRename = Replace-SpecialChars -InputString $solutionName -Type 'solutionname'
                         $fileName = Split-Path $file -leafbase;
-                        $fileName = $fileName.Replace(' ','') + "Workbook";
+						#$fileName = $fileName -replace '[(\)]','';
+						$fileName = Replace-SpecialChars -InputString $fileName -Type 'filename'
+                        $fileName = $fileName + "Workbook";
                         if ($contentToImport.Metadata) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
@@ -195,6 +216,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             break;
                         }
                         $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
+						
                         $workbookUiParameter = [PSCustomObject] @{
                             name     = "workbook$workbookCounter";
                             type     = "Microsoft.Common.Section";
@@ -209,7 +231,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     name         = "workbook$workbookCounter-name";
                                     type         = "Microsoft.Common.TextBox";
                                     label        = "Display Name";
-                                    defaultValue = $solutionName;
+                                    defaultValue = $solutionRename.trimEnd();
                                     toolTip      = "Display name for the workbook.";
                                     constraints  = [PSCustomObject] @{
                                         required          = $true;
@@ -223,7 +245,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
-                        $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $contentToImport.Name; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+                        $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $solutionRename.trimEnd(); minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
 
                         if(!$contentToImport.TemplateSpec)
                         {
@@ -1905,7 +1927,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
             }
         }
     }
-
+	
+	
     # Update CreateUiDefinition Description with Content Counts
     function updateDescriptionCount($counter, $emplaceString, $replaceString, $countStringCondition) {
         if ($counter -gt 0) {

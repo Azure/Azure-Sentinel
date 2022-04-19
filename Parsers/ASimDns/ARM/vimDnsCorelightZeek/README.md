@@ -1,6 +1,6 @@
 # Corelight Zeek ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Corelight Zeek.
+ARM template for ASIM Dns schema parser for Corelight Zeek.
 
 This ASIM parser supports filtering and normalizing Corelight Zeek DNS logs to the ASIM Dns normalized schema.
 
