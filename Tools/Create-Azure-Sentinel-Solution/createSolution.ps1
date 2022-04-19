@@ -132,7 +132,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         Write-Host "Generating Workbook using $file"
 
                         $fileName = Split-Path $file -leafbase;
-                        $fileName = $fileName + "_workbook";
+                        $fileName = $fileName.Replace(' ','') + "Workbook";
                         if ($contentToImport.Metadata) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
@@ -239,7 +239,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             kind       = "shared";
                             apiVersion = "2021-08-01";
                             properties = [PSCustomObject] @{
-                                displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
+                                displayName    = $contentToImport.Workbooks ? "[parameters('workbook$workbookCounter-name')]" : "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
                                 version        = "1.0";
                                 sourceId       = $contentToImport.TemplateSpec? "[variables('workspaceResourceId$workbookCounter')]" : "[variables('_workbook-source')]";
@@ -249,7 +249,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         if($contentToImport.TemplateSpec) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue $contentToImport.Version
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue "$($solutionName.Replace(' ', '_'))_Workbook_$workbookCounter"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookContentId$workbookCounter" -NotePropertyValue "[variables('workbookContentId$workbookCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
@@ -704,7 +704,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "uiConfigId$connectorCounter" -NotePropertyValue $connectorData.id
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_uiConfigId$connectorCounter" -NotePropertyValue "[variables('uiConfigId$connectorCounter')]"
                             }
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorContentId$connectorCounter" -NotePropertyValue "$($connectorName.Replace(' ', '_'))Connector"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorContentId$connectorCounter" -NotePropertyValue $connectorData.id
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$connectorCounter" -NotePropertyValue "[variables('dataConnectorContentId$connectorCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorId$connectorCounter" -NotePropertyValue "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorId$connectorCounter" -NotePropertyValue "[variables('dataConnectorId$connectorCounter')]"
@@ -1121,7 +1121,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind      = "HuntingQuery";
-                                contentId = "[variables('_$fileName')]";
+                                contentId = "$($yaml.id)";
                                 version   = $contentToImport.Version;
                             };
 
@@ -1180,10 +1180,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             {
                                 $huntingQueryObj | Add-Member -NotePropertyName "id" -NotePropertyValue "[guid('$($(New-Guid).Guid)')]"
                             }
-                            if($yaml.requiredDataConnectors)
-                            {
-                                $huntingQueryObj | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
-                            }
+
                             $huntingQueryDescription = ""
                             if ($yaml.description) {
                                 $huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
@@ -1218,7 +1215,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             if($contentToImport.TemplateSpec) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryVersion$huntingQueryCounter" -NotePropertyValue $contentToImport.Version
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryContentId$huntingQueryCounter" -NotePropertyValue "$($solutionName.Replace(' ', '_'))_Hunting_Query_$huntingQueryCounter"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryContentId$huntingQueryCounter" -NotePropertyValue $yaml.id
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_huntingQueryContentId$huntingQueryCounter" -NotePropertyValue "[variables('huntingQueryContentId$huntingQueryCounter')]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryId$huntingQueryCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('_huntingQueryContentId$huntingQueryCounter'))]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'-',variables('_huntingQueryContentId$huntingQueryCounter'))]"
@@ -1379,7 +1376,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind      = "AnalyticsRule";
-                                contentId = "[variables('_$fileName')]";
+                                contentId = "$($yaml.id)";
                                 version   = $contentToImport.Version;
                             };
 
@@ -1462,7 +1459,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             if($contentToImport.TemplateSpec) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleVersion$analyticRuleCounter" -NotePropertyValue $contentToImport.Version
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleContentId$analyticRuleCounter" -NotePropertyValue "$($solutionName.Replace(' ', '_'))_Analytic_Rule_$analyticRuleCounter"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleContentId$analyticRuleCounter" -NotePropertyValue "$($yaml.id)"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRuleContentId$analyticRuleCounter" -NotePropertyValue "[variables('analyticRuleContentId$analyticRuleCounter')]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleId$analyticRuleCounter" -NotePropertyValue "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRuleContentId$analyticRuleCounter'))]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-',variables('_analyticRuleContentId$analyticRuleCounter'))]"
