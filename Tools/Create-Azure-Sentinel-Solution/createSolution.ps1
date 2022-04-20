@@ -1414,6 +1414,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $alertRule.$($yamlPropertiesToCopyTo[$index]) = $yaml.$yamlProperty
                             }
 
+                            if($contentToImport.TemplateSpec)
+                            {
+                                $alertRule | Add-Member -NotePropertyName status -NotePropertyValue ($yaml.status ? $yaml.status : "Available") # Add requiredDataConnectors property if exists
+                            }
+
                             if($yaml.requiredDataConnectors)
                             {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticalRuleConnectorId$analyticRuleCounter" -NotePropertyValue $yaml.requiredDataConnectors.connectorId;
