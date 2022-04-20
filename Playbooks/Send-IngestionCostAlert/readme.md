@@ -209,14 +209,14 @@ When complete this section should look as follows:
 
 ```
   let price_per_GB = price_per_GB;
-  let how_many_days = how_many_days;
-  let total_funding = total_funding;
-  let threshold_per_day = toreal(total_funding) / toreal(how_many_days);
+  let how_many_days = days_in_month;
+  let total_funding = monthly_budget;
+  let max_per_day = toreal(monthly_budget) / toreal(days_in_month);
   Usage
   | where TimeGenerated > startofday(ago(1d))
   | where IsBillable == true
-  | summarize AggregatedValue= sum(Quantity) * price_per_GB / 1000 by bin(TimeGenerated, 1d)
-  | where AggregatedValue > threshold_per_day
+  | summarize AggregatedValue= sum(Quantity) * price_per_GB / 1024
+  | where AggregatedValue > max_per_day 
 ```
 
 In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
