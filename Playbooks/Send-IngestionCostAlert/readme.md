@@ -216,7 +216,7 @@ When complete this section should look as follows:
   | where TimeGenerated > startofday(ago(1d))
   | where IsBillable == true
   | summarize AggregatedValue= sum(Quantity) * price_per_GB / 1024
-  | where AggregatedValue > max_per_day 
+  | where AggregatedValue > max_per_day
 ```
 
 In this step, the aggregated value obtained from the previous step is compared against the budget value you set and should it exceed the amount then the logic branches to the left and sends out an e-mail or posts a Microsoft Teams message. If you are still within budget, then the logic branches to the right and no message is sent.
