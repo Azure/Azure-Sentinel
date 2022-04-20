@@ -9,8 +9,8 @@ requiredDataConnectors:
   - connectorId: PaloAltoNetworks
     dataTypes:
       - CommonSecurityLog
-queryFrequency: 1d
-queryPeriod: 14d
+queryFrequency: 1h
+queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -24,26 +24,29 @@ relevantTechniques:
 tags:
   - Fusion
 query: |
-  let starttime = 14d;
+  let starttime = 7d;
   let endtime = 1d;
-  let timeframe = 1d;
-  let histthreshold = 25; 
+  let timeframe = 1h;
+  let HistThreshold = 25; 
+  let CurrThreshold = 10; 
   let HistoricalThreats = CommonSecurityLog
   | where isnotempty(SourceIP)
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-  | where DeviceVendor =~ "Palo Alto Networks" 
+  | where DeviceVendor =~ "Palo Alto Networks"
   | where Activity =~ "THREAT" and SimplifiedDeviceAction =~ "alert" 
   | where DeviceEventClassID in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')
-  | summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by  SourceIP, DeviceAction, DeviceProduct, DeviceVendor;
-  let CurrentDayThreats =  CommonSecurityLog
+  | summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceVendor;
+  let CurrentHourThreats =  CommonSecurityLog
   | where isnotempty(SourceIP)
-  | where TimeGenerated > (startofday(ago(timeframe)))
+  | where TimeGenerated > ago(timeframe)
   | where DeviceVendor =~ "Palo Alto Networks"
   | where Activity =~ "THREAT" and SimplifiedDeviceAction =~ "alert" 
   | where DeviceEventClassID in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')
   | summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceProduct, DeviceVendor;
-  HistoricalThreats 
-  | where TotalEvents > histthreshold | join kind = leftanti (CurrentDayThreats) on SourceIP
+  CurrentHourThreats 
+  | where TotalEvents < CurrThreshold
+  | join kind = leftanti (HistoricalThreats 
+  | where TotalEvents > HistThreshold) on SourceIP
 entityMappings:
   - entityType: IP
     fieldMappings:
