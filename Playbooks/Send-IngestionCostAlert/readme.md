@@ -140,11 +140,11 @@ These 3 costs should be added together
 
 ![20-recurrence](../Send-IngestionCostAlert/images/20-recurrence.png)
 
-27. Select How name days and change the days to 31
+27. Select Days in a month and change the days to 31
 
 ![21-daysvar](../Send-IngestionCostAlert/images/21-daysvar.png)
 
-28. Select Total funding and enter the total monthly budget
+28. Select Monthly budget and enter the total monthly budget
 
 ![22-totfund](../Send-IngestionCostAlert/images/22-totfund.png)
 
@@ -192,7 +192,7 @@ These 3 costs should be added together
 
 43. In the message box type You have exceeded your daily budget 
 
-44. Click the Dynamic content -> Threshold_per_day
+44. Click the Dynamic content -> Max_per_day
 
 ![31-teamsdynamic](../Send-IngestionCostAlert/images/31-teamsdynamic.png)
 
