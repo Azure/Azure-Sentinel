@@ -1,9 +1,20 @@
-How to use it:
-	Unzip the CEFReplicator.zip on to the system that is designated to generate syslog traffic. This can be on the same system where LA Agent is setup and running or on a separate system.
-You will see the files like shown below.
-	 
+# Syslog or CEF over Syslog data replication
+Author: Anki Narravula
 
-We have 2 flavors / variants
+## Description
+This repository contains a console application (Python) that helps to generate / replicate data in Syslog or CEF over syslog format. Users need to input a file with sample data in it (minimum 1 event) to start generating the syslog traffic. User can use this tool to mimic as any Syslog datasource (device). Data will be sent to specified destination address (We can have AMA / LA agent installed here to receive the data) over TCP or UDP 514 port. AMA/LA agent will send to Sentinel as per configurations defined on the agent node. 
+
+If yours are trying to see specific values for the fields (in case of CEF data), for example deviceVendor need to be always from the array of values [] or any timestamp field shuld sent to current etc then we need to input a file where we have such customizations defined. Otherwise we donet require to input this file.
+
+Two options are available using the tool. The Prerequisites and App Registration steps are required for both options.
+
+## Prerequisites
+To configure the tool, the following assembly is required to post sample data to Azure Log Analytics custom logs via Azure Monitor Http Data Collector API.
+
+
+How to use 
+
+We have 2 flavors
 1.	Generating syslog / cef traffic from raw log
 2.	Generating syslog / cef traffic from csv file
 	
