@@ -72,6 +72,8 @@ In the **Instance Details** section:
 
 * **Integration Key**: Enter the value of the PagerDuty integration key created from the first section.
 
+***Note***: Although the integration key parameter is of type secure string, it will still be visible in plain text in the deployed playbook. If this poses an internal security risk, it is advised utilize the key-vault instead.
+
 Towards the bottom, click on “**Review + create**”. 
 
 ![PagerDuty_Deploy_1](Images/PagerDuty_Deploy_1.png)
