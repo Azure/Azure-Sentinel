@@ -1,0 +1,36 @@
+id: d5e1eb24-487a-11ec-81d3-0242ac130003
+name: Tomcat - Abnormal request size
+description: |
+  'Query shows abnormal request size.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: ApacheTomcat
+    dataTypes:
+      - TomcatEvent
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1530
+  - T1537
+query: |
+  let Average_Body_Bytes = TomcatEvent
+  | where TimeGenerated > ago(30d)
+  | summarize Avg_Size = avg(HttpResponseBodyBytes)
+  | extend K = 1;
+  TomcatEvent
+  | where TimeGenerated > ago(24h)
+  | extend File = extract(@"(.*\/)?(.*)", 2, tostring(UrlOriginal))
+  | extend K = 1
+  | join kind=inner Average_Body_Bytes on K
+  | where tolong(HttpResponseBodyBytes) > Avg_Size
+  | extend FileCustomEntity = File, UrlCustomEntity = UrlOriginal
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: UrlCustomEntity
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileCustomEntity
