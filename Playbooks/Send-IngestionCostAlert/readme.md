@@ -26,7 +26,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ![04-Azuredeploy](../Send-IngestionCostAlert/images/04-azuredeploy.png)
 
 
-6. Log into the Azure portal
+6. Log into the Azure portal   
 
 7. Enter the following information
 
