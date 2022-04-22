@@ -93,12 +93,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.json"
     $metadataPath = "$PSScriptRoot/../../Solutions/$($contentToImport.Name)/$($contentToImport.Metadata)"
 
+    $workbookMetadataPath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/"
     # Base JSON Objects
     $baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
     $baseCreateUiDefinition = Get-Content -Raw $baseCreateUiDefinitionPath | Out-String | ConvertFrom-Json
     $baseMetadata = Get-Content -Raw $metadataPath | Out-String | ConvertFrom-Json
 
     $DependencyCriteria = @();
+    ## After bug Bash we need to remove this -preview keyword in the below line of code for mass packaging
     $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId + "-preview"
                 $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
@@ -153,6 +155,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $fileName = Split-Path $file -leafbase;
 						#$fileName = $fileName -replace '[(\)]','';
 						$fileName = Replace-SpecialChars -InputString $fileName -Type 'filename'
+                        $workbookKey = $fileName;
                         $fileName = $fileName + "Workbook";
                         if ($contentToImport.Metadata) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
@@ -274,13 +277,47 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
 
                         if($contentToImport.TemplateSpec) {
+                            #Getting Workbook Metadata dependencies from Github
+                            $workbookData = $null 
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
+                            try {                                              
+                                Write-Host "Downloading $workbookFinalPath"
+                                $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
+                                $dependencies = $workbookData | ConvertFrom-Json | Where-Object {($_.templateRelativePath.split('.')[0] -match $workbookKey)}
+                                $WorkbookDependencyCriteria = @();
+                                foreach($dataTypesDependencies in $dependencies.dataTypesDependencies)
+                                {
+                                    $dataTypeObject = New-Object PSObject
+                                    $dataTypeObject | Add-Member -MemberType NoteProperty -Name "contentId" -Value "$dataTypesDependencies"
+                                    $dataTypeObject | Add-Member -MemberType NoteProperty -Name "kind" -Value "DataType"
+                                    $WorkbookDependencyCriteria += $dataTypeObject
+                                }
+                                foreach($dataConnectorsDependencies in $dependencies.dataConnectorsDependencies)
+                                {
+                                    $dataConnectorObject = New-Object PSObject
+                                    $dataConnectorObject | Add-Member -MemberType NoteProperty -Name "contentId" -Value "$dataConnectorsDependencies"
+                                    $dataConnectorObject | Add-Member -MemberType NoteProperty -Name "kind" -Value "DataConnector"
+                                    $WorkbookDependencyCriteria += $dataConnectorObject
+                                }
+                                $workbookDependencies = [PSCustomObject]@{
+                                    operator = "AND";
+                                    criteria = $WorkbookDependencyCriteria;
+                                };
+                            }
+                            catch {
+                                Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
+                                break;
+                            }
+
+
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue $contentToImport.Version
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue $fileName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue $dependencies.workbookKey
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookContentId$workbookCounter" -NotePropertyValue "[variables('workbookContentId$workbookCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId$workbookCounter'))]"
 
+                            
                             # Add base templateSpec
                             $baseWorkbookTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
@@ -308,6 +345,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId$workbookCounter'),'/'))))]";
+                                metadata =  @{description = $dependencies.description};
                                 properties = [PSCustomObject]@{
                                     parentId  = "[variables('workbookId$workbookCounter')]"
                                     contentId = "[variables('_workbookContentId$workbookCounter')]";
@@ -319,7 +357,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         sourceId = "[variables('_solutionId')]"
                                     };
                                     author    = $authorDetails;
-                                    support   = $baseMetadata.support
+                                    support   = $baseMetadata.support;
+                                    dependencies = $workbookDependencies;
                                 }
                             }
 
@@ -1421,13 +1460,18 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             if($yaml.requiredDataConnectors)
                             {
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticalRuleConnectorId$analyticRuleCounter" -NotePropertyValue $yaml.requiredDataConnectors.connectorId;
+                                #$baseMainTemplate.variables | Add-Member -NotePropertyName "analyticalRuleConnectorId$analyticRuleCounter" -NotePropertyValue $yaml.requiredDataConnectors.connectorId;
                                 # $requiredDataConnectors = @{
                                 #     connectorId = "[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
                                 #     dataTypes = $yaml.requiredDataConnectors.dataTypes;
                                 # }
+                                #$requiredDataConnectorAttribute = ($yaml.requiredDataConnectors.connectorId.GetType().Name -is [object]) ? ($yaml.requiredDataConnectors.connectorId -join ',') : $yaml.requiredDataConnectors.connectorId;
                                 $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
-                                $alertRule.requiredDataConnectors[0].connectorId = "[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
+                                for($i=0; $i -lt $yaml.requiredDataConnectors.connectorId.count; $i++)
+                                {
+                                    $alertRule.requiredDataConnectors[$i].connectorId = ($yaml.requiredDataConnectors[$i].connectorId.GetType().Name -is [object]) ? ($yaml.requiredDataConnectors[$i].connectorId -join ',') : $yaml.requiredDataConnectors[$i].connectorId;
+                                }
+                                #"[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
                             }
 
                             if (!$yaml.severity) {
@@ -1459,8 +1503,18 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "PT$field"
                                 }
                             }
-                            $alertRule.queryFrequency = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryFrequency.ToUpper())
-                            $alertRule.queryPeriod = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryPeriod.ToUpper())
+
+                            if($yaml.kind.ToUpper() -eq "Scheduled")
+                            {
+                                $alertRule.queryFrequency =  $(checkISO8601Format $yaml.queryFrequency.ToUpper())
+                                $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
+                            }
+                            else {
+                                $alertRule.PSObject.Properties.Remove('queryFrequency');
+                                $alertRule.PSObject.Properties.Remove('queryPeriod');
+                            }
+                            #$alertRule.queryFrequency = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryFrequency.ToUpper())
+                            #$alertRule.queryPeriod = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
 
                             # Handle optional fields
@@ -1522,7 +1576,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         parentId  = "[variables('analyticRuleId$analyticRuleCounter')]";
                                         contentId = "[variables('_analyticRulecontentId$analyticRuleCounter')]";
                                         kind      = "AnalyticsRule";
-                                        version   = "[variables('analyticRuleVersion$analyticRuleCounter')]";
+                                        # Need to remove the below assigned property for the yaml version after bug bash
+                                        version   = $yaml.version;  #"[variables('analyticRuleVersion$analyticRuleCounter')]";                 
                                         source    = [PSCustomObject]@{
                                             kind     = "Solution";
                                             name     = $contentToImport.Name;
