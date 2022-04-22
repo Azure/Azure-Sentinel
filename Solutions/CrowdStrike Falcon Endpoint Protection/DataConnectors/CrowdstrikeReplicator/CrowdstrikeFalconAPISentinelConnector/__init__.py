@@ -96,7 +96,7 @@ async def main(mytimer: func.TimerRequest):
     logging.info("Creating SQS connection")
     async with _create_sqs_client() as client:
         async with aiohttp.ClientSession() as session:
-            logging.info('Trying to check messages off the queue....')
+            logging.info('Trying to check messages off the queue...')
             try:
                 response = await client.receive_message(
                     QueueUrl=QUEUE_URL,
@@ -106,7 +106,7 @@ async def main(mytimer: func.TimerRequest):
                 if 'Messages' in response:
                     for msg in response['Messages']:
                         body_obj = json.loads(msg["Body"])
-                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
+                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}. Timestamp: {}.".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"], body_obj["timestamp"]))
                         await download_message_files(body_obj, session)
                         logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
                         try:
@@ -151,7 +151,6 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                                     event = customize_event(line)
                                 except ValueError as e:
                                     logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                                    raise e
                                 await sentinel.send(event)
                     s = line
                 if s:
@@ -159,7 +158,6 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                         event = customize_event(line)
                     except ValueError as e:
                         logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                        raise e
                     await sentinel.send(event)
                 await sentinel.flush()   
             except Exception as e:
@@ -170,7 +168,6 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                 else:
                     logging.error('Error. File was not read after few attempts. Adding file name to temp bucket. File: {}'.format(s3_path))
                     drop_files_array.append({"bucket": bucket, "path": s3_path})
-                    raise e
             else:
                 total_events += sentinel.successfull_sent_events_number
                 logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))         
