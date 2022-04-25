@@ -267,6 +267,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             location   = "[parameters('workspace-location')]";
                             kind       = "shared";
                             apiVersion = "2021-08-01";
+                            metadata   = [PSCustomObject]@{};
                             properties = [PSCustomObject] @{
                                 displayName    = $contentToImport.Workbooks ? "[parameters('workbook$workbookCounter-name')]" : "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
@@ -303,6 +304,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     operator = "AND";
                                     criteria = $WorkbookDependencyCriteria;
                                 };
+                                $newWorkbook.metadata | Add-Member -MemberType NoteProperty -Name "description" -Value "$($dependencies.description)"
                             }
                             catch {
                                 Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
@@ -345,7 +347,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId$workbookCounter'),'/'))))]";
-                                metadata =  @{description = $dependencies.description};
+                                #description = $dependencies.description;
                                 properties = [PSCustomObject]@{
                                     parentId  = "[variables('workbookId$workbookCounter')]"
                                     contentId = "[variables('_workbookContentId$workbookCounter')]";
@@ -1430,13 +1432,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $fileName = Split-Path $file -leafbase;
                             $fileName = $fileName + "_AnalyticalRules";
-
-                            $DependencyCriteria += [PSCustomObject]@{
-                                kind      = "AnalyticsRule";
-                                contentId = "$($yaml.id)";
-                                version   = $contentToImport.Version;
-                            };
-
                             foreach ($line in $rawData) {
                                 $content = $content + "`n" + $line
                             }
@@ -1447,6 +1442,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host "Failed to deserialize $file" -ForegroundColor Red
                                 break;
                             }
+                            $DependencyCriteria += [PSCustomObject]@{
+                                kind      = "AnalyticsRule";
+                                contentId = "$($yaml.id)";
+                                #post bug bash ,remove this below comments!
+                                version   = "$($yaml.version)"; #$contentToImport.Version; 
+                            };
                             # Copy all directly transposable properties
                             foreach ($yamlProperty in $yamlPropertiesToCopyFrom) {
                                 $index = $yamlPropertiesToCopyFrom.IndexOf($yamlProperty)
@@ -1529,7 +1530,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 type       = $contentToImport.TemplateSpec ? "Microsoft.SecurityInsights/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
                                 apiVersion = "2022-04-01-preview";
-                                kind       = "Scheduled";
+                                kind       =  "$($yaml.kind)";
                                 location   = "[parameters('workspace-location')]";
                                 properties = $alertRule;
                             }
