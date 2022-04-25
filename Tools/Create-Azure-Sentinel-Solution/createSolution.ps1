@@ -259,7 +259,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookIDParameterName -Value $workbookIDParameter
                         }
                         $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
-
                         # Create Workbook Resource Object
                         $newWorkbook = [PSCustomObject]@{
                             type       = "Microsoft.Insights/workbooks";
@@ -279,12 +278,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         if($contentToImport.TemplateSpec) {
                             #Getting Workbook Metadata dependencies from Github
-                            $workbookData = $null 
+                            $workbookData = $null
                             $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
-                            try {                                              
+                            try {
                                 Write-Host "Downloading $workbookFinalPath"
                                 $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
-                                $dependencies = $workbookData | ConvertFrom-Json | Where-Object {($_.templateRelativePath.split('.')[0] -match $workbookKey)}
+                                $dependencies = $workbookData | ConvertFrom-Json | Where-Object {($_.templateRelativePath.split('.')[0].ToLower() -eq $workbookKey.ToLower())}
                                 $WorkbookDependencyCriteria = @();
                                 foreach($dataTypesDependencies in $dependencies.dataTypesDependencies)
                                 {
@@ -320,8 +319,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                              # Add workspace resource ID if not available
                             if (!$baseMainTemplate.variables.workspaceResourceId) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-                            } 
-                            
+                            }
+
                             # Add base templateSpec
                             $baseWorkbookTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
@@ -1449,7 +1448,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 kind      = "AnalyticsRule";
                                 contentId = "$($yaml.id)";
                                 #post bug bash ,remove this below comments!
-                                version   = "$($yaml.version)"; #$contentToImport.Version; 
+                                version   = "$($yaml.version)"; #$contentToImport.Version;
                             };
                             # Copy all directly transposable properties
                             foreach ($yamlProperty in $yamlPropertiesToCopyFrom) {
@@ -1583,7 +1582,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         contentId = "[variables('_analyticRulecontentId$analyticRuleCounter')]";
                                         kind      = "AnalyticsRule";
                                         # Need to remove the below assigned property for the yaml version after bug bash
-                                        version   = $yaml.version;  #"[variables('analyticRuleVersion$analyticRuleCounter')]";                 
+                                        version   = $yaml.version;  #"[variables('analyticRuleVersion$analyticRuleCounter')]";
                                         source    = [PSCustomObject]@{
                                             kind     = "Solution";
                                             name     = $contentToImport.Name;
