@@ -329,7 +329,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
                                     "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
-                                    "hidden-sentinelContentType" = "Parser";
+                                    "hidden-sentinelContentType" = "Workbook";
                                 };
                                 properties = [PSCustomObject]@{
                                     description = "$($solutionName) Workbook with template";
@@ -1684,9 +1684,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         if($contentToImport.TemplateSpec) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserVersion$parserCounter" -NotePropertyValue $contentToImport.Version
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$($solutionName.Replace(' ','')) Data Parser"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$fileName"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$parserCounter" -NotePropertyValue "[variables('parserContentId$parserCounter')]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$($solutionName) Data Parser"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
@@ -1720,7 +1720,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject]@{
                                     eTag          = "*"
-                                    displayName   = "$($solutionName) Data Parser"
+                                    displayName   = "$($fileName) Data Parser"
                                     category      = "Samples"
                                     functionAlias = $functionAlias
                                     query         = $content
@@ -1798,7 +1798,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 name       = "[variables('_parserName$parserCounter')]";
                                 properties = [PSCustomObject] @{
                                     eTag          = "*";
-                                    displayName   = "$solutionName Data Parser";
+                                    displayName   = "$fileName Data Parser";
                                     category      = "Samples";
                                     functionAlias = "$fileName";
                                     query         = $content;
@@ -1855,7 +1855,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     eTag          = "*";
                                     displayName   = "$solutionName Data Parser";
                                     category      = "Samples";
-                                    functionAlias = "$fileName";
+                                    functionAlias = "$functionAlias";
                                     query         = $content;
                                     version       = 1;
                                 }
