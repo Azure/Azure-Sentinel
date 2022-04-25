@@ -272,7 +272,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 displayName    = $contentToImport.Workbooks ? "[parameters('workbook$workbookCounter-name')]" : "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
                                 version        = "1.0";
-                                sourceId       = $contentToImport.TemplateSpec? "[variables('workspaceResourceId$workbookCounter')]" : "[variables('_workbook-source')]";
+                                sourceId       = $contentToImport.TemplateSpec? "[variables('workspaceResourceId')]" : "[variables('_workbook-source')]";
                                 category       = "sentinel"
                             }
                         }
@@ -316,9 +316,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue $dependencies.workbookKey
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookContentId$workbookCounter" -NotePropertyValue "[variables('workbookContentId$workbookCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId$workbookCounter'))]"
-
+                             # Add workspace resource ID if not available
+                            if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                            } 
                             
                             # Add base templateSpec
                             $baseWorkbookTemplateSpec = [PSCustomObject]@{
@@ -327,7 +329,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 name       = "[variables('workbookTemplateSpecName$workbookCounter')]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
-                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId$workbookCounter')]";
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
                                     "hidden-sentinelContentType" = "Parser";
                                 };
                                 properties = [PSCustomObject]@{
@@ -349,6 +351,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId$workbookCounter'),'/'))))]";
                                 #description = $dependencies.description;
                                 properties = [PSCustomObject]@{
+                                    description = "$dependencies.description";
                                     parentId  = "[variables('workbookId$workbookCounter')]"
                                     contentId = "[variables('_workbookContentId$workbookCounter')]";
                                     kind      = "Workbook";
@@ -376,7 +379,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 name       = "[concat(variables('workbookTemplateSpecName$workbookCounter'),'/',variables('workbookVersion$workbookCounter'))]";
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
-                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId$workbookCounter')]";
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
                                     "hidden-sentinelContentType" = "Workbook";
                                 };
                                 dependsOn  = @(
@@ -1513,6 +1516,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             else {
                                 $alertRule.PSObject.Properties.Remove('queryFrequency');
                                 $alertRule.PSObject.Properties.Remove('queryPeriod');
+                                $alertRule.PSObject.Properties.Remove('triggerOperator');
+                                $alertRule.PSObject.Properties.Remove('triggerThreshold');
                             }
                             #$alertRule.queryFrequency = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             #$alertRule.queryPeriod = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryPeriod.ToUpper())
@@ -1680,14 +1685,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         if($contentToImport.TemplateSpec) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserVersion$parserCounter" -NotePropertyValue $contentToImport.Version
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$($fileName)"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$($solutionName.Replace(' ','')) Data Parser"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$parserCounter" -NotePropertyValue "[variables('parserContentId$parserCounter')]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$($solutionName) Data Parser"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Parser-',variables('_parserContentId$parserCounter'))]"
-
+                            # Add workspace resource ID if not available
+                            if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                            }
                             # Add base templateSpec
                             $baseParserTemplateSpec = [PSCustomObject]@{
                                 type       = "Microsoft.Resources/templateSpecs";
@@ -1713,9 +1721,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject]@{
                                     eTag          = "*"
-                                    displayName   = "$($fileName) Data Parser"
+                                    displayName   = "$($solutionName) Data Parser"
                                     category      = "Samples"
-                                    functionAlias = $fileName
+                                    functionAlias = $functionAlias
                                     query         = $content
                                     version       = 1
                                     tags          = @([PSCustomObject]@{
