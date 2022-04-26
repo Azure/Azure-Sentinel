@@ -16,7 +16,7 @@ To deploy a single schema use the buttons below:
 
 | ASim Schema | Deploy | Deploy to Azure Gov | 
 |-------------|--------| ------------------- | 
-| [Authentication](https://aka.ms/ASimAuthenticationDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM)| |
+| [Authentication](https://aka.ms/ASimAuthenticationDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuthenticationARMgov) |
 | [Dns](https://aka.ms/ASimDnsDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDnsARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimDnsARMgov) |
 | [File Event](https://aka.ms/ASimFileEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimFileEventARM)| |
 | [Network Session](https://aka.ms/ASimNetworkSessionDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimNetworkSessionARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimNetworkSessionARMgov) |
