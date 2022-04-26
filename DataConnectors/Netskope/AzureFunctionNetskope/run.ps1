@@ -135,7 +135,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 }
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-                Write-Host "Time of Execution so far | LogType : $($logtype) | Skip : $($skip) | Time at end of this execution : $($functionCurrentTimeEpoch)"
+                $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoc
+                Write-Host "Time of Execution so far | LogType : $($logtype) | Skip : $($skip) | Time difference : $($TimeDifferenceEpoch)"
 
                 #if ($functionCurrentTimeEpoch - $functionStartTimeEpoch -gt 570) {
                 #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
