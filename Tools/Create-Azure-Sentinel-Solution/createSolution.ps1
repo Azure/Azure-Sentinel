@@ -252,13 +252,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
-                        $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $solutionRename.trimEnd(); minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+                        
 
                         if(!$contentToImport.TemplateSpec)
                         {
                             $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookIDParameterName -Value $workbookIDParameter
                         }
-                        $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
+                       
                         # Create Workbook Resource Object
                         $newWorkbook = [PSCustomObject]@{
                             type       = "Microsoft.Insights/workbooks";
@@ -310,9 +310,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 break;
                             }
 
-
+                            $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $dependencies.title; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+                            $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue $contentToImport.Version
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue $dependencies.workbookKey
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue "$($dependencies.workbookKey)Workbook"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookContentId$workbookCounter" -NotePropertyValue "[variables('workbookContentId$workbookCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId$workbookCounter'))]"
@@ -1684,7 +1685,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         if($contentToImport.TemplateSpec) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserVersion$parserCounter" -NotePropertyValue $contentToImport.Version
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$fileName"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$($functionAlias)Parser" #"$fileName"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$parserCounter" -NotePropertyValue "[variables('parserContentId$parserCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
