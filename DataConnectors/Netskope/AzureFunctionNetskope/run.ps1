@@ -47,6 +47,9 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
     # Function for retrieving alerts and events from Netskope's APIs
     function GetNetSkopeAPILogs($logtype,$apitypes) {
+
+        Write-Host "Api data received : $($apitypes)."
+
         $timeInterval = [int]($env:timeInterval) * 60
         $pageLimit = 10000
         $skip = 0
