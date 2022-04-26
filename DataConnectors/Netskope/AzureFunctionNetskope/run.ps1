@@ -133,6 +133,15 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     $skip = $skip - $pageLimit
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 }
+
+                $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
+
+                if ($functionCurrentTimeEpoch - $functionStartTimeEpoch -gt 570) {
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                    Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
+                    break
+                }
+
             }
             catch {
                 UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
