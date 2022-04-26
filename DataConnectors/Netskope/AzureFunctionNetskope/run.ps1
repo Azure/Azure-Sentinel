@@ -199,7 +199,11 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             if ($mutex.WaitOne(2000)) {                
                 $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
                 $checkpoints = Import-Csv -Path $CheckpointFile
-                Write-Host "CHECKPOINT FILE : $($checkpoints)"
+                if ($null -ne $checkpoints){                
+                    Write-Host "CHECKPOINT FILE : $($checkpoints.Length)"
+                } else {
+                    Write-Host "Checkpointing file is Null."
+                }
                 $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
                 # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
                 $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
