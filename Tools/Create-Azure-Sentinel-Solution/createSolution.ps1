@@ -1721,10 +1721,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject]@{
                                     eTag          = "*"
-                                    displayName   = "$($fileName)"
+                                    displayName   = "$fileName"
                                     category      = "Samples"
-                                    functionAlias = $functionAlias
-                                    query         = $content
+                                    functionAlias = "$functionAlias"
+                                    query         = "$content"
                                     version       = 1
                                     tags          = @([PSCustomObject]@{
                                         "name"  = "description"
@@ -1801,7 +1801,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     eTag          = "*";
                                     displayName   = "$fileName";
                                     category      = "Samples";
-                                    functionAlias = "$($fileName)";
+                                    functionAlias = "$functionAlias";
                                     query         = $content;
                                     version       = 1;
                                 }
