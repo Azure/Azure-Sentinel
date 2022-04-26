@@ -66,7 +66,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
         $netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
         $netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
-        if($netskopetimediff.TotalSeconds -ge 300)
+        if($netskopetimediff.TotalSeconds -gt 300)
         {
            Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
            $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(300)) -UFormat %s)
@@ -135,10 +135,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 }
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-                $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoc
+                $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
                 Write-Host "Time of Execution so far | LogType : $($logtype) | Skip : $($skip) | Time difference : $($TimeDifferenceEpoch)"
 
-                #if ($functionCurrentTimeEpoch - $functionStartTimeEpoch -gt 570) {
+                #if ($functionCurrentTimeEpoch - $functionStartTimeEpoch -ge 570) {
                 #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 #    Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
                 #    break
