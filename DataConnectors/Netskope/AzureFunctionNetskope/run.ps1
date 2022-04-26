@@ -382,7 +382,7 @@ function Netskope () {
     $job = $apitypes | ForEach-Object -Parallel {
         # Define the function inside this thread...
         $function:CallNetskope = $using:funcDef
-        CallNetskope($_)
+        CallNetskope($_,$apitypes)
         #Start-Sleep 1
     } -ThrottleLimit 50 -AsJob
     $job | Receive-Job -Wait
