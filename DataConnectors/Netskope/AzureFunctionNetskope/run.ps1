@@ -68,7 +68,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         if($netskopetimediff.TotalSeconds -ge 300)
         {
            Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
-           $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
+           $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(300)) -UFormat %s)
            Write-Host "For Logtype $($logtype) new modified endtime is $($endTime)"
         }
         $alleventobjs = @()
@@ -138,13 +138,21 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 Write-Host "Exiting from do while loop for logType : $($logtype) because of error message as : " + $($Error[0].Exception.Message)
                 break
             }
+            
+            $currentUTCExecutionTime = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds((Get-Date).ToUniversalTime()))
+
+            if ($currentUTCExecutionTime-$currentUTCtime -lt 570){
+                UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                 Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout.")
+                break
+            }
 
         } while ($count -eq 0)
 
         if($count -eq 1)
         {
             UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
-        }
+        } 
     }
 
     # Function for processing the Netskope's API response
