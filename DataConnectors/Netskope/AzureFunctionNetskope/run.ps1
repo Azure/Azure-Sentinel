@@ -196,7 +196,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
             $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
         
-            if ($mutex.WaitOne(2000)) {                
+                $mutex.WaitOne() > $null;
                 $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
                 $checkpoints = Import-Csv -Path $CheckpointFile
                 if ($null -ne $checkpoints){                
@@ -209,13 +209,14 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
                 Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"                
                 $mutex.ReleaseMutex();
-            } else {
-                Write-Host "Could not aquire the Mutex for Updated to Checkpoint File with $($LastSuccessfulTime) for LogType $($LogType)"
-            }       
+
+            #if ($mutex.WaitOne(2000)) {                
+            #} else {
+            #    Write-Host "Could not aquire the Mutex for Updated to Checkpoint File with $($LastSuccessfulTime) for LogType $($LogType)"
+            #}       
         }
         catch {
             Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
-        } finally {
         }
     }
 
