@@ -138,11 +138,11 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
                 Write-Host "Time of Execution so far | LogType : $($logtype) | Skip : $($skip) | Time difference : $($TimeDifferenceEpoch)"
 
-                #if ($functionCurrentTimeEpoch - $functionStartTimeEpoch -ge 570) {
-                #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                #    Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
-                #    break
-                #}
+                if ($TimeDifferenceEpoch -ge 570) {
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                    Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
+                    break
+                }
 
             }
             catch {
