@@ -1721,14 +1721,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject]@{
                                     eTag          = "*"
-                                    displayName   = "$($fileName) Data Parser"
+                                    displayName   = "$($fileName)"
                                     category      = "Samples"
                                     functionAlias = $functionAlias
                                     query         = $content
                                     version       = 1
                                     tags          = @([PSCustomObject]@{
                                         "name"  = "description"
-                                        "value" = "$($fileName) Data Parser"
+                                        "value" = "$($fileName)"
                                         };
                                     )
                                 }
@@ -1799,9 +1799,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 name       = "[variables('_parserName$parserCounter')]";
                                 properties = [PSCustomObject] @{
                                     eTag          = "*";
-                                    displayName   = "$fileName Data Parser";
+                                    displayName   = "$fileName";
                                     category      = "Samples";
-                                    functionAlias = "$fileName";
+                                    functionAlias = "$($fileName)";
                                     query         = $content;
                                     version       = 1;
                                 }
