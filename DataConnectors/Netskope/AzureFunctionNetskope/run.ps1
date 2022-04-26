@@ -143,7 +143,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
             if ($currentUTCExecutionTime-$currentUTCtime -lt 570){
                 UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                 Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout.")
+                Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
                 break
             }
 
