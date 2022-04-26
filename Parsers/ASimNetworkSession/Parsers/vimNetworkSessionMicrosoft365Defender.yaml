@@ -29,6 +29,9 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
@@ -50,6 +53,7 @@ ParserQuery: |
     , endtime:datetime=datetime(null)
     , srcipaddr_has_any_prefix:dynamic=dynamic([])
     , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , ipaddr_has_any_prefix:dynamic=dynamic([])
     , dstportnumber:int=int(null)
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
@@ -64,27 +68,41 @@ ParserQuery: |
     ,'ConnectionFound', 'Unknown', false
     ,'ListeningConnectionCreated', 'Listen', false 
   ];
+  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
   // -- Common preprocessing to both input and outbound events
   let RawNetworkEvents = (select_outbound:boolean) {
-    DeviceNetworkEvents | where not(disabled)
+    DeviceNetworkEvents 
+    | where    (isnull(starttime) or TimeGenerated>=starttime) 
+           and (isnull(endtime) or TimeGenerated<=endtime) 
+    | where not(disabled)
     | lookup DirectionLookup on ActionType
     | where Outbound == select_outbound
     // ***************  Prefilterring *****************************************************************
-    |where (isnull(starttime) or TimeGenerated>=starttime) 
-           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
-           and (isnull(endtime) or TimeGenerated<=endtime) 
-           and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
-           and (array_length(srcipaddr_has_any_prefix)==0 
-                or has_any_ipv4_prefix(RemoteIP,srcipaddr_has_any_prefix)
-                or has_any_ipv4_prefix(LocalIP ,srcipaddr_has_any_prefix)
-                )
-           and (array_length(dstipaddr_has_any_prefix)==0 
-                or has_any_ipv4_prefix(RemoteIP,dstipaddr_has_any_prefix)
-                or has_any_ipv4_prefix(LocalIP ,dstipaddr_has_any_prefix)
-                )
+    |where  (array_length(dvcaction)==0 )     /// if filtered by action return nothing
+           and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort)
            and (array_length(hostname_has_any)==0 
               or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any)
-              ) 
+              )
+    | extend temp_isSrcMatch=( // only one of each pair has_any_ipv4_prefix is calculated
+                    (Outbound and has_any_ipv4_prefix(LocalIP,src_or_any))
+                    or
+                    (not(Outbound) and has_any_ipv4_prefix(RemoteIP,src_or_any))
+                    ) 
+           , temp_isDstMatch=(
+                    (not(Outbound) and has_any_ipv4_prefix(LocalIP,dst_or_any))
+                    or
+                    (Outbound and has_any_ipv4_prefix(RemoteIP,dst_or_any))
+                    ) 
+    | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+    ) 
+    | where ASimMatchingIpAddr != "No match"
+    | project-away temp_*
     | extend EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
     | where (eventresult=='*' or EventResult==eventresult)
     // *************** / Prefilterring *****************************************************************
@@ -134,8 +152,16 @@ ParserQuery: |
     RawNetworkEvents (true)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==RemotePort)
-        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
+    | extend temp_isMatchSrcHostname=DvcHostname has_any(hostname_has_any)
+           , temp_isMatchDstHostname=UrlHostname has_any(hostname_has_any)
+    |extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"-",
+                                temp_isMatchDstHostname and temp_isMatchSrcHostname, "Both",
+                                temp_isMatchDstHostname, "DstHostname",
+                                temp_isMatchSrcHostname, "SrcHostname",
+                                  "No match"
+                              )
+    | where ASimMatchingHostname != "No match"
     | project-rename
        DstIpAddr = RemoteIP,
        SrcIpAddr = LocalIP,
@@ -173,13 +199,6 @@ ParserQuery: |
        SrcProcessTokenElevation = InitiatingProcessTokenElevation,
        ParentProcessName = InitiatingProcessParentFileName,
        ParentProcessCreationTime = InitiatingProcessParentCreationTime
-       // SrcProcessFileSize = InitiatingProcessFileSize,
-       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
-       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
-       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
-       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
-       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
-       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
     | extend
        Process = SrcProcessName,
        ProcessId = SrcProcessId,
@@ -190,8 +209,13 @@ ParserQuery: |
     RawNetworkEvents (false)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==LocalPort)
-        and (array_length(hostname_has_any)==0 or DvcHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
+      |extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
+                                  UrlHostname has_any(hostname_has_any), "SrcHostname",
+                                  DvcHostname has_any(hostname_has_any), "DstHostname",
+                                  "No match"
+                              )
+    | where ASimMatchingHostname != "No match"
     | project-rename
        SrcIpAddr = RemoteIP,
        DstIpAddr = LocalIP,
@@ -201,17 +225,16 @@ ParserQuery: |
        DstUserAadId = InitiatingProcessAccountObjectId,
        DstUserId = InitiatingProcessAccountSid,
        DstUserUpn = InitiatingProcessAccountUpn,
-       DstUserDomain = InitiatingProcessAccountDomain
+       DstUserDomain = InitiatingProcessAccountDomain,
+       SrcDomain = UrlDomain,
+       SrcFQDN = UrlFQDN,
+       SrcDomainType = UrlDomainType
     | extend
        DstUsername = User,
        DstDvcId = DvcId,
        DstDvcIdType = 'MDEid',
        DstUserIdType = 'SID',
        SrcHostname = UrlHostname
-   | project-rename
-       SrcDomain = UrlDomain,
-       SrcFQDN = UrlFQDN,
-       SrcDomainType = UrlDomainType
     | extend  
        DstHostname = DvcHostname,
        DstDomain = DvcDomain,
@@ -228,13 +251,6 @@ ParserQuery: |
        DstProcessTokenElevation = InitiatingProcessTokenElevation,
        ParentProcessName = InitiatingProcessParentFileName,
        ParentProcessCreationTime = InitiatingProcessParentCreationTime
-       // SrcProcessFileSize = InitiatingProcessFileSize,
-       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
-       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
-       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
-       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
-       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
-       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
     | extend
        Process = DstProcessName,
        ProcessId = DstProcessId,
@@ -248,4 +264,4 @@ ParserQuery: |
      Src = SrcIpAddr,
      Dst = DstIpAddr 
   };
-  M365Defender (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  M365Defender (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

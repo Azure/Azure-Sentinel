@@ -12,6 +12,7 @@ import time
 import aiohttp
 import logging
 import azure.functions as func
+from .state_manager import StateManager
 
 WORKSPACE_ID = os.environ['WorkspaceID']
 SHARED_KEY = os.environ['WorkspaceKey']
@@ -22,6 +23,7 @@ AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
 QUEUE_URL = os.environ['QUEUE_URL']
 VISIBILITY_TIMEOUT = 1800
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
+connection_string = os.environ['AzureWebJobsStorage']
 
 # Defines how many files can be processed simultaneously
 MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('SimultaneouslyProcessingFiles', 20))
@@ -37,6 +39,8 @@ match = re.match(pattern, str(LOG_ANALYTICS_URI))
 if not match:
     raise Exception("Invalid Log Analytics Uri.")
 
+drop_files_array = []
+
 def _create_sqs_client():
     sqs_session = get_session()
     return sqs_session.create_client(
@@ -48,7 +52,7 @@ def _create_sqs_client():
 
 def _create_s3_client():
     s3_session = get_session()
-    boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME)
+    boto_config = BotoCoreConfig(region_name=AWS_REGION_NAME, retries = {'max_attempts': 10, 'mode': 'standard'})
     return s3_session.create_client(
                                     's3',
                                     region_name=AWS_REGION_NAME,
@@ -59,7 +63,6 @@ def _create_s3_client():
 
 def customize_event(line):
     element = json.loads(line)
-    # Ingesting only the fields required
     required_fileds = [
                         "timestamp", "aip", "aid", "EventType", "LogonType", "HostProcessType", "UserPrincipal", "DomainName",
                         "RemoteAddressIP", "ConnectionDirection", "TargetFileName", "LocalAddressIP4", "IsOnRemovableDisk",
@@ -85,7 +88,11 @@ def customize_event(line):
     return event
 
 async def main(mytimer: func.TimerRequest):
+    global drop_files_array
+    drop_files_array.clear()
     script_start_time = int(time.time())
+    filepath = f'{script_start_time}_file'
+    state = StateManager(connection_string=connection_string, share_name='funcstatemarkershare', file_path=filepath)
     logging.info("Creating SQS connection")
     async with _create_sqs_client() as client:
         async with aiohttp.ClientSession() as session:
@@ -99,7 +106,7 @@ async def main(mytimer: func.TimerRequest):
                 if 'Messages' in response:
                     for msg in response['Messages']:
                         body_obj = json.loads(msg["Body"])
-                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"]))
+                        logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}. Timestamp: {}.".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"], body_obj["timestamp"]))
                         await download_message_files(body_obj, session)
                         logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
                         try:
@@ -113,6 +120,9 @@ async def main(mytimer: func.TimerRequest):
                     logging.info('No messages in queue. Re-trying to check...')
             except KeyboardInterrupt:
                 pass
+    if len(drop_files_array) > 0:
+        logging.info("list of files that were not processed: {}".format(drop_files_array))
+        state.post(str(drop_files_array))
 
 async def process_file(bucket, s3_path, client, semaphore, session):
     async with semaphore:
@@ -126,31 +136,42 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                                                 LOG_TYPE, 
                                                 queue_size=MAX_BUCKET_SIZE
                                                 )
-        response = await client.get_object(Bucket=bucket, Key=s3_path)
-        s = ''
-        async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
-            s += decompressed_chunk.decode(errors='ignore')
-            lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
-            for n, line in enumerate(lines):
-                if n < len(lines) - 1:
-                    if line:
-                        try:
-                            event = customize_event(line)
-                        except ValueError as e:
-                            logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                            raise e
-                        await sentinel.send(event)
-            s = line
-        if s:
+        try_number = 1
+        while True:
             try:
-                event = customize_event(line)
-            except ValueError as e:
-                logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                raise e
-            await sentinel.send(event)
-        await sentinel.flush()
-        total_events += sentinel.successfull_sent_events_number
-        logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
+                response = await client.get_object(Bucket=bucket, Key=s3_path)
+                s = ''
+                async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
+                    s += decompressed_chunk.decode(errors='ignore')
+                    lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                    for n, line in enumerate(lines):
+                        if n < len(lines) - 1:
+                            if line:
+                                try:
+                                    event = customize_event(line)
+                                except ValueError as e:
+                                    logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                                await sentinel.send(event)
+                    s = line
+                if s:
+                    try:
+                        event = customize_event(line)
+                    except ValueError as e:
+                        logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                    await sentinel.send(event)
+                await sentinel.flush()   
+            except Exception as e:
+                if try_number < 3:
+                    await asyncio.sleep(try_number)
+                    try_number += 1
+                    logging.warn('Error while getting data from file {}. Try number: {}. Trying one more time. {}'.format(s3_path,try_number, e))
+                else:
+                    logging.error('Error. File was not read after few attempts. Adding file name to temp bucket. File: {}'.format(s3_path))
+                    drop_files_array.append({"bucket": bucket, "path": s3_path})
+            else:
+                total_events += sentinel.successfull_sent_events_number
+                logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))         
+                break
 
 async def download_message_files(msg, session):
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSING_FILES)

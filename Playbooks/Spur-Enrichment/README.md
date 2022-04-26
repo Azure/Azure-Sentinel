@@ -30,12 +30,6 @@ The Playbook modifies an Incident in two ways:
 1. A tag (label) is added to the incident in the following format per entity (IP): Spur:{IP}=[Clean|Anonymizer]. This format mimics the taxonomies in TheHive. At this point in Azure Sentinel it is not possible to tag individual entities, all of the tags are related to the incident itself, so I decided to use the following tagging format in my Playbooks (until a better option): {PlaybookName}:{Entity}={Conclusion}. See an example below:
 
 
-**Comment**:<br/>
-![comment](../static/comment.PNG)
-
-**Tagging**:<br/>
-![tagging](../static/tagging.PNG)
-
 ## Installation and Configuration
 
 **Deployment**:
