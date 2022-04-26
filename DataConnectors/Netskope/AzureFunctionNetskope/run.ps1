@@ -194,21 +194,23 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     function UpdateCheckpointTime ($CheckpointFile, $LogType, $LastSuccessfulTime, $skip) {
         try {
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
-            $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
+            $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
         
-            if ($mutex.WaitOne()) {                
+            if ($mutex.WaitOne(2000)) {                
                 $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
                 $checkpoints = Import-Csv -Path $CheckpointFile
                 $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
                 # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
                 $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-                Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
-            }        
+                Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"                
+                $mutex.ReleaseMutex();
+            } else {
+                Write-Host "Could not aquire the Mutex for Updated to Checkpoint File with $($LastSuccessfulTime) for LogType $($LogType)"
+            }       
         }
         catch {
             Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
         } finally {
-            $mutex.ReleaseMutex();
         }
     }
 
