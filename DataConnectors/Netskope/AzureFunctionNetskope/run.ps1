@@ -25,7 +25,7 @@ if ($Timer.IsPastDue) {
 $logAnalyticsUri = $env:logAnalyticsUri
 
 # Function to call the Netskope API for different Event Types
-function CallNetskope($logtype) {
+function CallNetskope($logtype,$apitypes) {
 
 # Function to contruct the Netskope Uri for alerts, event types, and to accomodate for pagination
 function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
@@ -46,7 +46,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     }
 
     # Function for retrieving alerts and events from Netskope's APIs
-    function GetNetSkopeAPILogs($logtype) {
+    function GetNetSkopeAPILogs($logtype,$apitypes) {
         $timeInterval = [int]($env:timeInterval) * 60
         $pageLimit = 10000
         $skip = 0
@@ -57,7 +57,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $uri = $env:uri
         $tableName = "Netskope"
         $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-        $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
+        $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -ApiTypes $apitypes -TimeInterval $timeInterval # function to create starttime
         $LastRecordData = $LastRecordObject.Split("|");
         $startTime = [Int]($LastRecordData[0])
         $skip = $LastRecordData.Length -gt 1 ? [Int]($LastRecordData[1]) : $skip
@@ -236,13 +236,13 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     }
 
     # Function to retrieve the checkpoint start time of the last successful API call for a given logtype. Checkpoint file will be created if none exists
-    function GetStartTime($CheckpointFile, $LogType, $TimeInterval) {
+    function GetStartTime($CheckpointFile, $LogType, $ApiTypes, $TimeInterval) {
         $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
         if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
             $CheckpointLog = @{}
-            Write-Host "FirstTime Creation : Api Data - $($apitypes)."
-            foreach ($apiType in $apitypes) {
+            Write-Host "FirstTime Creation : Api Data - $($ApiTypes)."
+            foreach ($apiType in $ApiTypes) {
                 $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
             }
             $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
@@ -262,8 +262,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
                 $CheckpointLog = @{}
-                Write-Host "NullData : Api Data - $($apitypes)."
-                foreach ($apiType in $apitypes) {
+                Write-Host "NullData : Api Data - $($ApiTypes)."
+                foreach ($apiType in $ApiTypes) {
                     $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
                 }
                 $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
@@ -361,7 +361,7 @@ function SplitDataAndProcess($customerId, $sharedKey, $payload, $logType) {
         Write-Host "Error, error message: $($Error[0].Exception.Message)"
     }
 }
-    GetNetSkopeAPILogs -logtype $logtype
+    GetNetSkopeAPILogs -logtype $logtype -apitypes $apitypes
 }
 
 
@@ -380,10 +380,10 @@ function Netskope () {
     # Get the function's definition *as a string*
     $funcDef = $function:CallNetskope.ToString()
     $job = $apitypes | ForEach-Object -Parallel {
-    # Define the function inside this thread...
-    $function:CallNetskope = $using:funcDef
-    CallNetskope($_)
-    #Start-Sleep 1
+        # Define the function inside this thread...
+        $function:CallNetskope = $using:funcDef
+        CallNetskope($_)
+        #Start-Sleep 1
     } -ThrottleLimit 50 -AsJob
     $job | Receive-Job -Wait
     $CurrentTime = $Time.Elapsed
