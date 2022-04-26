@@ -363,7 +363,8 @@ function SplitDataAndProcess($customerId, $sharedKey, $payload, $logType) {
     catch {
         Write-Host "Error, error message: $($Error[0].Exception.Message)"
     }
-}
+}   
+    Write-Host "API Data before function call : $($apitypes)"
     GetNetSkopeAPILogs -logtype $logtype -apitypes $apitypes
 }
 
@@ -375,6 +376,7 @@ function Netskope () {
     $loggingOptions = $env:logTypes
     #"page,alert"
     $apitypes = @($loggingOptions.split(",").Trim())
+    Write-Host "API Data just after split function : $($apitypes)"
     # foreach($iapiType in $apitypes)
     # {
     #     CallNetskope($iapiType)
