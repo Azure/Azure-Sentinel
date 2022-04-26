@@ -16,6 +16,7 @@ param($Timer)
 
 # Get the current universal time in the default string format.
 $currentUTCtime = (Get-Date).ToUniversalTime()
+$functionStartTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
@@ -139,11 +140,11 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 break
             }
             
-            $currentUTCExecutionTime = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds((Get-Date).ToUniversalTime()))
+            $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
 
-            if ($currentUTCExecutionTime-$currentUTCtime -lt 570){
+            if ($functionCurrentTimeEpoch-$functionStartTimeEpoch -lt 570){
                 UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
+                Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout.")
                 break
             }
 
