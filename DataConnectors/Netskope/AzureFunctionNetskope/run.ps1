@@ -79,16 +79,17 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
                 $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip
                 $netskopeevents = $response.data
-                $netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty connectionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty app_sessionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty transactionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
 
                 if($null -ne $netskopeevents)
                 {
+                    $netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty connectionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty app_sessionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty transactionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
+
                     $netskopeevents | ForEach-Object{
                         if($_.dlp_incident_id -ne $NULL){
                                 $_.dlp_incidentid = [string]$_.dlp_incident_id
@@ -112,21 +113,22 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                                 $_.requestid = [string]$_.request_id
                         }
                     }
-                }
-                $dataLength = $response.data.Length
-                $alleventobjs += $netskopeevents
-                $allEventsLength = $netskopeevents.Length
-                $responseCode = ProcessData -allEventsLength $allEventsLength -alleventobjs $netskopeevents -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
-                # Write-Host "$dataLength records added for '$logtype' events"
-                # If the API response length for the given log type is equal to the page limit, it indicates there are subsquent pages, continue while loop, and increment the skip value by the records already recieved for the subquent API requests
-                if($dataLength -eq $pageLimit){
-                    $skip = $skip + $pageLimit
-                }
-                else {
-                    # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
-                    $count = 1
-                    $skip = 0
+
+                    $dataLength = $response.data.Length
+                    $alleventobjs += $netskopeevents
+                    $allEventsLength = $netskopeevents.Length
+                    $responseCode = ProcessData -allEventsLength $allEventsLength -alleventobjs $netskopeevents -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
+                    # Write-Host "$dataLength records added for '$logtype' events"
+                    # If the API response length for the given log type is equal to the page limit, it indicates there are subsquent pages, continue while loop, and increment the skip value by the records already recieved for the subquent API requests
+                    if($dataLength -eq $pageLimit){
+                        $skip = $skip + $pageLimit
                     }
+                    else {
+                        # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
+                        $count = 1
+                        $skip = 0
+                     }
+                }                
 
                 if ($responseCode -ne 200) {
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
@@ -136,8 +138,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
-                Write-Host "Time of Execution so far | LogType : $($logtype) | Skip : $($skip) | Start Time : $($functionStartTimeEpoch) | Current Time : $($functionCurrentTimeEpoch) | Time difference : $($TimeDifferenceEpoch)"
-
+                
                 if ($TimeDifferenceEpoch -ge 480) {
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                     Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
@@ -190,21 +191,24 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     }
 
     # Function to update the checkpoint time with the last successful API call end time
-    function UpdateCheckpointTime($CheckpointFile, $LogType, $LastSuccessfulTime, $skip) {
+    function UpdateCheckpointTime ($CheckpointFile, $LogType, $LastSuccessfulTime, $skip) {
         try {
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
             $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
-            $mutex.WaitOne() > $null;
-            $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
-            $checkpoints = Import-Csv -Path $CheckpointFile
-            $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
-            # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-            $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-            Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
-            $mutex.ReleaseMutex();
+        
+            if ($mutex.WaitOne()) {                
+                $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
+                $checkpoints = Import-Csv -Path $CheckpointFile
+                $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
+                # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+                $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+                Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
+            }        
         }
         catch {
             Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
+        } finally {
+            $mutex.ReleaseMutex();
         }
     }
 
