@@ -44,7 +44,6 @@ ParserQuery: |
   | where DeviceProduct == "NSSFWlog"
   // Event fields
   | extend 
-    EventCount=DeviceCustomNumber1, 
     EventStartTime=TimeGenerated, 
     EventVendor = "Zscaler", 
     EventProduct = "ZIA Firewall", 
@@ -71,13 +70,21 @@ ParserQuery: |
     SrcNatPortNumber = SourceTranslatedPort, 
     SrcUserDepartment = DeviceCustomString1,  // Not in standard schema
     SrcUserLocation = SourceUserPrivileges,  // Not in standard schema
-    NetworkDuration = DeviceCustomNumber1, 
     ThreatName = DeviceCustomString6, 
     ThreatCategory = DeviceCustomString5, 
     RuleName = Activity 
   // -- Calculated fields
   | lookup ActionLookup on DvcOriginalAction 
   | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventCount=coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber2", int(null))), 
+      toint(column_ifexists("DeviceCustomNumber2",int(null)))
+    ),
+    NetworkDuration = coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
     ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
     SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
     DstBytes = tolong(ReceivedBytes), 

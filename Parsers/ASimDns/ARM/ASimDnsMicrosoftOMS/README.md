@@ -1,6 +1,6 @@
 # MS DNS Events ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for MS DNS Events.
+ARM template for ASIM Dns schema parser for MS DNS Events.
 
 This ASIM parser supports normalizing Windows DNS logs, collected using the Log Analytics agent, to the ASIM Dns normalized schema.
 
