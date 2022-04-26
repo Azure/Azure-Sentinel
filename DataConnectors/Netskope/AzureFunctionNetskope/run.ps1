@@ -241,6 +241,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
         if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
             $CheckpointLog = @{}
+            Write-Host "FirstTime Creation : Api Data - $($apitypes)."
             foreach ($apiType in $apitypes) {
                 $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
             }
@@ -261,6 +262,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
                 $CheckpointLog = @{}
+                Write-Host "NullData : Api Data - $($apitypes)."
                 foreach ($apiType in $apitypes) {
                     $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
                 }
