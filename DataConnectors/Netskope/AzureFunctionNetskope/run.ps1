@@ -139,14 +139,6 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 Write-Host "Exiting from do while loop for logType : $($logtype) because of error message as : " + $($Error[0].Exception.Message)
                 break
             }
-            
-            $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-
-            if ($functionCurrentTimeEpoch-$functionStartTimeEpoch -lt 570){
-                UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout.")
-                break
-            }
 
         } while ($count -eq 0)
 
