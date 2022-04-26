@@ -244,12 +244,19 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
             }
             $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+            $checkpoints = Import-Csv -Path $CheckpointFile
+                if ($null -ne $checkpoints){                
+                    Write-Host "FirstTime Creation : CHECKPOINT FILE : $($checkpoints)"
+                } else {
+                    Write-Host "FirstTime Creation : Checkpointing file is Null."
+                }
             return $firstStartTimeRecord.ToString() + "|" + 0
         }
         else {
             $GetLastRecordTime = Import-Csv -Path $CheckpointFile
             if($null -eq $GetLastRecordTime)
             {
+                Write-Host "NullData : CHECKPOINT FILE : $($GetLastRecordTime)"
                 $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
                 $CheckpointLog = @{}
@@ -261,6 +268,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else
             {
+                Write-Host "NullData : Checkpointing file is Null."
                 $LastRecordObject = $GetLastRecordTime | ForEach-Object{
                     if($_.Key -eq $LogType){
                         $_.Value
