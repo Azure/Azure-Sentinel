@@ -126,22 +126,34 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     }
                     else {
                         # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
-                        $count = 1
                         $skip = 0
+                        $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
+                        $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $startTime
+
+                        # If data to be retrieved is within last 20mins (10mins of time interval and 10mins of execution)
+                        if ($TimeDifferenceEpoch -lt 1200){
+                            $count = 1
+                        } 
+                        # If data to be retrieved is beyond 20mins, we can move the window forward and fetch that data within this execution
+                        else {
+                            $startTime += 600
+                        }
+
                      }
                 }                
 
                 if ($responseCode -ne 200) {
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
                     $skip = $skip - $pageLimit
-                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                    #UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 }
 
+                UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
                 
                 if ($TimeDifferenceEpoch -ge 480) {
-                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                     Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
                     break
                 }
