@@ -129,7 +129,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         $skip = 0
                         $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                         $TimeDifferenceQueryTimeEpoch = $functionCurrentTimeEpoch - $startTime
-                        Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceEpoch)"
+                        Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceQueryTimeEpoch)"
 
                         $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
 
@@ -142,7 +142,6 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                             $endTime = $endTime + $timeInterval
                             Write-Host "For Logtype $($logtype) new modified startTime is $($startTime) and endTime is $($endTime)."
                         }
-
                      }
                 }                
 
@@ -196,7 +195,15 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else {
                 Write-Host "Warning!: Total data size is > 30mb hence performing the operation of split and process."
-                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName
+                
+                $counter = [pscustomobject] @{ Value = 0 }
+                $groupSize = [math]::Ceiling($alleventobjs.Length/2) 
+                $groups = $alleventobjs | Group-Object -Property { [math]::Floor($counter.Value++ / $groupSize) }
+
+                $responseCode0 = ProcessData -allEventsLength $groups[0].Group.Count -alleventobjs $groups[0].Group -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
+                $responseCode1 = ProcessData -allEventsLength $groups[1].Group.Count -alleventobjs $groups[1].Group -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
+
+                $responseCode = responseCode0 -ne 200 ? responseCode0 : responseCode1
             }
         }
         else {
