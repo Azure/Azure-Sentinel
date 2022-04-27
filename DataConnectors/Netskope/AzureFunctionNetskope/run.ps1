@@ -137,7 +137,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         } else {
                         # If data to be retrieved is beyond 20mins, we can move the window forward and fetch that data within this execution
                             $startTime = $startTime + $timeInterval
-                            Write-Host "For Logtype $($logtype) new modified startTime is $($startTime)"
+                            $endTime = $endTime + $timeInterval
+                            Write-Host "For Logtype $($logtype) new modified startTime is $($startTime) and endTime is $($endTime)."
                         }
 
                      }
