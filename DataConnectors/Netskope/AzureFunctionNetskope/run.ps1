@@ -128,11 +128,13 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
                         $skip = 0
                         $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-                        $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $startTime
+                        $TimeDifferenceQueryTimeEpoch = $functionCurrentTimeEpoch - $startTime
                         Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceEpoch)"
 
+                        $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
+
                         # If data to be retrieved is within last 20mins (10mins of time interval and 10mins of execution)
-                        if ($TimeDifferenceEpoch -le 1200){
+                        if (($TimeDifferenceQueryTimeEpoch -le $timeInterval*2) -or ($TimeDifferenceEpoch -ge 420)){
                             $count = 1
                         } else {
                         # If data to be retrieved is beyond 20mins, we can move the window forward and fetch that data within this execution
