@@ -140,7 +140,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
                 
-                if ($TimeDifferenceEpoch -ge 480) {
+                if ($TimeDifferenceEpoch -ge 240) {
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                     Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
                     break
