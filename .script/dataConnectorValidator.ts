@@ -64,6 +64,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Event;
   }
+  else if (dataTypes[0].name.includes("AzureDevOpsAuditing"))
+  {
+    return ConnectorCategory.AzureDevOpsAuditing;
+  }
   else if (dataTypes[0].name.includes("AzureDiagnostics"))
   {
     return ConnectorCategory.AzureDiagnostics;
