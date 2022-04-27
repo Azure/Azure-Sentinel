@@ -57,7 +57,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $apikey = $env:apikey
         $uri = $env:uri
         $tableName = "Netskope"
-        $endTime = [int](Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
+        $endTime = [Int](Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
         $LastRecordData = $LastRecordObject.Split("|");
         $startTime = [Int]($LastRecordData[0])
@@ -69,7 +69,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         if($netskopetimediff.TotalSeconds -gt 600)
         {
            Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
-           $endTime = (Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
+           $endTime = [Int](Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
            Write-Host "For Logtype $($logtype) new modified endtime is $($endTime)"
         }
         $alleventobjs = @()
