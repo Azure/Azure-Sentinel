@@ -2,6 +2,8 @@
 
 failed=0
 
+# The KqlFuncYaml2Arm script generates deployable ARM templates from KQL function YAML files.
+# Currently, the script only runs on the parsers listed below.
 parsersSchemas=(ASimDns ASimNetworkSession ASimWebSession)
 for schema in ${parsersSchemas[@]}
 	do  
