@@ -15,7 +15,7 @@ param (
     [Parameter(Mandatory = $false,
         Position = 3)]
     [string]$PersonalAccessToken,
-    
+
     [Parameter(Mandatory = $false)]
     [string]$workspaceName,
 
@@ -55,19 +55,19 @@ if ($workspaceName) {
         -ResourceType 'Microsoft.OperationalInsights/workspaces'
 
     Write-Output "Workspace properties: $($workspace.name)"
-    
+
         $_resourceGroupName  = $workspace.ResourceGroupName
         $_workspaceName      = $workspace.Name
-        
+
         Write-Output "retrieving Workspace Id"
         $workspaceId = (Get-AzOperationalInsightsWorkspace -ResourceGroupName $_resourceGroupName -Name $_workspaceName).CustomerId.Guid
-        
+
         Write-Output "workspaceId found $($workspaceId)"
-    
+
        # Ignoring the message for now.
         Set-Item Env:\SuppressAzurePowerShellBreakingChangeWarnings "true"
         $workspaceKey = (Get-AzOperationalInsightsWorkspaceSharedKeys -ResourceGroupName $_resourceGroupName -Name $_workspaceName).PrimarySharedKey
-    
+
         $PersonalAccessToken = Get-AzKeyVaultSecret -VaultName $VaultName -Name PersonalAccessToken -AsPlainText
     }
     catch {
