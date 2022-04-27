@@ -292,7 +292,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         $_.Value
                     }
                 }
-                return $LastRecordObject
+                if ($null -ne $LastRecordObject) { return $LastRecordObject }
             }
             return $firstStartTimeRecord
         }
