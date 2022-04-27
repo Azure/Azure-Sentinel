@@ -263,10 +263,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             foreach ($apiType in $apitypes) {
                 $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
             }
-            $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
-            $mutex.WaitOne() > $null;
+            #$mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
+            #$mutex.WaitOne() > $null;
             $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-            $mutex.ReleaseMutex()
+            #$mutex.ReleaseMutex()
             return $firstStartTimeRecord.ToString() + "|" + 0
         }
         else {
@@ -279,10 +279,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 foreach ($apiType in $apitypes) {
                     $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
                 }
-                $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
-                $mutex.WaitOne() > $null;
+                #$mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
+                #$mutex.WaitOne() > $null;
                 $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-                $mutex.ReleaseMutex()
+                #$mutex.ReleaseMutex()
                 return $firstStartTimeRecord.ToString() + "|" + 0
             }
             else
@@ -292,8 +292,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         $_.Value
                     }
                 }
+                return $LastRecordObject
             }
-            if ($null -ne $LastRecordObject) return $LastRecordObject
             return $firstStartTimeRecord
         }
     }
