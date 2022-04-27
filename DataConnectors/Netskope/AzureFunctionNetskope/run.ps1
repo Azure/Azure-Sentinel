@@ -57,7 +57,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $apikey = $env:apikey
         $uri = $env:uri
         $tableName = "Netskope"
-        $endTime = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
+        $endTime = [int](Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
         $LastRecordData = $LastRecordObject.Split("|");
         $startTime = [Int]($LastRecordData[0])
@@ -132,7 +132,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceEpoch)"
 
                         # If data to be retrieved is within last 20mins (10mins of time interval and 10mins of execution)
-                        if ($TimeDifferenceEpoch -lt 1200){
+                        if ($TimeDifferenceEpoch -le 1200){
                             $count = 1
                         } else {
                         # If data to be retrieved is beyond 20mins, we can move the window forward and fetch that data within this execution
