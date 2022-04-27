@@ -78,16 +78,16 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
                 $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip
                 $netskopeevents = $response.data
-                $netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty connectionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty app_sessionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty transactionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
-                $netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
-
                 if($null -ne $netskopeevents)
                 {
+                    $netskopeevents | Add-Member -MemberType NoteProperty dlp_incidentid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty dlp_parentid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty connectionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty app_sessionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty transactionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty browser_sessionid -Value ""
+                    $netskopeevents | Add-Member -MemberType NoteProperty requestid -Value ""
+
                     $netskopeevents | ForEach-Object{
                         if($_.dlp_incident_id -ne $NULL){
                                 $_.dlp_incidentid = [string]$_.dlp_incident_id
@@ -182,18 +182,22 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         try {
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
             $mutex = New-Object System.Threading.Mutex $false, 'NetSkopeCsvConnection'
-            $mutex.WaitOne() > $null;
-            $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
-            $checkpoints = Import-Csv -Path $CheckpointFile
-            $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
-            # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-            $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-            Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
+            if($mutex.WaitOne(2000)){
+                $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
+                $checkpoints = Import-Csv -Path $CheckpointFile
+                $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
+                # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+                $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+                Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
+            }
+        }
+        catch [System.Threading.AbandonedMutexException]
+        {
+            Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
             $mutex.ReleaseMutex();
         }
-        catch {
-            Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
-        }
+        $mutex.ReleaseMutex();
+        $mutex.Dispose();
     }
 
     function GetLogs ($Uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip) {
