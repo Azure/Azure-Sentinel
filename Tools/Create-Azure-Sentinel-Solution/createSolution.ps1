@@ -157,11 +157,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 						$fileName = Replace-SpecialChars -InputString $fileName -Type 'filename'
                         $workbookKey = $fileName;
                         $fileName = $fileName + "Workbook";
-                        if ($contentToImport.Metadata) {
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
-                        }
-                       
 
                         if ($workbookCounter -eq 1) {
                             # Add workbook source variables
@@ -247,7 +242,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
-                        
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue $contentToImport.Version
 
                         if(!$contentToImport.TemplateSpec)
                         {
@@ -310,7 +305,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter                        
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId$workbookCounter'))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue $contentToImport.Version
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookContentId$workbookCounter" -NotePropertyValue "[variables('workbookContentId$workbookCounter')]"
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind      = "Workbook";
@@ -407,6 +401,15 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                         else {
                             $baseMainTemplate.resources += $newWorkbook
+                            if ($contentToImport.Metadata) {
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                            $DependencyCriteria += [PSCustomObject]@{
+                                kind      = "Workbook";
+                                contentId = "[variables('_$fileName')]";
+                                version   = "[variables('workbookVersion$workbookCounter')]";
+                            };
+                        }
                         }
 
                         $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUiParameter
@@ -1653,10 +1656,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
 
                         $fileName = Split-Path $file -leafbase;
-                        if ($contentToImport.Metadata) {
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
-                        }
+                        # if ($contentToImport.Metadata) {
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                        # }
 
                         function getFileNameFromPath ($inputFilePath) {
                             # Split out path
