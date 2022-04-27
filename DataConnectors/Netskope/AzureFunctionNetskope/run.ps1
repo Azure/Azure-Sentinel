@@ -132,13 +132,13 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceEpoch)"
 
                         # If data to be retrieved is within last 20mins (10mins of time interval and 10mins of execution)
-                        #if ($TimeDifferenceEpoch -lt 1200){
+                        if ($TimeDifferenceEpoch -lt 1200){
                             $count = 1
-                        #} 
+                        } else {
                         # If data to be retrieved is beyond 20mins, we can move the window forward and fetch that data within this execution
-                        #else {
-                        #    $startTime += 600
-                        #}
+                            $startTime = $startTime + $timeInterval
+                            Write-Host "For Logtype $($logtype) new modified startTime is $($startTime)"
+                        }
 
                      }
                 }                
