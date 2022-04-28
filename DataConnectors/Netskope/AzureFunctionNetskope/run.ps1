@@ -195,17 +195,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else {
                 Write-Host "Warning!: Total data size is > 30mb hence performing the operation of split and process."
-                
-                $part1 = $alleventobjs[0..([math]::Ceiling($alleventobjs.Length/2)-1)]
-                $part2 = $alleventobjs[([math]::Ceiling($alleventobjs.Length/2))..$alleventobjs.Length]
-
-                $responseCode0 = ProcessData -allEventsLength $part1.Length -alleventobjs $part1 -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
-                Write-Host "Processed Part 1 with length $($part1.length) | Result : $($responseCode0)"
-
-                $responseCode1 = ProcessData -allEventsLength $part2.Length -alleventobjs $part1 -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
-                Write-Host "Processed Part 2 with length $($part2.length) | Result : $($responseCode1)"
-
-                $responseCode = responseCode0 -ne 200 ? responseCode0 : responseCode1
+                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName                
             }
         }
         else {
