@@ -61,7 +61,7 @@ function queryResourceExists () {
 }
 
 function getQueryResourceLocation () {
-    for($i = 0; $i -lt $baseMainTemplate.resources.Length; $i++){
+    for ($i = 0; $i -lt $baseMainTemplate.resources.Length; $i++) {
         if ($baseMainTemplate.resources[$i].type -eq "Microsoft.OperationalInsights/workspaces") {
             return $i
         }
@@ -86,17 +86,24 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
     # Convenience Variables
     $solutionName = $contentToImport.Name
-	
+
 
     # Base JSON Object Paths
     $baseMainTemplatePath = "$PSScriptRoot/templating/baseMainTemplate.json"
     $baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.json"
+    $metadataPath = "$PSScriptRoot/../../Solutions/$($contentToImport.Name)/$($contentToImport.Metadata)"
 
+    $workbookMetadataPath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/"
     # Base JSON Objects
     $baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
     $baseCreateUiDefinition = Get-Content -Raw $baseCreateUiDefinitionPath | Out-String | ConvertFrom-Json
+    $baseMetadata = Get-Content -Raw $metadataPath | Out-String | ConvertFrom-Json
 
     $DependencyCriteria = @();
+    ## After bug Bash we need to remove this -preview keyword in the below line of code for mass packaging
+    $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId + "-preview"
+                $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
+                $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
@@ -105,11 +112,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 $finalPath = $basePath + $file
                 $rawData = $null
                 try {
-                    Write-Host "Downloading $file"
+                    Write-Host "Downloading $finalPath"
                     $rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
                 }
                 catch {
-                    Write-Host "Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
+                    Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
                     break;
                 }
 
@@ -148,21 +155,15 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $fileName = Split-Path $file -leafbase;
 						#$fileName = $fileName -replace '[(\)]','';
 						$fileName = Replace-SpecialChars -InputString $fileName -Type 'filename'
-                        $fileName = $fileName + "_workbook";
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
-
-                        $DependencyCriteria += [PSCustomObject]@{
-                            kind      = "Workbook";
-                            contentId = "[variables('_$fileName')]";
-                            version   = $contentToImport.Version;
-                        };
+                        $workbookKey = $fileName;
+                        $fileName = $fileName + "Workbook";
 
                         if ($workbookCounter -eq 1) {
                             # Add workbook source variables
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbook-source" -NotePropertyValue "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbook-source" -NotePropertyValue "[variables('workbook-source')]"
-
+                            if (!$contentToImport.TemplateSpec){
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workbook-source" -NotePropertyValue "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbook-source" -NotePropertyValue "[variables('workbook-source')]"
+                            };
                             $baseWorkbookStep = [PSCustomObject] @{
                                 name       = "workbooks";
                                 label      = "Workbooks";
@@ -186,15 +187,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 )
                             }
                             $baseCreateUiDefinition.parameters.steps += $baseWorkbookStep
-                            #Add formattedTimeNow parameter since workbooks exist
-                            $timeNowParameter = [PSCustomObject]@{
-                                type         = "string";
-                                defaultValue = "[utcNow('g')]";
-                                metadata     = [PSCustomObject]@{
-                                    description = "Appended to workbook displayNames to make them unique";
+
+                            if(!$contentToImport.TemplateSpec)
+                            {
+                                #Add formattedTimeNow parameter since workbooks exist
+                                $timeNowParameter = [PSCustomObject]@{
+                                    type         = "string";
+                                    defaultValue = "[utcNow('g')]";
+                                    metadata     = [PSCustomObject]@{
+                                        description = "Appended to workbook displayNames to make them unique";
+                                    }
                                 }
+                                $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "formattedTimeNow" -Value $timeNowParameter
                             }
-                            $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name "formattedTimeNow" -Value $timeNowParameter
                         }
                         try {
                             $data = $rawData
@@ -208,7 +213,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             break;
                         }
                         $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
-						
+
                         $workbookUiParameter = [PSCustomObject] @{
                             name     = "workbook$workbookCounter";
                             type     = "Microsoft.Common.Section";
@@ -227,7 +232,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     toolTip      = "Display name for the workbook.";
                                     constraints  = [PSCustomObject] @{
                                         required          = $true;
-                                        regex             = "[a-z0-9A-Z]{1,256}$";
+                                        regex             = "[a-z0-9A-Z]{1,256}";
                                         validationMessage = "Please enter a workbook name"
                                     }
                                 }
@@ -237,8 +242,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
-                        $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $solutionRename.trimEnd(); minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue $contentToImport.Version
 
+                        if(!$contentToImport.TemplateSpec)
+                        {
+                            $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookIDParameterName -Value $workbookIDParameter
+                        }
+                       
                         # Create Workbook Resource Object
                         $newWorkbook = [PSCustomObject]@{
                             type       = "Microsoft.Insights/workbooks";
@@ -246,18 +256,161 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             location   = "[parameters('workspace-location')]";
                             kind       = "shared";
                             apiVersion = "2021-08-01";
+                            metadata   = [PSCustomObject]@{};
                             properties = [PSCustomObject] @{
-                                displayName    = "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
+                                displayName    = $contentToImport.Workbooks ? "[parameters('workbook$workbookCounter-name')]" : "[concat(parameters('workbook$workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
                                 version        = "1.0";
-                                sourceId       = "[variables('_workbook-source')]";
+                                sourceId       = $contentToImport.TemplateSpec? "[variables('workspaceResourceId')]" : "[variables('_workbook-source')]";
                                 category       = "sentinel"
                             }
                         }
 
-                        $baseMainTemplate.resources += $newWorkbook
-                        $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookIDParameterName -Value $workbookIDParameter
-                        $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
+                        if($contentToImport.TemplateSpec) {
+                            #Getting Workbook Metadata dependencies from Github
+                            $workbookData = $null
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
+                            try {
+                                Write-Host "Downloading $workbookFinalPath"
+                                $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
+                                $dependencies = $workbookData | ConvertFrom-Json | Where-Object {($_.templateRelativePath.split('.')[0].ToLower() -eq $workbookKey.ToLower())}
+                                $WorkbookDependencyCriteria = @();
+                                foreach($dataTypesDependencies in $dependencies.dataTypesDependencies)
+                                {
+                                    $dataTypeObject = New-Object PSObject
+                                    $dataTypeObject | Add-Member -MemberType NoteProperty -Name "contentId" -Value "$dataTypesDependencies"
+                                    $dataTypeObject | Add-Member -MemberType NoteProperty -Name "kind" -Value "DataType"
+                                    $WorkbookDependencyCriteria += $dataTypeObject
+                                }
+                                foreach($dataConnectorsDependencies in $dependencies.dataConnectorsDependencies)
+                                {
+                                    $dataConnectorObject = New-Object PSObject
+                                    $dataConnectorObject | Add-Member -MemberType NoteProperty -Name "contentId" -Value "$dataConnectorsDependencies"
+                                    $dataConnectorObject | Add-Member -MemberType NoteProperty -Name "kind" -Value "DataConnector"
+                                    $WorkbookDependencyCriteria += $dataConnectorObject
+                                }
+                                $workbookDependencies = [PSCustomObject]@{
+                                    operator = "AND";
+                                    criteria = $WorkbookDependencyCriteria;
+                                };
+                                $newWorkbook.metadata | Add-Member -MemberType NoteProperty -Name "description" -Value "$($dependencies.description)"
+                            }
+                            catch {
+                                Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
+                                break;
+                            }
+
+                            $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $dependencies.title; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue "$($dependencies.workbookKey)"
+                            $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter                        
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId$workbookCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookContentId$workbookCounter" -NotePropertyValue "[variables('workbookContentId$workbookCounter')]"
+                            $DependencyCriteria += [PSCustomObject]@{
+                                kind      = "Workbook";
+                                contentId = "[variables('_workbookContentId$workbookCounter')]";
+                                version   = "[variables('workbookVersion$workbookCounter')]";
+                            };
+                            
+                            # Add workspace resource ID if not available
+                            if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                            }
+
+                            # Add base templateSpec
+                            $baseWorkbookTemplateSpec = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs";
+                                apiVersion = "2021-05-01";
+                                name       = "[variables('workbookTemplateSpecName$workbookCounter')]";
+                                location   = "[parameters('workspace-location')]";
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = "Workbook";
+                                };
+                                properties = [PSCustomObject]@{
+                                    description = "$($solutionName) Workbook with template";
+                                    displayName = "$($solutionName) workbook template";
+                                }
+                            }
+                            $newWorkbook.name = "[variables('workbookContentId$workbookCounter')]"
+                            $baseMainTemplate.resources += $baseWorkbookTemplateSpec
+                            $author = $contentToImport.Author.Split(" - ");
+                            $authorDetails = [PSCustomObject]@{
+                                name  = $author[0];
+                                email = $author[1];
+                            };
+
+                            $workbookMetadata = [PSCustomObject]@{
+                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                apiVersion = "2022-01-01-preview";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId$workbookCounter'),'/'))))]";
+                                #description = $dependencies.description;
+                                properties = [PSCustomObject]@{
+                                    description = "$dependencies.description";
+                                    parentId  = "[variables('workbookId$workbookCounter')]"
+                                    contentId = "[variables('_workbookContentId$workbookCounter')]";
+                                    kind      = "Workbook";
+                                    version   = "[variables('workbookVersion$workbookCounter')]";
+                                    source    = [PSCustomObject]@{
+                                        kind     = "Solution";
+                                        name     = $contentToImport.Name;
+                                        sourceId = "[variables('_solutionId')]"
+                                    };
+                                    author    = $authorDetails;
+                                    support   = $baseMetadata.support;
+                                    dependencies = $workbookDependencies;
+                                }
+                            }
+
+                            if($workbookDescriptionText -ne "")
+                            {
+                                $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
+                            }
+
+                            # Add templateSpecs/versions resource to hold actual content
+                            $workbookTemplateSpecContent = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs/versions";
+                                apiVersion = "2021-05-01";
+                                name       = "[concat(variables('workbookTemplateSpecName$workbookCounter'),'/',variables('workbookVersion$workbookCounter'))]";
+                                location   = "[parameters('workspace-location')]";
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = "Workbook";
+                                };
+                                dependsOn  = @(
+                                    "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName$workbookCounter'))]"
+                                );
+                                properties = [PSCustomObject]@{
+                                    description  = "$($fileName) Workbook with template version $($contentToImport.Version)";
+                                    mainTemplate = [PSCustomObject]@{
+                                        '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
+                                        contentVersion = "[variables('workbookVersion$workbookCounter')]";
+                                        parameters     = [PSCustomObject]@{};
+                                        variables      = [PSCustomObject]@{};
+                                        resources      = @(
+                                            # workbook
+                                            $newWorkbook,
+                                            # Metadata
+                                            $workbookMetadata
+                                        )
+                                    }
+                                }
+                            }
+
+                            $baseMainTemplate.resources += $workbookTemplateSpecContent
+                        }
+                        else {
+                            $baseMainTemplate.resources += $newWorkbook
+                            if ($contentToImport.Metadata) {
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                            $DependencyCriteria += [PSCustomObject]@{
+                                kind      = "Workbook";
+                                contentId = "[variables('_$fileName')]";
+                                version   = "[variables('workbookVersion$workbookCounter')]";
+                            };
+                        }
+                        }
 
                         $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUiParameter
                         $baseCreateUiDefinition.parameters.outputs | Add-Member -NotePropertyName "workbook$workbookCounter-name" -NotePropertyValue "[steps('workbooks').workbook$workbookCounter.workbook$workbookCounter-name]"
@@ -271,8 +424,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $fileName = Split-path -Parent $file | Split-Path -leaf
                         $fileName = "playbook$playbookCounter-$fileName";
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                        if ($contentToImport.Metadata) {
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                        }
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = "Playbook";
@@ -306,6 +461,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             $baseCreateUiDefinition.parameters.steps += $playbookStep
                         }
+                        $playbookDescriptionText = $(if ($contentToImport.PlaybookDescription -and $contentToImport.PlaybookDescription -is [System.Array]) { $contentToImport.PlaybookDescription[$playbookCounter - 1] } elseif ($contentToImport.PlaybookDescription -and $contentToImport.PlaybookDescription -is [System.String]) { $contentToImport.PlaybookDescription } else { "" })
                         $playbookElement = [PSCustomObject] @{
                             name     = "playbook$playbookCounter";
                             type     = "Microsoft.Common.Section";
@@ -314,7 +470,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 [PSCustomObject] @{
                                     name    = "playbook$playbookCounter-text";
                                     type    = "Microsoft.Common.TextBlock";
-                                    options = [PSCustomObject] @{ text = if ($playbookData.metadata -and $playbookData.metadata.comments) { $playbookData.metadata.comments } else { "This playbook ingests events from $solutionName into Log Analytics using the API." } }
+                                    options = [PSCustomObject] @{ text = $playbookDescriptionText }
                                 }
                             )
                         }
@@ -381,13 +537,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         minLength = 1;
                                         metadata  = [PSCustomObject] @{ description = "Password to connect to $solutionName API"; }
                                     }
-								)
+                                )
                             }
-							elseif ($param.Name.ToLower().contains("apikey")) {
+                            elseif ($param.Name.ToLower().contains("apikey")) {
                                 $playbookPasswordObject = [PSCustomObject] @{
                                     name        = "playbook$playbookCounter-$paramName";
                                     type        = "Microsoft.Common.PasswordBox";
-                                    label       = [PSCustomObject] @{password = "ApiKey"};
+                                    label       = [PSCustomObject] @{password = "ApiKey" };
                                     toolTip     = "ApiKey to connect to $solutionName API";
                                     constraints = [PSCustomObject] @{ required = $true; };
                                     options     = [PSCustomObject] @{ hideConfirmation = $true; };
@@ -464,14 +620,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($variableValue -is [System.String]) {
                                 $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                             }
-                            if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey")))
-                            {
+                            if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey"))) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$variableName" -NotePropertyValue "[$variableValue]"
                             }
-                            else
-                            {
+                            else {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
-                            }                           
+                            }
                         }
 
                         $azureManagementUrlExists = $false
@@ -557,17 +711,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if ($foundConnection) {
-                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"                     
+                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
                                     }
                                     else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
-                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"               
+                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
                                     }
-                                    if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
-                                        {
-                                            $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
-                                        }
+                                    if (($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey')) {
+                                        $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
+                                    }
                                 }
                             }
                             $playbookResource = $(replaceVarsRecursively $playbookResource)
@@ -593,18 +746,20 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             type         = "string";
                             defaultValue = $(New-Guid).Guid
                         }
-                        $baseMainTemplate.parameters | Add-Member -NotePropertyName "connector$connectorCounter-name" -NotePropertyValue $connectorNameParamObj
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "connector$connectorCounter-source" -NotePropertyValue "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector$connectorCounter-name'))]"
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_connector$connectorCounter-source" -NotePropertyValue "[variables('connector$connectorCounter-source')]"
-
                         $connectorId = $connectorData.id + 'Connector';
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName $connectorId -NotePropertyValue $connectorId
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$connectorId" -NotePropertyValue "[variables('$connectorId')]"
-
+                        if ($contentToImport.Metadata -and !$contentToImport.TemplateSpec) {
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $connectorId -NotePropertyValue $connectorId
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$connectorId" -NotePropertyValue "[variables('$connectorId')]"
+                        }
+                         if (!$contentToImport.TemplateSpec){
+                            $baseMainTemplate.parameters | Add-Member -NotePropertyName "connector$connectorCounter-name" -NotePropertyValue $connectorNameParamObj
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "connector$connectorCounter-source" -NotePropertyValue "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector$connectorCounter-name'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_connector$connectorCounter-source" -NotePropertyValue "[variables('connector$connectorCounter-source')]"
+                         };
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = "DataConnector";
-                            contentId = "[variables('_$connectorId')]";
-                            version   = $contentToImport.Version;
+                            contentId = if ($contentToImport.TemplateSpec){"[variables('_dataConnectorContentId$connectorCounter')]"}else{"[variables('_$connectorId')]"};
+                            version   = if ($contentToImport.TemplateSpec){"[variables('dataConnectorVersion$connectorCounter')]"}else{$contentToImport.Version};
                         };
                         foreach ($step in $connectorData.instructionSteps) {
                             # Remove empty properties from each instructionStep
@@ -612,44 +767,193 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $connectorData.instructionSteps[$stepIndex] = handleEmptyInstructionProperties $step
                         }
 
-                        $connectorObj = [PSCustomObject]@{}
-                        # If direct title is available, assume standard connector format
-                        if ($connectorData.title) {
-                            $connectorObj = [PSCustomObject]@{
-                                id         = "[variables('_connector$connectorCounter-source')]";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]"
+                        if ($contentToImport.TemplateSpec) {
+                            $connectorName = $contentToImport.Name
+                            # Add workspace resource ID if not available
+                            if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                            }
+                            # If both ID and Title exist, is standard GenericUI data connector
+                            if ($connectorData.id -and $connectorData.title) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "uiConfigId$connectorCounter" -NotePropertyValue $connectorData.id
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "_uiConfigId$connectorCounter" -NotePropertyValue "[variables('uiConfigId$connectorCounter')]"
+                            }
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorContentId$connectorCounter" -NotePropertyValue $connectorData.id
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$connectorCounter" -NotePropertyValue "[variables('dataConnectorContentId$connectorCounter')]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorId$connectorCounter" -NotePropertyValue "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorId$connectorCounter" -NotePropertyValue "[variables('dataConnectorId$connectorCounter')]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateSpecName$connectorCounter" -NotePropertyValue "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId$connectorCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$connectorCounter" -NotePropertyValue $contentToImport.Version
+                            if (!$contentToImport.TemplateSpec){
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "parentId" -NotePropertyValue $solutionId
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "_parentId" -NotePropertyValue "[variables('parentId')]"
+                             };
+                            # $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
+                            # $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
+
+                            # Add base templateSpec
+                            $baseDataConnectorTemplateSpec = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs";
+                                apiVersion = "2021-05-01";
+                                name       = "[variables('dataConnectorTemplateSpecName$connectorCounter')]";
+                                location   = "[parameters('workspace-location')]";
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = "DataConnector";
+                                };
+                                properties = [PSCustomObject]@{
+                                    description = "$($connectorName) data connector with template";
+                                    displayName = "$($connectorName) template";
+                                }
+                            }
+                            $baseMainTemplate.resources += $baseDataConnectorTemplateSpec
+                            # Data Connector Content -- *Assumes GenericUI
+                            if($contentToImport.Is1PConnector)
+                            {
+                                $1pconnectorData = $connectorData
+                                $1pconnectorData = $1pconnectorData | Select-Object -Property id,title,publisher,descriptionMarkdown, graphQueries, connectivityCriterias,dataTypes
+                            }
+                            $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $connectorData
+                            $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$connectorCounter')]"
+                            $dataConnectorContent = [PSCustomObject]@{
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$connectorCounter'))]";
                                 apiVersion = "2021-03-01-preview";
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                                 location   = "[parameters('workspace-location')]";
-                                kind       = "GenericUI";
+                                kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
                                 properties = [PSCustomObject]@{
-                                    connectorUiConfig = [PSCustomObject]@{
-                                        title                 = $connectorData.title;
-                                        publisher             = $connectorData.publisher;
-                                        descriptionMarkdown   = $connectorData.descriptionMarkdown;
-                                        graphQueries          = $connectorData.graphQueries;
-                                        sampleQueries         = $connectorData.sampleQueries;
-                                        dataTypes             = $connectorData.dataTypes;
-                                        connectivityCriterias = $connectorData.connectivityCriterias;
-                                        availability          = $connectorData.availability;
-                                        permissions           = $connectorData.permissions;
-                                        instructionSteps      = $connectorData.instructionSteps
+                                    connectorUiConfig = $templateSpecConnectorUiConfig
+                                }
+                            }
+                            $author = $contentToImport.Author.Split(" - ");
+                            $authorDetails = [PSCustomObject]@{
+                                name  = $author[0];
+                                email = $author[1];
+                            };
+                            $dataConnectorMetadata = [PSCustomObject]@{
+                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                apiVersion = "2022-01-01-preview";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId$connectorCounter'),'/'))))]";
+                                properties = [PSCustomObject]@{
+                                    parentId  = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]";
+                                    contentId = "[variables('_dataConnectorContentId$connectorCounter')]";
+                                    kind      = "DataConnector";
+                                    version   = "[variables('dataConnectorVersion$connectorCounter')]";
+                                    source    = [PSCustomObject]@{
+                                        kind     = "Solution";
+                                        name     = $contentToImport.Name;
+                                        sourceId = "[variables('_solutionId')]"
+                                    };
+                                    author    = $authorDetails;
+                                    support   = $baseMetadata.support
+                                }
+                            }
+                            # Add templateSpecs/versions resource to hold actual content
+                            $dataConnectorTemplateSpecContent = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs/versions";
+                                apiVersion = "2021-05-01";
+                                name       = "[concat(variables('dataConnectorTemplateSpecName$connectorCounter'),'/',variables('dataConnectorVersion$connectorCounter'))]";
+                                location   = "[parameters('workspace-location')]";
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = "DataConnector";
+                                };
+                                dependsOn  = @(
+                                    "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName$connectorCounter'))]"
+                                );
+                                properties = [PSCustomObject]@{
+                                    description  = "$($connectorName) data connector with template version $($contentToImport.Version)";
+                                    mainTemplate = [PSCustomObject]@{
+                                        '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
+                                        contentVersion = "[variables('dataConnectorVersion$connectorCounter')]";
+                                        parameters     = [PSCustomObject]@{};
+                                        variables      = [PSCustomObject]@{};
+                                        resources      = @(
+                                            # Data Connector
+                                            $dataConnectorContent,
+                                            # Metadata
+                                            $dataConnectorMetadata
+                                        )
                                     }
                                 }
                             }
+                            $baseMainTemplate.resources += $dataConnectorTemplateSpecContent
+
+                            # Add content-metadata item, in addition to template spec metadata item
+                            $dataConnectorActiveContentMetadata = [PSCustomObject]@{
+                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                apiVersion = "2022-01-01-preview";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId$connectorCounter'),'/'))))]";
+                                dependsOn  = @("[variables('_dataConnectorId$connectorCounter')]");
+                                properties = [PSCustomObject]@{
+                                    parentId  = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]";
+                                    contentId = "[variables('_dataConnectorContentId$connectorCounter')]";
+                                    kind      = "DataConnector";
+                                    version   = "[variables('dataConnectorVersion$connectorCounter')]";
+                                    source    = [PSCustomObject]@{
+                                        kind     = "Solution";
+                                        name     = $contentToImport.Name;
+                                        sourceId = "[variables('_solutionId')]"
+                                    };
+                                    author    = $authorDetails;
+                                    support   = $baseMetadata.support
+                                }
+                            }
+                            $baseMainTemplate.resources += $dataConnectorActiveContentMetadata
                         }
-                        elseif ($connectorData.resources -and 
-                            $connectorData.resources[0] -and 
-                            $connectorData.resources[0].properties -and 
-                            $connectorData.resources[0].properties.connectorUiConfig -and 
+                        $connectorObj = [PSCustomObject]@{}
+                        # If direct title is available, assume standard connector format
+                        if ($connectorData.title) {
+                            $standardConnectorUiConfig = [PSCustomObject]@{
+                                title                 = $connectorData.title;
+                                publisher             = $connectorData.publisher;
+                                descriptionMarkdown   = $connectorData.descriptionMarkdown;
+                                graphQueries          = $connectorData.graphQueries;
+                                dataTypes             = $connectorData.dataTypes;
+                                connectivityCriterias = $connectorData.connectivityCriterias;
+                            }
+
+                            if(!$contentToImport.Is1PConnector)
+                            {
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $connectorData.sampleQueries;
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "permissions" -NotePropertyValue $connectorData.permissions;
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "instructionSteps" -NotePropertyValue $connectorData.instructionSteps;
+                            }
+
+                            if($contentToImport.TemplateSpec){
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
+                            }
+                            $connectorObj = [PSCustomObject]@{
+                                #id         = "[variables('_connector$connectorCounter-source')]";
+                                # id         = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
+                                name       = if ($contentToImport.TemplateSpec) { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$connectorCounter'))]" }else { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]" }
+                                apiVersion = "2021-03-01-preview";
+                                type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
+                                location   = "[parameters('workspace-location')]";
+                                kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
+                                properties = [PSCustomObject]@{
+                                    connectorUiConfig = $standardConnectorUiConfig
+                                }
+                            }
+
+                            if(!$contentToImport.TemplateSpec)
+                            {
+                                $connectorObj | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_connector$connectorCounter-source')]";
+                            }
+                        }
+                        elseif ($connectorData.resources -and
+                            $connectorData.resources[0] -and
+                            $connectorData.resources[0].properties -and
+                            $connectorData.resources[0].properties.connectorUiConfig -and
                             $connectorData.resources[0].properties.pollingConfig) {
                             # Else check if Polling connector
                             $connectorData = $connectorData.resources[0]
                             $connectorUiConfig = $connectorData.properties.connectorUiConfig
                             $connectorUiConfig.PSObject.Properties.Remove('id')
                             $connectorObj = [PSCustomObject]@{
-                                id         = "[variables('_connector$connectorCounter-source')]";
-                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]"
+                                id         = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
+                                name       = if ($contentToImport.TemplateSpec) { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$connectorCounter'))]" }else { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]" }
                                 apiVersion = "2021-03-01-preview";
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                                 location   = "[parameters('workspace-location')]";
@@ -757,35 +1061,36 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $searchData = $json # Assume input is basic array of SavedSearches to start
                         # Check if SavedSearch input file uses direct structure given by export
                         if ($searchData -isnot [System.Array] -and $searchData.value) {
-                            $searchData = $searchData.value 
+                            $searchData = $searchData.value
                         }
                         # Check if SavedSearch input file uses standard template structure
                         if ($searchData -isnot [System.Array] -and $searchData.resources) {
                             $isStandardTemplate = $true
                             $searchData = $searchData.resources
                         }
-                        if($searchData -is [System.Array] -and !$isStandardTemplate) {
-                            foreach($search in $searchData) {
+                        if ($searchData -is [System.Array] -and !$isStandardTemplate) {
+                            foreach ($search in $searchData) {
                                 $savedSearchIdParameterName = "savedsearch$savedSearchCounter-id"
                                 $savedSearchIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
                                 $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $savedSearchIdParameterName -Value $savedSearchIdParameter
 
                                 $savedSearchResource = [PSCustomObject]@{
-                                    type = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                                    type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
                                     apiVersion = "2020-08-01";
-                                    name = "[concat(parameters('workspace'),'/',parameters('$savedSearchIdParameterName'))]";
+                                    name       = "[concat(parameters('workspace'),'/',parameters('$savedSearchIdParameterName'))]";
                                     properties = [PSCustomObject]@{
-                                        category = $search.properties.category;
-                                        displayName = $search.properties.displayName;
-                                        query = $search.properties.query;
+                                        category      = $search.properties.category;
+                                        displayName   = $search.properties.displayName;
+                                        query         = $search.properties.query;
                                         functionAlias = $search.properties.functionAlias;
-                                        version = $search.properties.version;
+                                        version       = $search.properties.version;
                                     };
                                 }
                                 $baseMainTemplate.resources += $savedSearchResource
                                 $savedSearchCounter++
                             }
-                        } elseif ($isStandardTemplate) {
+                        }
+                        elseif ($isStandardTemplate) {
                             $baseMainTemplate.resources += $searchData
                         }
                     }
@@ -793,8 +1098,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $watchlistData = $json.resources[0]
 
                         $watchlistName = $watchlistData.properties.displayName;
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName $watchlistName -NotePropertyValue $watchlistName
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$watchlistName" -NotePropertyValue "[variables('$watchlistName')]"
+                        if ($contentToImport.Metadata) {
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName $watchlistName -NotePropertyValue $watchlistName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$watchlistName" -NotePropertyValue "[variables('$watchlistName')]"
+                        }
 
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = "Watchlist";
@@ -830,6 +1137,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
 
                         #Handle CreateUiDefinition Step Sub-Element
+                        $watchlistDescriptionText = $(if ($contentToImport.WatchlistDescription -and $contentToImport.WatchlistDescription -is [System.Array]) { $contentToImport.WatchlistDescription[$watchlistCounter - 1] } elseif ($contentToImport.WatchlistDescription -and $contentToImport.WatchlistDescription -is [System.String]) { $contentToImport.WatchlistDescription } else { $watchlistData.properties.description })
                         $currentStepNum = $baseCreateUiDefinition.parameters.steps.Count - 1
                         $watchlistStepElement = [PSCustomObject]@{
                             name     = "watchlist$watchlistCounter";
@@ -840,7 +1148,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     name    = "watchlist$watchlistCounter-text";
                                     type    = "Microsoft.Common.TextBlock";
                                     options = [PSCustomObject]@{
-                                        text = $watchlistData.properties.description
+                                        text = $watchlistDescriptionText
                                     }
                                 }
                             )
@@ -880,28 +1188,28 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             $fileName = Split-Path $file -leafbase;
-                            $fileName += "_HuntingQueries";
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
-
+                            $fileName = $fileName + "_HuntingQueries";
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryVersion$huntingQueryCounter" -NotePropertyValue $contentToImport.Version
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQuerycontentId$huntingQueryCounter" -NotePropertyValue $yaml.id
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_huntingQuerycontentId$huntingQueryCounter" -NotePropertyValue "[variables('huntingQuerycontentId$huntingQueryCounter')]"
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind      = "HuntingQuery";
-                                contentId = "[variables('_$fileName')]";
-                                version   = $contentToImport.Version;
+                                contentId = "[variables('_huntingQuerycontentId$huntingQueryCounter')]";
+                                version   = "[variables('huntingQueryVersion$huntingQueryCounter')]";
                             };
 
                             if ($huntingQueryCounter -eq 1) {
                                 if (!$(queryResourceExists)) {
                                     $baseHuntingQueryResource = [PSCustomObject] @{
                                         type       = "Microsoft.OperationalInsights/workspaces";
-                                        apiVersion = "2020-08-01";
+                                        apiVersion = "2021-06-01";
                                         name       = "[parameters('workspace')]";
                                         location   = "[parameters('workspace-location')]";
                                         resources  = @()
                                     }
                                     $baseMainTemplate.resources += $baseHuntingQueryResource
                                 }
-                                if ($null -eq $baseMainTemplate.variables.'workspace-dependency') {
+                                if (!$contentToImport.TemplateSpec -and $null -eq $baseMainTemplate.variables.'workspace-dependency') {
                                     #Add parser dependency variable once to ensure validation passes.
                                     $baseMainTemplate.variables | Add-Member -MemberType NoteProperty -Name "workspace-dependency" -Value "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]"
                                 }
@@ -925,22 +1233,26 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $baseCreateUiDefinition.parameters.steps += $huntingQueryBaseStep
                             }
+
                             $huntingQueryObj = [PSCustomObject] @{
-                                type       = "savedSearches";
+                                type       = $contentToImport.TemplateSpec ? "Microsoft.OperationalInsights/savedSearches" : "savedSearches";
                                 apiVersion = "2020-08-01";
-                                name       = "$solutionName Hunting Query $huntingQueryCounter";
-                                dependsOn  = @(
-                                    "[variables('workspace-dependency')]"
-                                );
+                                name       = $contentToImport.TemplateSpec ? "$($solutionName.Replace(' ', '_'))_Hunting_Query_$huntingQueryCounter" : "$solutionName Hunting Query $huntingQueryCounter";
+                                location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject] @{
                                     eTag        = "*";
                                     displayName = $yaml.name;
                                     category    = "Hunting Queries";
                                     query       = $yaml.query;
-                                    version     = 1;
-                                    tags        = @()
+                                    version     = $contentToImport.TemplateSpec ? 2 : 1;
+                                    tags        = @();
                                 }
                             }
+
+                            # if($contentToImport.TemplateSpec)
+                            # {
+                            #     $huntingQueryObj | Add-Member -NotePropertyName "id" -NotePropertyValue "[guid('$($(New-Guid).Guid)')]"
+                            # }
                             $huntingQueryDescription = ""
                             if ($yaml.description) {
                                 $huntingQueryDescription = $yaml.description.substring(1, $yaml.description.length - 3)
@@ -961,8 +1273,110 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $huntingQueryObj.properties.tags += $tacticsObj
                             }
-                            $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $huntingQueryObj
 
+                            if ($yaml.relevantTechniques -and $yaml.relevantTechniques.Count -gt 0) {
+                                $relevantTechniquesObj = [PSCustomObject]@{
+                                    name  = "techniques";
+                                    value = $yaml.relevantTechniques -join ","
+                                }
+                                if ($relevantTechniquesObj.value.ToString() -match ' ') {
+                                    $relevantTechniquesObj.value = $relevantTechniquesObj.value -replace ' ', ''
+                                }
+                                $huntingQueryObj.properties.tags += $relevantTechniquesObj
+                            }
+
+                            if($contentToImport.TemplateSpec) {
+                               
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryId$huntingQueryCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('_huntingQuerycontentId$huntingQueryCounter'))]"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'-HuntingQuery-',variables('_huntingQuerycontentId$huntingQueryCounter'))]"
+                                if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                                }
+
+                                $baseHuntingQueryTemplateSpec = [PSCustomObject]@{
+                                    type       = "Microsoft.Resources/templateSpecs";
+                                    apiVersion = "2021-05-01";
+                                    name       = "[variables('huntingQueryTemplateSpecName$huntingQueryCounter')]";
+                                    location   = "[parameters('workspace-location')]";
+                                    tags       = [PSCustomObject]@{
+                                        "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                        "hidden-sentinelContentType" = "HuntingQuery";
+                                    };
+                                    properties = [PSCustomObject]@{
+                                        description = "$($solutionName) Hunting Query $huntingQueryCounter with template";
+                                        displayName = "$($solutionName) Hunting Query template";
+                                    }
+                                }
+
+                                $baseMainTemplate.resources += $baseHuntingQueryTemplateSpec
+                                $author = $contentToImport.Author.Split(" - ");
+                                $authorDetails = [PSCustomObject]@{
+                                    name  = $author[0];
+                                    email = $author[1];
+                                };
+
+                                $huntingQueryMetadata = [PSCustomObject]@{
+                                    type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                    apiVersion = "2022-01-01-preview";
+                                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(variables('huntingQueryId$huntingQueryCounter'),'/'))))]";
+                                    properties = [PSCustomObject]@{
+                                        description = "$($solutionName) Hunting Query $huntingQueryCounter";
+                                        parentId  = "[variables('huntingQueryId$huntingQueryCounter')]";
+                                        contentId = "[variables('_huntingQuerycontentId$huntingQueryCounter')]";
+                                        kind      = "HuntingQuery";
+                                        version   = "[variables('huntingQueryVersion$huntingQueryCounter')]";
+                                        source    = [PSCustomObject]@{
+                                            kind     = "Solution";
+                                            name     = $contentToImport.Name;
+                                            sourceId = "[variables('_solutionId')]"
+                                        };
+                                        author    = $authorDetails;
+                                        support   = $baseMetadata.support
+                                    }
+                                }
+
+                                 # Add templateSpecs/versions resource to hold actual content
+                                $huntingQueryTemplateSpecContent = [PSCustomObject]@{
+                                    type       = "Microsoft.Resources/templateSpecs/versions";
+                                    apiVersion = "2021-05-01";
+                                    name       = "[concat(variables('huntingQueryTemplateSpecName$huntingQueryCounter'),'/',variables('huntingQueryVersion$huntingQueryCounter'))]";
+                                    location   = "[parameters('workspace-location')]";
+                                    tags       = [PSCustomObject]@{
+                                        "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                        "hidden-sentinelContentType" = "HuntingQuery";
+                                    };
+                                    dependsOn  = @(
+                                        "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName$huntingQueryCounter'))]"
+                                    );
+                                    properties = [PSCustomObject]@{
+                                        description  = "$($fileName) Hunting Query with template version $($contentToImport.Version)";
+                                        mainTemplate = [PSCustomObject]@{
+                                            '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
+                                            contentVersion = "[variables('huntingQueryVersion$huntingQueryCounter')]";
+                                            parameters     = [PSCustomObject]@{};
+                                            variables      = [PSCustomObject]@{};
+                                            resources      = @(
+                                                # workbook
+                                                $huntingQueryObj,
+                                                # Metadata
+                                                $huntingQueryMetadata
+                                            )
+                                        }
+                                    }
+                                }
+                                $baseMainTemplate.resources += $huntingQueryTemplateSpecContent
+                            }
+                            else{
+                                if(!$contentToImport.TemplateSpec)
+                                {
+                                    $dependsOn  = @(
+                                        "[variables('workspace-dependency')]"
+                                    );
+
+                                    $huntingQueryObj | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue $dependsOn
+                                }
+                                $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $huntingQueryObj
+                            }
                             $dependencyDescription = ""
                             if ($yaml.requiredDataConnectors) {
                                 $dependencyDescription = "It depends on the $($yaml.requiredDataConnectors.connectorId) data connector and $($($yaml.requiredDataConnectors.dataTypes)) data type and $($yaml.requiredDataConnectors.connectorId) parser."
@@ -988,7 +1402,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Update HuntingQuery Counter
                             $huntingQueryCounter += 1
                         }
-
                         else {
                             # If yaml and not hunting query, process as Alert Rule
                             Write-Host "Generating Alert Rule using $file"
@@ -1025,16 +1438,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $content = ''
 
                             $fileName = Split-Path $file -leafbase;
-                            $fileName += "_AnalyticalRules";
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
-
-                            $DependencyCriteria += [PSCustomObject]@{
-                                kind      = "AnalyticsRule";
-                                contentId = "[variables('_$fileName')]";
-                                version   = $contentToImport.Version;
-                            };
-
+                            $fileName = $fileName + "_AnalyticalRules";
                             foreach ($line in $rawData) {
                                 $content = $content + "`n" + $line
                             }
@@ -1045,11 +1449,42 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host "Failed to deserialize $file" -ForegroundColor Red
                                 break;
                             }
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleVersion$analyticRuleCounter" -NotePropertyValue "$($yaml.version)" #Post bugbash we need to remove this #$contentToImport.Version
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRulecontentId$analyticRuleCounter" -NotePropertyValue "$($yaml.id)"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRulecontentId$analyticRuleCounter" -NotePropertyValue "[variables('analyticRulecontentId$analyticRuleCounter')]"
+                            $DependencyCriteria += [PSCustomObject]@{
+                                kind      = "AnalyticsRule";
+                                contentId = "[variables('analyticRulecontentId$analyticRuleCounter')]";
+                                #post bug bash ,remove this below comments!
+                                version   = "[variables('analyticRuleVersion$analyticRuleCounter')]"; #$contentToImport.Version;
+                            };
                             # Copy all directly transposable properties
                             foreach ($yamlProperty in $yamlPropertiesToCopyFrom) {
                                 $index = $yamlPropertiesToCopyFrom.IndexOf($yamlProperty)
                                 $alertRule.$($yamlPropertiesToCopyTo[$index]) = $yaml.$yamlProperty
                             }
+
+                            if($contentToImport.TemplateSpec)
+                            {
+                                $alertRule | Add-Member -NotePropertyName status -NotePropertyValue ($yaml.status ? $yaml.status : "Available") # Add requiredDataConnectors property if exists
+                            }
+
+                            if($yaml.requiredDataConnectors)
+                            {
+                                #$baseMainTemplate.variables | Add-Member -NotePropertyName "analyticalRuleConnectorId$analyticRuleCounter" -NotePropertyValue $yaml.requiredDataConnectors.connectorId;
+                                # $requiredDataConnectors = @{
+                                #     connectorId = "[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
+                                #     dataTypes = $yaml.requiredDataConnectors.dataTypes;
+                                # }
+                                #$requiredDataConnectorAttribute = ($yaml.requiredDataConnectors.connectorId.GetType().Name -is [object]) ? ($yaml.requiredDataConnectors.connectorId -join ',') : $yaml.requiredDataConnectors.connectorId;
+                                $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue $yaml.requiredDataConnectors # Add requiredDataConnectors property if exists
+                                for($i=0; $i -lt $yaml.requiredDataConnectors.connectorId.count; $i++)
+                                {
+                                    $alertRule.requiredDataConnectors[$i].connectorId = ($yaml.requiredDataConnectors[$i].connectorId.GetType().Name -is [object]) ? ($yaml.requiredDataConnectors[$i].connectorId -join ',') : $yaml.requiredDataConnectors[$i].connectorId;
+                                }
+                                #"[variables('analyticalRuleConnectorId$analyticRuleCounter')]";
+                            }
+
                             if (!$yaml.severity) {
                                 $alertRule.severity = "Medium"
                             }
@@ -1079,10 +1514,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "PT$field"
                                 }
                             }
-                            $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
-                            $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
+
+                            if($yaml.kind.ToUpper() -eq "Scheduled")
+                            {
+                                $alertRule.queryFrequency =  $(checkISO8601Format $yaml.queryFrequency.ToUpper())
+                                $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
+                            }
+                            else {
+                                $alertRule.PSObject.Properties.Remove('queryFrequency');
+                                $alertRule.PSObject.Properties.Remove('queryPeriod');
+                                $alertRule.PSObject.Properties.Remove('triggerOperator');
+                                $alertRule.PSObject.Properties.Remove('triggerThreshold');
+                            }
+                            #$alertRule.queryFrequency = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryFrequency.ToUpper())
+                            #$alertRule.queryPeriod = ($yaml.kind.ToUpper() -eq "NRT") ? "" : $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
-                            
+
                             # Handle optional fields
                             foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")) {
                                 if ($yaml.$yamlField) {
@@ -1092,19 +1539,106 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
-                                type       = "Microsoft.OperationalInsights/workspaces/providers/alertRules";
+                                type       = $contentToImport.TemplateSpec ? "Microsoft.SecurityInsights/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic$analyticRuleCounter-id'))]";
-                                apiVersion = "2021-03-01-preview";
-                                kind       = "Scheduled";
+                                apiVersion = "2022-04-01-preview";
+                                kind       =  "$($yaml.kind)";
                                 location   = "[parameters('workspace-location')]";
                                 properties = $alertRule;
                             }
 
-                            # Add Resource and Parameters to Template
-                            $baseMainTemplate.resources += $newAnalyticRule
-                            $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $alertRuleParameterName -Value $alertRuleParameter
+                            if($contentToImport.TemplateSpec) {
+                                
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleId$analyticRuleCounter" -NotePropertyValue "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId$analyticRuleCounter'))]"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-AnalyticsRule-',variables('_analyticRulecontentId$analyticRuleCounter'))]"
+                                if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                                }
 
+                                $baseAnalyticRuleTemplateSpec = [PSCustomObject]@{
+                                    type       = "Microsoft.Resources/templateSpecs";
+                                    apiVersion = "2021-05-01";
+                                    name       = "[variables('analyticRuleTemplateSpecName$analyticRuleCounter')]";
+                                    location   = "[parameters('workspace-location')]";
+                                    tags       = [PSCustomObject]@{
+                                        "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                        "hidden-sentinelContentType" = "AnalyticsRule";
+                                    };
+                                    properties = [PSCustomObject]@{
+                                        description = "$($solutionName) Analytics Rule $analyticRuleCounter with template";
+                                        displayName = "$($solutionName) Analytics Rule template";
+                                    }
+                                }
 
+                                $newAnalyticRule.name = "[variables('AnalyticRulecontentId$analyticRuleCounter')]"
+                                $baseMainTemplate.resources += $baseAnalyticRuleTemplateSpec
+                                $author = $contentToImport.Author.Split(" - ");
+                                $authorDetails = [PSCustomObject]@{
+                                    name  = $author[0];
+                                    email = $author[1];
+                                };
+
+                                $analyticRuleMetadata = [PSCustomObject]@{
+                                    type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                    apiVersion = "2022-01-01-preview";
+                                    name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId$analyticRuleCounter'),'/'))))]";
+                                    properties = [PSCustomObject]@{
+                                        description = "$($solutionName) Analytics Rule $analyticRuleCounter";
+                                        parentId  = "[variables('analyticRuleId$analyticRuleCounter')]";
+                                        contentId = "[variables('_analyticRulecontentId$analyticRuleCounter')]";
+                                        kind      = "AnalyticsRule";
+                                        # Need to remove the below assigned property for the yaml version after bug bash
+                                        version   = "[variables('analyticRuleVersion$analyticRuleCounter')]";  #"[variables('analyticRuleVersion$analyticRuleCounter')]";
+                                        source    = [PSCustomObject]@{
+                                            kind     = "Solution";
+                                            name     = $contentToImport.Name;
+                                            sourceId = "[variables('_solutionId')]"
+                                        };
+                                        author    = $authorDetails;
+                                        support   = $baseMetadata.support
+                                    }
+                                }
+
+                                 # Add templateSpecs/versions resource to hold actual content
+                                $analyticRuleTemplateSpecContent = [PSCustomObject]@{
+                                    type       = "Microsoft.Resources/templateSpecs/versions";
+                                    apiVersion = "2021-05-01";
+                                    name       = "[concat(variables('analyticRuleTemplateSpecName$analyticRuleCounter'),'/',variables('analyticRuleVersion$analyticRuleCounter'))]";
+                                    location   = "[parameters('workspace-location')]";
+                                    tags       = [PSCustomObject]@{
+                                        "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                        "hidden-sentinelContentType" = "AnalyticsRule";
+                                    };
+                                    dependsOn  = @(
+                                        "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName$analyticRuleCounter'))]"
+                                    );
+                                    properties = [PSCustomObject]@{
+                                        description  = "$($fileName) Analytics Rule with template version $($contentToImport.Version)";
+                                        mainTemplate = [PSCustomObject]@{
+                                            '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
+                                            contentVersion = "[variables('analyticRuleVersion$analyticRuleCounter')]";
+                                            parameters     = [PSCustomObject]@{};
+                                            variables      = [PSCustomObject]@{};
+                                            resources      = @(
+                                                # Analytics Rule
+                                                $newAnalyticRule,
+                                                # Metadata
+                                                $analyticRuleMetadata
+                                            )
+                                        }
+                                    }
+                                }
+                                $baseMainTemplate.resources += $analyticRuleTemplateSpecContent
+                            }
+                            else {
+                                # Add Resource and Parameters to Template
+                                $baseMainTemplate.resources += $newAnalyticRule
+                            }
+
+                            if(!$contentToImport.TemplateSpec)
+                            {
+                                $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $alertRuleParameterName -Value $alertRuleParameter
+                            }
                             $alertRuleUIParameter = [PSCustomObject] @{ name = "analytic$analyticRuleCounter"; type = "Microsoft.Common.Section"; label = $alertRule.displayName; elements = @( [PSCustomObject] @{ name = "analytic$analyticRuleCounter-text"; type = "Microsoft.Common.TextBlock"; options = @{ text = $alertRule.description; } } ) }
                             $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $alertRuleUIParameter
 
@@ -1113,24 +1647,29 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                     }
                     else {
+                    # elseif($objectKeyLowercase -eq "parser") {
                         # Assume file is Parser due to parsers having inconsistent types. (.txt, .kql, or none)
                         Write-Host "Generating Data Parser using $file"
-                        if ($parserCounter -eq 1 -and $null -eq $baseMainTemplate.variables.'workspace-dependency') {
+                        if ($parserCounter -eq 1 -and $null -eq $baseMainTemplate.variables.'workspace-dependency' -and !$contentToImport.TemplateSpec) {
                             # Add parser dependency variable once to ensure validation passes.
                             $baseMainTemplate.variables | Add-Member -MemberType NoteProperty -Name "workspace-dependency" -Value "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]"
                         }
 
                         $fileName = Split-Path $file -leafbase;
-                        $fileName = $fileName + "_Parser";
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                        # if ($contentToImport.Metadata) {
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
+                        # }
 
-                        $DependencyCriteria += [PSCustomObject]@{
-                            kind      = "Parser";
-                            contentId = "[variables('_$fileName')]";
-                            version   = $contentToImport.Version;
-                        };
+                        function getFileNameFromPath ($inputFilePath) {
+                            # Split out path
+                            $output = $inputFilePath.Split("/")
+                            $output = $output[$output.Length - 1]
 
+                            # Split out file type
+                            $output = $output.Split(".")[0]
+                            return $output
+                        }
                         $content = ''
                         $rawData = $rawData.Split("`n")
                         foreach ($line in $rawData) {
@@ -1140,47 +1679,194 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                         }
 
-                        function getFileNameFromPath ($inputFilePath) {
-                            # Split out path
-                            $output = $inputFilePath.Split("/")
-                            $output = $output[$output.Length - 1]
-                            # Split out file type
-                            $output = $output.Split(".")[0]
-                            return $output
-                        }
-
                         # Use File Name as Parser Name
                         $functionAlias = getFileNameFromPath $file
-                        if ($parserCounter -eq 1 -and !$(queryResourceExists)) {
-                            $baseParserResource = [PSCustomObject] @{
-                                type       = "Microsoft.OperationalInsights/workspaces";
-                                apiVersion = "2020-08-01";
-                                name       = "[parameters('workspace')]";
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserVersion$parserCounter" -NotePropertyValue $contentToImport.Version
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "parserContentId$parserCounter" -NotePropertyValue "$($functionAlias)-Parser" #"$fileName"
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserContentId$parserCounter" -NotePropertyValue "[variables('parserContentId$parserCounter')]"
+                        $DependencyCriteria += [PSCustomObject]@{
+                            kind      = "Parser";
+                            contentId = "[variables('_parserContentId$parserCounter')]";
+                            version   = "[variables('parserVersion$parserCounter')]";
+                        };
+
+                        if($contentToImport.TemplateSpec) {                
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Parser-',variables('_parserContentId$parserCounter'))]"
+                            # Add workspace resource ID if not available
+                            if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                            }
+                            # Add base templateSpec
+                            $baseParserTemplateSpec = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs";
+                                apiVersion = "2021-05-01";
+                                name       = "[variables('parserTemplateSpecName$parserCounter')]";
                                 location   = "[parameters('workspace-location')]";
-                                resources  = @(
-
-                                )
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = "Parser";
+                                };
+                                properties = [PSCustomObject]@{
+                                    description = "$($fileName) Data Parser with template";
+                                    displayName = "$($fileName) Data Parser template";
+                                }
                             }
-                            $baseMainTemplate.resources += $baseParserResource
-                        }
-                        $parserObj = [PSCustomObject] @{
-                            type       = "savedSearches";
-                            apiVersion = "2020-08-01";
-                            name       = "$solutionName Data Parser";
-                            dependsOn  = @(
-                                "[variables('workspace-dependency')]"
-                            );
-                            properties = [PSCustomObject] @{
-                                eTag          = "*";
-                                displayName   = "$solutionName Data Parser";
-                                category      = "Samples";
-                                functionAlias = "$functionAlias";
-                                query         = $content;
-                                version       = 1;
-                            }
-                        }
-                        $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $parserObj
+                            $baseMainTemplate.resources += $baseParserTemplateSpec
 
+                            # Parser Content
+                            $parserContent = [PSCustomObject]@{
+                                name       = "[variables('_parserName$parserCounter')]";
+                                apiVersion = "2020-08-01";
+                                type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                                location   = "[parameters('workspace-location')]";
+                                properties = [PSCustomObject]@{
+                                    eTag          = "*"
+                                    displayName   = "$fileName"
+                                    category      = "Samples"
+                                    functionAlias = "$functionAlias"
+                                    query         = "$content"
+                                    version       = 1
+                                    tags          = @([PSCustomObject]@{
+                                        "name"  = "description"
+                                        "value" = "$($fileName)"
+                                        };
+                                    )
+                                }
+                            }
+
+                            $author = $contentToImport.Author.Split(" - ");
+                            $authorDetails = [PSCustomObject]@{
+                                name  = $author[0];
+                                email = $author[1];
+                            };
+
+                            $parserMetadata = [PSCustomObject]@{
+                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                apiVersion = "2022-01-01-preview";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
+                                dependsOn  =  @(
+                                    "[variables('_parserName$parserCounter')]"
+                                );
+                                properties = [PSCustomObject]@{
+                                    parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
+                                    contentId = "[variables('_parserContentId$parserCounter')]";
+                                    kind      = "Parser";
+                                    version   = "[variables('parserVersion$parserCounter')]";
+                                    source    = [PSCustomObject]@{
+                                        name     = $contentToImport.Name;
+                                        kind     = "Solution";
+                                        sourceId = "[variables('_solutionId')]"
+                                    };
+                                    author    = $authorDetails;
+                                    support   = $baseMetadata.support
+                                }
+                            }
+
+                            # Add templateSpecs/versions resource to hold actual content
+                            $parserTemplateSpecContent = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs/versions";
+                                apiVersion = "2021-05-01";
+                                name       = "[concat(variables('parserTemplateSpecName$parserCounter'),'/',variables('parserVersion$parserCounter'))]";
+                                location   = "[parameters('workspace-location')]";
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = "Parser";
+                                };
+                                dependsOn  = @(
+                                    "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName$parserCounter'))]"
+                                );
+                                properties = [PSCustomObject]@{
+                                    description  = "$($fileName) Data Parser with template version $($contentToImport.Version)";
+                                    mainTemplate = [PSCustomObject]@{
+                                        '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
+                                        contentVersion = "[variables('parserVersion$parserCounter')]";
+                                        parameters     = [PSCustomObject]@{};
+                                        variables      = [PSCustomObject]@{};
+                                        resources      = @(
+                                            # Parser
+                                            $parserContent,
+                                            # Metadata
+                                            $parserMetadata
+                                        )
+                                    }
+                                }
+                            }
+                            $baseMainTemplate.resources += $parserTemplateSpecContent
+
+                            $parserObj = [PSCustomObject] @{
+                                type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
+                                apiVersion = "2021-06-01";
+                                name       = "[variables('_parserName$parserCounter')]";
+                                properties = [PSCustomObject] @{
+                                    eTag          = "*";
+                                    displayName   = "$fileName";
+                                    category      = "Samples";
+                                    functionAlias = "$functionAlias";
+                                    query         = $content;
+                                    version       = 1;
+                                }
+                            }
+                            $baseMainTemplate.resources += $parserObj
+
+                            $parserMetadata = [PSCustomObject]@{
+                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                apiVersion = "2022-01-01-preview";
+                                name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
+                                dependsOn  =  @(
+                                    "[variables('_parserId$parserCounter')]"
+                                );
+                                properties = [PSCustomObject]@{
+                                    parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
+                                    contentId = "[variables('_parserContentId$parserCounter')]";
+                                    kind      = "Parser";
+                                    version   = "[variables('parserVersion$parserCounter')]";
+                                    source    = [PSCustomObject]@{
+                                        kind     = "Solution";
+                                        name     = $contentToImport.Name;
+                                        sourceId = "[variables('_solutionId')]"
+                                    };
+                                    author    = $authorDetails;
+                                    support   = $baseMetadata.support
+                                }
+                            }
+
+                            $baseMainTemplate.resources += $parserMetadata
+                        }
+                        else {
+                            if ($parserCounter -eq 1 -and !$(queryResourceExists)) {
+                                $baseParserResource = [PSCustomObject] @{
+                                    type       = "Microsoft.OperationalInsights/workspaces";
+                                    apiVersion = "2020-08-01";
+                                    name       = "[parameters('workspace')]";
+                                    location   = "[parameters('workspace-location')]";
+                                    resources  = @(
+
+                                    )
+                                }
+                                $baseMainTemplate.resources += $baseParserResource
+                            }
+                            $parserObj = [PSCustomObject] @{
+                                type       = "savedSearches";
+                                apiVersion = "2020-08-01";
+                                name       = "$solutionName Data Parser";
+                                dependsOn  = @(
+                                    "[variables('workspace-dependency')]"
+                                );
+                                properties = [PSCustomObject] @{
+                                    eTag          = "*";
+                                    displayName   = "$solutionName Data Parser";
+                                    category      = "Samples";
+                                    functionAlias = "$functionAlias";
+                                    query         = $content;
+                                    version       = 1;
+                                }
+                            }
+                            $baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $parserObj
+                        }
                         # Update Parser Counter
                         $parserCounter += 1
                     }
@@ -1188,14 +1874,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
             }
         }
         elseif ($objectProperties.Name.ToLower() -eq "metadata") {
-            $finalPath = $basePath + $objectProperties.Value
+            $finalPath = $metadataPath
             $rawData = $null
             try {
-                Write-Host "Downloading $file"
+                Write-Host "Downloading $finalPath"
                 $rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
             }
             catch {
-                Write-Host "Failed to download $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
+                Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
                 break;
             }
 
@@ -1209,9 +1895,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
             if ($validJson -and $json) {
                 # Create Metadata Resource Object
-                if ($json.publisherId -and $json.offerId) {
-                    $sourceId = $json.publisherId + "." + $json.offerId;
-                }
                 if ($json.support) {
                     $support = $json.support;
                 }
@@ -1219,21 +1902,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     $categories = $json.categories;
                 }
 
-                if ($sourceId) {
-                    $baseMainTemplate.variables | Add-Member -NotePropertyName "sourceId" -NotePropertyValue $sourceId;
-                    $baseMainTemplate.variables | Add-Member -NotePropertyName "_sourceId" -NotePropertyValue "[variables('sourceId')]"
-                }
 
                 $Author = $contentToImport.Author.Split(" - ");
 
                 $newMetadata = [PSCustomObject]@{
                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
-                    apiVersion = "2021-03-01-preview";
+                    apiVersion = "2022-01-01-preview";
                     properties = [PSCustomObject] @{
                         version = $contentToImport.Version;
                         kind    = "Solution";
                     };
                 };
+
+                if($contentToImport.TemplateSpec)
+                {
+                    $newMetadata.Properties | Add-Member -Name 'contentSchemaVersion' -Type NoteProperty -Value "2.0.0";
+                }
 
                 $source = [PSCustomObject]@{
                     kind = "Solution";
@@ -1243,12 +1927,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     name  = $Author[0];
                     email = $Author[1];
                 };
-                if ($sourceId) {
-                    $newMetadata | Add-Member -Name 'name' -Type NoteProperty -Value "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]";
-                    $newMetadata.Properties | Add-Member -Name 'contentId' -Type NoteProperty -Value "[variables('_sourceId')]";
-                    $newMetadata.Properties | Add-Member -Name 'parentId' -Type NoteProperty -Value "[variables('_sourceId')]";
+                if ($solutionId) {
+                    $newMetadata | Add-Member -Name 'name' -Type NoteProperty -Value "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]";
+                    $newMetadata.Properties | Add-Member -Name 'contentId' -Type NoteProperty -Value "[variables('_solutionId')]";
+                    $newMetadata.Properties | Add-Member -Name 'parentId' -Type NoteProperty -Value "[variables('_solutionId')]";
 
-                    $source | Add-Member -Name 'sourceId' -Type NoteProperty -value "[variables('_sourceId')]";
+                    $source | Add-Member -Name 'sourceId' -Type NoteProperty -value "[variables('_solutionId')]";
                     $newMetadata.Properties | Add-Member -Name 'source' -Type NoteProperty -value $source;
                 }
 
@@ -1311,8 +1995,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
             }
         }
     }
-	
-	
+
+
     # Update CreateUiDefinition Description with Content Counts
     function updateDescriptionCount($counter, $emplaceString, $replaceString, $countStringCondition) {
         if ($counter -gt 0) {
