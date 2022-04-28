@@ -278,7 +278,6 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             #$mutex.WaitOne() > $null;
             $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
             #$mutex.ReleaseMutex()
-            return $firstStartTimeRecord.ToString() + "|" + 0
         }
         else {
             $GetLastRecordTime = Import-Csv -Path $CheckpointFile
@@ -294,7 +293,6 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 #$mutex.WaitOne() > $null;
                 $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
                 #$mutex.ReleaseMutex()
-                return $firstStartTimeRecord.ToString() + "|" + 0
             }
             else
             {
@@ -305,8 +303,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 }
                 if ($null -ne $LastRecordObject) { return $LastRecordObject }
             }
-            return $firstStartTimeRecord
         }
+        return $firstStartTimeRecord.ToString() + "|" + 0
     }
 
     # Function to build the authorization signature to post to Log Analytics
