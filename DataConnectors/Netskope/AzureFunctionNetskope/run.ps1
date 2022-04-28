@@ -127,21 +127,21 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     else {
                         # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
                         $skip = 0
-                        $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-                        $TimeDifferenceQueryTimeEpoch = $functionCurrentTimeEpoch - $startTime
-                        Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceQueryTimeEpoch)"
+                        #$functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
+                        #$TimeDifferenceQueryTimeEpoch = $functionCurrentTimeEpoch - $startTime
+                        #Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceQueryTimeEpoch)"
 
-                        $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
+                        #$TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
 
                         # If data to be retrieved is within last 20mins (10mins of time interval and 10mins of execution)
-                        if (($TimeDifferenceQueryTimeEpoch -le $timeInterval*2) -or ($TimeDifferenceEpoch -ge 420)){
+                        #if (($TimeDifferenceQueryTimeEpoch -le $timeInterval*2) -or ($TimeDifferenceEpoch -ge 420)){
                             $count = 1
-                        } else {
+                        #} else {
                         # If data to be retrieved is beyond 20mins, we can move the window forward and fetch that data within this execution
-                            $startTime = $startTime + $timeInterval
-                            $endTime = $endTime + $timeInterval
-                            Write-Host "For Logtype $($logtype) new modified startTime is $($startTime) and endTime is $($endTime)."
-                        }
+                        #    $startTime = $startTime + $timeInterval
+                        #    $endTime = $endTime + $timeInterval
+                        #    Write-Host "For Logtype $($logtype) new modified startTime is $($startTime) and endTime is $($endTime)."
+                        #}
                      }
                 }                
 
