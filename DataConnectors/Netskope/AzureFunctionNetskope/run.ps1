@@ -148,18 +148,19 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 if ($responseCode -ne 200) {
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
                     $skip = $skip - $pageLimit
-                    #UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                }
-
-                if($count -eq 0) {
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 }
+
+                #if($count -eq 0) {
+                #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                #}
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
                 
                 if ($TimeDifferenceEpoch -ge 480) {
                     Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                     break
                 }
 
@@ -197,21 +198,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else {
                 Write-Host "Warning!: Total data size is > 30mb hence performing the operation of split and process."
-                #$responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName
-                
-                $allParts = @(
-                               @($alleventobjs[0..([math]::Ceiling($alleventobjs.Length/2)-1)]),
-                               @($alleventobjs[([math]::Ceiling($alleventobjs.Length/2))..$alleventobjs.Length]) 
-                            )
-                # Get the function's definition *as a string*
-                $funcDef = $function:ProcessData.ToString()
-                $job = $alleventobjs | ForEach-Object -Parallel {
-                        # Define the function inside this thread...
-                        $function:ProcessData = $using:funcDef
-                        ProcessData($_.Length,$_,$checkPointFile,$logtype, $endTime, $skip)
-                        #Start-Sleep 1
-                } -ThrottleLimit 50 -AsJob
-                $job | Receive-Job -Wait                
+                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName
             }
         }
         else {
@@ -280,10 +267,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             foreach ($apiType in $apitypes) {
                 $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
             }
-            #$mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
-            #$mutex.WaitOne() > $null;
+            $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
+            $mutex.WaitOne() > $null;
             $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-            #$mutex.ReleaseMutex()
+            $mutex.ReleaseMutex()
         }
         else {
             $GetLastRecordTime = Import-Csv -Path $CheckpointFile
@@ -295,10 +282,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 foreach ($apiType in $apitypes) {
                     $CheckpointLog.Add($apiType, $firstStartTimeRecord.ToString() + "|" + 0)
                 }
-                #$mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
-                #$mutex.WaitOne() > $null;
+                $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
+                $mutex.WaitOne() > $null;
                 $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-                #$mutex.ReleaseMutex()
+                $mutex.ReleaseMutex()
             }
             else
             {
@@ -314,7 +301,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
                     $CheckpointLog = @{}
                     $CheckpointLog.Add($LogType, $firstStartTimeRecord.ToString() + "|" + 0)
+                    $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
+                    $mutex.WaitOne() > $null;
                     $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+                    $mutex.ReleaseMutex()
                 }
             }
         }
