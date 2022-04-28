@@ -19,7 +19,7 @@ accessKeyId = os.environ.get('AliCloudAccessKeyId', '')
 accessKey = os.environ.get('AliCloudAccessKey', '')
 token = ""
 topic = os.environ.get('Topic', '')
-user_projects = os.environ.get("AliCloudProjects", "").replace(" ", "").split(',')
+user_projects = os.environ.get("AliCloudProjects", '').replace(" ", "").split(',')
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 log_type = "AliCloud"
@@ -41,6 +41,7 @@ def generate_date():
     current_time = datetime.utcnow().replace(second=0, microsecond=0) - timedelta(minutes=10)
     state = StateManager(connection_string=connection_string)
     past_time = state.get()
+    # past_time = 0
     if past_time is not None:
         logging.info("The last time point is: {}".format(past_time))
     else:
@@ -111,8 +112,7 @@ def gen_chunks(data, start_time, end_time):
             success += len(chunk)
         else:
             failed += len(chunk)
-    logging.info("{} successfully added, {} failed. Period(UTC): {} - {}".format(success, failed, start_time.strftime(
-        "%d.%m.%Y %H:%M:%S"), end_time.strftime("%d.%m.%Y %H:%M:%S")))
+    logging.info("{} successfully added, {} failed. Period(UTC): {} - {}".format(success, failed, start_time, end_time))
 
 
 def get_list_logstores(client, project):
