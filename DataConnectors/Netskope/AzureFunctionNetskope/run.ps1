@@ -151,8 +151,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     #UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 }
 
-                UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                
+                if($count -eq 0) {
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                }
+
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
                 
@@ -195,7 +197,21 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
             }
             else {
                 Write-Host "Warning!: Total data size is > 30mb hence performing the operation of split and process."
-                $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName                
+                #$responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $alleventobjs -logType $tableName
+                
+                $allParts = @(
+                               @($alleventobjs[0..([math]::Ceiling($alleventobjs.Length/2)-1)]),
+                               @($alleventobjs[([math]::Ceiling($alleventobjs.Length/2))..$alleventobjs.Length]) 
+                            )
+                # Get the function's definition *as a string*
+                $funcDef = $function:ProcessData.ToString()
+                $job = $alleventobjs | ForEach-Object -Parallel {
+                        # Define the function inside this thread...
+                        $function:ProcessData = $using:funcDef
+                        ProcessData($_.Length,$_,$checkPointFile,$logtype, $endTime, $skip)
+                        #Start-Sleep 1
+                } -ThrottleLimit 50 -AsJob
+                $job | Receive-Job -Wait                
             }
         }
         else {
@@ -291,7 +307,15 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         $_.Value
                     }
                 }
-                if ($null -ne $LastRecordObject) { return $LastRecordObject }
+                if ($null -ne $LastRecordObject) { 
+                    return $LastRecordObject 
+                } else {
+                    $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
+                    $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
+                    $CheckpointLog = @{}
+                    $CheckpointLog.Add($LogType, $firstStartTimeRecord.ToString() + "|" + 0)
+                    $CheckpointLog.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
+                }
             }
         }
         return $firstStartTimeRecord.ToString() + "|" + 0
