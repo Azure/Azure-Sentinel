@@ -100,8 +100,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseMetadata = Get-Content -Raw $metadataPath | Out-String | ConvertFrom-Json
 
     $DependencyCriteria = @();
-    ## After bug Bash we need to remove this -preview keyword in the below line of code for mass packaging
-    $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId + "-preview"
+    $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
                 $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 
