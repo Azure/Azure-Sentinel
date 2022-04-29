@@ -4,7 +4,7 @@
  * The purpose of this interface is to provide detail on
  *  the various fields the input file can have.
  */
-interface SolutionAutomationInput {
+ interface SolutionAutomationInput {
   Name: string;                //Solution Name      - Ex. "Symantec Endpoint Protection"
   Author: string;              //Author of Solution - Ex. "Eli Forbes - v-eliforbes@microsoft.com"
   Logo: string;                //Link to the Logo used in the CreateUiDefinition.json
@@ -14,6 +14,10 @@ interface SolutionAutomationInput {
   //The following fields take arrays of paths relative to the solutions folder.
   //Ex. Workbooks: ["Workbooks/SymantecEndpointProtection.json"]
   Workbooks?: string[];
+  WorkbookBladeDescription: string; //Description used in the CreateUiDefinition.json for Workbooks Blade
+  AnalyticalRuleBladeDescription: string; //Description used in the CreateUiDefinition.json for Analytical Rule Blade
+  HuntingQueryBladeDescription: string; //Description used in the CreateUiDefinition.json for Hunting Query Blade
+  PlaybooksBladeDescription: string; //Description used in the CreateUiDefinition.json for Playbook Blade
   "Analytic Rules"?: string[];
   Playbooks?: string[];
   PlaybookDescription?: string|string[];
@@ -25,6 +29,4 @@ interface SolutionAutomationInput {
   WatchlistDescription?: string|string[];
   BasePath?: string; //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
   Metadata: string;
-  TemplateSpec: boolean;
-  Is1PConnector: boolean;
 }

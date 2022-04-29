@@ -177,12 +177,18 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "workbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text = "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences.";
-                                            link = [PSCustomObject] @{
-                                                label = "Learn more";
-                                                uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data";
-                                            }
+                                            text =  $contentToImport.WorkbookBladeDescription ? $contentToImport.WorkbookBladeDescription : "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences.";
                                         }
+                                    },
+                                    [PSCustomObject] @{
+                                        name    = "workbooks-link";
+                                        type    = "Microsoft.Common.TextBlock";
+                                        options = [PSCustomObject] @{
+                                            link=  [PSCustomObject] @{
+                                                label= "Learn more";
+                                                uri= "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+                                              }
+                                            }
                                     }
                                 )
                             }
@@ -450,14 +456,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "playbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text = "This solution installs playbook resources.  A security playbook is a collection of procedures that can be run from Microsoft Sentinel in response to an alert. A security playbook can help automate and orchestrate your response, and can be run manually or set to run automatically when specific alerts are triggered. Security playbooks in Microsoft Sentinel are based on Azure Logic Apps, which means that you get all the power, customizability, and built-in templates of Logic Apps. Each playbook is created for the specific subscription you choose, but when you look at the Playbooks page, you will see all the playbooks across any selected subscriptions.";
+                                            text = $contentToImport.PlaybooksBladeDescription ? $contentToImport.PlaybooksBladeDescription : "This solution installs the following Playbook templates. After installing the solution, playbooks can be managed in the Manage solution view. ";
+                                        }
+                                    },
+                                    [PSCustomObject] @{
+                                        name    = "playbooks-link";
+                                        type    = "Microsoft.Common.TextBlock";
+                                        options = [PSCustomObject] @{
                                             link = [PSCustomObject] @{
                                                 label = "Learn more";
                                                 uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
-                                            };
-                                        };
+                                        }
                                     }
-                                )
+                                })
                             }
                             $baseCreateUiDefinition.parameters.steps += $playbookStep
                         }
@@ -1026,16 +1037,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     text = $parserText;
                                 }
                             }
-                            $normalizedFormatLink = [PSCustomObject] @{
-                                name    = "dataconnectors-link1";
-                                type    = "Microsoft.Common.TextBlock";
-                                options = [PSCustomObject] @{
-                                    link = [PSCustomObject] @{
-                                        label = "Learn more about normalized format";
-                                        uri   = "https://docs.microsoft.com/azure/sentinel/normalization-schema";
-                                    }
-                                }
-                            }
+                            # $normalizedFormatLink = [PSCustomObject] @{
+                            #     name    = "dataconnectors-link1";
+                            #     type    = "Microsoft.Common.TextBlock";
+                            #     options = [PSCustomObject] @{
+                            #         link = [PSCustomObject] @{
+                            #             label = "Learn more about normalized format";
+                            #             uri   = "https://docs.microsoft.com/azure/sentinel/normalization-schema";
+                            #         }
+                            #     }
+                            # }
                             $connectDataSourcesLink = [PSCustomObject] @{
                                 name    = "dataconnectors-link2";
                                 type    = "Microsoft.Common.TextBlock";
@@ -1049,7 +1060,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($isParserAvailable) {
                                 $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $parserTextElement
                             }
-                            $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $normalizedFormatLink
+                            # $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $normalizedFormatLink
                             $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
                         }
 
@@ -1222,14 +1233,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             name    = "huntingqueries-text";
                                             type    = "Microsoft.Common.TextBlock";
                                             options = [PSCustomObject] @{
-                                                text = "This Microsoft Sentinel Solution installs hunting queries for $solutionName that you can run in Microsoft Sentinel. These hunting queries will be deployed in the Hunting gallery of your Microsoft Sentinel workspace. Run these hunting queries to hunt for threats in the Hunting gallery after this Solution deploys.";
-                                                link = [PSCustomObject] @{
-                                                    label = "Learn more";
-                                                    uri   = "https://docs.microsoft.com/azure/sentinel/hunting"
+                                                    text = $contentToImport.HuntingQueryBladeDescription ? $contentToImport.HuntingQueryBladeDescription : "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. ";
                                                 }
-                                            }
-                                        }
-                                    )
+                                            },
+                                            [PSCustomObject] @{
+                                                name    = "huntingqueries-link";
+                                                type    = "Microsoft.Common.TextBlock";
+                                                options = [PSCustomObject] @{
+                                                    link = [PSCustomObject] @{
+                                                        label = "Learn more";
+                                                        uri   = "https://docs.microsoft.com/azure/sentinel/hunting"
+                                                    }
+                                                }
+                                            })
                                 }
                                 $baseCreateUiDefinition.parameters.steps += $huntingQueryBaseStep
                             }
@@ -1419,7 +1435,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             name    = "analytics-text";
                                             type    = "Microsoft.Common.TextBlock";
                                             options = [PSCustomObject] @{
-                                                text = "This Microsoft Sentinel Solution installs analytic rules for $solutionName that you can enable for custom alert generation in Microsoft Sentinel. These analytic rules will be deployed in disabled mode in the analytics rules gallery of your Microsoft Sentinel workspace. Configure and enable these rules in the analytic rules gallery after this Solution deploys.";
+                                                text = $contentToImport.AnalyticalRuleBladeDescription ? $contentToImport.AnalyticalRuleBladeDescription : "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view.";
+                                            }
+                                        },
+                                        [PSCustomObject] @{
+                                            name    = "analytics-link";
+                                            type    = "Microsoft.Common.TextBlock";
+                                            options = [PSCustomObject] @{
                                                 link = [PSCustomObject] @{
                                                     label = "Learn more";
                                                     uri   = "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef";
