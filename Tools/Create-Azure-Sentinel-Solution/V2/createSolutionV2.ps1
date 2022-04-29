@@ -91,7 +91,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     # Base JSON Object Paths
     $baseMainTemplatePath = "$PSScriptRoot/templating/baseMainTemplate.json"
     $baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.json"
-    $metadataPath = "$PSScriptRoot/../../Solutions/$($contentToImport.Name)/$($contentToImport.Metadata)"
+    $metadataPath = "$PSScriptRoot/../../../Solutions/$($contentToImport.Name)/$($contentToImport.Metadata)"
 
     $workbookMetadataPath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/"
     # Base JSON Objects
@@ -2087,7 +2087,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     Compress-Archive -Path "$solutionFolder/*" -DestinationPath "$solutionFolder/$zipPackageName" -Force
 
     #downloading and running arm-ttk on generated solution
-    $armTtkFolder = "$PSScriptRoot/arm-ttk"
+    $armTtkFolder = "$PSScriptRoot/../arm-ttk"
     if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"

@@ -25,4 +25,6 @@ interface SolutionAutomationInput {
   WatchlistDescription?: string|string[];
   BasePath?: string; //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
   Metadata: string;
+  TemplateSpec: boolean;
+  Is1PConnector: boolean;
 }
