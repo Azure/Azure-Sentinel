@@ -151,7 +151,6 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                                     event = customize_event(line)
                                 except ValueError as e:
                                     logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                                    raise e
                                 await sentinel.send(event)
                     s = line
                 if s:
@@ -159,7 +158,6 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                         event = customize_event(line)
                     except ValueError as e:
                         logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                        raise e
                     await sentinel.send(event)
                 await sentinel.flush()   
             except Exception as e:
@@ -170,7 +168,6 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                 else:
                     logging.error('Error. File was not read after few attempts. Adding file name to temp bucket. File: {}'.format(s3_path))
                     drop_files_array.append({"bucket": bucket, "path": s3_path})
-                    raise e
             else:
                 total_events += sentinel.successfull_sent_events_number
                 logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))         

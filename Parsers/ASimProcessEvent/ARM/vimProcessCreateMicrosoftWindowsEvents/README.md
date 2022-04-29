@@ -2,7 +2,7 @@
 
 This template deploys the ASIM ProcessEvent schema parser for Security Events.
 
-This ASIM parser supports normalizing Windows process create events (event 4688) collected using the WEF connector (WindowsEvent table) to the ASIM Process Event normalized schema. 
+This ASIM parser supports filtering and normalizing Windows process create events (event 4688) collected using the WEF connector (WindowsEvent table) to the ASIM Process Event normalized schema. 
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
