@@ -1,6 +1,6 @@
 # Overview
 ---
-The Microsoft Sentinel Zero Trust (TIC 3.0) Solution provides a mechanism for viewing log queries aligned to Zero Trust and Trusted Internet Connections models across the Microsoft and partner ecosystem. This solution enables governance and compliance teams to design, build, monitor, and respond to Zero Trust (TIC 3.0) requirements across 25+ Microsoft and 3rd party products. The solution includes the new Zero Trust (TIC 3.0) Workbook, (1) Analytics Rule, and (3) Playbooks. While only Microsoft Sentinel and Microsoft Defender for Cloud are required to get started, the solution is enhanced with numerous Microsoft offerings. This Solution enables Security Architects, Engineers, SecOps Analysts, Managers, and IT Pros to gain situational awareness visibility for the security posture of cloud, multi-cloud, hybrid, and on-premise workloads. For more information, see 💡[Microsoft Zero Trust Model](https://www.microsoft.com/security/business/zero-trust) 💡[Trusted Internet Connections: Core Guidance Documents](https://www.cisa.gov/trusted-internet-connections) 
+The Microsoft Sentinel Zero Trust (TIC 3.0) Solution provides a mechanism for viewing log queries aligned to Zero Trust and Trusted Internet Connections models across the Microsoft and partner ecosystem. This solution enables governance and compliance teams to design, build, monitor, and respond to Zero Trust (TIC 3.0) requirements across cloud, multi-cloud, 1st/3rd party workloads. The solution includes the new Zero Trust (TIC 3.0) Workbook, (1) Analytics Rule, and (3) Playbooks. While only Microsoft Sentinel and Microsoft Defender for Cloud are required to get started, the solution is enhanced with numerous Microsoft offerings. This Solution enables Security Architects, Engineers, SecOps Analysts, Managers, and IT Pros to gain situational awareness visibility for the security posture of cloud, multi-cloud, hybrid, and on-premise workloads. For more information, see 💡[Microsoft Zero Trust Model](https://www.microsoft.com/security/business/zero-trust) 💡[Trusted Internet Connections](https://www.cisa.gov/trusted-internet-connections)
 
 ## Try on Portal
 You can deploy the solution by clicking on the buttons below:
@@ -8,7 +8,7 @@ You can deploy the solution by clicking on the buttons below:
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroTrust(TIC3.0)%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroTrust(TIC3.0)%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
 
-![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ZeroTrust(TIC3.0)/Workbooks/Images/Preview/ZeroTrust(TIC3.0)Black1.PNG?raw=true)
+![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ZeroTrust(TIC3.0)/Workbooks/Images/ZeroTrust(TIC3.0)Black1.PNG?raw=true)
 
 ## Getting Started
 This solution is designed to augment staffing through automation, machine learning, query/alerting generation, and visualizations. This workbook leverages Azure Policy, Azure Resource Graph, and Azure Log Analytics to align with Zero Trust (TIC 3.0) control requirements. A filter set is available for custom reporting by guides, subscriptions, workspaces, time-filtering, control family, and controls. This offering telemetry from 25+ Microsoft Security and partner offerings, while only Microsoft Sentinel and Microsoft Defender for Cloud are required to get started, each offering provides additional enrichment for aligning with control requirements. Each control includes a Control Card detailing an overview of requirements, primary/secondary controls, deep-links to referenced product pages/portals, recommendations, implementation guides, compliance cross-walks and tooling telemetry for building situational awareness of cloud workloads. 
@@ -43,13 +43,18 @@ This solution is designed to augment staffing through automation, machine learni
 ✳️[Azure DDoS Protection](https://azure.microsoft.com/services/ddos-protection/)<br>
 ✳️[Microsoft Defender for Identity](https://www.microsoft.com/microsoft-365/security/identity-defender)<br>
 
-## Workbooks
+### Print/Export Report
+1️⃣ Set Background Theme: Settings > Appearance > Theme: Azure > Apply<br>
+2️⃣ Print/Export Report: More Content Actions (...) > Print Content<br>
+3️⃣ Settings: Layout (Landscape), Pages (All), Print (One Sided), Scale (60), Pages Per Sheet (1), Quality (1,200 DPI), Margins (None) > Print<br>
+
+### Workbooks
 The Microsoft Sentinel Zero Trust (TIC 3.0) Workbook provides a mechanism for viewing log queries aligned to Zero Trust and Trusted Internet Connections models across the Microsoft portfolio including Microsoft security offerings, Office 365 and many more. This workbook enables Security Architects, Engineers, SecOps Analysts, Managers, and IT Pros to gain situational awareness visibility for the security posture of cloud workloads. There are also recommendations for selecting, designing, deploying, and configuring Microsoft offerings for alignment with respective security best practice. 
 
-## Analytics Rule
+### Analytics Rule
 The Microsoft Sentinel Zero Trust (TIC 3.0) Analytic rule leverages Microsoft Defender for Cloud Security Recommendations to measure Zero Trust posture alignment across (11) TIC 3.0 control families. The default configuration is set for scheduled rules running every 7 days to reduce alert overload. The default configuration is to alert when posture compliance is below 70% and this number is configurable per organizational requirements. 
 
-## Playbooks
+### Playbooks
 ### 1) Notify Governance Compliance Team
 This Security Orchestration, Automation, & Response (SOAR) capability is designed for configuration with the solution's analytics rules. When analytics rules trigger this automation notifies the governance compliance team of respective details via Teams chat and exchange email. This automation reduces requirements to manually monitor the workbook or analytics rules while increasing response times.<br>
 ### 2) Open DevOps Task based on Recommendation
