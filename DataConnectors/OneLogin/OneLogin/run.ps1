@@ -53,7 +53,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
 }
 
 $headers = $Request.Headers
-$eventLogs = $Request.Body
+$eventLogs = $Request.Body | ConvertTo-Json
 Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($eventLogs)) -logType $logType  
 
 Write-Verbose "PowerShell HTTP trigger function processed a request."

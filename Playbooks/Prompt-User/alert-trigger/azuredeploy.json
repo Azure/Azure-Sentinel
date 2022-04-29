@@ -1,12 +1,12 @@
-
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Prompt User - Alert",
-        "description": "This playbook will ask the user if they completed the action from the alert in Azure Sentinel.  If so, it will close the incident and add a comment.  If not, it will post a message to teams for the SOC to investigate and add a comment to the incident.",
+        "description": "This playbook will ask the user if they completed the action from the alert in Microsoft Sentinel.  If so, it will close the incident and add a comment.  If not, it will post a message to teams for the SOC to investigate and add a comment to the incident.",
         "prerequisites": "1. You will need the Team Id and Channel Id.",
-        "lastUpdateTime": "2021-07-14T00:00:00.000Z",
+        "postDeployment": [ "1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity.", "2. Authorize Azure AD, Microsoft Teams, and Office 365 Outlook Logic App connections." ],
+        "lastUpdateTime": "2022-03-22T00:00:00.000Z",
         "entities": [ "Account" ],
         "tags": [ "Remediation" ],
         "support": {
@@ -22,11 +22,15 @@
             "type": "string"
         },
         "TeamsId": {
-            "defaultValue": "Enter the Teams Group ID",
+            "metadata": {
+                "description": "Enter the Teams Group ID"
+            },
             "type": "string"
         },
         "TeamsChannelId": {
-            "defaultValue": "Enter the Teams Channel ID",
+            "metadata": {
+                "description": "Enter the Teams Channel ID"
+            },
             "type": "string"
         }
     },
@@ -99,7 +103,7 @@
             "tags": {
                 "LogicAppsCategory": "security",
                 "hidden-SentinelTemplateName": "Prompt-User_alert",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -212,12 +216,13 @@
                                                 "runAfter": {},
                                                 "type": "ApiConnection"
                                             },
-                                            "Post_a_message_(V3)": {
+                                            "Post_message_in_a_chat_or_channel": {
                                                 "inputs": {
                                                     "body": {
-                                                        "body": {
-                                                            "content": "<p>New alert from Azure Sentinel.<br>\nPlease investigate ASAP.<br>\nSeverity : @{body('Alert_-_Get_incident')?['properties']?['severity']}<br>\nDescription: @{body('Alert_-_Get_incident')?['properties']?['description']}<br>\n<br>\n@{body('Get_user')?['displayName']} user confirmed they did not complete the action.</p>",
-                                                            "contentType": "html"
+                                                        "messageBody": "<p>New alert from Azure Sentinel.<br>\nPlease investigate ASAP.<br>\nSeverity : @{body('Alert_-_Get_incident')?['properties']?['severity']}<br>\nDescription: @{body('Alert_-_Get_incident')?['properties']?['description']}<br>\n<br>\n@{body('Get_user')?['displayName']} user confirmed they did not complete the action.</p>",
+                                                        "recipient": {
+                                                            "channelId": "[parameters('TeamsChannelId')]",
+                                                            "groupId": "[parameters('TeamsId')]"
                                                         },
                                                         "subject": "Incident @{body('Alert_-_Get_incident')?['properties']?['incidentNumber']} - @{body('Alert_-_Get_incident')?['properties']?['title']}"
                                                     },
@@ -227,7 +232,7 @@
                                                         }
                                                     },
                                                     "method": "post",
-                                                    "path": "[concat('/v3/beta/teams/@{encodeURIComponent(', parameters('TeamsId'),')}/channels/@{encodeURIComponent(', parameters('TeamsChannelId'), ')}/messages')]"
+                                                    "path": "/beta/teams/conversation/message/poster/@{encodeURIComponent('User')}/location/@{encodeURIComponent('Channel')}"
                                                 },
                                                 "runAfter": {
                                                     "Add_comment_to_incident_(V3)_2": [
@@ -315,7 +320,7 @@
                         }
                     },
                     "triggers": {
-                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                        "Microsoft_Sentinel_alert": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
