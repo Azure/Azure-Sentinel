@@ -1449,7 +1449,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host "Failed to deserialize $file" -ForegroundColor Red
                                 break;
                             }
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleVersion$analyticRuleCounter" -NotePropertyValue "2.0.0" #Post bugbash we need to remove this #$contentToImport.Version
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleVersion$analyticRuleCounter" -NotePropertyValue $contentToImport.Version #Post bugbash we need to remove this #$contentToImport.Version
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRulecontentId$analyticRuleCounter" -NotePropertyValue "$($yaml.id)"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_analyticRulecontentId$analyticRuleCounter" -NotePropertyValue "[variables('analyticRulecontentId$analyticRuleCounter')]"
                             $DependencyCriteria += [PSCustomObject]@{
