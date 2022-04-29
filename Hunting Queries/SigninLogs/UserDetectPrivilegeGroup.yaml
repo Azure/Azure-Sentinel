@@ -1,0 +1,45 @@
+$schema: 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#'
+contentVersion: 1.0.0.0
+parameters:
+    workspace:
+        type: String
+resources:
+    - 
+        id: "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f7ac8e4e-01d6-40f3-9430-2f3cf598506a')]"
+        name: "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f7ac8e4e-01d6-40f3-9430-2f3cf598506a')]"
+        type: Microsoft.OperationalInsights/workspaces/providers/alertRules
+        kind: Scheduled
+        apiVersion: 2021-10-01-preview
+        properties:
+            displayName: User_Detection_AdPgroup
+            description: Based on a Watchlist Detects when a user has been added to a privileged group/role. We can exclude from the wathclist the users for whom we do not want this alert to be triggered.
+            severity: Medium
+            enabled: true
+            query: "let PrivilegedUsers = (_GetWatchlist('Accounts') | project Users);\r\nlet timeRange = 3d;\r\nlet lookBack = 7d;\r\nAuditLogs\r\n| where LoggedByService == 'Core Directory' or LoggedByService == 'PIM'\r\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\r\n| where Identity !in (PrivilegedUsers)\r\n| mv-expand TargetResources\r\n| extend modProps = parse_json(TargetResources).modifiedProperties\r\n| mv-expand bagexpansion=array modProps\r\n| evaluate bag_unpack(modProps)\r\n| extend displayName = column_ifexists(\"displayName\", \"NotAvailable\"), newValue = column_ifexists(\"newValue\", \"NotAvailable\")\r\n//if you want only extract hig privilege Rol display or WellKnowObject\r\n| where newValue contains \"UserAccountAdmins\" or newValue contains \"User Administrator\" or newValue contains \"ApplicationAdministrators\" or newValue contains \"BuiltInRole\"\r\n//| project TimeGenerated, displayName, newValue, OperationName, Category, Identity, LoggedByService, Location, ResourceGroup \r\n"
+            queryFrequency: PT5H
+            queryPeriod: PT5H
+            triggerOperator: GreaterThan
+            triggerThreshold: 0
+            suppressionDuration: PT5H
+            suppressionEnabled: false
+            tactics:
+                - Reconnaissance
+                - PrivilegeEscalation
+            techniques: []
+            alertRuleTemplateName: null
+            incidentConfiguration:
+                createIncident: true
+                groupingConfiguration:
+                    enabled: false
+                    reopenClosedIncident: false
+                    lookbackDuration: PT5H
+                    matchingMethod: AllEntities
+                    groupByEntities: []
+                    groupByAlertDetails: []
+                    groupByCustomDetails: []
+            eventGroupingSettings:
+                aggregationKind: SingleAlert
+            alertDetailsOverride: null
+            customDetails: null
+            entityMappings: null
+            sentinelEntitiesMappings: null
