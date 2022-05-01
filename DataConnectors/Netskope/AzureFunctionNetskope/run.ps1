@@ -43,7 +43,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
     else {
         return $url
     }
-    }
+}
 
     # Function for retrieving alerts and events from Netskope's APIs
     function GetNetSkopeAPILogs($logtype) {
@@ -138,7 +138,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
                     $skip =  $skip - $pageLimit -lt 0 ? 0 : $skip - $pageLimit
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                } else if ($count -eq 0){
+                } elseif ($count -eq 0){
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 } else {
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
