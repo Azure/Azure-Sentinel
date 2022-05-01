@@ -57,21 +57,21 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         $apikey = $env:apikey
         $uri = $env:uri
         $tableName = "Netskope"
-        $endTime = [Int](Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $LastRecordObject = GetStartTime -CheckpointFile $checkPointFile -LogType $logtype -TimeInterval $timeInterval # function to create starttime
         $LastRecordData = $LastRecordObject.Split("|");
         $startTime = [Int]($LastRecordData[0])
         $skip = $LastRecordData.Length -gt 1 ? [Int]($LastRecordData[1]) : $skip
-        Write-Host "For Logtype $($logtype) starttime is $($startTime)"
-        $netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
-        $netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
-        $netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
-        if($netskopetimediff.TotalSeconds -gt 300)
-        {
-           Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
-           $endTime = [Int](Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
-           Write-Host "For Logtype $($logtype) new modified endtime is $($endTime)"
-        }
+        $endTime = [Int]($startTime + $timeInterval)
+        Write-Host "For Logtype $($logtype) starttime is $($startTime) and endtime is $($endTime)."
+        #$netskopestartInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
+        #netskopeendInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
+        #$netskopetimediff = ($netskopeendInterval - $netskopestartInterval)
+        #if($netskopetimediff.TotalSeconds -gt 300)
+        #{
+        #   Write-Host "Time difference is > 10 minutes for Logtype :- $($logtype).Hence Resetting the endtime to add 10 minutes difference between starttime - $($startTime)  and endtime - $($endTime) "
+        #   $endTime = [Int](Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
+        #   Write-Host "For Logtype $($logtype) new modified endtime is $($endTime)"
+        #}
         $alleventobjs = @()
         $count = 0
         $functionStartTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
@@ -119,7 +119,6 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     $alleventobjs += $netskopeevents
                     $allEventsLength = $netskopeevents.Length
                     $responseCode = ProcessData -allEventsLength $allEventsLength -alleventobjs $netskopeevents -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
-                    # Write-Host "$dataLength records added for '$logtype' events"
                     # If the API response length for the given log type is equal to the page limit, it indicates there are subsquent pages, continue while loop, and increment the skip value by the records already recieved for the subquent API requests
                     if($dataLength -eq $pageLimit){
                         $skip = $skip + $pageLimit
@@ -127,40 +126,29 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     else {
                         # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
                         $skip = 0
-                        #$functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
-                        #$TimeDifferenceQueryTimeEpoch = $functionCurrentTimeEpoch - $startTime
-                        #Write-Host "Time Check | CurrentTime : $($functionCurrentTimeEpoch) | StartTime : $($startTime) | Difference : $($TimeDifferenceQueryTimeEpoch)"
-
-                        #$TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
-
-                        # If data to be retrieved is within last 20mins (10mins of time interval and 10mins of execution)
-                        #if (($TimeDifferenceQueryTimeEpoch -le $timeInterval*2) -or ($TimeDifferenceEpoch -ge 420)){
-                            $count = 1
-                        #} else {
-                        # If data to be retrieved is beyond 20mins, we can move the window forward and fetch that data within this execution
-                        #    $startTime = $startTime + $timeInterval
-                        #    $endTime = $endTime + $timeInterval
-                        #    Write-Host "For Logtype $($logtype) new modified startTime is $($startTime) and endTime is $($endTime)."
-                        #}
+                        $count = 1
+                        
                      }
                 }                
 
                 if ($responseCode -ne 200) {
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
                     $skip = $skip - $pageLimit
-                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                    #UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 }
 
-                #if($count -eq 0) {
-                #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                #}
+                if($count -eq 0) {
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                } else {
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
+                }
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
                 
-                if ($TimeDifferenceEpoch -ge 180) {
+                if ($TimeDifferenceEpoch -ge 420) {
                     Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
-                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                    #UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                     break
                 }
 
@@ -171,12 +159,12 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 break
             }
 
-        } while ($count -eq 0)
+        } while (true)
 
-        if($count -eq 1)
-        {
-            UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
-        } 
+        #if($count -eq 1)
+        #{
+        #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
+        #} 
     }
 
     # Function for processing the Netskope's API response
