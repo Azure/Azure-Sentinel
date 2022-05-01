@@ -78,6 +78,9 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         Do {
             try {
                 $endTime = [Int]($startTime + $timeInterval)
+                if ($endTime -gt ((Get-Date -Date ((Get-Date).DateTime) -UFormat %s))) {
+                    break
+                }
                 $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip
                 $netskopeevents = $response.data
 
@@ -160,7 +163,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 break
             }
 
-        } while ($endTime -le $functionCurrentTimeEpoch)
+        } while ($count -eq 0)
 
         #if($count -eq 1)
         #{
