@@ -138,14 +138,15 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
                     $skip =  $skip - $pageLimit -lt 0 ? 0 : $skip - $pageLimit
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                } elseif ($count -eq 0){
-                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                } else {
-                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
-                    $startTime = $startTime + $timeInterval
-                    $count = 0
-                    Write-Host "For Logtype $($logtype) modified starttime is $($startTime)."
-                }
+                } 
+                #elseif ($count -eq 0){
+                #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                #} else {
+                #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
+                #    $startTime = $startTime + $timeInterval
+                #    $count = 0
+                #    Write-Host "For Logtype $($logtype) modified starttime is $($startTime)."
+                #}
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
