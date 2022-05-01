@@ -72,12 +72,12 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         #   $endTime = [Int](Get-Date -Date ($netskopestartInterval.AddSeconds(600)) -UFormat %s)
         #   Write-Host "For Logtype $($logtype) new modified endtime is $($endTime)"
         #}
-        $alleventobjs = @()
+        #$alleventobjs = @()
         $count = 0
         $functionStartTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         Do {
             try {
-
+                $endTime = [Int]($startTime + $timeInterval)
                 $response = GetLogs -Uri $uri -ApiKey $apikey -StartTime $startTime -EndTime $endTime -LogType $logtype -Page $pageLimit -Skip $skip
                 $netskopeevents = $response.data
 
@@ -115,12 +115,12 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         }
                     }
 
-                    $dataLength = $response.data.Length
-                    $alleventobjs += $netskopeevents
+                    #$dataLength = $netskopeevents.Length
+                    #$alleventobjs += $netskopeevents
                     $allEventsLength = $netskopeevents.Length
                     $responseCode = ProcessData -allEventsLength $allEventsLength -alleventobjs $netskopeevents -checkPointFile $checkPointFile -logtype $logtype -endTime $endTime
                     # If the API response length for the given log type is equal to the page limit, it indicates there are subsquent pages, continue while loop, and increment the skip value by the records already recieved for the subquent API requests
-                    if($dataLength -eq $pageLimit){
+                    if($allEventsLength -eq $pageLimit){
                         $skip = $skip + $pageLimit
                     }
                     else {
@@ -130,17 +130,18 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         
                      }
                 }                
-
+                
                 if ($responseCode -ne 200) {
                     Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
-                    $skip = $skip - $pageLimit
-                    #UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
-                }
-
-                if($count -eq 0) {
+                    $skip =  $skip - $pageLimit -lt 0 ? 0 : $skip - $pageLimit
+                    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
+                } else if ($count -eq 0){
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
                 } else {
                     UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
+                    $startTime = $startTime + $timeInterval
+                    $count = 0
+                    Write-Host "For Logtype $($logtype) modified starttime is $($startTime)."
                 }
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
@@ -159,7 +160,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 break
             }
 
-        } while (true)
+        } while ($endTime -le $functionCurrentTimeEpoch)
 
         #if($count -eq 1)
         #{
