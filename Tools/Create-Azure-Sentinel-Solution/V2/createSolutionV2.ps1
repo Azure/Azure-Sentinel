@@ -219,7 +219,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                         $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
 
-                        $workbookUiParameter = [PSCustomObject] @{
+                      <#   $workbookUiParameter = [PSCustomObject] @{
                             name     = "workbook$workbookCounter";
                             type     = "Microsoft.Common.Section";
                             label    = $solutionName;
@@ -242,7 +242,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                 }
                             )
-                        }
+                        } #>
                         #creating parameters in mainTemplate
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
@@ -417,7 +417,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                         }
 
-                        $baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUiParameter
+                        #$baseCreateUiDefinition.parameters.steps[$baseCreateUiDefinition.parameters.steps.Count - 1].elements += $workbookUiParameter
                         $baseCreateUiDefinition.parameters.outputs | Add-Member -NotePropertyName "workbook$workbookCounter-name" -NotePropertyValue "[steps('workbooks').workbook$workbookCounter.workbook$workbookCounter-name]"
 
                         $workbookCounter += 1
