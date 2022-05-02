@@ -60,7 +60,7 @@ ParserQuery: |
     let ProcessEvents_MD4IoT=()
     {
       SecurityIoTRawEvent 
-      | where RawEventName == "Process" and EventDetails.EventType == 'EXIT'
+      | where RawEventName == "Process" and EventDetails has_cs 'EXIT'
       // --------------------------------------------------------------------------------------
         | where
         (isnull(starttime)   or TimeGenerated >= starttime )
@@ -79,10 +79,13 @@ ParserQuery: |
       // --------------------------------------------------------------------------------------
       | extend
         EventDetails = todynamic(EventDetails)
+      | where tostring(EventDetails.EventType) == 'EXIT'
       | extend // required for postfilterring
+        DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"), // Intermediate fix
         TargetProcessCommandLine = coalesce (tostring(EventDetails.Commandline), tostring(EventDetails.Executable)), 
         TargetProcessName = coalesce (tostring(EventDetails.Executable), split(EventDetails.Commandline," ")[0]),
-        TargetrUsername = iff (DvcOs == "Windows", tostring(EventDetails.UserName), "")
+      | extend // required for postfilterring
+        ActorUsername = iff (DvcOs == "Windows", tostring(EventDetails.UserName), "")
       // --------------------------------------------------------------------------------------
       | where (array_length(commandline_has_any)==0 or TargetProcessCommandLine has_any (commandline_has_any)) 
         and (array_length(commandline_has_all)==0 or TargetProcessCommandLine has_all (commandline_has_all)) 
@@ -103,7 +106,6 @@ ParserQuery: |
         EventResult = 'Success', 
         TargetProcessId = tostring(EventDetails.ProcessId), 
         ActorUsernameType = iif (DvcOs == "Windows", "Windows", "Simple"), 
-        DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"), // Intermediate fix
         ActingProcessId = iff (DvcOs == "Windows", tostring(EventDetails.ParentProcessId), "") 
       | project-rename
           DvcHostname = DeviceId,
