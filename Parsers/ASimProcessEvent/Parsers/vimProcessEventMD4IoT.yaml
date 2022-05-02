@@ -82,13 +82,15 @@ ParserQuery: |
       | extend // required for postfilterring
         TargetProcessCommandLine = coalesce (tostring(EventDetails.Commandline), tostring(EventDetails.Executable)), 
         TargetProcessName = coalesce (tostring(EventDetails.Executable), split(EventDetails.Commandline," ")[0]),
-        TargetrUsername = iff (DvcOs == "Windows", tostring(EventDetails.UserName), "")
+        DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows") // Intermediate fix
+      | extend 
+        TargetUsername = iff (DvcOs == "Windows", tostring(EventDetails.UserName), "")
       // --------------------------------------------------------------------------------------
       | where (array_length(commandline_has_any)==0 or TargetProcessCommandLine has_any (commandline_has_any)) 
         and (array_length(commandline_has_all)==0 or TargetProcessCommandLine has_all (commandline_has_all)) 
         and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(TargetProcessCommandLine, commandline_has_any_ip_prefix) ) 
         and (array_length(targetprocess_has_any)==0 or TargetProcessName has_any (targetprocess_has_any)) 
-        and (targetusername=='*' or ActorUsername has targetusername)  
+        and (targetusername=='*' or TargetUsername has targetusername)  
       // --------------------------------------------------------------------------------------
       | extend
         EventOriginalUid = tostring(EventDetails.OriginalEventId), 
@@ -102,8 +104,7 @@ ParserQuery: |
         EventSubType = tostring(EventDetails.EventType),
         EventResult = 'Success', 
         TargetProcessId = tostring(EventDetails.ProcessId), 
-        ActorUsernameType = iif (DvcOs == "Windows", "Windows", "Simple"), 
-        DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"), // Intermediate fix
+        TargetUsernameType = iif (DvcOs == "Windows", "Windows", "Simple"), 
         ActingProcessId = iff (DvcOs == "Windows", tostring(EventDetails.ParentProcessId), "") 
       | project-rename
           DvcHostname = DeviceId,
@@ -112,7 +113,7 @@ ParserQuery: |
         _SubscriptionId = AzureSubscriptionId 
       | extend 
           // -- aliases
-        User = ActorUsername, 
+        User = TargetUsername, 
         CommandLine = TargetProcessCommandLine, 
         Process = TargetProcessName, 
         Dvc = DvcHostname 
