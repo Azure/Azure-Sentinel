@@ -140,32 +140,69 @@ for f in files:
         logging.debug ('Parsing XML')
         # parse the YAML file
         parserYaml = yamale.make_data(os.path.join(folder, f))
-        Title = parserYaml[0][0]["Parser"]["Title"]
-        Alias = parserYaml[0][0]["ParserName"]
-        Query = parserYaml[0][0]["ParserQuery"]
-        Product = parserYaml[0][0]["Product"]["Name"]
-        Description = parserYaml[0][0]["Description"]
+        try:
+            Title = parserYaml[0][0]["Parser"]["Title"]
+        except:
+            try:
+                FunctionMode = True
+                Title = parserYaml[0][0]["Function"]["Title"]
+            except:
+                 raise SystemExit (f"Error: file {f} does not specify a parser or function title.")
+
+        try:
+            Alias = parserYaml[0][0]["ParserName"]
+        except:
+            try:
+                Alias = parserYaml[0][0]["FunctionName"]
+            except:
+                 raise SystemExit (f"Error: file {f} does not specify a parser or function name.")
+           
+        try:
+             Query = parserYaml[0][0]["ParserQuery"]
+        except:
+            try:
+                 Query = parserYaml[0][0]["FunctionQuery"]
+            except:
+                 raise SystemExit (f"Error: file {f} does not specify a parser or function query.")
+        
+        try:
+             Product = parserYaml[0][0]["Product"]["Name"]
+        except:
+            Product = ""
+            if not(FunctionMode):
+                raise SystemExit (f"Error: file {f} does not specify a parser product name.")
+       
+        try:
+            Description = parserYaml[0][0]["Description"]
+        except:
+            raise SystemExit (f"Error: file {f} does not specify a description.")
 
         try:
             Schema = parserYaml[0][0]["Normalization"]["Schema"]
         except:
             Schema = ""
             logging.info (f"No schema in YAML file {f}.")
+
+        try:
+            Category = parserYaml[0][0]["Category"]
+        except:
+            Category = "ASIM" # -- should not be hardcoded
     
         if Schema != "":
             if package_type == 'asim' and package_schema != "" and package_schema != Schema:
                 raise SystemExit(f"Error: schema in file {f} is inconsistent with asim package schema.")
             package_schema = Schema
 
-
-
         params = parserYaml[0][0].get("ParserParams")
+        if not(params):
+            params = parserYaml[0][0].get("FunctionParams")            
 
         logging.debug ('Generating ARM template')
         # generate the ARM template
         armTemplate = copy.deepcopy(func_arm_template)
         armTemplate['resources'][0]['resources'][0]['name'] = Alias
         armTemplate['resources'][0]['resources'][0]['properties']['query'] = Query
+        armTemplate['resources'][0]['resources'][0]['properties']['category'] = Category
         if params:
             for param in params:
                 if param['Type']=='string':
