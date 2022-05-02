@@ -133,8 +133,7 @@ class Auth0Connector:
         try:
             token = resp.json()['access_token']
         except KeyError:
-            logging.error('Token not provided.')
-            exit()
+            raise Exception('Token not provided.')
         return token
 
     def _get_header(self):
