@@ -1,378 +1,325 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.0",
-  "metadata": {
-    "_generator": {
-      "name": "bicep",
-      "version": "0.4.1272.37030",
-      "templateHash": "8817793994077072575"
-    }
-  },
-  "parameters": {
-    "PlaybookName": {
-      "type": "string",
-      "defaultValue": "Run-MDEAntivirus"
-    },
-    "SentinelResourceGroupName": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().name]"
-    },
-    "SentinelSubscriptionId": {
-      "type": "string",
-      "defaultValue": "[subscription().subscriptionId]"
-    }
-  },
-  "variables": {
-    "AzureSentinelConnectionName_var": "[format('azuresentinel-{0}', parameters('PlaybookName'))]",
-    "MDATPConnectionName_var": "[format('wdatp-{0}', parameters('PlaybookName'))]"
-  },
-  "resources": [
-    {
-      "type": "Microsoft.Web/connections",
-      "apiVersion": "2016-06-01",
-      "name": "[variables('AzureSentinelConnectionName_var')]",
-      "location": "[resourceGroup().location]",
-      "kind": "V1",
-      "properties": {
-        "displayName": "[variables('AzureSentinelConnectionName_var')]",
-        "customParameterValues": {},
-        "parameterValueType": "Alternative",
-        "api": {
-          "id": "[format('/subscriptions/{0}/providers/Microsoft.Web/locations/resourceGroup().location/managedApis/azuresentinel', subscription().subscriptionId)]"
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Run-MDEAntivirus",
+            "type":  "string"
         }
-      }
     },
-    {
-      "type": "Microsoft.Web/connections",
-      "apiVersion": "2016-06-01",
-      "name": "[variables('MDATPConnectionName_var')]",
-      "location": "[resourceGroup().location]",
-      "kind": "V1",
-      "properties": {
-        "displayName": "[variables('MDATPConnectionName_var')]",
-        "customParameterValues": {},
-        "parameterValueType": "Alternative",
-        "api": {
-          "id": "[format('/subscriptions/{0}/providers/Microsoft.Web/resourceGroup().locations/resourceGroup().resourceGroup().location/managedApis/wdatp', subscription().subscriptionId)]"
-        }
-      }
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "WdatpConnectionName":  "[concat('Wdatp-', parameters('PlaybookName'))]"
     },
-    {
-      "type": "Microsoft.Logic/workflows",
-      "apiVersion": "2019-05-01",
-      "name": "[parameters('PlaybookName')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "LogicAppsCategory": "security",
-        "hidden-SentinelTemplateName": "Run-MDEAntivirus",
-        "hidden-SentinelTemplateVersion": "1.0"
-      },
-      "identity": {
-        "type": "SystemAssigned"
-      },
-      "properties": {
-        "state": "Enabled",
-        "definition": {
-          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-          "actions": {
-            "Entities_-_Get_Hosts": {
-              "inputs": {
-                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "path": "/entities/host"
-              },
-              "runAfter": {
-                "Initialize_variable": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection"
-            },
-            "For_each": {
-              "actions": {
-                "Condition": {
-                  "actions": {
-                    "Machines_-_Get_single_machine": {
-                      "inputs": {
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['wdatp']['connectionId']"
-                          }
-                        },
-                        "method": "get",
-                        "path": "/api/machines/@{encodeURIComponent(items('For_each')?['HostName'])}"
-                      },
-                      "runAfter": {},
-                      "type": "ApiConnection"
-                    },
-                    "Set_variable": {
-                      "inputs": {
-                        "name": "MDEDeviceId",
-                        "value": "@body('Machines_-_Get_single_machine')?['id']"
-                      },
-                      "runAfter": {
-                        "Machines_-_Get_single_machine": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "SetVariable"
-                    }
-                  },
-                  "else": {
-                    "actions": {
-                      "Machines_-_Get_single_machine_2": {
-                        "inputs": {
-                          "host": {
-                            "connection": {
-                              "name": "@parameters('$connections')['wdatp']['connectionId']"
-                            }
-                          },
-                          "method": "get",
-                          "path": "/api/machines/@{encodeURIComponent(items('For_each')?['MdatpDeviceId'])}"
-                        },
-                        "runAfter": {},
-                        "type": "ApiConnection"
-                      },
-                      "Set_variable_2": {
-                        "inputs": {
-                          "name": "MDEDeviceId",
-                          "value": "@body('Machines_-_Get_single_machine_2')?['id']"
-                        },
-                        "runAfter": {
-                          "Machines_-_Get_single_machine_2": [
-                            "Succeeded"
-                          ]
-                        },
-                        "type": "SetVariable"
-                      }
-                    }
-                  },
-                  "expression": {
-                    "and": [
-                      {
-                        "equals": [
-                          "@items('For_each')?['MdatpDeviceId']",
-                          "@null"
-                        ]
-                      }
-                    ]
-                  },
-                  "runAfter": {},
-                  "type": "If"
-                },
-                "Condition_2": {
-                  "actions": {
-                    "Actions_-_Run_antivirus_scan": {
-                      "inputs": {
-                        "body": {
-                          "Comment": "AV Scan run from playbook for Azure Sentinel Incident:  @{triggerBody()?['object']?['properties']?['incidentNumber']}- @{triggerBody()?['object']?['properties']?['title']}",
-                          "ScanType": "Full"
-                        },
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['wdatp']['connectionId']"
-                          }
-                        },
-                        "method": "post",
-                        "path": "/api/machines/@{encodeURIComponent(variables('MDEDeviceId'))}/runAntiVirusScan"
-                      },
-                      "runAfter": {},
-                      "type": "ApiConnection"
-                    },
-                    "Add_comment_to_incident_(V3)": {
-                      "inputs": {
-                        "body": {
-                          "incidentArmId": "@triggerBody()?['object']?['id']",
-                          "message": "<p>@{items('For_each')?['HostName']} (MDE Device ID: @{body('Machines_-_Get_single_machine')?['id']}) had a full AV scan triggered and the status was @{body('Actions_-_Run_antivirus_scan')?['status']}</p>"
-                        },
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                          }
-                        },
-                        "method": "post",
-                        "path": "/Incidents/Comment"
-                      },
-                      "runAfter": {
-                        "Actions_-_Run_antivirus_scan": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "ApiConnection"
-                    }
-                  },
-                  "else": {
-                    "actions": {
-                      "Add_comment_to_incident_(V3)_2": {
-                        "inputs": {
-                          "body": {
-                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                            "message": "<p>@{items('For_each')?['HostName']} could not be found in MDE, so no AV scan was run.</p>"
-                          },
-                          "host": {
-                            "connection": {
-                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                            }
-                          },
-                          "method": "post",
-                          "path": "/Incidents/Comment"
-                        },
-                        "runAfter": {},
-                        "type": "ApiConnection"
-                      }
-                    }
-                  },
-                  "expression": {
-                    "and": [
-                      {
-                        "not": {
-                          "equals": [
-                            "@variables('MDEDeviceId')",
-                            "@null"
-                          ]
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
                         }
-                      }
-                    ]
-                  },
-                  "runAfter": {
-                    "Condition": [
-                      "Succeeded"
-                    ]
-                  },
-                  "type": "If"
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Entities_-_Get_Hosts":  {
+                            "runAfter":  {
+                                "Initialize_variable":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/host"
+                            }
+                        },
+                        "For_each":  {
+                            "foreach":  "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions":  {
+                                "Condition":  {
+                                    "actions":  {
+                                        "Machines_-_Get_single_machine":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['wdatp']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "get",
+                                                "path":  "/api/machines/@{encodeURIComponent(items('For_each')?['HostName'])}"
+                                            }
+                                        },
+                                        "Set_variable":  {
+                                            "runAfter":  {
+                                                "Machines_-_Get_single_machine":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "MDEDeviceId",
+                                                "value":  "@body('Machines_-_Get_single_machine')?['id']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Machines_-_Get_single_machine_2":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "ApiConnection",
+                                                "inputs":  {
+                                                    "host":  {
+                                                        "connection":  {
+                                                            "name":  "@parameters('$connections')['wdatp']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method":  "get",
+                                                    "path":  "/api/machines/@{encodeURIComponent(items('For_each')?['MdatpDeviceId'])}"
+                                                }
+                                            },
+                                            "Set_variable_2":  {
+                                                "runAfter":  {
+                                                    "Machines_-_Get_single_machine_2":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "MDEDeviceId",
+                                                    "value":  "@body('Machines_-_Get_single_machine_2')?['id']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@items('For_each')?['MdatpDeviceId']",
+                                                    "@null"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Condition_2":  {
+                                    "actions":  {
+                                        "Actions_-_Run_antivirus_scan":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "body":  {
+                                                    "Comment":  "AV Scan run from playbook for Azure Sentinel Incident:  @{triggerBody()?['object']?['properties']?['incidentNumber']}- @{triggerBody()?['object']?['properties']?['title']}",
+                                                    "ScanType":  "Full"
+                                                },
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['wdatp']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "path":  "/api/machines/@{encodeURIComponent(variables('MDEDeviceId'))}/runAntiVirusScan"
+                                            }
+                                        },
+                                        "Add_comment_to_incident_(V3)":  {
+                                            "runAfter":  {
+                                                "Actions_-_Run_antivirus_scan":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "body":  {
+                                                    "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                    "message":  "\u003cp\u003e@{items('For_each')?['HostName']} (MDE Device ID: @{body('Machines_-_Get_single_machine')?['id']}) had a full AV scan triggered and the status was @{body('Actions_-_Run_antivirus_scan')?['status']}\u003c/p\u003e"
+                                                },
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "path":  "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Condition":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Add_comment_to_incident_(V3)_2":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "ApiConnection",
+                                                "inputs":  {
+                                                    "body":  {
+                                                        "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                        "message":  "\u003cp\u003e@{items('For_each')?['HostName']} could not be found in MDE, so no AV scan was run.\u003c/p\u003e"
+                                                    },
+                                                    "host":  {
+                                                        "connection":  {
+                                                            "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method":  "post",
+                                                    "path":  "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "not":  {
+                                                    "equals":  [
+                                                        "@variables('MDEDeviceId')",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                }
+                            },
+                            "runAfter":  {
+                                "Entities_-_Get_Hosts":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_variable":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "MDEDeviceId",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "wdatp":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('WdatpConnectionName'))]",
+                                "connectionName":  "[variables('WdatpConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Wdatp')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-              },
-              "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
-              "runAfter": {
-                "Entities_-_Get_Hosts": [
-                  "Succeeded"
-                ]
-              },
-              "type": "Foreach"
             },
-            "Initialize_variable": {
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "MDEDeviceId",
-                    "type": "string"
-                  }
-                ]
-              },
-              "runAfter": {},
-              "type": "InitializeVariable"
-            }
-          },
-          "contentVersion": "1.0.0.0",
-          "outputs": {},
-          "parameters": {
-            "$connections": {
-              "defaultValue": {},
-              "type": "Object"
-            }
-          },
-          "triggers": {
-            "Microsoft_Sentinel_incident": {
-              "inputs": {
-                "body": {
-                  "callback_url": "@{listCallbackUrl()}"
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "LogicAppsCategory":  "security",
+                "hidden-SentinelTemplateName":  "Run-MDEAntivirus",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('WdatpConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
                 },
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                  }
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('WdatpConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('WdatpConnectionName')]",
+                "customParameterValues":  {
                 },
-                "path": "/incident-creation"
-              },
-              "type": "ApiConnectionWebhook"
-            }
-          }
-        },
-        "parameters": {
-          "$connections": {
-            "value": {
-              "azuresentinel": {
-                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName_var'))]",
-                "connectionName": "[variables('AzureSentinelConnectionName_var')]",
-                "id": "[format('/subscriptions/{0}/providers/Microsoft.Web/locations/resourceGroup().location/managedApis/azuresentinel', subscription().subscriptionId)]",
-                "connectionProperties": {
-                  "authentication": {
-                    "type": "ManagedServiceIdentity"
-                  }
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Wdatp')]"
                 }
-              },
-              "wdatp": {
-                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName_var'))]",
-                "connectionName": "[variables('MDATPConnectionName_var')]",
-                "id": "[format('/subscriptions/{0}/providers/Microsoft.Web/locations/resourceGroup().location/managedApis/wdatp', subscription().subscriptionId)]",
-                "connectionProperties": {
-                  "authentication": {
-                    "type": "ManagedServiceIdentity"
-                  }
-                }
-              }
             }
-          }
         }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName_var'))]",
-        "[resourceId('Microsoft.Web/connections', variables('MDATPConnectionName_var'))]"
-      ]
-    },
-    {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
-      "name": "Assign_Sentinel_Contributor",
-      "subscriptionId": "[parameters('SentinelSubscriptionId')]",
-      "resourceGroup": "[parameters('SentinelResourceGroupName')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "principalId": {
-            "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.4.1272.37030",
-              "templateHash": "2795249122353296900"
-            }
-          },
-          "parameters": {
-            "principalId": {
-              "type": "string"
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2020-04-01-preview",
-              "name": "[guid(resourceGroup().id, parameters('principalId'), resourceId('Microsoft.Authorization/roleDefinitions', 'ab8e14d6-4a74-4a29-9ba8-549422addade'))]",
-              "properties": {
-                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', 'ab8e14d6-4a74-4a29-9ba8-549422addade')]",
-                "principalId": "[parameters('principalId')]",
-                "principalType": "ServicePrincipal"
-              }
-            }
-          ]
-        }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
-      ]
-    }
-  ]
+    ]
 }
