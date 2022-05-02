@@ -825,6 +825,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $connectorData
                             $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$connectorCounter')]"
+                            if($contentToImport.Is1PConnector -eq $false)
+                            {
+                                $templateSpecConnectorUiConfig.availability.isPreview =  ($templateSpecConnectorUiConfig.availability.isPreview -eq $true) ? $false : $templateSpecConnectorUiConfig.availability.isPreview
+                            }
                             $dataConnectorContent = [PSCustomObject]@{
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$connectorCounter'))]";
                                 apiVersion = "2021-03-01-preview";
