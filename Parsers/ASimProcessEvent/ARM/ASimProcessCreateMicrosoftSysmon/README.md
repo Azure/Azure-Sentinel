@@ -1,6 +1,6 @@
 # Sysmon ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Sysmon.
+ARM template for ASIM ProcessEvent schema parser for Sysmon.
 
 This ASIM parser supports normalizing Sysmon process create events (event 1) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
 
