@@ -35,10 +35,10 @@
     Name of stream to send data to before being procesed and sent to an Azure Monitor data table.
             
     .EXAMPLE    
-    PS> Send-AzMonitorCustomLogs -LogPath C:\WinEvents.json -appId 'XXXX' -appSecret 'XXXXXX' -TenantId 'XXXXXX' -DcrImmutableId 'dcr-XXXX' -DceURI 'https://XXXX.westus2-1.ingest.monitor.azure.com' -StreamName 'Custom-WindowsEvent' 
+    PS> Send-AzMonitorCustomLogs -LogPath C:\WinEvents.json -AADAppId 'XXXX' -AADAppSecret 'XXXXXX' -TenantId 'XXXXXX' -DcrImmutableId 'dcr-XXXX' -DceURI 'https://XXXX.westus2-1.ingest.monitor.azure.com' -StreamName 'Custom-WindowsEvent' 
         
     .EXAMPLE    
-    PS> Send-AzMonitorCustomLogs -LogPath C:\WinEventsFolder\ -appId 'XXXX' -appSecret 'XXXXXX' -TenantId 'XXXXXX' -DcrImmutableId 'dcr-XXXX' -DceURI 'https://XXXX.westus2-1.ingest.monitor.azure.com' -StreamName 'Custom-WindowsEvent'
+    PS> Send-AzMonitorCustomLogs -LogPath C:\WinEventsFolder\ -AADAppId 'XXXX' -AADAppSecret 'XXXXXX' -TenantId 'XXXXXX' -DcrImmutableId 'dcr-XXXX' -DceURI 'https://XXXX.westus2-1.ingest.monitor.azure.com' -StreamName 'Custom-WindowsEvent'
     
     .NOTES
     # Author: Roberto Rodriguez (@Cyb3rWard0g)
@@ -54,8 +54,7 @@
     # Custom Logs Limit
     # Maximum size of API call: 1MB for both compressed and uncompressed data
     # Maximum data/minute per DCR: 1 GB for both compressed and uncompressed data. Retry after the duration listed in the Retry-After header in the response.
-    # Maximum requests/minute per DCR: 6,000. Retry after the duration listed in the Retry-After header in the response.
-    
+    # Maximum requests/minute per DCR: 6,000. Retry after the duration listed in the Retry-After header in the response.    
 #>
 
 param(    
