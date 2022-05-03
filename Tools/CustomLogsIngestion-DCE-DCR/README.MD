@@ -23,7 +23,7 @@
 ## Steps to Ingest Customlogs
 1. Download the script 
   
-   [![Download](/Tools/Archive-Log-Tool/images/Download.png)](https://aka.ms/custom-logs-ingestion)
+   [![Download](/Tools/Archive-Log-Tool/images/Download.png)](https://aka.ms/customlogsingestion)
 
 2. Extract the folder and open "Send-AzMonitorCustomLogs.ps1" either in Visual Studio Code/PowerShell
 
