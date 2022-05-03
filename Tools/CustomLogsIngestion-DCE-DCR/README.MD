@@ -1,6 +1,9 @@
 ## Ingest Customlogs via DCE/DCR
 **Author : Sreedhar Ande**
 
+Script to send data to a data collection endpoint which is a unique connection point for your subscription. The payload sent to Azure Monitor must be in JSON format. A data collection rule is needed in your Azure tenant that understands the format of the source data, potentially filters and transforms it for the target table, and then directs it to a specific table in a specific workspace.
+You can modify the target table and workspace by modifying the data collection rule without any change to the REST API call or source data.
+
 ## Pre-requisites  
 1.	Register an Azure Active Directory application to authenticate against the API  
 	https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs#configure-application  
@@ -33,10 +36,7 @@
    ```PowerShell
    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass  
    ```  
-3. Script to send data to a data collection endpoint which is a unique connection point for your subscription. The payload sent to Azure Monitor must be in JSON format. A data collection rule is needed in your Azure tenant that understands the format of the source data, potentially filters and transforms it for the target table, and then directs it to a specific table in a specific workspace.
-    You can modify the target table and workspace by modifying the data collection rule without any change to the REST API call or source data.
-    
-4. You are prompted to enter the following value 
+3. You are prompted to enter the following value 
 	- LogPath  
     Path to the log file or folder to read logs from and send them to Azure Monitor  
 	- AADAppId  
