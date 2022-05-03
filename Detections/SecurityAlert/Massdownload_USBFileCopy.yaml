@@ -1,7 +1,9 @@
 id: 6267ce44-1e9d-471b-9f1e-ae76a6b7aa84
-name: Mass download with new USB file copy activity
+name: Mass Download & copy to USB device by single user
 description: |
-  'This query looks for any mass download by a single user with possible file copy activity to a new USB drive. Malicious insiders may perform such activities that may cause harm to the organization. This alert could also reveal unintentional insider that had no intention of malicious activity but their actions may impact an organizations security posture.'
+  'This query looks for any mass download by a single user with possible file copy activity to a new USB drive. Malicious insiders may perform such activities that may cause harm to the organization. 
+  This alert could also reveal unintentional insider that had no intention of malicious activity but their actions may impact an organizations security posture.
+  Reference:https://docs.microsoft.com/en-us/defender-cloud-apps/policy-template-reference'
 severity: Medium
 requiredDataConnectors:
   - connectorId: MicrosoftCloudAppSecurity
@@ -18,10 +20,10 @@ triggerThreshold: 0
 tactics:
   - Exfiltration
 relevantTechniques:
-  - T1030
+  - T1052
 query: |
  SecurityAlert
-  | where AlertName == "mass download by a single user"
+  | where AlertName =~ "mass download by a single user"
   | extend Extprop = parsejson(Entities)
   | mv-expand Extprop
   | extend Extprop = parsejson(Extprop)
@@ -32,7 +34,7 @@ query: |
   | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
   | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '')
   | extend Process = iff(isnotempty(CmdLine), CmdLine, File)
-  | project AlertName,AlertSeverity,CompromisedEntity,Account,IpAddress
+  | project AlertName, AlertSeverity, CompromisedEntity, Account, IpAddress, CmdLine, File, Domain, Process
   | join kind=inner
   (  
   DeviceEvents
@@ -45,7 +47,7 @@ query: |
   DeviceFileEvents
   | where FolderPath !startswith "c" and FolderPath !startswith @"\"
   )  on DeviceId
-  | project  TimeGenerated, ActionType, DeviceName, FileName, FileSize, IPCustomEntity=IpAddress, InitiatingProcessCommandLine, InitiatingProcessFileName, AccountCustomEntity=Account
+  | project  TimeGenerated, ActionType, CompromisedEntity, FileName, FileSize, IPCustomEntity=IpAddress, CommandLineCustomEntity=CmdLine, ProcessCustomEntity=Process, AccountCustomEntity=Account
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -55,5 +57,15 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: CompromisedEntity
+  - entityType: Process
+    fieldMappings:
+      - identifier: Process
+        columnName: ProcessCustomEntity
+      - identifier: CommandLine
+        columnName: CommandLineCustomEntity
 version: 1.0.0
 kind: Scheduled
