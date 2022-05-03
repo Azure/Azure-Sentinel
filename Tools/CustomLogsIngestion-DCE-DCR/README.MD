@@ -37,18 +37,18 @@ You can modify the target table and workspace by modifying the data collection r
    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass  
    ```  
 3. You are prompted to enter the following value 
-	- LogPath  
+	- **LogPath**    
     Path to the log file or folder to read logs from and send them to Azure Monitor  
-	- AADAppId  
+	- **AADAppId**  
     Azure Active Directory application to authenticate against the API to send logs to Azure Monitor data collection endpoint. This script supports the Client Credential Grant Flow.  
-	- AADAppSecret  
+	- **AADAppSecret**  
     Secret text to use with the Azure Active Directory application to authenticate against the API for the Client Credential Grant Flow  
-	- TenantId  
+	- **TenantId**  
     ID of Tenant  
-	- DcrImmutableId  
+	- **DcrImmutableId**    
     Immutable ID of the data collection rule used to process events flowing to an Azure Monitor data table  
-	- DceURI  
+	- **DceURI**   
     Uri of the data collection endpoint used to host the data collection rule  
-	- StreamName  
+	- **StreamName**   
     Name of stream to send data to before being procesed and sent to an Azure Monitor data table  
     
