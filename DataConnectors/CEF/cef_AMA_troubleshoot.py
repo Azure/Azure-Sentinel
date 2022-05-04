@@ -662,16 +662,20 @@ class SystemInfo():
             self.append_content_to_file(command_object)
 
 
-def main():
-    collection_feature_flag = "collect"
-    running_in_collect_mode = False
-    help_feature_flag = ['-h', '-H', '-help', '--help', '-Help', '--Help']
-    printer = ColorfulPrint()
+def verify_root_privileges(printer):
     o, e = subprocess.Popen(['id', '-u'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     if int(o) != 0:
         printer.print_error(
             "This script must be run in elevated privileges since some of the tests require root privileges")
         exit()
+
+
+def main():
+    collection_feature_flag = "collect"
+    running_in_collect_mode = False
+    help_feature_flag = ['-h', '-H', '-help', '--help', '-Help', '--Help']
+    printer = ColorfulPrint()
+    verify_root_privileges(printer)
     if len(sys.argv) > 1:
         if str(sys.argv[1]) == collection_feature_flag:
             running_in_collect_mode = True
@@ -691,7 +695,7 @@ def main():
             exit()
         else:
             print("python cef_AMA_troubleshoot.py: unrecognized option '{}'\n"
-                                "Try 'python cef_AMA_troubleshoot.py --help' for more information.".format(str(sys.argv[1])))
+                  "Try 'python cef_AMA_troubleshoot.py --help' for more information.".format(str(sys.argv[1])))
             exit()
     class_tests_array = [
         (AgentInstallationVerifications(), "Starting validation tests for AMA"),
