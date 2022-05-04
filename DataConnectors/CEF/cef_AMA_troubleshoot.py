@@ -54,7 +54,111 @@ class ColorfulPrint:
         print("\033[0;30;47m" + input_str + "\033[0m")
 
 
-class BasicCommand(ColorfulPrint):
+class ShellExecute(ColorfulPrint):
+    '''
+    This class is for executing all the shell related commands in the terminal for each test.
+    '''
+    def run_command(self):
+        '''
+        Running the bash commands using the subprocess library
+        '''
+        try:
+            self.command_result, self.command_result_err = subprocess.Popen(self.command_to_run, shell=True,
+                                                                            stdout=subprocess.PIPE,
+                                                                            stderr=subprocess.STDOUT).communicate()
+        except Exception:
+            self.command_result_err = "Error processing command"
+        if "not found" in str(self.command_result):
+            self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again".format(
+                self.command_to_run)
+
+    def print_result_to_prompt(self):
+        '''
+        Printing the test's name and success status to the customer's prompt
+        '''
+        max_length = 47
+        if self.is_successful:
+            self.print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
+        else:
+            self.print_error(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failure")
+
+    def document_result(self):
+        '''
+        A simple way to only document the response to prompt and to the log file
+        Can be used in case some special commands that don't require a verification to be ran
+        '''
+        self.print_result_to_prompt()
+        self.log_result_to_file()
+
+    def log_result_to_file(self):
+        '''
+        Logging each test to a log file that can be used for troubleshooting. Is done by the use of the object repr function
+        '''
+        output = self.__repr__()
+        output_file = open(LOG_OUTPUT_FILE, 'a')
+        try:
+            output_file.write(output)
+        except Exception:
+            print(str(self.command_name.command) + "was not documented successfully")
+        output_file.close()
+
+    def run_full_test(self, exclude=False):
+        '''
+        A simple way to run a full test- executing the command, validating it's result, printing it to the prompt and logging it to a file
+        :param exclude: A parameter given to the is_command_successful function.
+        '''
+        self.run_command()
+        self.is_command_successful(exclude)
+        self.print_result_to_prompt()
+        self.log_result_to_file()
+
+
+class FullVerification(ShellExecute):
+    '''
+    This class is running all the necessary verifications for the running test.
+    '''
+    def is_command_successful(self, exclude=False, should_fail=False):
+        '''
+        Verifying the command output indicates success. It's done by searching for key words in the result
+        :param exclude: If true, will verify the key words do not exist in the command result
+        :param should_fail: If true, will just return false and not run any further verification
+        :return: True if successful otherwise False.
+        '''
+        global FAILED_TESTS_COUNT
+        if self.command_result_err is None and self.command_result is not None and should_fail is not True:
+            self.command_result = str(self.command_result)
+            for key_word in self.result_keywords_array:
+                key_word = str(key_word)
+                if exclude:
+                    if key_word in self.command_result:
+                        self.fault_keyword = key_word
+                        self.is_successful = False
+                        FAILED_TESTS_COUNT += 1
+                        return False
+                elif key_word not in self.command_result:
+                    self.fault_keyword = key_word
+                    self.is_successful = False
+                    FAILED_TESTS_COUNT += 1
+                    return False
+            self.is_successful = True
+            return True
+        self.is_successful = False
+        FAILED_TESTS_COUNT += 1
+        return False
+
+    def run_full_verification(self, exclude=False, should_fail=False):
+        '''
+        A simple way to run only the verification on documentation steps of the test.
+        Can be used in case some special commands are not run using the run_command function
+        :param exclude: A parameter given to the is_command_successful function.
+        :param should_fail: A parameter given to the is_command_successful function.
+        '''
+        self.is_command_successful(exclude, should_fail)
+        self.print_result_to_prompt()
+        self.log_result_to_file()
+
+
+class BasicCommand(FullVerification):
     '''
     This class is for creating a command object. The object has execution, validation and documentation functions
     '''
@@ -86,100 +190,6 @@ class BasicCommand(ColorfulPrint):
                 self.is_successful) +
             delimiter).replace(
             '%', '%%').replace('\\n', '\n')
-
-    def run_command(self):
-        '''
-        Running the bash commands using the subprocess library
-        '''
-        try:
-            self.command_result, self.command_result_err = subprocess.Popen(self.command_to_run, shell=True,
-                                                                            stdout=subprocess.PIPE,
-                                                                            stderr=subprocess.STDOUT).communicate()
-        except Exception:
-            self.command_result_err = "Error processing command"
-        if "not found" in str(self.command_result):
-            self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again".format(
-                self.command_to_run)
-
-    def is_command_successful(self, exclude=False, should_fail=False):
-        '''
-        Verifying the command output indicates success. It's done by searching for key words in the result
-        :param exclude: If true, will verify the key words do not exist in the command result
-        :param should_fail: If true, will just return false and not run any further verification
-        :return: True if successful otherwise False.
-        '''
-        global FAILED_TESTS_COUNT
-        if self.command_result_err is None and self.command_result is not None and should_fail is not True:
-            self.command_result = str(self.command_result)
-            for key_word in self.result_keywords_array:
-                key_word = str(key_word)
-                if exclude:
-                    if key_word in self.command_result:
-                        self.fault_keyword = key_word
-                        self.is_successful = False
-                        FAILED_TESTS_COUNT += 1
-                        return False
-                elif key_word not in self.command_result:
-                    self.fault_keyword = key_word
-                    self.is_successful = False
-                    FAILED_TESTS_COUNT += 1
-                    return False
-            self.is_successful = True
-            return True
-        self.is_successful = False
-        FAILED_TESTS_COUNT += 1
-        return False
-
-    def print_result_to_prompt(self):
-        '''
-        Printing the test's name and success status to the customer's prompt
-        '''
-        max_length = 47
-        if self.is_successful:
-            self.print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
-        else:
-            self.print_error(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failure")
-
-    def log_result_to_file(self):
-        '''
-        Logging each test to a log file that can be used for troubleshooting. Is done by the use of the object repr function
-        '''
-        output = self.__repr__()
-        output_file = open(LOG_OUTPUT_FILE, 'a')
-        try:
-            output_file.write(output)
-        except Exception:
-            print(str(self.command_name.command) + "was not documented successfully")
-        output_file.close()
-
-    def run_full_test(self, exclude=False):
-        '''
-        A simple way to run a full test- executing the command, validating it's result, printing it to the prompt and logging it to a file
-        :param exclude: A parameter given to the is_command_successful function.
-        '''
-        self.run_command()
-        self.is_command_successful(exclude)
-        self.print_result_to_prompt()
-        self.log_result_to_file()
-
-    def run_full_verification(self, exclude=False, should_fail=False):
-        '''
-        A simple way to run only the verification on documentation steps of the test.
-        Can be used in case some special commands are not run using the run_command function
-        :param exclude: A parameter given to the is_command_successful function.
-        :param should_fail: A parameter given to the is_command_successful function.
-        '''
-        self.is_command_successful(exclude, should_fail)
-        self.print_result_to_prompt()
-        self.log_result_to_file()
-
-    def document_result(self):
-        '''
-        A simple way to only document the response to prompt and to the log file
-        Can be used in case some special commands that don't require a verification to be ran
-        '''
-        self.print_result_to_prompt()
-        self.log_result_to_file()
 
 
 class AgentInstallationVerifications:
