@@ -1,6 +1,6 @@
 # Microsoft Windows Events Sysmon ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Microsoft Windows Events Sysmon.
+ARM template for ASIM ProcessEvent schema parser for Microsoft Windows Events Sysmon.
 
 This ASIM parser supports normalizing Microsoft Windows Sysmon process terminate events (event 5) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
 

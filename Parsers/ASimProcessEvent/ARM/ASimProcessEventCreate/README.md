@@ -1,6 +1,6 @@
 # Multiple ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Multiple.
+ARM template for ASIM ProcessEvent schema parser for Multiple.
 
 This ASIM parser supports normalizing process create event logs from all supported sources to the ASIM ProcessEvent normalized schema.
 
