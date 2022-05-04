@@ -823,7 +823,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 #$instructionArray = [string[]]($connectorData.instructionSteps)
                                 $existingFunctionApp = $false;
                                 $instructionArray = $connectorData.instructionSteps
-                                ($instructionArray | ForEach {if($_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
+                                ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
                                 #$isFunctionApp = $null -ne ($instructionArray | ? {$_.description.IndexOf('[Deploy To Azure]')})
                                 if($existingFunctionApp)
                                 {
