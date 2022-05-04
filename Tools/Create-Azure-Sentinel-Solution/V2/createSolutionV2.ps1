@@ -820,12 +820,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             if(!$contentToImport.Is1PConnector)
                             {
-                                $test = [string[]]($connectorData.instructionSteps)
-                                if($test.IndexOf('[Deploy To Azure]') -gt 0)
+                                #$instructionArray = [string[]]($connectorData.instructionSteps)
+                                $existingFunctionApp = $false;
+                                $instructionArray = $connectorData.instructionSteps
+                                ($instructionArray | ForEach {if($_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
+                                #$isFunctionApp = $null -ne ($instructionArray | ? {$_.description.IndexOf('[Deploy To Azure]')})
+                                if($existingFunctionApp)
                                 {
                                     $connectorData.title = $connectorData.title + "(using Azure Function)";
-                                }
-                           #$test1 =  $test | Select-String -Pattern '[Deploy To Azure]'
+                                }            
+                                # if($instructionArray.IndexOf('[Deploy To Azure]') -gt 0)
+                                # {
+                                #     $connectorData.title = $connectorData.title + "(using Azure Function)";
+                                # }
                             }
                             # Data Connector Content -- *Assumes GenericUI
                             if($contentToImport.Is1PConnector)
