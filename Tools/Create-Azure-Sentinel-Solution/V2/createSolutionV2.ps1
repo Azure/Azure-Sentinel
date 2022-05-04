@@ -817,6 +817,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
                             $baseMainTemplate.resources += $baseDataConnectorTemplateSpec
+
+                            if(!$contentToImport.Is1PConnector)
+                            {
+                                $test = [string[]]($connectorData.instructionSteps)
+                                if($test.IndexOf('[Deploy To Azure]') -gt 0)
+                                {
+                                    $connectorData.title = $connectorData.title + "(using Azure Function)";
+                                }
+                           #$test1 =  $test | Select-String -Pattern '[Deploy To Azure]'
+                            }
                             # Data Connector Content -- *Assumes GenericUI
                             if($contentToImport.Is1PConnector)
                             {
@@ -937,7 +947,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             if($contentToImport.TemplateSpec){
                                 $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
+                                
                             }
+
                             $connectorObj = [PSCustomObject]@{
                                 #id         = "[variables('_connector$connectorCounter-source')]";
                                 # id         = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
@@ -981,7 +993,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         if ($connectorData.additionalRequirementBanner) {
                             $connectorObj.properties.connectorUiConfig | Add-Member -NotePropertyName "additionalRequirementBanner" -NotePropertyValue $connectorData.additionalRequirementBanner
                         }
-
+                        
                         $baseMainTemplate.resources += $connectorObj
 
                         $syslog = "Syslog"
