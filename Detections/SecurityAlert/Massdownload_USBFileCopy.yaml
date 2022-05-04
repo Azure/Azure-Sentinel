@@ -24,30 +24,27 @@ relevantTechniques:
 query: |
   SecurityAlert
   | where AlertName =~ "mass download by a single user"
-  | extend Extprop = parsejson(Entities)
-  | mv-expand Extprop
-  | extend Extprop = parsejson(Extprop)
-  | extend CmdLine = iff(Extprop['Type']=="process", Extprop['CommandLine'], '')
-  | extend File = iff(Extprop['Type']=="file", Extprop['Name'], '')
-  | extend Account = Extprop['Name']
-  | extend Domain = Extprop['UPNSuffix']
-  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
-  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '')
-  | extend Process = iff(isnotempty(CmdLine), CmdLine, File)
-  | project AlertName, AlertSeverity, CompromisedEntity, Account, IpAddress, CmdLine, File, Domain, Process
+  | extend Extprop = parse_json(ExtendedProperties)
+  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
+  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
+  | extend IpAddress = tostring(parse_json(ExtendedProperties).["IpAddress"]) 
+  | project timestamp=TimeGenerated, AlertName, Computer, Account, IpAddress, ExtendedProperties
   | join kind=inner
-  (  
+  ( 
   DeviceEvents
   | where  ActionType == "PnpDeviceConnected"
   | extend parsed = parse_json(AdditionalFields)
-  | project DeviceId, DriveClass = tostring(parsed.ClassName), UsbDeviceId = tostring(parsed.DeviceId), ClassId = tostring(parsed.DeviceId), DeviceDescription = tostring(parsed.DeviceDescription), VendorIds = tostring(parsed.VendorIds), AccountDomain,AccountName
+  | project DeviceId, DriveClass = tostring(parsed.ClassName), UsbDeviceId = tostring(parsed.DeviceId), ClassId = tostring(parsed.DeviceId), DeviceDescription = tostring(parsed.DeviceDescription), VendorIds = tostring(parsed.VendorIds), AccountDomain,AccountName,TimeGenerated, ActionType, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, Type
   | where DriveClass == 'USB' and DeviceDescription == 'USB Mass Storage Device'
   ) on $left.Account == $right.AccountName
-   | join kind=inner (
+  | join kind=inner 
+  (
   DeviceFileEvents
   | where FolderPath !startswith "c" and FolderPath !startswith @"\"
   )  on DeviceId
-  | project  TimeGenerated, ActionType, CompromisedEntity, FileName, FileSize, IPCustomEntity=IpAddress, CommandLineCustomEntity=CmdLine, ProcessCustomEntity=Process, AccountCustomEntity=Account
+  | project  TimeGenerated, ActionType, Computer, FileName, FileSize, IpAddress, InitiatingProcessCommandLine, InitiatingProcessFileName, Account
+  | extend timestamp = TimeGenerated, CompromisedEntity = Computer, AccountCustomEntity=Account, ProcessCustomEntity = InitiatingProcessFileName, CommandLineCustomEntity = InitiatingProcessCommandLine,IPCustomEntity=IpAddress
+
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -63,7 +60,7 @@ entityMappings:
         columnName: CompromisedEntity
   - entityType: Process
     fieldMappings:
-      - identifier: Process
+      - identifier: ProcessId
         columnName: ProcessCustomEntity
       - identifier: CommandLine
         columnName: CommandLineCustomEntity
