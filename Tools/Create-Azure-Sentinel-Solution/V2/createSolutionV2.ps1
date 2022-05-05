@@ -247,7 +247,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
-                        $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue $contentToImport.Version
+                        
 
                         if(!$contentToImport.TemplateSpec)
                         {
@@ -306,6 +306,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $dependencies.title; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$workbookCounter" -NotePropertyValue "$($dependencies.version)" #$contentToImport.Version
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue "$($dependencies.workbookKey)"
                             $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
@@ -827,7 +828,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 #$isFunctionApp = $null -ne ($instructionArray | ? {$_.description.IndexOf('[Deploy To Azure]')})
                                 if($existingFunctionApp)
                                 {
-                                    $connectorData.title = $connectorData.title + "(using Azure Function)";
+                                    $connectorData.title = $connectorData.title + " (using Azure Function)";
                                 }            
                                 # if($instructionArray.IndexOf('[Deploy To Azure]') -gt 0)
                                 # {
