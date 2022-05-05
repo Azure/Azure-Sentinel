@@ -1,6 +1,6 @@
 # VMConnection ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for VMConnection.
+ARM template for ASIM NetworkSession schema parser for VMConnection.
 
 This ASIM parser supports normalizing VM connection logs collected using the Log Analytics agent to the ASIM Network Session normalized schema.
 
