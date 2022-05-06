@@ -1,0 +1,42 @@
+id: 16b940d2-aaf8-4eaa-a5e1-05df5f5c3d43
+name: CyberArkEPM - Uncommon Windows process started from System folder
+description: |
+  'Detects when uncommon windows proccess is started from System folder.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CyberArkEPM
+    dataTypes:
+      - CyberArkEPM
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - DefenseEvasion
+relevantTechniques:
+  - T1204
+  - T1036
+query: | 
+  let lb_period = 14d;
+  let q_time = 1h;
+  let sys_proc = CyberArkEPM
+  | where TimeGenerated between (ago(lb_period) .. ago(q_time))
+  | where EventSubType != 'AttackAttempt'
+  | where ActingProcessName has @'\'
+  | where ActingProcessName has_any ('System32', 'SysWOW64')
+  | summarize makeset(ActingProcessFileInternalName);
+  CyberArkEPM
+  | where TimeGenerated > ago(q_time)
+  | where EventSubType != 'AttackAttempt'
+  | where ActingProcessName has @'\'
+  | where ActingProcessName has_any ('System32', 'SysWOW64')
+  | where ActingProcessFileInternalName !in (sys_proc)
+  | extend AccountCustomEntity = ActorUsername
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

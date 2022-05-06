@@ -40,7 +40,7 @@ This Security Orchestration, Automation, & Response (SOAR) capability is designe
 ### 2) Open_DevOpsTask
 This Security Orchestration, Automation, & Response (SOAR) capability is designed to create an Azure DevOps Task when an alert is triggered. This automation enables a consistent response when resources become unhealthy relative to a predefined recommendation, enabling teams to focus on remediation and improving response times.<br>
 ### 3) Open-JIRA-Ticket
-This Security Orchestration, Automation, & Response (SOAR) capability is designed to open a JIRA issue when a recommendation is unhealthy in Microsoft Defender for Cloud. This automation improves time to response by providing consistent notifications when resources become unhealthy relative to a predefined recommendation.<br
+This Security Orchestration, Automation, & Response (SOAR) capability is designed to open a JIRA issue when a recommendation is unhealthy in Microsoft Defender for Cloud. This automation improves time to response by providing consistent notifications when resources become unhealthy relative to a predefined recommendation.<br>
 
 ## Print/Export Report
 1️⃣ Set Background Theme: Settings > Appearance > Theme: Azure > Apply<br>
