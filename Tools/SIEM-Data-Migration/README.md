@@ -8,11 +8,11 @@ This tool is deployed through an ARM template and performs the following steps:
 
 - Downloads and extracts the following tools into the Virtual Machine's desktop:
 
-    + [LightIngest](https://docs.microsoft.com/en-us/azure/data-explorer/lightingest) (used to migrate data to ADX)
+    + [LightIngest](https://docs.microsoft.com/azure/data-explorer/lightingest) (used to migrate data to ADX)
 
     + [Azure Monitor Custom log ingestion tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/CustomLogsIngestion-DCE-DCR) (used to migrate data to Log Analytics)
 
-    + [AzCopy](https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10) (used to migrate data to Azure Blob Storage)
+    + [AzCopy](https://docs.microsoft.com/azure/storage/common/storage-use-azcopy-v10) (used to migrate data to Azure Blob Storage)
 
 - Deploys the target platform that will host your historical logs. To choose from:
 
