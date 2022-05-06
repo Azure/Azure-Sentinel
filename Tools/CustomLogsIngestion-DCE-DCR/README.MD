@@ -38,7 +38,7 @@ You can modify the target table and workspace by modifying the data collection r
    ```  
 3. You are prompted to enter the following value 
 	- **LogPath**    
-    Path to the log file or folder to read logs from and send them to Azure Monitor  
+    Path to the log file or folder (JSON|CSV) to read logs from and send them to Azure Monitor  
 	- **AADAppId**  
     Azure Active Directory application to authenticate against the API to send logs to Azure Monitor data collection endpoint. This script supports the Client Credential Grant Flow.  
 	- **AADAppSecret**  
