@@ -1,4 +1,4 @@
-# Vendor Product Logic Apps connector and playbook templates
+# The Hive Logic Apps connector and playbook templates
 
 <img src="./logo.png" alt="drawing" width="20%"/><br>
 
@@ -35,7 +35,8 @@ This package includes:
 
 You can choose to deploy the whole package: connectors + all three playbook templates, or each one seperately from its specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2Fazuredeploy.json)
 
 # The Hive connectors documentation 
 
@@ -49,13 +50,10 @@ TheHive web interface.
 
 <a name="prerequisites">
 
-### Prerequisites in Vendor Product
+### Prerequisites in The Hive
 
-To get Vendor Product API credentials, follow the instructions:
-
-1. 1.
-2. 2.
-3. 3.
+TheHive connector uses [On-Premises Data Gateway](https://docs.microsoft.com/data-integration/gateway/service-gateway-onprem).
+Therefore [installation of the On-Premises Data Gateway](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-install) and [creation of the On-Premises Data Gateway resource](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-connection#create-azure-gateway-resource) are required.
 
 <a name="deployment">
 
@@ -64,12 +62,15 @@ To get Vendor Product API credentials, follow the instructions:
 1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters for deploying Custom Connectors and Playbooks
 
-| Parameters | Description |
-|----------------|--------------|
-|**For Connector**|
-|**parameter name** | short description |
-|**For Playbooks**|
-|**parameter name** | short description |
+| Parameters              | Description                                             |
+|-------------------------|---------------------------------------------------------|
+| **For Connector**       |
+| **API Hostname**        | Hostname of TheHive instance                            |
+| **API Port**            | Port number of TheHive API. By default 9000.            |
+| **For Playbooks**       |
+| **TheHive-CreateAlert** | Enter the playbook name here (e.g. TheHive-CreateAlert) |
+| **TheHive-CreateCase**  | Enter the playbook name here (e.g. TheHive-CreateCase)  |
+| **TheHive-LockUser**    | Enter the playbook name here (e.g. TheHive-LockUser)    |
 
 <br>
 <a name="postdeployment">

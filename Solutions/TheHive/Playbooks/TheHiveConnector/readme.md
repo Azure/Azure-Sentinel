@@ -1,24 +1,31 @@
-# Vendor Product API Logic Apps Custom connector
+# THeHive API Logic Apps Custom connector
 
-This Custom Connector is used for connection to Vendor Product API.
+This Custom Connector is used for connection to TheHive API.
 
 ### Authentication methods supported by this connector
 
-* API Key authentication
+* Basic Authentication
 
 ### Prerequisites in Vendor Product
 
-To get Vendor Product API credentials, follow the instructions:
+When creating the connection for the custom connector, you will be asked to provide user and password which you generated in
+TheHive web interface.
+TheHive connector uses [On-Premises Data Gateway](https://docs.microsoft.com/data-integration/gateway/service-gateway-onprem).
+Therefore, [installation of the On-Premises Data Gateway](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-install) and [creation of the On-Premises Data Gateway resource](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-connection#create-azure-gateway-resource) are required.
 
-1. 1.
-2. 2.
-3. 3.
 
-## Actions supported by Vendor Product API Custom Connector
+## Actions supported by TheHive API Custom Connector
 
-| **Component** | **Description** |
-| --------- | -------------- |
-| **action** | short description |
+| **Component**                     | **Description**                     |
+|-----------------------------------|-------------------------------------|
+| **Create Alert**                  | Creates and alert                   |
+| **Create Case**                   | Creates case                        |
+| **Create Task**                   | Creates a task for a case           |
+| **List observables**              | List last 30 observables for a case |
+| **Lock user**                     | Lock a user                         |
+| **Create observable for a case**  | Creates an observable which can be linked to a case                   |
+| **Create observable for a alert** | Creates an observable which can be linked to a case                   |
+
 
 
 ### Deployment instructions

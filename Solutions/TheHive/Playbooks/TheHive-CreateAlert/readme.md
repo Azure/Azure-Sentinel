@@ -1,26 +1,27 @@
-# VendorProduct-playbookname
+# TheHive-CreateAlert
 
 ## Summary
 
-When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
+When a new sentinel alerts is created, this playbook gets triggered and performs the following actions:
 
-1. 1.
-2. 2.
+1. Parse alert extended properties 
+2. Parse alert custom details
+3. Creates alert in TheHive with description, source, sourceRef, title and type passed.
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, Vendor Product API Connector needs to be deployed under the same subscription.
-2. Obtain Vendor Product API credentials. Refer to Vendor Product API Custom Connector documentation.
-3. 3.
+1. Prior to the deployment of this playbook, TheHive API Connector needs to be deployed under the same subscription.
+2. Obtain TheHive API credentials. Refer to TheHive API Custom Connector documentation.
+
 
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
-    * params name: param descr
+
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fbase-playbooks-solution%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2FPlaybooks%2FVendorProduct-playbookname%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fbase-playbooks-solution%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2FPlaybooks%2FVendorProduct-playbookname%2Fazuredeploy.json)
 
@@ -39,5 +40,5 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident with a malicious IP. In the *Entity maping* section of the analytics rule creation workflow, malicious IP should be mapped to **Address** identitfier of the **IP** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Azure sentinel, analytical rules should be configured to trigger an alert. An alert should contain *source* and *sourceRef* custom entities. [Docomentation about custom entities values](https://docs.thehive-project.org/thehive/legacy/thehive3/api/alert/)
 2. Configure the automation rules to trigger the playbook.

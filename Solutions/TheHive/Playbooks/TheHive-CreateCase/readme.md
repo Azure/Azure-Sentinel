@@ -1,19 +1,21 @@
-# VendorProduct-playbookname
+# TheHvie-CreateCase
 
 ## Summary
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
-1. 1.
-2. 2.
+1. Create case in TheHive instance with and enrich it with description and title
+2. Gets Hosts, IPs entities.
+3. Create task and bind it to case.
+4. Creates obsarvebles with hosts and IPs for created case. 
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, Vendor Product API Connector needs to be deployed under the same subscription.
-2. Obtain Vendor Product API credentials. Refer to Vendor Product API Custom Connector documentation.
-3. 3.
+1. Prior to the deployment of this playbook, TheHive  API Connector needs to be deployed under the same subscription.
+2. Obtain TheHive API credentials. Refer to TheHive API Custom Connector documentation.
+
 
 ### Deployment instructions
 
@@ -39,5 +41,6 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident with a malicious IP. In the *Entity maping* section of the analytics rule creation workflow, malicious IP should be mapped to **Address** identitfier of the **IP** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Azure sentinel, analytical rules should be configured to trigger an incident.
+In the *Entity maping* section of the analytics rule creation workflow, suspicious IP and hostnames should be mapped to **Address** identitfier of the **IP** for IPs entity type and **HostName** for the **Host**. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook.
