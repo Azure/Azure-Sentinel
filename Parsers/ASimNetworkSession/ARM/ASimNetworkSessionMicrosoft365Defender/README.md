@@ -1,6 +1,6 @@
 # M365 Defender for Endpoint ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for M365 Defender for Endpoint.
+ARM template for ASIM NetworkSession schema parser for M365 Defender for Endpoint.
 
 This ASIM parser supports normalizing M365 Defender for Endpoint to the ASIM Network Session schema.
 

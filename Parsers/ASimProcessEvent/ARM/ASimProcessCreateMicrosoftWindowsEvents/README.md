@@ -1,6 +1,6 @@
 # Security Events ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Security Events.
+ARM template for ASIM ProcessEvent schema parser for Security Events.
 
 This ASIM parser supports normalizing Windows process create events (event 4688) collected using the WEF connector (WindowsEvent table) to the ASIM Process Event normalized schema. 
 

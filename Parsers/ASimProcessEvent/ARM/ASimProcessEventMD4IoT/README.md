@@ -1,6 +1,6 @@
 # Microsoft Defender for IoT ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Microsoft Defender for IoT.
+ARM template for ASIM ProcessEvent schema parser for Microsoft Defender for IoT.
 
 This ASIM parser supports normalizing Microsoft Defender for IoT events to the ASIM Process Event normalized schema. 
 

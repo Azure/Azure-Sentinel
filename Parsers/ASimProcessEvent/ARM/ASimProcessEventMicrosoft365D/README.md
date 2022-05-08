@@ -1,6 +1,6 @@
 # Microsoft 365 Defender for endpoint ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Microsoft 365 Defender for endpoint.
+ARM template for ASIM ProcessEvent schema parser for Microsoft 365 Defender for endpoint.
 
 This ASIM parser supports normalizing Microsoft 365 Defender for endpoint to the ASIM Process Event normalized schema.
 
