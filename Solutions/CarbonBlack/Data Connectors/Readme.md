@@ -1,4 +1,4 @@
-# Carbon Black Logic Apps custom connector
+# VMware Carbon Black Logic App custom connector
 
 <img src="./CarbonBlack.PNG" alt="drawing" width="20%"/><br>
 
@@ -36,8 +36,7 @@ This custom connector connects to Carbon Black cloud end point and performs diff
 1. Deploy the custom connector by clicking on "Deploy to Azure" button. This will take you to the Deploy an ARM Template wizard.
 2. Fill in the required parameters:
 
-  * Custom connector Name: Enter the Custom connector name (e.g. CarbonBlackCloudConnector)
+  * Custom connector Name: Enter the custom connector name (e.g. CarbonBlackCloudConnector)
   * Service Endpoint: Enter the Carbon Black Cloud API endpoint (e.g. https://{CarbonblackBaseURL})
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FData%20Connectors%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FData%20Connectors%2Fazuredeploy.json)
-
