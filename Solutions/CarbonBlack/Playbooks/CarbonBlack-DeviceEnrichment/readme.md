@@ -9,7 +9,6 @@
 
      ![Comment example](./images/Incident_Comment.png)
 
-
 ![CarbonBlack-Enrich Incident With devices information](./images/designerOverviewLight.png)
 
 ### Prerequisites
