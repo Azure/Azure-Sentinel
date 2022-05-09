@@ -36,7 +36,7 @@ This package includes:
 You can choose to deploy the whole package: connector + all three playbook templates, or each one seperately from it's specific folder.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json)
 
 
 
@@ -65,14 +65,14 @@ This connector supports API Key authentication. When creating the connection for
 | Parameters | Description |
 |----------------|--------------|
 |**For Custom Connector**|
-|**Custom Connector name**| Enter the Custom connector name (e.g. CarbonBlackConnector)|
-|**Service Endpoint** | Enter the CarbonBlack clound end point (e.g. https://{CarbonblackBaseURL})|
+|**Custom Connector name**| Enter the custom connector name (e.g. CarbonBlackConnector)|
+|**Service Endpoint** | Enter the CarbonBlack cloud endpoint (e.g. https://{CarbonblackBaseURL})|
 |**For Playbooks**|
 |**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**|  Enter the playbook name here (e.g. CarbonBlack-TakeDeviceActionFromTeams)|
 |**CarbonBlack-DeviceEnrichment Playbook Name** |Enter the playbook name here (e.g. CarbonBlack-QuarantineDevice)|
 |**CarbonBlack-QuarantineDevice Playbook Name** | Enter the playbook name here (e.g. CarbonBlack-DeviceEnrichment)| 
 |**OrganizationId** | Enter the OrganizationId|
-|**PolicyId** | Enter the pre-defined PolicyId to which Teams adapative card will offer to move device|
+|**PolicyId** | Enter the pre-defined PolicyId to which Teams adaptive card will offer to move device|
 |**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
 |**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
 
