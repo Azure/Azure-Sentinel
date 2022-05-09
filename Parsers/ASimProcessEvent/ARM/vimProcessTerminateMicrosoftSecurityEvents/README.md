@@ -1,15 +1,15 @@
 # Security Events ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Security Events.
+ARM template for ASIM ProcessEvent schema parser for Security Events.
 
 This ASIM parser supports filtering and normalizing Windows process terminate events (event 4689) collected using the Security Events connectors, utilizing either the Log Analytics agent or the Azure Monitor Agent (AMA) and stored in the SecurityEvent table to the ASIM Process Event normalized schema. 
 
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM ProcessEvent normalization schema reference](https://aka.ms/ASimProcessEventDoc)
 
