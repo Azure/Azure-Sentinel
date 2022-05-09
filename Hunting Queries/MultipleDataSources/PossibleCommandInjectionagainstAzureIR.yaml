@@ -1,0 +1,76 @@
+id: 2d1a3e86-f1a0-49d0-b88a-55789e1d6660
+name: Possible command injection attempts against Azure Integration Runtimes
+description: |
+  'This hunting query looks for potential command injection attempts via the vulnerable third-party driver against Azure IR with Managed VNet or SHIR processes as well as post-exploitation activity based on process execution and command line activity
+  Reference: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2022-29972 , https://msrc.microsoft.com/update-guide/vulnerability/ADV220001'
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+tactics:
+  - Collection
+relevantTechniques:
+  - T1074.001
+query: |
+  let parent_proc_list = dynamic(["diawp.exe", "ReportingServicesService.exe", "RSPortal.exe", "RsPowerBI.exe", "taskexecutor.exe"]);
+  let cmdline_tokens = dynamic([("| curl ", "/c start ", " whoami 2>&1", "-m 5 ", "--data-binary")]);
+  (union isfuzzy=true
+  (DeviceProcessEvents  
+  | where CreatedProcessName =~ "cmd.exe"
+  | where InitiatingProcessName in~ ("ReportingServicesService.exe", "RSPortal.exe", "RsPowerBI.exe", "diawp.exe")
+  | where CreatedProcessCommandLine has_any ("| curl ", "/c start ", " whoami 2>&1", "-m 5 ", "--data-binary")
+  | where ProcessCommandLine has_any (cmdline_tokens)
+  | project-reorder  TimeGenerated, DeviceName, DeviceId, ProcessCommandLine, AccountName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName,  ProcessCustomEntity = InitiatingProcessFileName
+  ),
+  (imProcessCreate
+  | where ParentProcessName endswith "diawp.exe" or ParentProcessName endswith "ReportingServicesService.exe" or ParentProcessName endswith "RSPortal.exe" or ParentProcessName endswith "RsPowerBI.exe" or ParentProcessName endswith "taskexecutor.exe"
+  | where ActingProcessName = "cmd.exe"
+  | where (CommandLine has_any (cmdline_tokens))
+  | extend timestamp = TimeGenerated, HostCustomEntity = DvcHostname , AccountCustomEntity = ActorUsername, ProcessCustomEntity = TargetProcessFilePath
+  ),
+  (SecurityEvent
+  | where EventID == '4688'
+  | where Process == "cmd.exe" and isnotempty(ParentProcessName)
+  | where ParentProcessName endswith "diawp.exe" or ParentProcessName endswith "ReportingServicesService.exe" or ParentProcessName endswith "RSPortal.exe" or ParentProcessName endswith "RsPowerBI.exe" or ParentProcessName endswith "taskexecutor.exe"
+  | where (CommandLine has_any (cmdline_tokens)) 
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+  ),
+  (WindowsEvent
+  | where EventID == '4688' and (EventData has_any (cmdline_tokens) or EventData has_all (parent_proc_list))
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where (CommandLine has_any (cmdline_tokens))
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend NewProcessId = tostring(EventData.NewProcessId)
+  | where NewProcessName =~ "cmd.exe" and ParentProcessName in~ (parent_proc_list)
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, CommandLine
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+      - identifier: CommandLine
+        columnName: CommandLineCustomEntity
