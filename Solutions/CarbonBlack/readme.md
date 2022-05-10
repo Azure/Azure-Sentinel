@@ -49,7 +49,7 @@ This connector supports API Key authentication. When creating the connection for
 
 ### Carbon Black Prerequisites
 
-1. Your Carbon Black Cloud API endpoint should be known. (e.g.  https://{CarbonblackBaseURL})
+1. [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) (e.g. https://defense.conferdeploy.net) 
 2. Generate an API key ([learn how](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)), and grant it  **/appservices/** Access level.
 
   * The `/investigate/` Access level is also relevant for playbooks built from scratch and use the process API
@@ -67,15 +67,15 @@ This connector supports API Key authentication. When creating the connection for
 |----------------|--------------|
 |**For Custom Connector**|
 |**Custom Connector name**| Enter the custom connector name (e.g. CarbonBlackConnector)|
-|**Service Endpoint** | Enter the CarbonBlack cloud endpoint (e.g. https://{CarbonblackBaseURL})|
+|**Service Endpoint** | Enter the CarbonBlack cloud endpoint (e.g. https://defense.conferdeploy.net)|
 |**For Playbooks**|
-|**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**|  Enter the playbook name here (e.g. CarbonBlack-TakeDeviceActionFromTeams)|
-|**CarbonBlack-DeviceEnrichment Playbook Name** |Enter the playbook name here (e.g. CarbonBlack-QuarantineDevice)|
-|**CarbonBlack-QuarantineDevice Playbook Name** | Enter the playbook name here (e.g. CarbonBlack-DeviceEnrichment)| 
+|**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**|  Enter the playbook name (e.g. CarbonBlack-TakeDeviceActionFromTeams)|
+|**CarbonBlack-DeviceEnrichment Playbook Name** |Enter the playbook name (e.g. CarbonBlack-QuarantineDevice)|
+|**CarbonBlack-QuarantineDevice Playbook Name** | Enter the playbook name (e.g. CarbonBlack-DeviceEnrichment)|
 |**OrganizationId** | Enter the OrganizationId|
-|**PolicyId** | Enter the pre-defined PolicyId to which Teams adaptive card will offer to move device|
-|**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
-|**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
+|**PolicyId** | Enter the pre-defined Carbon Black Policy Id to which the Microsoft Teams adaptive card will offer to move device|
+|**Teams GroupId** | Enter the Microsoft Teams channel id to send the adaptive card|
+|**Teams ChannelId** | Enter the Microsoft Teams Group id to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
 
 <br>
 <a name="postdeployment">
