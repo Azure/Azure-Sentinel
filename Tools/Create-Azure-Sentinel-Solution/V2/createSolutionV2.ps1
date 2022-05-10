@@ -100,10 +100,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseMetadata = Get-Content -Raw $metadataPath | Out-String | ConvertFrom-Json
 
     $DependencyCriteria = @();
+    $metadataAuthor = $contentToImport.Author.Split(" - ");
     $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
                 $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
-
+                if($null -ne $metadataAuthor[1])
+                {
+                    $baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
+                    $baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
+                }
+                
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
         if ($objectProperties.Value -is [System.Array]) {
@@ -343,9 +349,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $author = $contentToImport.Author.Split(" - ");
                             $authorDetails = [PSCustomObject]@{
                                 name  = $author[0];
-                                email = $author[1];
+                                #email = "[variables('_email')]";
                             };
-
+                            if($null -ne $author[1])
+                            {
+                                $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+                            }
                             $workbookMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
@@ -860,8 +869,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $author = $contentToImport.Author.Split(" - ");
                             $authorDetails = [PSCustomObject]@{
                                 name  = $author[0];
-                                email = $author[1];
+                                #email = "[variables('_email')]";#$author[1];
                             };
+                            if($null -ne $author[1])
+                            {
+                                $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+                            }
                             $dataConnectorMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
@@ -1351,8 +1364,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $author = $contentToImport.Author.Split(" - ");
                                 $authorDetails = [PSCustomObject]@{
                                     name  = $author[0];
-                                    email = $author[1];
+                                    #email = "[variables('_email')]";#$author[1];
                                 };
+                                if($null -ne $author[1])
+                                {
+                                     $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+                                }
 
                                 $huntingQueryMetadata = [PSCustomObject]@{
                                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
@@ -1620,8 +1637,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $author = $contentToImport.Author.Split(" - ");
                                 $authorDetails = [PSCustomObject]@{
                                     name  = $author[0];
-                                    email = $author[1];
+                                    #email = "[variables('_email')]";#$author[1];
                                 };
+                                if($null -ne $author[1])
+                                {
+                                     $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+                                }
 
                                 $analyticRuleMetadata = [PSCustomObject]@{
                                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
@@ -1786,9 +1807,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $author = $contentToImport.Author.Split(" - ");
                             $authorDetails = [PSCustomObject]@{
                                 name  = $author[0];
-                                email = $author[1];
+                                #email = "[variables('_email')]";#$author[1];
                             };
-
+                            if($null -ne $author[1])
+                            {
+                                 $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+                            }
                             $parserMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
@@ -1970,8 +1994,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 };
                 $authorDetails = [PSCustomObject]@{
                     name  = $Author[0];
-                    email = $Author[1];
+                    #email = "[variables('_email')]";#$Author[1];
                 };
+                if($null -ne $Author[1])
+                {
+                     $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+                }
                 if ($solutionId) {
                     $newMetadata | Add-Member -Name 'name' -Type NoteProperty -Value "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]";
                     $newMetadata.Properties | Add-Member -Name 'contentId' -Type NoteProperty -Value "[variables('_solutionId')]";
