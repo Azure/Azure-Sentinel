@@ -18,7 +18,7 @@ This tool will do the following:
 
 ![Overview](Images/Solution%20overview.png)
 
-[Blog post with more background information](https://thecollective.eu/blog/setting-up-a-bidirectional-sync-between-sentinel-and-jira/)
+[Blog post with more background information](https://www.thecollective.eu/en/insights/setting-up-a-bidirectional-sync-between-sentinel-and-jira)
 
 ## Implementation
 To implement this solution, a few different steps need to be done:
