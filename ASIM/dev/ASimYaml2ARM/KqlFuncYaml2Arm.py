@@ -216,10 +216,9 @@ for f in files:
                 except:
                     ParamString = f'{param["Name"]}:{param["Type"]}'
                 if Parameters != "":
-                    Parameters = f',{Parameters}'
+                    Parameters = f'{Parameters},'
                 Parameters = Parameters + ParamString
             armTemplate['resources'][0]['resources'][0]['properties']['functionParameters'] =  Parameters
-        logging.debug ('2')
         armTemplate['resources'][0]['resources'][0]['properties']['FunctionAlias'] = Alias
         armTemplate['resources'][0]['resources'][0]['properties']['displayName'] = Title
 
