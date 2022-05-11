@@ -1,0 +1,29 @@
+// This should be adapted for each working schedule and location time.
+// This is currently configured for Central European Time and European Daylight Saving Times.
+// Click "Save as function", in Parameters write in the fields: "datetime" "date_time" "datetime(null)"
+// If you call the function "IsWorkingTime()", you can check the function with queries like the following:
+//
+// print IsWorkingTime()
+//
+// SigninLogs
+// | extend SecondTime = TimeGenerated
+// | summarize take_any(TimeGenerated) by bin(SecondTime, 1h)
+// | project TimeGenerated, IsWorkingTime(TimeGenerated)
+//
+//let Function = (date_time:datetime = datetime(null)){
+    let schedule_start_hour = 8;
+    let schedule_end_hour = 18;
+    let schedule_friday_end_hour = 14;
+    let Winter = 1h; //Central European Time
+    let Summer = 2h; // Central European Summer Time
+    let parsed_date_time = iff(isnull(date_time), now(), date_time);
+    let FirstEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 3, 1))); //First European Daylight Saving Time
+    let SecondEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 10, 1))); //Second European Daylight Saving Time
+    let corrected_date_time = parsed_date_time + iff(parsed_date_time between (FirstEuropeDST..SecondEuropeDST), Summer, Winter);
+    let _HourOfDay = hourofday(corrected_date_time);
+    let _DayOfWeek = dayofweek(corrected_date_time - 1d)/1d + 1;
+    case(_DayOfWeek < 5 and _HourOfDay between (schedule_start_hour..(schedule_end_hour - 1)), true,
+        _DayOfWeek == 5 and _HourOfDay between (schedule_start_hour..(schedule_friday_end_hour - 1)), true,
+        false)
+//};
+//Function(date_time)
