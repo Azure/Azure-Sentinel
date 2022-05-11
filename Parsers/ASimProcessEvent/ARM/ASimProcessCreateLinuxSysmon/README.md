@@ -1,6 +1,6 @@
 # Sysmon for Linux ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Sysmon for Linux.
+ARM template for ASIM ProcessEvent schema parser for Sysmon for Linux.
 
 This ASIM parser supports normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema. 
 
