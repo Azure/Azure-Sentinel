@@ -14,4 +14,4 @@ For more information about Log Analytics functions refer to:
 
 <br/>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/bla%2F_ASIM_GetWatchlistRaw%2F_ASIM_GetWatchlistRaw.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/bla%2F_ASIM_GetWatchlistRaw%2F_ASIM_GetWatchlistRaw.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/https%3A%2F%2Faka.ms%2FASimFunctionLibrary%2FASIM_GetWatchlistRaw%2FASIM_GetWatchlistRaw.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Faka.ms%2FASimFunctionLibrary%2FASIM_GetWatchlistRaw%2FASIM_GetWatchlistRaw.json)

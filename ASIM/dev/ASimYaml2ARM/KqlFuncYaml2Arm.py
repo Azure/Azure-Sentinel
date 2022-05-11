@@ -204,11 +204,22 @@ for f in files:
         armTemplate['resources'][0]['resources'][0]['properties']['query'] = Query
         armTemplate['resources'][0]['resources'][0]['properties']['category'] = Category
         if params:
+            Parameters = ""
             for param in params:
-                if param['Type']=='string':
-                    param['Default'] = f"\'{param['Default']}\'"
-            armTemplate['resources'][0]['resources'][0]['properties']['functionParameters'] =  \
-                ', '.join([f'{param["Name"]}:{param["Type"]}={param["Default"]}' for param in params])
+                logging.debug("Param: " + str(param))
+                try:
+                    if param['Type']=='string':
+                        Default = f"\'{param[Default]}\'"
+                    else:
+                        Default = param["Default"]   
+                    ParamString = f'{param["Name"]}:{param["Type"]}={Default}'
+                except:
+                    ParamString = f'{param["Name"]}:{param["Type"]}'
+                if Parameters != "":
+                    Parameters = f',{Parameters}'
+                Parameters = Parameters + ParamString
+            armTemplate['resources'][0]['resources'][0]['properties']['functionParameters'] =  Parameters
+        logging.debug ('2')
         armTemplate['resources'][0]['resources'][0]['properties']['FunctionAlias'] = Alias
         armTemplate['resources'][0]['resources'][0]['properties']['displayName'] = Title
 
@@ -240,7 +251,7 @@ for f in files:
             package_arm_template['resources'].append(genericTemplate_element)
 
     except Exception as E:
-        raise SystemExit(f'Converstion of {f} failed:{E}')
+        raise SystemExit(f'Convertion of {f} failed:{E}')
 
 if package_mode:
     if package_schema == "NA":
