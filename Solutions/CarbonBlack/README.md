@@ -67,8 +67,8 @@ This connector supports API Key authentication. When creating the connection for
 
 | Parameters | Description |
 |----------------|--------------|
-|**Custom Connector name**| Custom connector name (e.g. CarbonBlackConnector)|
-|**Service Endpoint** | Carbon Black Cloud API endpoint (e.g. https://defense.conferdeploy.net)|
+|**Custom Connector name**| Custom connector name (e.g. CarbonBlackConnector) |
+|**Service Endpoint** | Carbon Black Cloud API endpoint [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) |
 
 #### Playbook parameters
 
