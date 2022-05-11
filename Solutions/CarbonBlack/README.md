@@ -67,10 +67,10 @@ This connector supports API Key authentication. When creating the connection for
 |----------------|--------------|
 |**For Custom Connector**|
 |**Custom Connector name**| Enter the custom connector name (e.g. CarbonBlackConnector)|
-|**Service Endpoint** | Enter the CarbonBlack cloud endpoint (e.g. https://defense.conferdeploy.net)|
+|**Service Endpoint** | Enter the Carbon Black Cloud API endpoint (e.g. https://defense.conferdeploy.net)|
 |**For Playbooks**|
-|**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**|  Enter the playbook name (e.g. CarbonBlack-TakeDeviceActionFromTeams)|
-|**CarbonBlack-DeviceEnrichment Playbook Name** |Enter the playbook name (e.g. CarbonBlack-QuarantineDevice)|
+|**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**| Enter the playbook name (e.g. CarbonBlack-TakeDeviceActionFromTeams)|
+|**CarbonBlack-DeviceEnrichment Playbook Name** | Enter the playbook name (e.g. CarbonBlack-QuarantineDevice)|
 |**CarbonBlack-QuarantineDevice Playbook Name** | Enter the playbook name (e.g. CarbonBlack-DeviceEnrichment)|
 |**OrganizationId** | Enter the OrganizationId|
 |**PolicyId** | Enter the pre-defined Carbon Black Policy Id to which the Microsoft Teams adaptive card will offer to move device|
@@ -91,11 +91,13 @@ Once deployment is complete, you will need to authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps for other connections such as Teams connection and CarbonBlack connector API Connection (For authorizing the Carbon Black connector API connection, API Key needs to be provided. The API Key is the combination of API Key / API Id).
+6. Repeat steps for other connections such as Teams connection and CarbonBlack connector API Connection
 
-#### b. Configurations in Sentinel
+Note: To authorize the Carbon Black API connection, the API Key needs to be provided as a combination of the API Key and API ID.
 
-1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with risky user account. 
+#### b. Sentinel configurations
+
+1. In Microsoft Sentinel analytics rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
 
 <a name="limitations">

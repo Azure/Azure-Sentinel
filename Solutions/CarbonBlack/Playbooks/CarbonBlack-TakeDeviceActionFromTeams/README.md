@@ -1,23 +1,24 @@
 # CarbonBlack-TakeDeviceActionFromTeams playbook
  
- ## Summary
+## Summary
 
  When a new Microsoft Sentinel incident is created, this playbook is triggered and performs the following actions:
 
- 1. Retrieves the devices information from Carbon Black.
+ 1. Retrieves the device information from Carbon Black.
  2. Sends an adaptive card to the SOC Teams channel, let the analyst decide on action:
     - Quarantine the device or Update the policy based on SOC action.
 
     ![card example](./images/adaptiveCard.png)
 
  3. Add a comment to the incident with the information collected from the Carbon Black, summary of the actions taken and close the incident.
-     ![Comment example](./images/Incident_Comment.png)
+     
+     ![Comment example](./images/IncidentComment.png)
 
 ### Prerequisites
 
 1. Carbon Black Custom Connector needs to be deployed prior to the deployment of this playbook in the same subscription.
 2. Generate an API key. Refer this link [how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
-3. Find the organization key by referring this link. [Find the Carbon Black organization key.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
+3. Find the organization key by referring this link. [Determine the Carbon Black organization key.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
 
 ### Deployment instructions
 
@@ -46,7 +47,7 @@ Once deployment is complete, you will need to authorize each connection.
 5. Click Save
 6. Repeat steps two and three for the Carbon Black connector Connection.
 
-Note: To authore the Carbon Black API connection, the API Key needs to be provided as a combination of the API Key and API ID.
+Note: To authorize the Carbon Black API connection, the API Key needs to be provided as a combination of the API Key and API ID.
 
 #### Sentinel configuration
 

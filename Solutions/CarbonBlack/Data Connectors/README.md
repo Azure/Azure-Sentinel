@@ -6,7 +6,7 @@ This custom connector connects to Carbon Black cloud end point and performs diff
 
 ## Supported authentication methods
 
-* API Key authentication
+* API key authentication
 
 ## Carbon Black Prerequisites
 

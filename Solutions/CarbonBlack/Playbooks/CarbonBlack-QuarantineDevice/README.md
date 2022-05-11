@@ -3,26 +3,26 @@
 
  When a new Sentinel incident is created,this playbook gets triggered and performs following actions:
  
- 1. Retrieves the device information from Carbon Black.
- 2. Quarantine the device
- 3. Enrich the incident with device information by fetching from Carbon Black<br>
-    ![CarbonBlack-Enrich Incident With devices information](./images/Incident_Comment.png)
+1. Retrieves the device information from Carbon Black.
+2. Quarantine the device
+3. Enrich the incident with device information by fetching from Carbon Black
 
-![CarbonBlack-Enrich Incident With device information](./images/designerOverviewLight1.png)<br>
-![CarbonBlack-Enrich Incident With device information](./images/designerOverviewLight2.png)
+    ![CarbonBlack-Enrich Incident With devices information](./images/IncidentComment.png)
+    ![CarbonBlack-Enrich Incident With device information](./images/designerOverviewLight1.png)<br>
+    ![CarbonBlack-Enrich Incident With device information](./images/designerOverviewLight2.png)
 
-### Prerequisites 
+### Prerequisites
 
-1. Carbon Black Custom Connector needs to be deployed prior to the deployment of this playbook in the same subscription.
+1. Carbon Black Custom connector must be deployed prior to the deployment of this playbook in the same subscription.
 2. Generate an API key. Refer this link [how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
 3. Find the organization key by refering this link [ Find Organization key by refering this link ](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
    
 ### Deployment instructions 
 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex:CarbonBlack-QuarantineDevice)
-    * OrganizationKey : Enter the Organization key
+    * OrganizationKey : Carbon Black organization key
 
 ### Post-Deployment instructions
 
@@ -30,12 +30,14 @@
 
 Once deployment is complete, you will need to authorize each connection.
 
-1. Click the Microsoft Sentinel connection resource.
-2. Click edit API connection.
-3. Click Authorize.
-4. Sign in.
-5. Click Save.
-6. Repeat steps 2 & 3 for the Carbon Black connector Connection to authorize connector API of the playbook (For authorizing the Carbon Black API connection, the API Key needs to be provided. API Key Value is the combination of API Key / API ID).
+1. Click the Microsoft Sentinel connection resource
+2. Click edit API connection
+3. Click Authorize
+4. Sign in
+5. Click Save
+6. Repeat steps two and three for the Carbon Black connector Connection.
+
+Note: To authorize the Carbon Black API connection, the API Key needs to be provided as a combination of the API Key and API ID.
 
 #### Configurations in Sentinel
 
