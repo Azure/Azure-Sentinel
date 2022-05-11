@@ -1,6 +1,6 @@
 # Carbon Black Logic Apps connector and playbook templates
 
-<img src="./CarbonBlackConnector/CarbonBlack.PNG" alt="drawing" width="20%"/><br>
+<img src="./Data%20Connectors/CarbonBlack.PNG" alt="drawing" width="20%"/><br>
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This package includes:
 
 * [Logic Apps custom connector for Carbon Black](./CarbonBlackConnector)
 
-  ![custom connector](./CarbonBlackConnector/CarbonBlackListOfActions.png)
+  ![custom connector](.//Data%20Connectors/CarbonBlackListOfActions.png)
 
 * Three playbook templates leverage CarbonBlack custom connector:
 
