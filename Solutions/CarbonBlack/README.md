@@ -23,7 +23,7 @@ The Carbon Black Cloud is a cloud-native endpoint protection platform (EPP) that
 
 This package includes:
 
-* [Logic Apps custom connector for Carbon Black](./CarbonBlackConnector)
+* [Logic Apps custom connector for Carbon Black](./Data%20Connectors)
 
   ![custom connector](.//Data%20Connectors/CarbonBlackListOfActions.png)
 
