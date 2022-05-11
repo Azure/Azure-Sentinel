@@ -63,26 +63,31 @@ This connector supports API Key authentication. When creating the connection for
 1. Deploy the custom connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters for deploying custom connector and playbooks
 
+#### Custom Connector parameters
+
 | Parameters | Description |
 |----------------|--------------|
-|**For Custom Connector**|
-|**Custom Connector name**| Enter the custom connector name (e.g. CarbonBlackConnector)|
-|**Service Endpoint** | Enter the Carbon Black Cloud API endpoint (e.g. https://defense.conferdeploy.net)|
-|**For Playbooks**|
-|**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**| Enter the playbook name (e.g. CarbonBlack-TakeDeviceActionFromTeams)|
-|**CarbonBlack-DeviceEnrichment Playbook Name** | Enter the playbook name (e.g. CarbonBlack-QuarantineDevice)|
-|**CarbonBlack-QuarantineDevice Playbook Name** | Enter the playbook name (e.g. CarbonBlack-DeviceEnrichment)|
-|**OrganizationId** | Enter the OrganizationId|
-|**PolicyId** | Enter the pre-defined Carbon Black Policy Id to which the Microsoft Teams adaptive card will offer to move device|
-|**Teams GroupId** | Enter the Microsoft Teams channel id to send the adaptive card|
-|**Teams ChannelId** | Enter the Microsoft Teams Group id to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
+|**Custom Connector name**| Custom connector name (e.g. CarbonBlackConnector) |
+|**Service Endpoint** | Carbon Black Cloud API endpoint [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) |
 
-<br>
+#### Playbook parameters
+
+| Parameters | Description |
+|----------------|--------------|
+|**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**| Playbook name (e.g. CarbonBlack-TakeDeviceActionFromTeams) |
+|**CarbonBlack-DeviceEnrichment Playbook Name** | Playbook name (e.g. CarbonBlack-QuarantineDevice) |
+|**CarbonBlack-QuarantineDevice Playbook Name** | Playbook name (e.g. CarbonBlack-DeviceEnrichment) |
+|**Organization Id** | Carbon Black Cloud Organization Id [How to determine the Carbon Black organization Id](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key) |
+|**Policy Id** | Carbon Black Policy Id to which the Microsoft Teams adaptive card will offer to move device |
+|**Teams GroupId** | Microsoft Teams channel id to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps) |
+|**Teams ChannelId** | Microsoft Teams Group id to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps) |
+
+
 <a name="postdeployment">
 
 ### Post-Deployment instructions
 
-#### a. Authorize connections
+#### Authorize connections
 
 Once deployment is complete, you will need to authorize each connection.
 
@@ -95,7 +100,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 Note: To authorize the Carbon Black API connection, the API Key needs to be provided as a combination of the API Key and API ID.
 
-#### b. Sentinel configurations
+#### Sentinel configurations
 
 1. In Microsoft Sentinel analytics rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
