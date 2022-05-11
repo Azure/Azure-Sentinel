@@ -97,7 +97,7 @@ Note: To authorize the Carbon Black API connection, the API Key needs to be prov
 
 #### b. Sentinel configurations
 
-1. In Microsoft Sentinel analytics rules should be configured to trigger an incident with risky user account. 
+1. Microsoft Sentinel analytics rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
 
 <a name="limitations">

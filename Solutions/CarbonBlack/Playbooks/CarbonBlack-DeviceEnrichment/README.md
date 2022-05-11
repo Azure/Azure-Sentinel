@@ -4,8 +4,8 @@
 
  When a new Microsoft Sentinel incident is created, this playbook is triggered and performs the following actions:
 
- 1. Retrieves the devices information from Carbon Black.
- 2. Enrich the incident with device information by adding a comment to the incident.
+ 1. Retrieves the device information from Carbon Black Cloud.
+ 2. Enriches the incident with device information by adding a comment to the incident.
 
     ![Comment example](./images/IncidentComment.png)
 
@@ -54,32 +54,32 @@ Microsoft Sentinel incident is created. The playbook receives the incident as th
 
 ### Entities - Get Hosts
 
-Get the list of risky devices as entities from the Incident
+Gets list of risky devices as entities from the incident.
 
 ### Initialize variable to compose the devices information
 
-Initialize an array variable to format the license query and used as parameter while calling the search devices with organization API action
+Initializes an array variable to format the license query and used as parameter while calling the search devices with organization API action.
 
 ### Initialize variable to assign the Organization Id
 
-Initialize an string variable to assign the Organization Id provided by Client while deploying the playbook and used a parameter while calling the search devices with organization API action.
+Initializes a string variable to assign the Organization Id provided by Client while deploying the playbook and used a parameter while calling the search devices with organization API action.
 
 ### For each host
 
-This action will append each host to array variable called Hosts
+This action appends each host to array variable called Hosts.
 
 ### Join OR to the hosts
 
-This action will append logical OR operator to collected Hosts
+This action appends logical OR operator to collected Hosts.
 
 ### Search devices in your organization
 
-This action call API to search the devices in the organization by taking two parameters such as organization key and query [Query contains names of the devices]
+This action calls the API to search the devices in the organization by taking two parameters such as organization key and query (query contains names of the devices).
 
 ### Construct HTML table
 
-This action will construct the HTML table with devices information
+This action constructs the HTML table with devices information.
 
 ### Add a comment to the incident with the information
 
-This action will enrich the incident with the constructed HTML table with device information
+This action enriches the incident with the constructed HTML table with device information.

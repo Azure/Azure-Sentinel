@@ -1,11 +1,11 @@
 # CarbonBlack-QuarantineDevice Enrich Incident With device information
  ## Summary
 
- When a new Sentinel incident is created,this playbook gets triggered and performs following actions:
- 
-1. Retrieves the device information from Carbon Black.
-2. Quarantine the device
-3. Enrich the incident with device information by fetching from Carbon Black
+When a new Sentinel incident is created, this playbook gets triggered and performs following actions:
+
+1. Retrieves the device information from Carbon Black Cloud.
+2. Quarantines the device.
+3. Enriches the incident with device information from Carbon Black Cloud.
 
     ![CarbonBlack-Enrich Incident With devices information](./images/IncidentComment.png)
     ![CarbonBlack-Enrich Incident With device information](./images/designerOverviewLight1.png)<br>
@@ -54,40 +54,40 @@ Microsoft Sentinel incident is created. The playbook receives the incident as th
 
 ### Entities - Get Hosts
 
-Get the list of risky devices as entities from the Incident
+Gets list of risky devices as entities from the incident.
 
 ### Initialize variable to assign the Organization Id
 
-Initialize an string variable to assign the Organization Id provided by Client while deploying the playbook and used a parameter while calling the search devices with organization API action.
+Initializes an string variable to assign the Organization Id provided by Client while deploying the playbook and used a parameter while calling the search devices with organization API action.
 
 ### Initialize variable to assign the Carbon Black devices information
 
-Initialize an array variable to assign the Carbon Black devices used as source to format the HTML with the devices information
+Initializes an array variable to assign the Carbon Black devices used as source to format the HTML with the device information.
 
 ### Initialize variable to assign the quarantined devices information
 
-Initialize an array variable to assign the quarantined devices information used as source to format the HTML with the action takened devices information
+Initializes an array variable to assign the quarantined devices information used as source to format the HTML with the action takened device information.
 
 ### For each-hosts
 
-This action will perform the following actions:
+This action performs the following actions:
 
-  a. Make a call to Carbon Black API with the parameters [ Contains device name ]
-  b. Verify the Carbon Black returned the results and Check the device is quarantined
+  a. Make a call to Carbon Black API with the parameters [Contains device name].
+  b. Verify Carbon Black returned the results and verify the device is quarantined.
   c. If the device is not quarantined then isolate it.
 
 ### Construct HTML table - Carbon Black devices information
 
-This action will construct the HTML table with devices information
+This action constructs the HTML table with devices information.
 
 ### Construct HTML table - Quarantined devices through playbook
 
-This action will construct the HTML table with Quarantined devices through playbook
+This action constructs the HTML table with Quarantined devices through playbook.
 
 ### Add a comment to the incident with the information
 
-This action will enrich the incident with the constructed HTML table with devices information
+This action enriches the incident with the constructed HTML table with devices information.
 
 ### Close the comment
 
-This action will close the incident if there is no exceptions occurred while quarantining the devices
+This action closes the incident if there is no exceptions occurred while quarantining the devices.
