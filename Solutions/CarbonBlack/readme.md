@@ -49,7 +49,7 @@ This connector supports API Key authentication. When creating the connection for
 
 ### Carbon Black Prerequisites
 
-1. [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) (e.g. https://defense.conferdeploy.net) 
+1. [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) (e.g. https://defense.conferdeploy.net)
 2. Generate an API key ([learn how](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)), and grant it  **/appservices/** Access level.
 
   * The `/investigate/` Access level is also relevant for playbooks built from scratch and use the process API

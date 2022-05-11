@@ -13,29 +13,27 @@
  3. Add a comment to the incident with the information collected from the Carbon Black, summary of the actions taken and close the incident.
      ![Comment example](./images/Incident_Comment.png)
 
-
 ### Prerequisites
 
 1. Carbon Black Custom Connector needs to be deployed prior to the deployment of this playbook in the same subscription.
-2. Generate an API key. Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
-3. Find the organization key by referring this link [ Find Organization key by refering this link ](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
+2. Generate an API key. Refer this link [how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
+3. Find the organization key by referring this link. [Find the Carbon Black organization key.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
 
 ### Deployment instructions
 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters:
    - Playbook Name: Enter the playbook name here (Ex:CarbonBlack-TakeDeviceActionFromTeams)
-   - OrganizationKey: Enter the Organization key
-   - PolicyId: Enter the PolicyId
-   - Teams GroupId: Enter the Teams GroupId
-   - Teams ChannelId: Enter the Teams ChannelId
+   - OrganizationKey: Enter the Carbon Back organization key.
+   - PolicyId: Enter the Carbon Black policy Id to move devices.
+   - Teams GroupId: Enter the Microsoft Teams group Id.
+   - Teams ChannelId: Enter the Microsoft Teams channel Id.
   
-      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
+      [How to find the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCarbonBlack%2FSolutions%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json)
 
-
-### Post-Deployment instructions
+### Post-deployment instructions
 
 #### Authorize connections
 
@@ -46,10 +44,13 @@ Once deployment is complete, you will need to authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps two and three for the Carbon Black connector Connection to authorize connector API of the playbook (For authorizing the Carbon Black API connection, API Key needs to be provided. API Key Value is the combination of API Key / API ID)
-#### Configurations in Sentinel
+6. Repeat steps two and three for the Carbon Black connector Connection.
 
-1. In Sentinel analytical rules should be configured to trigger an incident with risky device.
+Note: To authore the Carbon Black API connection, the API Key needs to be provided as a combination of the API Key and API ID.
+
+#### Sentinel configuration
+
+1. Sentinel analytics rule should be configured to trigger an incident with risky device.
 2. Configure the automation rules to trigger this playbook
 
 ## Playbook steps explained
@@ -64,13 +65,13 @@ Get the list of risky devices as entities from the Incident
 
 ### Initialize the following variables:
 
-- PolicyId - Assign the pre-configured policyId value
-- OrganizationId - Assign the OrganizationId
+- PolicyId - Assign the pre-configured policy Id value
+- OrganizationId - Assign the Organization Id
 - Information - SOC will take the action based on the note
 - ActionSummary - Assign the summary of the actions taken by SOC
-- AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [ Each device information returned from Carbon Black ]
-- DeviceActions - Choice list contains actions information [ Quarantine, Update_Policy and Ignore ]
-- AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [ Each device information returned from Carbon Black ]
+- AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [Each device information returned from Carbon Black]
+- DeviceActions - Choice list contains actions information [Quarantine, Update_Policy and Ignore]
+- AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [Each device information returned from Carbon Black]
 - AdaptiveCardBody - Assing the dynamically prepared adaptive card body
 - Hosts - Assign the Hosts information 
 - CarbonBlackDeviceInformation - Assign the Carbon Black device information
@@ -81,10 +82,10 @@ Get the list of risky devices as entities from the Incident
 
 This action will perform the following actions:
 
-- Makes a call to Carbon Black API [ Contains device name ]
+- Makes a call to Carbon Black API [Contains device name]
 - Verifies the Carbon Black API response_mode
 - Checks if the device is quarantined or assigned to predefined policy
-- Prepares choice lists based on the response returned by API [ Quarantine, Update_Policy and Ignore ]
+- Prepares choice lists based on the response returned by API [Quarantine, Update_Policy and Ignore]
 
 ### Compose Incident information
 
