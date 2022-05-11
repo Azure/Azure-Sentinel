@@ -21,11 +21,21 @@ def send_chunks_to_queue(exportJobDetails):
         vuln_table = ExportsTableStore(
             connection_string, vuln_export_table_name)
         for chunk in chunks:
-            if vuln_table.get(exportJobId, chunk) is None:
-                vuln_table.post(exportJobId, str(chunk), {
-                    'jobStatus': TenableStatus.sending_to_queue.value,
-                    'jobType': TenableExportType.vuln.value
-                })
+            chunk_dtls = vuln_table.get(exportJobId, str(chunk))
+            if chunk_dtls:
+                current_chunk_status = chunk_dtls['jobStatus']
+                if (
+                    current_chunk_status == TenableStatus.sent_to_queue.value or
+                    current_chunk_status == TenableStatus.finished.value
+                ):
+                    logging.warn(f'Avoiding vuln chunk duplicate processing -- {exportJobId} {chunk}. Current status: {current_chunk_status}')
+                    continue
+
+            vuln_table.post(exportJobId, str(chunk), {
+                'jobStatus': TenableStatus.sending_to_queue.value,
+                'jobType': TenableExportType.vuln.value
+            })
+
             vuln_queue = ExportsQueue(connection_string, vuln_queue_name)
 
             try:
@@ -39,6 +49,11 @@ def send_chunks_to_queue(exportJobDetails):
                 logging.warn(
                     f'Failed to send {exportJobId} - {chunk} to be processed')
                 logging.warn(e)
+
+                vuln_table.merge(exportJobId, str(chunk), {
+                    'jobStatus': TenableStatus.sent_to_queue_failed.value,
+                    'jobType': TenableExportType.asset.value
+                })
     else:
         logging.info('no chunk found to process.')
         return
