@@ -207,14 +207,18 @@ for f in files:
             Parameters = ""
             for param in params:
                 logging.debug("Param: " + str(param))
-                try:
-                    if param['Type']=='string':
-                        Default = f"\'{param[Default]}\'"
-                    else:
-                        Default = param["Default"]   
-                    ParamString = f'{param["Name"]}:{param["Type"]}={Default}'
-                except:
-                    ParamString = f'{param["Name"]}:{param["Type"]}'
+                if param['Type'] == 'table':
+                    ParamString = param["Name"]
+                else:
+                    try:
+                        if param['Type']=='string':
+                            Default = f"\'{param[Default]}\'"
+                            
+                        else:
+                            Default = param["Default"]   
+                        ParamString = f'{param["Name"]}:{param["Type"]}={Default}'
+                    except:
+                        ParamString = f'{param["Name"]}:{param["Type"]}'
                 if Parameters != "":
                     Parameters = f'{Parameters},'
                 Parameters = Parameters + ParamString
