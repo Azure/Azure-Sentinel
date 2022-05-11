@@ -14,4 +14,4 @@ For more information about Log Analytics functions refer to:
 
 <br/>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/https%3A%2F%2Faka.ms%2FASimFunctionLibrary%2FASIM_GetDisabledParsers%2FASIM_GetDisabledParsers.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Faka.ms%2FASimFunctionLibrary%2FASIM_GetDisabledParsers%2FASIM_GetDisabledParsers.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2Fmaster%2FASIM%2FLibrary%2FARM%2FASIM_GetDisabledParsers%2FASIM_GetDisabledParsers.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2Fmaster%2FASIM%2FLibrary%2FARM%2FASIM_GetDisabledParsers%2FASIM_GetDisabledParsers.json)
