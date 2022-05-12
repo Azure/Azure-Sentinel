@@ -1,6 +1,6 @@
 # Microsoft ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Microsoft.
+ARM template for ASIM Dns schema parser for Microsoft.
 
 This function returns an empty ASIM DNS activity schema.
 

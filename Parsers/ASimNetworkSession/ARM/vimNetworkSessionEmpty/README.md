@@ -1,6 +1,6 @@
 # Microsoft ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Microsoft.
+ARM template for ASIM NetworkSession schema parser for Microsoft.
 
 This function returns an empty ASIM Network Session schema 
 
