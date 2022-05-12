@@ -3,11 +3,11 @@
 ![Carbon Black logo](./Data%20Connectors/CarbonBlack.PNG)
 
 > **Important**
-> 
-> The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` path should be deployed using the [Microsoft Sentinel content hub]('https://docs.microsoft.com/en-us/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed individually using the documentation below.
 >
-> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/en-us/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview'). The connector is required 
+> The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` path should be deployed using the [Microsoft Sentinel content hub]('https://docs.microsoft.com/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed individually using the documentation below.
 >
+> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview').
+>en
 
 ## Table of Contents
 
