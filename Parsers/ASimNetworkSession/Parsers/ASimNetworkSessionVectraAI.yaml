@@ -28,6 +28,9 @@ ParserQuery: |
       true, false, 'Outbound',
       true, true, 'Local',
       false, false, 'External'];
+    let EventSubTypeLookup = datatable(conn_state_s:string, EventSubType:string)[
+      "S1", 'Start',
+      "SF", 'End'];
     let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
     VectraStream_CL
     | where metadata_type_s == 'metadata_isession'
@@ -36,13 +39,25 @@ ParserQuery: |
         DvcDescription = hostname_s,
         DstDescription = resp_hostname_s,
         SrcDescription = orig_hostname_s,
-        DstDvcId = resp_huid_s,
-        SrcDvcId = orig_huid_s,
+        // -- huid does not seem to be unique per device and not mapped for now
+        // DstDvcId = resp_huid_s, 
+        // SrcDvcId = orig_huid_s,
         DvcId = sensor_uid_s,
-        NetworkSessionId = community_id_s,
+        // -- community id is just a hash of addresses and ports, and not unique for the session
+        // NetworkSessionId = community_id_s,
         SrcIpAddr = id_orig_h_s
+    | extend SplitRespDomain = split(resp_domain_s,".")
+    | extend 
+        DstDomain = tostring(strcat_array(array_slice(SplitRespDomain, 1, -1), '.')),
+        DstFQDN = iif (array_length(SplitRespDomain) > 1, resp_domain_s, ''),
+        DstDomainType = iif (array_length(SplitRespDomain) > 1, 'FQDN', '')
     | extend
-        DstHostname = iff (DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "", DstDescription),
+        DstHostname = case (
+            resp_domain_s != "", tostring(SplitRespDomain[0]),
+            DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "",
+            DstDescription)
+    | project-away SplitRespDomain
+    | extend
         SrcHostname = iff (SrcDescription startswith "IP-" or not(SrcDescription matches regex HostnameRegex), "", SrcDescription),
         DvcHostname = iff (DvcDescription startswith "IP-" or not(DvcDescription matches regex HostnameRegex), "", DvcDescription),
         NetworkApplicationProtocol = toupper(service_s),
@@ -55,7 +70,7 @@ ParserQuery: |
         DstVlanId = tostring(toint(resp_vlan_id_d)),
         EventCount = toint(1),
         EventEndTime = unixtime_milliseconds_todatetime(ts_d),
-        EventOriginalSubType = split(metadata_type_s, '_')[1],
+        EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),
         EventProduct = 'Vectra Stream',
         EventResult = 'Success',
         EventSchema = 'NetworkSession',
@@ -68,14 +83,15 @@ ParserQuery: |
         SrcPackets = tolong(orig_pkts_d),
         SrcPortNumber = toint(id_orig_p_d),
         SrcVlanId = tostring(toint(orig_vlan_id_d)),
-        SrcDvcIdType = 'VectraId',
-        DstDvcIdType = 'VectraId',
+        // -- No ID mapped, since huid found not to be unique
+        // SrcDvcIdType = 'VectraId',
+        // DstDvcIdType = 'VectraId',
         DvcIdType = 'VectraId',
         NetworkDuration = toint(duration_d)
     | extend 
         Hostname = DstHostname,
         IpAddr = SrcIpAddr,
-        SessionId = NetworkSessionId,
+        // SessionId = NetworkSessionId,
         Src = SrcIpAddr,
         Dvc = DvcId,
         Duration = NetworkDuration,
@@ -84,7 +100,24 @@ ParserQuery: |
         NetworkPackets = SrcPackets + DstPackets,
         OuterVlanId = DstVlanId
     | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
+    | lookup EventSubTypeLookup on conn_state_s
+    // -- preserving non-normalized important fields
+    | project-rename 
+        first_orig_resp_data_pkt = first_orig_resp_data_pkt_s,
+        first_resp_orig_data_pkt = first_resp_orig_data_pkt_s,
+        orig_sluid = orig_sluid_s, 
+        resp_sluid = resp_sluid_s,
+        orig_huid = orig_huid_s,
+        resp_huid = resp_huid_s,
+        community_id = community_id_s,
+        resp_multihome = resp_multihomed_b,
+        host_multihomed = host_multihomed_b
+    | extend
+        first_orig_resp_data_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
+        first_orig_resp_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
+        first_resp_orig_data_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
+        first_resp_orig_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
     | project-away
-        *_d, *_s, *_b, *_g
+        *_d, *_s, *_b, *_g, Computer
   };
   parser (disabled)
