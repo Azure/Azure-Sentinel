@@ -1,6 +1,13 @@
 # VMware Carbon Black Cloud Solution
 
-<img src="./Data%20Connectors/CarbonBlack.PNG" alt="drawing" width="20%"/><br>
+![Carbon Black logo](./Data%20Connectors/CarbonBlack.PNG)
+
+> **Important**
+> 
+> The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` path should be deployed using the [Microsoft Sentinel content hub]('https://docs.microsoft.com/en-us/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed individually using the documentation below.
+>
+> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/en-us/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview'). The connector is required 
+>
 
 ## Table of Contents
 
@@ -16,8 +23,6 @@
 ## Overview
 
 The Carbon Black Cloud is a cloud-native endpoint protection platform (EPP) that provides what you need to secure your endpoints using a single, lightweight agent and an easy-to-use console.
-
-This solution requires that the Sentinel Carbon Black Data connector is installed to retreive log information. This solution includes an additional Carbon Black data connector to enable the enrichment and SOAR features in the playbooks. It does not replace the Sentinel Carbon Black connector.
 
 <a name="deployall">
 ## Manually Deploy Custom Connector + three playbook templates
