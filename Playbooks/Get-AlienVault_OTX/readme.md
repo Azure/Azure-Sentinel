@@ -1,4 +1,4 @@
-# Get-AlienValut_OTX_V2
+# Get-AlienVault_OTX_V2
 author: Andrew Blumhardt
 
 This is a Logic App to import threat indicators from AlienVault into Azure Sentinel using the Graph Security API.
