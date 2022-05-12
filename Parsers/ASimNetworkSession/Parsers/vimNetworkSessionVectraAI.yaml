@@ -45,99 +45,85 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let parser = (
-    starttime:datetime=datetime(null), 
-    endtime:datetime=datetime(null), 
-    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
-    dstipaddr_has_any_prefix:dynamic=dynamic([]), 
-    dstportnumber:int=int(null), 
-    hostname_has_any:dynamic=dynamic([]), 
-    dvcaction:dynamic=dynamic([]), 
-    eventresult:string='*', 
-    disabled:bool=false)
+  let parser = (starttime: datetime = datetime(null),
+                endtime: datetime = datetime(null),
+                srcipaddr_has_any_prefix: dynamic = dynamic([]),
+                dstipaddr_has_any_prefix: dynamic = dynamic([]),
+                dstportnumber: int = int(null),
+                hostname_has_any: dynamic = dynamic([]),
+                dvcaction: dynamic = dynamic([]),
+                eventresult: string = '*',
+                disabled: bool = false)
   {
-    let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)[
-      false, true, 'Inbound',
-      true, false, 'Outbound',
-      true, true, 'Local',
-      false, false, 'External'];
-    let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
+      let NetworkDirectionLookup = datatable(local_orig_b: bool,
+                                            local_resp_b: bool,
+                                            NetworkDirection: string)
+    [
+        false, true, 'Inbound',
+        true, false, 'Outbound',
+        true, true, 'Local',
+        false, false, 'Local'
+    ];
     VectraStream_CL
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
     | where metadata_type_s == 'metadata_isession'
-      // -- Pre-filtering:
-        | where
-            eventresult  in ("*", "Success") 
-            and array_length(dvcaction) == 0
-            and (starttime == datetime(null) or TimeGenerated >= starttime)
-            and (endtime == datetime(null) or TimeGenerated <= endtime)
-            and (
-                array_length(srcipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(id_orig_h_s,srcipaddr_has_any_prefix)
-            )
-            and (
-                array_length(dstipaddr_has_any_prefix) == 0 
-                or has_any_ipv4_prefix(id_resp_h_s,dstipaddr_has_any_prefix)
-            )
-            and (dstportnumber==int(null) or id_resp_p_d == dstportnumber)
-            and (
-                array_length(hostname_has_any)==0 
-                or Computer has_any (hostname_has_any)
-            )
-        // -- End pre-filtering
-  | project-rename
+    | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(id_orig_h_s, srcipaddr_has_any_prefix))
+    | where (array_length(dstipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(id_resp_h_s, dstipaddr_has_any_prefix))
+    | where (isnull(dstportnumber) or dstportnumber == toint(id_resp_p_d))
+    | where (array_length(hostname_has_any) == 0 or resp_hostname_s has_any(hostname_has_any))
+    | where array_length(dvcaction) == 0
+    | where (eventresult == '*' or 'Success' =~ eventresult)
+    | project-rename
+        DstHostname = resp_hostname_s,
         DstIpAddr = id_resp_h_s,
-        DvcDescription = hostname_s,
-        DstDescription = resp_hostname_s,
-        SrcDescription = orig_hostname_s,
-        SrcDvcId = orig_huid_s,
-        DstDvcId = resp_huid_s,
-        DvcId = sensor_uid_s,
+        Dvc = hostname_s,
+        EventOriginalUid = uid_s,
+        NetworkApplicationProtocol = service_s,
+        NetworkProtocol = protoName_s,
+        NetworkProtocolVersion = id_ip_ver_s,
         NetworkSessionId = community_id_s,
+        SrcHostname = orig_hostname_s,
         SrcIpAddr = id_orig_h_s
     | extend
-        DstHostname = iff (DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "", DstDescription),
-        SrcHostname = iff (SrcDescription startswith "IP-" or not(SrcDescription matches regex HostnameRegex), "", SrcDescription),
-        DvcHostname = iff (DvcDescription startswith "IP-" or not(DvcDescription matches regex HostnameRegex), "", DvcDescription),
-        NetworkApplicationProtocol = toupper(service_s),
-        NetworkProtocol = toupper(protoName_s),
-        NetworkProtocolVersion = toupper(id_ip_ver_s),
-        Dst = DstIpAddr,
         DstBytes = tolong(resp_ip_bytes_d),
         DstPackets = tolong(resp_pkts_d),
         DstPortNumber = toint(id_resp_p_d),
         DstVlanId = tostring(toint(resp_vlan_id_d)),
         EventCount = toint(1),
-        EventEndTime = unixtime_milliseconds_todatetime(ts_d),
-        EventOriginalSubType = split(metadata_type_s, '_')[1],
+        EventStartTime = unixtime_milliseconds_todatetime(ts_d),
         EventProduct = 'Vectra Stream',
         EventResult = 'Success',
+        EventResultDetails = '',
         EventSchema = 'NetworkSession',
         EventSchemaVersion='0.2.2',
         EventSeverity = 'Informational',
-        EventStartTime = unixtime_milliseconds_todatetime(session_start_time_d),
         EventType = 'NetworkSession',
         EventVendor = 'Vectra AI',
-        SrcDvcIdType = 'VectraId',
-        DstDvcIdType = 'VectraId',
-        DvcIdType = 'VectraId',
+        NetworkDuration = toint(duration_d),
         SrcBytes = tolong(orig_ip_bytes_d),
         SrcPackets = tolong(orig_pkts_d),
         SrcPortNumber = toint(id_orig_p_d),
-        SrcVlanId = tostring(toint(orig_vlan_id_d)),
-        NetworkDuration = toint(duration_d)
-    | extend 
-        Hostname = DstHostname,
-        IpAddr = SrcIpAddr,
-        SessionId = NetworkSessionId,
-        Src = SrcIpAddr,
-        Dvc = DvcId,
-        Duration = NetworkDuration,
-        InnerVlanId = SrcVlanId,
-        NetworkBytes = SrcBytes + DstBytes,
-        NetworkPackets = SrcPackets + DstPackets,
-        OuterVlanId = DstVlanId
+        SrcVlanId = tostring(toint(orig_vlan_id_d))
+    | extend
+        EventEndTime = case(isnotempty(NetworkDuration),
+        EventStartTime + (NetworkDuration * 1s),
+        EventStartTime)
     | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
     | project-away
         *_d, *_s, *_b, *_g
+    | extend
+        Duration = NetworkDuration,
+        Dst = DstIpAddr,
+        Hostname = DstHostname,
+        InnerVlanId = SrcVlanId,
+        IpAddr = SrcIpAddr,
+        NetworkBytes = SrcBytes + DstBytes,
+        NetworkPackets = SrcPackets + DstPackets,
+        OuterVlanId = DstVlanId,
+        SessionId = NetworkSessionId,
+        Src = SrcIpAddr
+    | project-reorder * asc
   };
-  parser  (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
