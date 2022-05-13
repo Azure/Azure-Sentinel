@@ -104,14 +104,14 @@ This connector supports API Key authentication. When creating the connection for
 
 #### Authorize connections
 
-Once deployment is complete, you will need to authorize each connection within the deployed Logic Apps.
+Once the playbook is deployed, edit the Logic App and authorize each Carbon Black Cloud and Microsoft Teams connection.
 
-1. Click the Microsoft Sentinel connection resource
-2. Click edit API connection
+1. Click the connection resource
+2. Click edit or create new API connection
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps for other connections such as Teams connection and CarbonBlack connector API Connection
+6. Repeat steps for other connections such as the Microsoft Teams connection and Carbon Black connector connection.
 
 > *Note*
 > The API Key must be provided as a combination {API Key}/{API ID}.

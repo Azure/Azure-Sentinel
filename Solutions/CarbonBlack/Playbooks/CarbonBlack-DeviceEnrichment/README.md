@@ -50,7 +50,7 @@
 
 Once the playbook is deployed, edit the Logic App and authorize each Carbon Black Cloud connection.
 
-1. Click the Microsoft Sentinel connection resource
+1. Click the connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
