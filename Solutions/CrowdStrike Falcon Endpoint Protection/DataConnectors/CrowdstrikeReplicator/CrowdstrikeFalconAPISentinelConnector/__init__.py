@@ -83,6 +83,7 @@ def customize_event(line):
             custom_fields_data[key] = value
     event = required_fields_data
     custom_fields_data_text = str(json.dumps(custom_fields_data))
+    logging.info("event_simpleName : " + element.get("event_simpleName") + " ClientComputerName : " + element.get("ClientComputerName", "EMPTY") + " ComputerName : " + element.get("ComputerName", "EMPTY"))
     if custom_fields_data_text != "{}":
         event["custom_fields_message"] = custom_fields_data_text
     return event
