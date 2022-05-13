@@ -1,0 +1,66 @@
+id: 6267ce44-1e9d-471b-9f1e-ae76a6b7aa84
+name: Mass Download & copy to USB device by single user
+description: |
+  'This query looks for any mass download by a single user with possible file copy activity to a new USB drive. Malicious insiders may perform such activities that may cause harm to the organization. 
+  This query could also reveal unintentional insider that had no intention of malicious activity but their actions may impact an organizations security posture.
+  Reference:https://docs.microsoft.com/defender-cloud-apps/policy-template-reference'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+      - DeviceFileEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1052
+query: |
+  SecurityAlert
+  | where AlertName =~ "mass download by a single user"
+  | extend Extprop = parse_json(ExtendedProperties)
+  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
+  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
+  | extend IpAddress = tostring(parse_json(ExtendedProperties).["IpAddress"]) 
+  | project timestamp=TimeGenerated, AlertName, Computer, Account, IpAddress, ExtendedProperties
+  | join kind=inner
+  ( 
+  DeviceEvents
+  | where  ActionType == "PnpDeviceConnected"
+  | extend parsed = parse_json(AdditionalFields)
+  | project DeviceId, DriveClass = tostring(parsed.ClassName), UsbDeviceId = tostring(parsed.DeviceId), ClassId = tostring(parsed.DeviceId), DeviceDescription = tostring(parsed.DeviceDescription), VendorIds = tostring(parsed.VendorIds), AccountDomain,AccountName,TimeGenerated, ActionType, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, Type
+  | where DriveClass == 'USB' and DeviceDescription == 'USB Mass Storage Device'
+  ) on $left.Account == $right.AccountName
+  | join kind=inner 
+  (
+  DeviceFileEvents
+  | where FolderPath !startswith "c" and FolderPath !startswith @"\"
+  )  on DeviceId
+  | project  TimeGenerated, ActionType, Computer, FileName, FileSize, IpAddress, InitiatingProcessCommandLine, InitiatingProcessFileName, Account
+  | extend timestamp = TimeGenerated, CompromisedEntity = Computer, AccountCustomEntity=Account, ProcessCustomEntity = InitiatingProcessFileName, IPCustomEntity=IpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: CompromisedEntity
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+version: 1.0.0
+kind: Scheduled

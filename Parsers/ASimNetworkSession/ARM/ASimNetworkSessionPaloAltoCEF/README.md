@@ -1,6 +1,6 @@
 # Palo Alto PanOS ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Palo Alto PanOS.
+ARM template for ASIM NetworkSession schema parser for Palo Alto PanOS.
 
 This ASIM parser supports normalizing Palo Alto PanOS logs produced by the Microsoft Sentinel Palo Alto Networks connector to the ASIM Network Session normalized schema.
 
