@@ -1,13 +1,13 @@
 # VMware Carbon Black Cloud Solution
 
-![Carbon Black logo](./Data%20Connectors/CarbonBlack.PNG)
-
 > **Important**
 >
 > The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` should be deployed from the [Microsoft Sentinel content hub]('https://docs.microsoft.com/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed using the documentation below.
 >
 > This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview').
 >
+
+![Carbon Black logo](./Data%20Connectors/CarbonBlack.PNG)
 
 ## Table of Contents
 
@@ -45,23 +45,34 @@ You can choose to deploy the whole package (Connector and all three playbook tem
 
     [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json)
 
-## Carbon Black connector documentation
+## Carbon Black Logic Apps custom connector
 
 <a name="authentication">
 ## Authentication
 
-This connector supports API Key authentication. When creating the connection for the custom connector, you will be asked to provide the API key which you generated in Carbon Black platform. [API Key authentication](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key).
+This connector supports API Key authentication. When creating the connection for the custom connector, you must provide the API Secret and API key which you generated in Carbon Black Cloud console. [API Key authentication](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key).
+
+> *Note*
+> The API Key must be provided as a combination {API Key}/{API ID}.
 
 <a name="prerequisites">
 
-### Carbon Black Prerequisites
+### Carbon Black Cloud prerequisites
 
-1. [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) (e.g. https://defense.conferdeploy.net)
-2. Generate an API key ([learn how](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)), and grant it  **/appservices/** Access level.
+1. Know your Carbon Black Cloud API service endpoint. [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) (e.g. https://defense.conferdeploy.net)
+2. Know your Carbon Black Org Key [Where is the Carbon Black Org Key found?](https://community.carbonblack.com/t5/Knowledge-Base/Carbon-Black-Cloud-Where-is-the-Org-Key-Found/ta-p/80970)
+3. Create a custom Access level with the following minimum access:
 
-  * The `/investigate/` Access level is also relevant for playbooks built from scratch and use the process API
-
-3. For Response from Teams playbook, a policy needs to be created, so SOC will be able to move a device to it from the Teams adaptive card.
+   * Device > General Information > “device” allow permissions for “READ”
+   * Device > Policy assignment > “device.policy” allow permissions for “UPDATE”
+   * Device > Quarantine > “device.quarantine” allow permissions for “EXECUTE”
+   * Search > Events > “org.search.events”, allow permission to CREATE to start a job, READ to get results, DELETE to cancel a search and UPDATE for watchlist actions.
+   * Alerts > General Information > “org.alerts” allow permissions for “READ”
+   * Alerts > Dismiss > “org.alerts.dismiss” allow permissions for “EXECUTE”
+   * Alerts > Notes > “org.alerts.notes” allow permissions for “CREATE”, “READ”, and “DELETE”
+  
+4. Create an API key and secret using the Access Level type "Custom", and the Access Level you created. [How to generate a Carbon Black Cloud API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
+5. (Optional) Create a Carbon Black device policy for which to move devices, when requested from the Microsoft Teams playbook.
 
 <a name="deployment">
 ### Deployment instructions
@@ -83,10 +94,10 @@ This connector supports API Key authentication. When creating the connection for
 |**CarbonBlack-TakeDeviceActionFromTeams Playbook Name**| Playbook name (e.g. CarbonBlack-TakeDeviceActionFromTeams) |
 |**CarbonBlack-DeviceEnrichment Playbook Name** | Playbook name (e.g. CarbonBlack-QuarantineDevice) |
 |**CarbonBlack-QuarantineDevice Playbook Name** | Playbook name (e.g. CarbonBlack-DeviceEnrichment) |
-|**Organization Id** | Carbon Black Cloud Organization Id [How to determine the Carbon Black organization Id](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key) |
+|**Org Key** | Carbon Black Cloud Org Key [Where is the Carbon Black Org Key found?](https://community.carbonblack.com/t5/Knowledge-Base/Carbon-Black-Cloud-Where-is-the-Org-Key-Found/ta-p/80970) |
 |**Policy Id** | Carbon Black Policy Id to which the Microsoft Teams adaptive card will offer to move device |
-|**Teams GroupId** | Microsoft Teams channel id to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps) |
-|**Teams ChannelId** | Microsoft Teams Group id to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps) |
+|**Teams GroupId** | Microsoft Teams group to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps) |
+|**Teams ChannelId** | Microsoft Teams channel to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps) |
 
 <a name="postdeployment">
 ### Post-Deployment instructions
@@ -102,7 +113,8 @@ Once deployment is complete, you will need to authorize each connection within t
 5. Click Save
 6. Repeat steps for other connections such as Teams connection and CarbonBlack connector API Connection
 
-Note: To authorize the Carbon Black API connection, the API Key needs to be provided as a combination of the API Key and API ID.
+> *Note*
+> The API Key must be provided as a combination {API Key}/{API ID}.
 
 #### Sentinel configurations
 

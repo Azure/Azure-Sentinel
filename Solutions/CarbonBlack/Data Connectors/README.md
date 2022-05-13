@@ -1,22 +1,42 @@
 # VMware Carbon Black Logic App custom connector
 
+> **Important**
+>
+> The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` should be deployed from the [Microsoft Sentinel content hub]('https://docs.microsoft.com/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed using the documentation below.
+>
+> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview').
+>
+
 <img src="./CarbonBlack.PNG" alt="drawing" width="20%"/><br>
 
-This custom connector connects to Carbon Black cloud end point and performs different actions on alerts, devices and threats using CarbonBlack cloud endpoint API.
+This Logic App custom connector connects to Carbon Black cloud end point and performs different actions on alerts, devices and threats using CarbonBlack cloud endpoint API.
 
-## Supported authentication methods
+## Authentication methods
 
-* API key authentication
+API key authentication is the only supported authentication method. 
 
-## Carbon Black Prerequisites
+## Carbon Black Cloud connector prerequisites
 
-1. [Determine the Carbon Black Cloud API service endpoint URL.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) (e.g. https://dashboard.confer.net)
-2. Generate an API key. [Refer this link on how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key) with the required access level.
+1. The Carbon Black custom connector must be already be deployed in same subscription as this playbook.
+2. Know your Carbon Black Cloud API service endpoint. [Determine your Carbon Black Cloud API service endpoint.](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#building-your-base-urls) (e.g. https://defense.conferdeploy.net)
+3. Know your Carbon Black Org Key [Where is the Carbon Black Org Key found?](https://community.carbonblack.com/t5/Knowledge-Base/Carbon-Black-Cloud-Where-is-the-Org-Key-Found/ta-p/80970)
+4. Create a custom Access level with the following minimum access:
+
+   * Device > General Information > “device” allow permissions for “READ”
+   * Device > Policy assignment > “device.policy” allow permissions for “UPDATE”
+   * Device > Quarantine > “device.quarantine” allow permissions for “EXECUTE”
+   * Search > Events > “org.search.events”, allow permission to CREATE to start a job, READ to get results, DELETE to cancel a search and UPDATE for watchlist actions.
+   * Alerts > General Information > “org.alerts” allow permissions for “READ”
+   * Alerts > Dismiss > “org.alerts.dismiss” allow permissions for “EXECUTE”
+   * Alerts > Notes > “org.alerts.notes” allow permissions for “CREATE”, “READ”, and “DELETE”
+  
+5. Create an API key and API Secret using the Access Level type "Custom", and the Access Level you created. [How to generate a Carbon Black Cloud API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
+
 
 | **Connector actions** | **API** | **Service Category** | **API Key Access Level(s) Permitted** |
 | --------- | -------------- | ----------------- | ------------------------------------ |
-| Get endpoints info, Quarantine device, Update policy for a device, Dismiss an alert, Add a note to an alert | Alerts API, Devices API | /appservices/ | Custom (must add an access level with appropriate permissions) |
-| Search processes actions | Platform Search API for Processes | /investigate/ | Custom (must add an access level with appropriate permissions) |
+| Get endpoints info, Quarantine device, Update policy for a device, Dismiss an alert, Add a note to an alert | Alerts API, Devices API | `/appservices/` | Custom (must add an access level with appropriate permissions) |
+| Search processes actions | Platform Search API for Processes | `/investigate/` | Custom (must add an access level with appropriate permissions) |
 
 ## Actions supported by Carbon Black custom connector
 
@@ -35,7 +55,7 @@ This custom connector connects to Carbon Black cloud end point and performs diff
 
 1. Deploy the custom connector by clicking on "Deploy to Azure" button. This will take you to the Deploy an ARM Template wizard.
 2. Fill in the required parameters:
-
+  
   * Custom connector Name: Enter the custom connector name (e.g. CarbonBlackCloudConnector)
   * Service Endpoint: Enter the Carbon Black Cloud API service endpoint (e.g. https://dashboard.confer.net )
 
