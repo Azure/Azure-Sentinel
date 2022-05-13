@@ -67,10 +67,12 @@ Therefore [installation of the On-Premises Data Gateway](https://docs.microsoft.
 | **For Connector**       |
 | **API Hostname**        | Hostname of TheHive instance                            |
 | **API Port**            | Port number of TheHive API. By default 9000.            |
+| **Http scheme**         | Http scheme for TheHive API.                            |
 | **For Playbooks**       |
 | **TheHive-CreateAlert** | Enter the playbook name here (e.g. TheHive-CreateAlert) |
 | **TheHive-CreateCase**  | Enter the playbook name here (e.g. TheHive-CreateCase)  |
 | **TheHive-LockUser**    | Enter the playbook name here (e.g. TheHive-LockUser)    |
+| **onPremiseGatewayName** | Provide the On-premises data gateway that will be used with The Hive connector. Data gateway should be deployed under the same subscription and resource group as playbooks. |
 
 <br>
 <a name="postdeployment">
