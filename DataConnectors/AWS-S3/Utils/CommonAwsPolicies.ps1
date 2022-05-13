@@ -122,32 +122,42 @@ param (
 	[Parameter(position=2)]
 	[ValidateNotNullOrEmpty()]
 	[string]
-	$SqsArn
+	$SqsArn,
+	[Parameter()]
+	[bool]
+	$IsCustomLog
 )  
+	$SqsSuffix = ""
+
+	if($true -ne $IsCustomLog)
+	{
+		$SqsSuffix = ",{
+						'Name': 'suffix',
+						'Value': '.gz'
+						}"
+	}
+
 
 	$sqsEventConfig = "
-   {
-	   'QueueConfigurations': [
-			{
-			  'Id':'$EventNotificationName',
-			  'QueueArn': '$SqsArn',
-			  'Events': ['s3:ObjectCreated:*'],
-			  'Filter': {
-				'Key': {
-				  'FilterRules': [
-					{
-					  'Name': 'prefix',
-					  'Value': '$EventNotificationPrefix'
-					},
-					{
-					  'Name': 'suffix',
-					  'Value': '.gz'
+	{
+		'QueueConfigurations': [
+				{
+				'Id':'$EventNotificationName',
+				'QueueArn': '$SqsArn',
+				'Events': ['s3:ObjectCreated:*'],
+				'Filter': {
+					'Key': {
+					'FilterRules': [
+						{
+						'Name': 'prefix',
+						'Value': '$EventNotificationPrefix'
+						}
+						$SqsSuffix
+					]
 					}
-				  ]
 				}
-			  }
-			}
-		]
+				}
+			]
 	}"
 
 	return $sqsEventConfig.Replace("'",'"')
@@ -181,7 +191,7 @@ param (
             'Principal': {
                 'AWS': '$RoleArn'
             },
-            'Action': ['s3:Get*','s3:List*'],
+            'Action': ['s3:GetObject'],
             'Resource': 'arn:aws:s3:::$BucketName/*'
         }]}"
 			

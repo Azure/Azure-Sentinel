@@ -1,0 +1,225 @@
+print Topic = "l33tSpeak: Advanced hunting in Microsoft 365 Defender" 
+    , Presenters = pack_array("Sebastien Molendijk, Michael Melone, Tali Ash")
+    , Company = "Microsoft" 
+    , Date = todatetime("10 MAY 2021") 
+
+///////////////////////  
+// Working with the dynamic type  
+// ref: https://docs.microsoft.com/azure/data-explorer/kusto/query/scalar-data-types/dynamic  
+///////////////////////  
+
+// Dynamic is an object oriented format for storing structured data.  
+// Dynamics are usually converted from JSON strings using either todynamic() or parse_json() (same function)  
+// You can also convert XML into a dynamic by using parse_xml()  
+
+let JsonString = '{"hello": 1337, "world": ["wibble","wobble","wubble"]}';
+print todynamic(JsonString)  
+
+// There are a number of ways you can interact with elements stored as dynamic() typed objects.  
+// Interacting with child elements  
+// - Column.Child  
+// - Column[“Child”]  
+  
+let JsonString = '{"hello": 1337, "world": ["wibble","wobble","wubble"]}';
+print x = todynamic(JsonString)  
+| extend hello = x.hello, world = x["world"]  
+
+// Interacting with lists \ arrays  
+// Column[ElementNumber]  
+  
+let JsonString = '{"hello": 1337, "world": ["wibble","wobble","wubble"]}';
+print x = todynamic(JsonString)  
+| extend hello = x.hello, world = x["world"]  
+| extend FirstElement = world[0], SecondElement = world[1]  
+
+// The information on the actor initiating the activities can be found in AccountObjectId and AccountDisplayName columns.  
+// To get the target account and the activities were performed we can extract information from RawEventData 
+
+CloudAppEvents 
+| where ActionType == "AddedToGroup" 
+| take 50 
+| project-reorder AccountObjectId, AccountDisplayName, RawEventData
+
+CloudAppEvents 
+| where ActionType == "AddedToGroup" 
+| project Timestamp, Application, IPAddress, Actor = AccountDisplayName, AddedUser = RawEventData.TargetUserOrGroupName 
+
+CloudAppEvents 
+| where ActionType == "AddedToGroup" 
+| project Timestamp, Application, IPAddress, Actor = AccountDisplayName, AddedUser = RawEventData["TargetUserOrGroupName"] 
+
+
+//////////////////////////////
+// pack_array()
+// ref: https://docs.microsoft.com/azure/data-explorer/kusto/query/packarrayfunction  
+// Creates a dynamic array
+//////////////////////////////
+
+// Lists, sets, and arrays in KQL are stored as dynamics and can be created  
+// with functions such as pack_array()  
+
+print pack_array('foo','bar','baz')  
+
+// Note that you cannot simply compare dynamic elements in KQL. To do this,
+// convert them back to another type using functions such as tostring() or toint()
+
+let JsonDynamic = todynamic('{"hello": 1337, "world": ["wibble","wobble","wubble"]}');
+print tostring(JsonDynamic.hello) == tostring(JsonDynamic['hello'])  
+
+////////////////////////  
+// bag_unpack()  
+// ref: https://docs.microsoft.com/azure/data-explorer/kusto/query/bag-unpackplugin  
+// Automatically unpacks the first level of a dynamic to a table  
+////////////////////////  
+
+// Another option is to use bag_unpack() to turn JSON data directly into a table.  
+// Note that bag_unpack() only processes the first level of JSON. If you have   
+// multiple nested JSON elements you may need multiple calls to the function.  
+  
+let JsonDynamic = todynamic('{"hello": 1337, "world": ["wibble","wobble","wubble"]}');
+print x = JsonDynamic
+| evaluate bag_unpack(x)
+
+/////////////////////////////
+// mv-expand  
+// ref: https://docs.microsoft.com/azure/data-explorer/kusto/query/mvexpandoperator  
+// Multiplies elements in a dynamic array across a tabular dataset  
+/////////////////////////////  
+
+
+// You can also use functions such as mv-expand to parse elements in a dynamic
+// across a table. This is very handy for efficiently analyzing lists of
+// elements at scale
+
+// Let’s put bag_unpack() and mv-expand together.  
+  
+let JsonDynamic = todynamic('{"hello": 1337, "world": ["wibble","wobble","wubble"]}');
+print x = JsonDynamic
+| evaluate bag_unpack(x)
+| mv-expand world
+
+// With mv-expand we can extract the Group the user was added to.  
+// The easiest is to extract it from ActivityObjects column 
+
+CloudAppEvents 
+| where ActionType == "AddedToGroup" 
+| mv-expand ActivityObjects    
+| where ActivityObjects['Type'] == ('Group') 
+| project Timestamp, Application, IPAddress, Actor = AccountDisplayName, AddedUser = RawEventData.TargetUserOrGroupName, Group = ActivityObjects.Name 
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+
+//////////////////////////////  
+// startofday() function  
+// ref: https://docs.microsoft.com/azure/data-explorer/kusto/query/startofdayfunction  
+// Returns the time at the start of a day, with an optional time offset  
+//////////////////////////////  
+
+// KQL time filters and functions are UTC  
+// Returns the start of the day containing the date, shifted by an offset of days, if provided.  
+
+print startofday(datetime(2021-01-01 10:10:17))  
+
+IdentityInfo | where AccountUpn == 'meganb@seccxp.ninja'   
+
+let timeToSearch = startofday(datetime('2021-05-04'));    
+AADSignInEventsBeta     
+| where AccountObjectId == 'eababd92-9dc7-40e3-9359-6c106522db19' and Timestamp >= timeToSearch     
+| distinct Application, ResourceDisplayName, Country, City, IPAddress, DeviceName, DeviceTrustType, OSPlatform, IsManaged, IsCompliant, AuthenticationRequirement, RiskState, UserAgent, ClientAppUsed   
+
+// Step 1: understand the performed actions   
+let accountId = 'eababd92-9dc7-40e3-9359-6c106522db19';    
+let locations = pack_array('SG', 'DE', 'IE', 'AL', 'UK');    
+let timeToSearch = startofday(datetime('2021-05-04'));    
+CloudAppEvents    
+| where AccountObjectId == accountId and CountryCode in (locations) and Timestamp >= timeToSearch     
+| summarize by ActionType, CountryCode, AccountObjectId     
+| sort by ActionType asc   
+
+// Step 2: review the accessed emails   
+let accountId = 'eababd92-9dc7-40e3-9359-6c106522db19';    
+let locations = pack_array('SG', 'DE', 'IE', 'AL', 'UK');    
+let timeToSearch = startofday(datetime('2021-05-04'));    
+CloudAppEvents    
+| where ActionType == 'MailItemsAccessed' and CountryCode in (locations) and AccountObjectId == accountId and Timestamp >= timeToSearch    
+| mv-expand todynamic(RawEventData.Folders)     
+| extend Path = todynamic(RawEventData_Folders.Path), SessionId = tostring(RawEventData.SessionId)    
+| mv-expand todynamic(RawEventData_Folders.FolderItems)    
+| project SessionId, Timestamp, AccountObjectId, DeviceType, CountryCode, City, IPAddress, UserAgent, Path, Message = tostring(RawEventData_Folders_FolderItems.InternetMessageId)    
+| join kind=leftouter (    
+    EmailEvents     
+    | where RecipientObjectId == accountId     
+    | project Subject, RecipientEmailAddress, SenderMailFromAddress, DeliveryLocation, ThreatTypes, AttachmentCount, UrlCount, InternetMessageId     
+    )   
+    on $left.Message == $right.InternetMessageId     
+| sort by Timestamp desc   
+
+ 
+// BONUS: get message details using Graph:  
+// https://graph.microsoft.com/v1.0/users/meganb@seccxp.ninja/messages?filter=internetMessageId eq '<b4acafd9-d086-4de0-8deb-c83118dae907@az.centralus.production.microsoft.com>'&select=subject,from,hasAttachments 
+
+// Step 3: review the accessed FolderItems
+let accountId = 'eababd92-9dc7-40e3-9359-6c106522db19';   
+let locations = pack_array('SG', 'DE', 'IE', 'AL', 'UK');   
+let timeToSearch = startofday(datetime('2021-05-04'));  
+CloudAppEvents   
+| where ActionType == 'FilePreviewed' or ActionType == 'FileDownloaded' and CountryCode in (locations) and AccountObjectId == accountId and Timestamp >= timeToSearch   
+| project Timestamp, CountryCode, IPAddress, ISP, UserAgent, Application, ActivityObjects, AccountObjectId   
+| mv-expand ActivityObjects   
+| where ActivityObjects['Type'] in ('File', 'Folder') and ActivityObjects['Role'] == 'Target object' 
+| evaluate bag_unpack(ActivityObjects) 
+
+
+// Step 4: review deleted emails   
+let accountId = 'eababd92-9dc7-40e3-9359-6c106522db19';    
+let locations = pack_array('SG', 'DE', 'IE', 'AL', 'UK');    
+let timeToSearch = startofday(datetime('2021-05-04'));    
+CloudAppEvents    
+| where ActionType in~ ('MoveToDeletedItems', 'SoftDelete', 'HardDelete') and CountryCode in (locations) and AccountObjectId == accountId and Timestamp >= timeToSearch    
+| mv-expand ActivityObjects    
+| where ActivityObjects['Type'] in ('Email', 'Folder')    
+| evaluate bag_unpack(ActivityObjects)    
+| distinct Timestamp, AccountObjectId, ActionType, CountryCode, IPAddress, Type, Name, Id    
+| sort by Timestamp desc   
+
+  
+// Step 5: review the created inbox rules   
+let accountId = 'eababd92-9dc7-40e3-9359-6c106522db19';    
+let locations = pack_array('SG', 'DE', 'IE', 'AL', 'UK');    
+let timeToSearch = startofday(datetime('2021-05-04'));    
+CloudAppEvents    
+| where ActionType contains_cs 'InboxRule' and CountryCode in (locations)    
+| extend RuleParameters = RawEventData.Parameters    
+| project Timestamp, CountryCode, IPAddress, ISP, ActionType, ObjectName, RuleParameters     
+| sort by Timestamp desc   
+
+// Step 6: identify potential other victims   
+let accountId = 'eababd92-9dc7-40e3-9359-6c106522db19';    
+let locations = pack_array('SG', 'DE', 'IE', 'AL', 'UK');    
+let timeToSearch = startofday(datetime('2021-05-04'));    
+let ips = (   
+    CloudAppEvents    
+    | where CountryCode in (locations)     
+    | distinct IPAddress, AccountObjectId     
+    );    
+ips     
+| join (CloudAppEvents | project ActivityIP = IPAddress, UserId = AccountObjectId) on $left.IPAddress == $right.ActivityIP     
+| distinct UserId     
+| join IdentityInfo on $left.UserId == $right.AccountObjectId    
+| distinct AccountDisplayName, AccountUpn, Department, Country, City, AccountObjectId   
+
+// Bonus: identify details sent by the malicious actorIdentityInfo   
+let accountId = 'eababd92-9dc7-40e3-9359-6c106522db19';   
+let timeToSearch = startofday(datetime('2021-05-04'));   
+CloudAppEvents   
+| where ActionType =~ 'send' and AccountObjectId == accountId // apply the right filter   
+| extend rawData = todynamic(RawEventData)   
+| extend UserKey = rawData.UserKey, MessageId = tostring(rawData.Item.InternetMessageId), Subject = rawData.Item.Subject, Attachments = rawData.Item.Attachments   
+| join (   
+    EmailEvents    
+    )   
+    on $left.MessageId == $right.InternetMessageId    
+| sort by Timestamp desc   
+| project UserKey, Timestamp, AccountObjectId, AccountDisplayName, DeviceType, CountryCode, City, ISP, IPAddress, SenderIPv4, SenderIPv6, UserAgent, Subject, InternetMessageId, Attachments, RecipientEmailAddress, SenderMailFromAddress, DeliveryLocation,  ThreatTypes, ConfidenceLevel 
+, AttachmentCount, UrlCount, MessageId

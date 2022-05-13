@@ -1,0 +1,49 @@
+id: 148de00b-e647-4767-9201-c3cbf51befb1
+name: MailItemsAccessedTimeSeries[Solarigate]
+description: |
+  Identifies anomalous increases in Exchange mail items accessed operations.
+  The query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns.
+  Sudden increases in execution frequency of sensitive actions should be further investigated for malicious activity.
+  Manually change scorethreshold from 1.5 to 3 or higher to reduce the noise based on outliers flagged from the query criteria.
+  Read more about MailItemsAccessed- https://docs.microsoft.com/microsoft-365/compliance/advanced-audit?view=o365-worldwide#mailitemsaccessed
+  Query insprired by Azure Sentinel detection https://github.com/Azure/Azure-Sentinel/blob/master/Detections/OfficeActivity/MailItemsAccessedTimeSeries.yaml
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+- Collection
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  let timeframe = 1h;
+  let scorethreshold = 1.5;
+  let percentthreshold = 50;
+  // Preparing the time series data aggregated hourly count of MailItemsAccessd Operation in the form of multi-value array to use with time series anomaly function.
+  let TimeSeriesData =
+      CloudAppEvents 
+      | where Timestamp   between (startofday(ago(starttime))..startofday(ago(endtime)))
+      | where ActionType =~ "MailItemsAccessed"
+      | where Application has "Exchange"
+      | extend RawEventData = parse_json(RawEventData)
+      | where RawEventData.ResultStatus == "Succeeded"  
+      | project Timestamp, ActionType, RawEventData.MailboxOwnerUPN    
+      | make-series Total=count() on Timestamp from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe;
+  let TimeSeriesAlerts =
+    TimeSeriesData
+    | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')
+    | mv-expand Total to typeof(double), Timestamp to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+    | where anomalies > 0
+    | project Timestamp, Total, baseline, anomalies, score;
+    // Joining the flagged outlier from the previous step with the original dataset to present contextual information
+    // during the anomalyhour to analysts to conduct investigation or informed decisions.
+    TimeSeriesAlerts | where Timestamp > ago(2d)  
+    // Join against base logs since specified timeframe to retrive records associated with the hour of anomoly
+    | join (
+        CloudAppEvents 
+          | where Timestamp > ago(2d)
+          | where ActionType =~ "MailItemsAccessed"
+          | where Application has "Exchange"
+          | extend RawEventData = parse_json(RawEventData)
+          | where RawEventData.ResultStatus == "Succeeded"  
+    ) on Timestamp

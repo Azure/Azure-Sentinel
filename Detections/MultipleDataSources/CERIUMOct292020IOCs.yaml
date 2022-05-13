@@ -5,6 +5,9 @@ description: |
    Matches domain name IOCs related to the CERIUM activity group with CommonSecurityLog, DnsEvents, and VMConnection dataTypes.'
 severity: High
 requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
   - connectorId: DNS
     dataTypes:
       - DnsEvents
@@ -20,6 +23,25 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -37,25 +59,19 @@ query: |
   | where FileHash in (SHA256Hash) or DNSName =~ DomainNames
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
   ),
-  (DnsEvents 
-  | extend DNSName = Name
-  | where isnotempty(DNSName)
-  | where DNSName =~ DomainNames
-  | extend IPAddress = ClientIP
+   (_Im_Dns (domain_has_any=DomainNames)
+  | extend DNSName = DnsQuery 
+  | extend IPAddress =  SrcIpAddr, Computer = Dvc
+  ), 
+  (_Im_WebSession(url_has_any=DomainNames) 
+  | extend DNSName = tostring(parse_url(Url)["Host"])
+  | extend IPAddress = SrcIpAddr, Account=User
   ),
   (VMConnection 
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | where isnotempty(DNSName)
   | where DNSName =~ DomainNames
   | extend IPAddress = RemoteIp
-  ),
-  (AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallDnsProxy"
-  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
-  | where Request_Name has_any (DomainNames)  
-  | extend DNSName = Request_Name
-  | extend IPAddress = ClientIP 
   ),
   (AzureDiagnostics 
   | where ResourceType == "AZUREFIREWALLS"
@@ -81,5 +97,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.2.1
 kind: Scheduled

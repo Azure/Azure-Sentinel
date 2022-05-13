@@ -1,4 +1,4 @@
-# Module 4 - Incident Managment
+# Module 4 - Incident Management
 
 #### 🎓 Level: 300 (Intermediate)
 #### ⌛ Estimated time to complete this lab: 60 minutes
@@ -37,11 +37,11 @@ We have 2 options to open the workbook:
 
 ![Select Microsoft incident creation rule](../Images/m5-SecurityOperationsEfficiency_incident.gif?raw=true)
 
-6. Review the dashbaord.
+6. Review the dashboard.
 
 ### Exercise 2: Handling Incident **"Sign-ins from IPs that attempt sign-ins to disabled accounts"**
 
-1. Open Azure Sentiel incident page.
+1. Open Azure Sentinel incident page.
 
 2. Locate the incident **"Sign-ins from IPs that attempt sign-ins to disabled accounts"**
 
@@ -64,7 +64,7 @@ We have 2 options to open the workbook:
 
 ![Select Microsoft incident creation rule](../Images/m5-NAV_incident.gif?raw=true)
 
-- To view the relevant automation that will assist us with the enrichment opertion, Press **view playbook**
+- To view the relevant automation that will assist us with the enrichment operation, Press **view playbook**
 
 ![Select Microsoft incident creation rule](../Images/m5-view_playbooks.gif?raw=true)
 
@@ -88,7 +88,7 @@ We have 2 options to open the workbook:
 
 ![Select Microsoft incident creation rule](../Images/m5-workbook-validator.gif?raw=true)
 
-15. As the subject of the investigation is the suspicious IP from North Koriea. we want to see all the activity done by this IP
+15. As the subject of the investigation is the suspicious IP from North Korea. we want to see all the activity done by this IP
  so in the properties selector, switch on the **investigate by** to Entity.
 
  16. in the **Investigate IP Address** Tab, add the suspicious IP.
@@ -110,7 +110,7 @@ We have 2 options to open the workbook:
 ![Select Microsoft incident creation rule](../Images/m5-automation02.gif?raw=true)
 
 
-22. As this incident concider as benign, we go back to the main incident page, and close the incident with the right classifiction.
+22. As this incident consider as benign, we go back to the main incident page, and close the incident with the right classification.
 
 ![Select Microsoft incident creation rule](../Images/M5-close-incident.gif?raw=true)
 M5-close-incident
@@ -154,7 +154,7 @@ M5-close-incident
 
 ![incident5](../Images/incident5.png)
 
-5. As you can see, besides **ClienPC**, there's two additional computers where the malicious DLL and named pipe has been found. Bookmark all three records, selecting them and then click on on *Add bookmark*.
+5. As you can see, besides **ClienPC**, there's two additional computers where the malicious DLL and named pipe has been found. Bookmark all three records, selecting them and then click on *Add bookmark*.
 
 ![incident6](../Images/incident6.png)
 
