@@ -1,13 +1,14 @@
 # VMware Carbon Black Cloud Solution
 
+![Carbon Black logo](./Data%20Connectors/CarbonBlack.PNG)
+
 > **Important**
 >
 > The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` should be deployed from the [Microsoft Sentinel content hub]('https://docs.microsoft.com/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed using the documentation below.
 >
-> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview').
+> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview') from the Data Connector gallery.
 >
 
-![Carbon Black logo](./Data%20Connectors/CarbonBlack.PNG)
 
 ## Table of Contents
 
@@ -41,13 +42,14 @@ This package includes:
 
 You can choose to deploy the whole package (Connector and all three playbook templates), or each one seperately from each folder.
 
-    [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json) 
+  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json)
 
-    [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json)
+  [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2Fazuredeploy.json)
 
 ## Carbon Black Logic Apps custom connector
 
 <a name="authentication">
+
 ## Authentication
 
 This connector supports API Key authentication. When creating the connection for the custom connector, you must provide the API Secret and API key which you generated in Carbon Black Cloud console. [API Key authentication](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key).
@@ -75,6 +77,7 @@ This connector supports API Key authentication. When creating the connection for
 5. (Optional) Create a Carbon Black device policy for which to move devices, when requested from the Microsoft Teams playbook.
 
 <a name="deployment">
+
 ### Deployment instructions
 
 1. Deploy the custom connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
@@ -100,6 +103,7 @@ This connector supports API Key authentication. When creating the connection for
 |**Teams ChannelId** | Microsoft Teams channel to send the adaptive card [How to determine the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps) |
 
 <a name="postdeployment">
+
 ### Post-Deployment instructions
 
 #### Authorize connections

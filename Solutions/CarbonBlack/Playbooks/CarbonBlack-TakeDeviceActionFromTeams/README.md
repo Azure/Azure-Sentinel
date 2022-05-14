@@ -4,8 +4,9 @@
 >
 > The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` should be deployed from the [Microsoft Sentinel content hub]('https://docs.microsoft.com/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed using the documentation below.
 >
-> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview').
+> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview') from the Data Connector gallery.
 >
+
 
 ## Summary
 
@@ -85,27 +86,27 @@ Gets the list of risky devices as entities from the Incident
 
 Initializes the following variables:
 
-- PolicyId - Assign the pre-configured policy Id value
-- OrganizationId - Assign the Organization Id
-- Information - SOC will take the action based on the note
-- ActionSummary - Assign the summary of the actions taken by SOC
-- AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [Each device information returned from Carbon Black]
-- DeviceActions - Choice list contains actions information [Quarantine, Update_Policy and Ignore]
-- AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [Each device information returned from Carbon Black]
-- AdaptiveCardBody - Assing the dynamically prepared adaptive card body
-- Hosts - Assign the Hosts information 
-- CarbonBlackDeviceInformation - Assign the Carbon Black device information
-- DevicesActionsNeeded - Assign the devices information that needs SOC action
-- ComposeProductname - Compose the product name
+* PolicyId - Assign the pre-configured policy Id value
+* OrganizationId - Assign the Organization Id
+* Information - SOC will take the action based on the note
+* ActionSummary - Assign the summary of the actions taken by SOC
+* AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [Each device information returned from Carbon Black]
+* DeviceActions - Choice list contains actions information [Quarantine, Update_Policy and Ignore]
+* AdaptiveCardColumnsList - Assign the dynamically prepared columns list to show in the adaptive card [Each device information returned from Carbon Black]
+* AdaptiveCardBody - Assing the dynamically prepared adaptive card body
+* Hosts - Assign the Hosts information
+* CarbonBlackDeviceInformation - Assign the Carbon Black device information
+* DevicesActionsNeeded - Assign the devices information that needs SOC action
+* ComposeProductname - Compose the product name
 
 ### For each host
 
 This action performs the following actions:
 
-- Makes a call to Carbon Black API [Contains device name]
-- Verifies the Carbon Black API response_mode
-- Checks if the device is quarantined or assigned to predefined policy
-- Prepares choice lists based on the response returned by API [Quarantine, Update_Policy and Ignore]
+* Makes a call to Carbon Black API [Contains device name]
+* Verifies the Carbon Black API response_mode
+* Checks if the device is quarantined or assigned to a predefined policy
+* Prepares choice lists based on the response returned by API [Quarantine, Update_Policy and Ignore]
 
 ### Compose Incident information
 

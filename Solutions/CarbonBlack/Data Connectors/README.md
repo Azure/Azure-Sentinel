@@ -1,13 +1,13 @@
 # VMware Carbon Black Logic App custom connector
 
+<img src="./CarbonBlack.PNG" alt="drawing" width="20%"/><br>
+
 > **Important**
 >
 > The playbooks, workbook, and analytic rules included in `\Solutions\CarbonBlack` should be deployed from the [Microsoft Sentinel content hub]('https://docs.microsoft.com/azure/sentinel/sentinel-solutions-deploy#install-or-update-a-solution') rather than being deployed using the documentation below.
 >
-> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview').
+> This solution requires the [VMware Carbon Black Endpoint Standard Sentinel data connector]('https://docs.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-endpoint-standard-preview') from the Data Connector gallery.
 >
-
-<img src="./CarbonBlack.PNG" alt="drawing" width="20%"/><br>
 
 This Logic App custom connector connects to Carbon Black cloud end point and performs different actions on alerts, devices and threats using CarbonBlack cloud endpoint API.
 
