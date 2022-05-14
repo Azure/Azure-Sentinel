@@ -43,11 +43,12 @@
 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Enter the required parameters:
-   - Playbook Name: Enter the playbook name here (Ex:CarbonBlack-TakeDeviceActionFromTeams)
-   - OrganizationKey: Enter the Carbon Back organization key.
-   - PolicyId: Enter the Carbon Black policy Id to move devices.
-   - Teams GroupId: Enter the Microsoft Teams group Id.
-   - Teams ChannelId: Enter the Microsoft Teams channel Id.
+
+   * Playbook Name: Enter the playbook name here (Ex:CarbonBlack-TakeDeviceActionFromTeams)
+   * OrganizationKey: Enter the Carbon Back organization key.
+   * PolicyId: Enter the Carbon Black policy Id to move devices.
+   * Teams GroupId: Enter the Microsoft Teams group Id.
+   * Teams ChannelId: Enter the Microsoft Teams channel Id.
   
       [How to find the Microsoft Teams channel and group ids](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
   
