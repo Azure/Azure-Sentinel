@@ -1,6 +1,6 @@
 # Source agnostic ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Source agnostic.
+ARM template for ASIM NetworkSession schema parser for Source agnostic.
 
 This ASIM parser supports filtering and normalizing Network Session logs from all supported sources to the ASIM Network Session normalized schema.
 
