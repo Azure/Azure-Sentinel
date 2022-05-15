@@ -139,17 +139,25 @@ function Get-GuardDutyAndRoleKmsPolicy
 	return $kmsPolicy.Replace("'",'"')
 }
 
-function Enable-GuardDuty
+function Enable-GuardDuty-ForRegion
 {
     <#
     .SYNOPSIS 
         Enables GuardDuty based on specified configuration
+    .PARAMETER Region
+		Specifies the region
     #>
 
-    Write-Log -Message "Enabling GuardDuty" -LogFileName $LogFileName -LinePadding 1
+    param (
+        [Parameter()]
+        [ValidateNotNullOrEmpty()][string]
+        $Region
+    )
+
+    Write-Log -Message "Enabling GuardDuty for region $region" -LogFileName $LogFileName -LinePadding 1
     Set-RetryAction({
         Write-Log -Message "Executing: aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1" -LogFileName $LogFileName -Severity Verbose
-        $newGuarduty = aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1
+        $newGuarduty = aws --region $region guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1
         
         $isGuardutyEnabled = $lastexitcode -ne 0
         if ($isGuardutyEnabled)
@@ -157,10 +165,8 @@ function Enable-GuardDuty
             Write-Output `n
             Write-Log -Message 'A detector already exists for the current account.' -LogFileName $LogFileName
             Write-Log -Message "Executing: aws guardduty list-detectors" -LogFileName $LogFileName -Severity Verbose
-            $detectors = (aws guardduty list-detectors | ConvertFrom-Json)."DetectorIds"  -join ', '
-            Write-Log -Message "List of existing detectors: $detectors" -LogFileName $LogFileName  
-            
-            $script:detectorId = Read-ValidatedHost 'Please enter detector Id from the above list'
+
+            $script:detectorId = (aws --region $region guardduty list-detectors | ConvertFrom-Json)."DetectorIds"  -join ', '
             Write-Log -Message "Detector Id: $detectorId" -LogFileName $LogFileName
         }
         else
@@ -169,7 +175,7 @@ function Enable-GuardDuty
         }
         
         Write-Log -Message "Executing: aws guardduty list-publishing-destinations --detector-id $detectorId 2>&1" -LogFileName $LogFileName -Severity Verbose
-        $script:currentDestinations = aws guardduty list-publishing-destinations --detector-id $detectorId 2>&1
+        $script:currentDestinations = aws --region $region guardduty list-publishing-destinations --detector-id $detectorId 2>&1
         Write-Log $currentDestinations -LogFileName $LogFileName -Severity Verbose
     })
 }
@@ -179,19 +185,27 @@ function Set-GuardDutyPublishDestinationBucket
     <#
     .SYNOPSIS 
         Configures GuardDuty to publish logs to destination bucket
+    .PARAMETER Region
+		Specifies the region
     #>
+
+    param (
+        [Parameter()]
+        [ValidateNotNullOrEmpty()][string]
+        $Region
+    )
 
     $currentDestinationsObject = $currentDestinations | ConvertFrom-Json
     $currentS3Destinations = $currentDestinationsObject.Destinations | Where-Object DestinationType -eq S3
     if ($null -eq $currentS3Destinations)
     {
         Write-Log -Message "Executing: aws guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
-        aws guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
+        aws --region $Region guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
     }
     else
     {
         Write-Log "Executing: aws guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json" -LogFileName $LogFileName -Severity Verbose
-        $destinationDescriptionObject = aws guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json
+        $destinationDescriptionObject = aws --region $Region guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json
         $destinationArn = $destinationDescriptionObject.DestinationProperties.DestinationArn
 
         Write-Log -Message "GuardDuty is already configured for bucket arn '$destinationArn'" -LogFileName $LogFileName -LinePadding 2
@@ -199,7 +213,7 @@ function Set-GuardDutyPublishDestinationBucket
         if ($guardDutyBucketConfirmation -eq 'y')
         {
             Write-Log -Message "Executing: aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
-            aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
+            aws --region $Region guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
         }
         else
         {
@@ -207,6 +221,48 @@ function Set-GuardDutyPublishDestinationBucket
         }
     } 
 }
+
+function Enable-GuardDuty
+{
+    <#
+    .SYNOPSIS 
+        Enables GuardDuty based on specified configuration
+    #>
+
+    [String[]]$allRegionsArray =  (aws ec2 describe-regions | ConvertFrom-Json)."Regions".RegionName
+    $regionConfirmation = Read-ValidatedHost 'Do you want enable guardduty for all regions? [y/n]' -ValidationType Confirm
+    if ($regionConfirmation -eq 'y')
+    {     
+        for($i = 0; $i -lt $allRegionsArray.length; $i++)
+        { 
+            Enable-GuardDuty-ForRegion -Region $allRegionsArray[$i]
+            Set-GuardDutyPublishDestinationBucket -Region $allRegionsArray[$i]
+        }
+    }
+    else
+    {
+        [String[]]$selectedRegionsArray = Read-ValidatedHost -Prompt "Please enter list of regions seperated by space"
+        $selectedRegionsArray = $selectedRegionsArray.Split(' ') | Select-Object -Unique
+
+        for($i = 0; $i -lt $selectedRegionsArray.length; $i++)
+        { 
+            if (-not($allRegionsArray -contains $selectedRegionsArray[$i]))
+            {
+                $notValidRegion = $selectedRegionsArray[$i]
+                $selectedRegionsArray = $selectedRegionsArray | ? {$_ -ne $notValidRegion}
+                Write-Log -Message "Region $notValidRegion doesn't exist" -LogFileName $LogFileName -LinePadding 2
+            }
+        }
+        for($i = 0; $i -lt $selectedRegionsArray.length; $i++)
+        { 
+            Enable-GuardDuty-ForRegion -Region $selectedRegionsArray[$i]
+            Set-GuardDutyPublishDestinationBucket -Region $selectedRegionsArray[$i]
+        }
+    }
+}
+
+
+
 
 # ***********       Main Flow       ***********
 
@@ -255,7 +311,7 @@ Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 Enable-S3EventNotification -DefaultEventNotificationPrefix "AWSLogs/${callerAccount}/GuardDuty/"
 
 Enable-GuardDuty
-Set-GuardDutyPublishDestinationBucket
+
  
 # Output information needed to configure Sentinel data connector
 Write-RequiredConnectorDefinitionInfo -DestinationTable AWSGuardDuty
