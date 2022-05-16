@@ -1,10 +1,10 @@
 import logging
 import os
 
-from ..exports_store import ExportsTableStore, ExportsTableNames
 from ..exports_queue import ExportsQueue, ExportsQueueNames
-
+from ..exports_store import ExportsTableStore, ExportsTableNames
 from ..tenable_helper import TenableIO, TenableStatus, TenableExportType
+
 # from tenable.io import TenableIO
 
 connection_string = os.environ['AzureWebJobsStorage']
@@ -25,10 +25,10 @@ def send_chunks_to_queue(exportJobDetails):
             if chunk_dtls:
                 current_chunk_status = chunk_dtls['jobStatus']
                 if (
-                    current_chunk_status == TenableStatus.sent_to_queue.value or
-                    current_chunk_status == TenableStatus.finished.value
+                        current_chunk_status == TenableStatus.sent_to_queue.value or
+                        current_chunk_status == TenableStatus.finished.value
                 ):
-                    logging.warn(f'Avoiding vuln chunk duplicate processing -- {exportJobId} {chunk}. Current status: {current_chunk_status}')
+                    logging.warning(f'Avoiding vuln chunk duplicate processing -- {exportJobId} {chunk}. Current status: {current_chunk_status}')
                     continue
 
             vuln_table.post(exportJobId, str(chunk), {
