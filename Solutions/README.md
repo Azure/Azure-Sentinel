@@ -115,4 +115,3 @@ The following steps reference the Partner Center's more detailed documentation.
 
 [Email Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with any feedback on this process, for new scenarios not covered in this guide, or with any constraints you may encounter. 
 
-
