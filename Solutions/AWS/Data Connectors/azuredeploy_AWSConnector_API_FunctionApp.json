@@ -1,0 +1,163 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appName": {
+            "type": "string",
+            "defaultValue": "S3toSentinel",
+            "metadata": {
+                "description": "The name of the function app that you will create to import S3 Bucket"
+            }
+        },
+        "storageAccountType": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "metadata": {
+                "description": "Storage Account type"
+            }
+        },
+        "AwsAccessKeyID": {
+            "type": "string",
+            "metadata": {
+                "description": "Input your AWS Access Key ID"
+            }
+        },
+        "AwsSecretAccessKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Input your AWS Secret Access Key"
+            }
+        },
+        "AwsRegionName": {
+            "type": "string",
+            "metadata": {
+                "description": "Input your AWS default region"
+            }
+        },
+        "InspectorS3Bucket": {
+            "type": "string",
+            "metadata": {
+                "description": "AWS Inspector S3 Bucket"
+            }
+        },
+        "MacieS3Bucket": {
+            "type": "string",
+            "metadata": {
+                "description": "AWS Macie S3 Bucket"
+            }
+        },            		
+        "WorkspaceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Provide the workspace ID for your Azure Sentinel solution"
+            }
+        },
+        "WorkspaceKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Provide the primary key to this Log Analytics workspace"
+            }
+        }
+    },
+    "variables": {
+        "functionAppName": "[concat(toLower(parameters('appName')), uniqueString(resourceGroup().id))]",
+        "hostingPlanName": "[parameters('appName')]",
+        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]"
+    },
+    "resources": [
+	{
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2020-06-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[resourceGroup().location]",
+	    "kind": "Linux",
+	    "sku": {
+		"name": "S1"   
+	    },
+            "properties": {
+		"reserved": true
+            }
+        },	    
+      {
+         "type":"Microsoft.Web/sites",
+         "apiVersion":"2019-08-01",
+         "name":"[variables('functionAppName')]",
+         "kind":"functionapp,linux",
+         "location":"[resourceGroup().location]",
+         "dependsOn":[
+            "[resourceId('Microsoft.Web/serverfarms/', variables('hostingPlanName'))]",
+            "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]"
+         ],
+         "properties":{
+            "serverFarmId":"[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+            "siteConfig":{
+               "linuxFxVersion":"PYTHON|3.8",
+               "alwaysOn": true,
+               "appSettings":[
+                  {
+                     "name":"FUNCTIONS_EXTENSION_VERSION",
+                     "value":"~3"
+                  },
+                  {
+                     "name": "FUNCTIONS_WORKER_RUNTIME",
+                     "value": "python"
+                  },                 
+                  {
+                     "name":"AzureWebJobsStorage",
+                     "value":"[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+                  },
+                  {
+                     "name":"AWS_ACCESS_KEY_ID",
+                     "value":"[parameters('AwsAccessKeyID')]"
+                  },
+                  {
+                     "name":"AWS_REGION_NAME",
+                     "value":"[parameters('AwsRegionName')]"
+                  },
+                  {
+                     "name":"AWS_SECRET_ACCESS_KEY",
+                     "value":"[parameters('AwsSecretAccessKey')]"
+                  },
+                  {
+                     "name":"AWS_INSPECTOR_S3_BUCKET",
+                     "value":"[parameters('InspectorS3Bucket')]"
+                  },
+                  {
+                     "name":"AWS_MACIE_S3_BUCKET",
+                     "value":"[parameters('MacieS3Bucket')]"
+                  },
+                  {
+                     "name":"WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                     "value":"[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+                  },
+                  {
+                     "name":"CUSTOMER_ID",
+                     "value":"[parameters('WorkspaceID')]"
+                  },
+                  {
+                     "name":"SHARED_KEY",
+                     "value":"[parameters('WorkspaceKey')]"
+                  },
+                  {
+                     "name":"WEBSITE_RUN_FROM_PACKAGE",
+                     "value":"https://github.com/tungnt77/AwsToSentinel/raw/main/Trigger.zip"
+                  },
+                  {
+                     "name":"SCM_DO_BUILD_DURING_DEPLOYMENT",
+                     "value":true
+                  }				  
+               ]
+            }
+         }
+		 },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "[parameters('storageAccountType')]"
+            }
+        }
+    ]
+}
