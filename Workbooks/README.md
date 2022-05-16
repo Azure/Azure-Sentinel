@@ -81,3 +81,4 @@ If needed, also update the preview images or the data types.
 
 
 For any feedback on the instructions [Open an issue](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
+
