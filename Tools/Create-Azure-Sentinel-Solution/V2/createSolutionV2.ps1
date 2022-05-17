@@ -100,6 +100,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseMetadata = Get-Content -Raw $metadataPath | Out-String | ConvertFrom-Json
 
     $DependencyCriteria = @();
+    $customConnectorsList = @{};
     $metadataAuthor = $contentToImport.Author.Split(" - ");
     $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
                 $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
@@ -109,7 +110,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     $baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
                     $baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
                 }
-                
+
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
         if ($objectProperties.Value -is [System.Array]) {
@@ -253,7 +254,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
                         $workbookIDParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the workbook" }; }
-                        
+
 
                         if(!$contentToImport.TemplateSpec)
                         {
@@ -438,17 +439,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
                         $fileName = Split-path -Parent $file | Split-Path -leaf
-                        $fileName = "playbook$playbookCounter-$fileName";
+                        #$fileName = "playbook$playbookCounter-$fileName";
                         if ($contentToImport.Metadata) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
                         }
 
+                        $IsLogicAppsCustomConnector = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/customApis".ToLower())}) ? $true : $false;
+
                         $DependencyCriteria += [PSCustomObject]@{
-                            kind      = "Playbook";
+                            kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : "Playbook";;
                             contentId = "[variables('_$fileName')]";
-                            version   = $contentToImport.Version;
+                            version   = "[variables('playbookVersion$playbookCounter')]";
                         };
+
+                        if (!$playbookName) {
+                            $playbookName = $fileName;
+                        }
 
                         if ($playbookCounter -eq 1) {
                             # If a playbook exists, add CreateUIDefinition step before playbook elements while handling first playbook.
@@ -490,7 +497,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 [PSCustomObject] @{
                                     name    = "playbook$playbookCounter-text";
                                     type    = "Microsoft.Common.TextBlock";
-                                    options = [PSCustomObject] @{ text = $playbookDescriptionText }
+                                    options = [PSCustomObject] @{ text = if ($playbookData.metadata -and $playbookData.metadata.comments) { $playbookData.metadata.comments } else { "This playbook ingests events from $solutionName into Log Analytics using the API." } }
                                 }
                             )
                         }
@@ -502,7 +509,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $defaultParamValue = $(if ($playbookData.parameters.$paramName.defaultValue) { $playbookData.parameters.$paramName.defaultValue } else { "" })
                             if ($param.Name.ToLower().contains("playbookname")) {
                                 $playbookNameObject = [PSCustomObject] @{
-                                    name         = "playbook$playbookCounter-$paramName";
+                                    name         = $contentToImport.TemplateSpec ? $paramName : "playbook$playbookCounter-$paramName";
                                     type         = "Microsoft.Common.TextBox";
                                     label        = "Playbook Name";
                                     defaultValue = $defaultParamValue;
@@ -514,16 +521,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                 }
                                 $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookNameObject
-                                $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
-                                        defaultValue = $playbookName;
-                                        type         = "string";
-                                        minLength    = 1;
-                                        metadata     = [PSCustomObject] @{ description = "Resource name for the logic app playbook.  No spaces are allowed"; }
-                                    })
+                                if(!$contentToImport.TemplateSpec)
+                                {
+                                    $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
+                                            defaultValue = $playbookName;
+                                            type         = "string";
+                                            minLength    = 1;
+                                            metadata     = [PSCustomObject] @{ description = "Resource name for the logic app playbook.  No spaces are allowed"; }
+                                        })
+                                }
                             }
                             elseif ($param.Name.ToLower().contains("username")) {
                                 $playbookUsernameObject = [PSCustomObject] @{
-                                    name         = "playbook$playbookCounter-$paramName";
+                                    name         = $contentToImport.TemplateSpec ? $paramName : "playbook$playbookCounter-$paramName";
                                     type         = "Microsoft.Common.TextBox";
                                     label        = "$solutionName Username";
                                     defaultValue = $defaultParamValue;
@@ -535,16 +545,18 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                 }
                                 $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookUsernameObject
+                                if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
                                         defaultValue = $defaultParamValue;
                                         type         = "string";
                                         minLength    = 1;
                                         metadata     = [PSCustomObject] @{ description = "Username to connect to $solutionName API" }
                                     })
+                                }
                             }
                             elseif ($param.Name.ToLower().contains("password")) {
                                 $playbookPasswordObject = [PSCustomObject] @{
-                                    name        = "playbook$playbookCounter-$paramName";
+                                    name        = $contentToImport.TemplateSpec ? $paramName : "playbook$playbookCounter-$paramName";
                                     type        = "Microsoft.Common.PasswordBox";
                                     label       = [PSCustomObject] @{ password = $defaultParamValue; };
                                     toolTip     = "Password to connect to $solutionName API";
@@ -552,16 +564,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     options     = [PSCustomObject] @{ hideConfirmation = $false; };
                                 }
                                 $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
                                         type      = "securestring";
                                         minLength = 1;
                                         metadata  = [PSCustomObject] @{ description = "Password to connect to $solutionName API"; }
-                                    }
-                                )
+                                    })
+                                }
                             }
                             elseif ($param.Name.ToLower().contains("apikey")) {
                                 $playbookPasswordObject = [PSCustomObject] @{
-                                    name        = "playbook$playbookCounter-$paramName";
+                                    name        = $contentToImport.TemplateSpec ? $paramName : "playbook$playbookCounter-$paramName";
                                     type        = "Microsoft.Common.PasswordBox";
                                     label       = [PSCustomObject] @{password = "ApiKey" };
                                     toolTip     = "ApiKey to connect to $solutionName API";
@@ -569,11 +582,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     options     = [PSCustomObject] @{ hideConfirmation = $true; };
                                 }
                                 $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
-                                $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
-                                        type      = "securestring";
-                                        minLength = 1;
-                                        metadata  = [PSCustomObject] @{ description = "ApiKey to connect to $solutionName API"; }
-                                    })
+                                if(!$contentToImport.TemplateSpec)
+                                {
+                                    $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
+                                            type      = "securestring";
+                                            minLength = 1;
+                                            metadata  = [PSCustomObject] @{ description = "ApiKey to connect to $solutionName API"; }
+                                        })
+                                }
                             }
                             else {
                                 function PascalSplit ($pascalStr) {
@@ -590,7 +606,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $playbookParamObject = $(
                                     if ($playbookData.parameters.$paramName.allowedValues) {
                                         [PSCustomObject] @{
-                                            name         = "playbook$playbookCounter-$paramName";
+                                            name         = $contentToImport.TemplateSpec ? $paramName : "playbook$playbookCounter-$paramName";
                                             type         = "Microsoft.Common.DropDown";
                                             label        = "$(PascalSplit $paramName)";
                                             placeholder  = "$($playbookData.parameters.$paramName.allowedValues[0])";
@@ -610,7 +626,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     else {
                                         [PSCustomObject] @{
-                                            name         = "playbook$playbookCounter-$paramName";
+                                            name         = $contentToImport.TemplateSpec ? $paramName : "playbook$playbookCounter-$paramName";
                                             type         = "Microsoft.Common.TextBox";
                                             label        = "$(PascalSplit $paramName)";
                                             defaultValue = $defaultParamValue;
@@ -625,13 +641,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 )
                                 $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookParamObject
                                 $defaultValue = $(if ($defaultParamValue) { $defaultParamValue } else { "" })
+                                if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
                                         defaultValue = $defaultValue;
                                         type         = "string";
                                         minLength    = 1;
                                     })
+                                }
                             }
-                            $baseCreateUiDefinition.parameters.outputs | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue "[steps('playbooks').playbook$playbookCounter.playbook$playbookCounter-$paramName]"
+                            if(!$contentToImport.TemplateSpec){
+                                $baseCreateUiDefinition.parameters.outputs | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue "[steps('playbooks').playbook$playbookCounter.playbook$playbookCounter-$paramName]"
+                            }
                         }
 
                         foreach ($playbookVariable in $playbookData.variables.PsObject.Properties) {
@@ -640,10 +660,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if ($variableValue -is [System.String]) {
                                 $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                             }
+                            if($contentToImport.TemplateSpec -and $variableName.ToLower().Contains("connection"))
+                            {
+                                $variableValue = "[" + $variableValue ;
+                            }
                             if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey"))) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$variableName" -NotePropertyValue "[$variableValue]"
                             }
-                            else {
+                            elseif (!$contentToImport.TemplateSpec) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
                             }
                         }
@@ -656,12 +680,95 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $outputStr = $baseStr.Replace("`"", "\`"")
                             $outputStr
                         }
+
+                        function removeBlanksRecursively($resourceObj) {
+                            if ($resourceObj.GetType() -ne [System.DateTime]) {
+                                foreach ($prop in $resourceObj.PsObject.Properties) {
+                                    $key = $prop.Name
+                                    if ($prop.Value -is [System.String]) {
+                                        #Write-Host "its a string $resourceObj.$key"
+                                        if($resourceObj.$key -eq "")
+                                        {
+                                            $resourceObj.$key = "[variables('blanks')]";
+                                        }
+                                    }
+                                    elseif ($prop.Value -is [System.Array]) {
+                                        foreach ($item in $prop.Value) {
+                                            $itemIndex = $prop.Value.IndexOf($item)
+                                            if ($null -ne $itemIndex) {
+                                                if ($item -is [System.String]) {
+                                                    $resourceObj.$key[$itemIndex] = $item
+                                                }
+                                                elseif ($item -is [System.Management.Automation.PSCustomObject]) {
+                                                    $resourceObj.$key[$itemIndex] = $(removeBlanksRecursively $item)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        if (($prop.Value -isnot [System.Int32]) -and ($prop.Value -isnot [System.Int64])) {
+                                            $resourceObj.$key = $(removeBlanksRecursively $resourceObj.$key)
+                                        }
+                                    }
+                                }
+                            }
+                            $resourceObj
+                        }
+
+                        function addInternalSuffixRecursively($resourceObj) {
+                            if ($resourceObj.GetType() -ne [System.DateTime]) {
+                                foreach ($prop in $resourceObj.PsObject.Properties) {
+                                    $key = $prop.Name
+                                    if ($prop.Value -is [System.String]) {
+                                        $resourceObj.$key = $resourceObj.$key.Replace("resourceGroup().location", "variables('workspace-location-inline')")
+                                        if ($key -eq "operationId") {
+                                            $playbookData.variables | Add-Member -NotePropertyName "operationId-$($resourceobj.$key)" -NotePropertyValue $($resourceobj.$key)
+                                            $playbookData.variables | Add-Member -NotePropertyName "_operationId-$($resourceobj.$key)" -NotePropertyValue "[variables('operationId-$($resourceobj.$key)')]"
+                                            $resourceObj.$key = "[variables('_operationId-$($resourceobj.$key)')]"
+                                        }
+                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[")))
+                                        {
+                                            $resourceObj.$key = "[" + $resourceObj.$key;
+                                        }
+                                    }
+                                    elseif ($prop.Value -is [System.Array]) {
+                                        foreach ($item in $prop.Value) {
+                                            $itemIndex = $prop.Value.IndexOf($item)
+                                            if ($null -ne $itemIndex) {
+                                                if ($item -is [System.String]) {
+                                                    $item = $item.Replace("resourceGroup().location", "variables('workspace-location-inline')")
+                                                    if($contentToImport.TemplateSpec -and ($item.StartsWith("[")))
+                                                    {
+                                                        $item = "[" + $item;
+                                                    }
+                                                    $resourceObj.$key[$itemIndex] = $item
+                                                }
+                                                elseif ($item -is [System.Management.Automation.PSCustomObject]) {
+                                                    $resourceObj.$key[$itemIndex] = $(addInternalSuffixRecursively $item)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        if (($prop.Value -isnot [System.Int32]) -and ($prop.Value -isnot [System.Int64])) {
+                                            $resourceObj.$key = $(addInternalSuffixRecursively $resourceObj.$key)
+                                        }
+                                    }
+                                }
+                            }
+                            $resourceObj
+                        }
+
                         function replaceVarsRecursively ($resourceObj) {
                             if ($resourceObj.GetType() -ne [System.DateTime]) {
                                 foreach ($prop in $resourceObj.PsObject.Properties) {
                                     $key = $prop.Name
                                     if ($prop.Value -is [System.String]) {
                                         $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                                        if($contentToImport.TemplateSpec -and ($resourceObj.$key.StartsWith("[") -and $resourceObj.$key.Contains("parameters(") -and !$resourceObj.$key.contains("parameters('workspace-location')")))
+                                        {
+                                            $resourceObj.$key = "[" + $resourceObj.$key;
+                                        }
                                         if ($resourceObj.$key.StartsWith("[") -and $resourceObj.$key[$resourceObj.$key.Length - 1] -eq "]") {
                                             $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
                                         }
@@ -683,6 +790,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                                 if ($item -is [System.String]) {
                                                     $item = $(node "$PSScriptRoot/templating/replaceLocationValue.js" $item $playbookCounter)
                                                     $item = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $item $playbookCounter)
+                                                    if($contentToImport.TemplateSpec -and ($item.StartsWith("[") -and $item.Contains("parameters(") -and !$item.contains("parameters('workspace-location')")))
+                                                    {
+                                                        $item = "[" + $item;
+                                                    }
                                                     if ($item.StartsWith("[") -and $item[$item.Length - 1] -eq "]") {
                                                         $item = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" $item $playbookCounter)
                                                     }
@@ -712,11 +823,33 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             return $false
                         }
+
+                        $playbookDependencies = @();
+                        $playbookResources = @();
+                        $playbookVersion = '1.0';
+                        $logicAppsPlaybookId = '';
+                        $customConnectorContentId = '';
                         foreach ($playbookResource in $playbookData.resources) {
                             if ($playbookResource.type -eq "Microsoft.Web/connections") {
                                 if ($playbookResource.properties -and $playbookResource.properties.api -and $playbookResource.properties.api.id) {
+                                    if ($playbookResource.properties.api.id.Contains("/providers/Microsoft.Web/customApis/")) {
+                                        $splits = $playbookResource.properties.api.id.Split(',');
+                                        $connectionKey = $splits[-1].Trim().Replace("parameters('","").Replace("'","").Replace(")","").Replace("]","");
+
+                                        foreach ($templateVar in $($playbookData.parameters).PSObject.Properties) {
+                                            if ($templateVar.Name -eq $connectionKey) {
+                                                $playbookDependencies += [PSCustomObject] @{
+                                                    kind = "LogicAppsCustomConnector";
+                                                    contentId = $customConnectorsList[$templateVar.Value.defaultValue].id;
+                                                    version = $customConnectorsList[$templateVar.Value.defaultValue].version;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    # $playbookResource.location = "[[variables('workspace-location-inline')]";
                                     $connectionVar = $playbookResource.properties.api.id
-                                    $connectionVar = $connectionVar.Replace("resourceGroup().location", "parameters('workspace-location')")
+                                    $connectionVar = $connectionVar.Replace("resourceGroup().location", "variables('workspace-location-inline')")
                                     $variableReferenceString = "[variables"
                                     $varName = ""
                                     if ($connectionVar.StartsWith($variableReferenceString)) {
@@ -727,30 +860,212 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                             $varName = $($playbookData.variables.$varName.Split("'"))[1]
                                         }
                                         $connectionVar = $playbookData.variables.$varName
-                                        $connectionVar = $connectionVar.Replace("resourceGroup().location", "parameters('workspace-location')")
+                                        $connectionVar = $connectionVar.Replace("resourceGroup().location", "variables('workspace-location-inline')")
+
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if ($foundConnection) {
                                         $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
                                     }
                                     else {
-                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
-                                        $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
-                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
+                                        $playbookData.variables | Add-Member -NotePropertyName "connection-$connectionCounter" -NotePropertyValue $connectionVar
+                                        $playbookData.variables | Add-Member -NotePropertyName "_connection-$connectionCounter" -NotePropertyValue "[variables('connection-$connectionCounter')]"
+                                        $playbookResource.properties.api.id = "[variables('_connection-$connectionCounter')]"
                                     }
-                                    if (($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey')) {
+                                    if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey')) {
                                         $playbookResource.properties.parameterValues.api_key = "[variables('playbook-ApiKey')]"
                                     }
                                 }
                             }
-                            $playbookResource = $(replaceVarsRecursively $playbookResource)
+                            elseif ($contentToImport.TemplateSpec -and $playbookResource.type -eq "Microsoft.Logic/workflows") {
+                                if($null -eq $playbookResource.tags)
+                                {
+                                    $playbookResource | Add-Member -NotePropertyName "tags" -NotePropertyValue ([PSCustomObject]@{});
+                                }
+                                $playbookResource.tags | Add-Member -NotePropertyName "hidden-SentinelWorkspaceId" -NotePropertyValue "[variables('workspaceResourceId')]";
+                                $playbookVersion = $playbookResource.tags.'hidden-SentinelTemplateVersion' ? $playbookResource.tags.'hidden-SentinelTemplateVersion' : $playbookVersion;
+                            } elseif ($contentToImport.TemplateSpec -and $playbookResource.type -eq "Microsoft.Web/customApis") {
+                                $logicAppsPlaybookId = $playbookResource.name.Replace("parameters('","").Replace("'","").Replace(")","").Replace("]","").Replace("[","");
+                                $customConnectorContentId = $playbookData.parameters.$logicAppsPlaybookId.defaultValue
+                                Write-Host $customConnectorContentId;
+                                Write-Host $logicAppsPlaybookId;
+                            }
+
+
+                            $playbookResource =  $playbookResource # $(replaceVarsRecursively $playbookResource)
                             $playbookResource = $(removePropertiesRecursively $playbookResource)
-                            $baseMainTemplate.resources += $playbookResource
+                            # $playbookResource =  $(replaceVarsRecursively $playbookResource)
+                            $playbookResource =  $(addInternalSuffixRecursively $playbookResource)
+                            $playbookResource =  $(removeBlanksRecursively $playbookResource)
+                            $playbookResources += $playbookResource;
                             $connectionCounter += 1
                         }
+
+                        if($contentToImport.TemplateSpec)
+                        {
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "playbookVersion$playbookCounter" -NotePropertyValue $playbookVersion
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "playbookContentId$playbookCounter" -NotePropertyValue $fileName
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbookContentId$playbookCounter" -NotePropertyValue "[variables('playbookContentId$playbookCounter')]"
+
+                            if (!$IsLogicAppsCustomConnector) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "playbookId$playbookCounter" -NotePropertyValue "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId$playbookCounter'))]"
+                            }
+
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$playbookCounter" -NotePropertyValue ($IsLogicAppsCustomConnector ? "[concat(parameters('workspace'),'-LogicAppsCustomConnector-',variables('_playbookContentId$playbookCounter'))]" : "[concat(parameters('workspace'),'-Playbook-',variables('_playbookContentId$playbookCounter'))]")
+                            # Add workspace resource ID if not available
+                            if (!$baseMainTemplate.variables.workspaceResourceId) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                            }
+                            # Add base templateSpec
+                            $basePlaybookTemplateSpec = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs";
+                                apiVersion = "2021-05-01";
+                                name       = "[variables('playbookTemplateSpecName$playbookCounter')]";
+                                location   = "[parameters('workspace-location')]";
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : "Playbook";
+                                };
+                                properties = [PSCustomObject]@{
+                                    description = $IsLogicAppsCustomConnector ? $playbookName : "$($playbookName) playbook";
+                                    displayName = $IsLogicAppsCustomConnector ? $playbookName : "$($playbookName) playbook";
+                                }
+                            }
+
+                            $baseMainTemplate.resources += $basePlaybookTemplateSpec
+                            $author = $contentToImport.Author.Split(" - ");
+                            $authorDetails = [PSCustomObject]@{
+                                name  = $author[0];
+                                #email = $author[1];
+                            };
+                            if($null -ne $author[1])
+                            {
+                                $authorDetails | Add-Member -NotePropertyName "email" -NotePropertyValue "[variables('_email')]"
+                            }
+                            if ($IsLogicAppsCustomConnector) {
+                                # $customApi = $fileName.Replace("Connector", "")
+                                $customConnectorsList.add($customConnectorContentId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$playbookCounter')]"});
+                            }
+
+                            $playbookMetadata = [PSCustomObject]@{
+                                type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
+                                apiVersion = "2022-01-01-preview";
+                                name       = $IsLogicAppsCustomConnector ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('LogicAppsCustomConnector-', last(split(variables('playbookId'),'/'))))]" : "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId$playbookCounter'),'/'))))]";
+                                properties = [PSCustomObject]@{
+                                    parentId  = $IsLogicAppsCustomConnector ? "[[variables('playbookId')]" : "[variables('playbookId$playbookCounter')]"
+                                    contentId = "[variables('_playbookContentId$playbookCounter')]";
+                                    kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : "Playbook";
+                                    version   = "[variables('playbookVersion$playbookCounter')]";
+                                    source    = [PSCustomObject]@{
+                                        kind     = "Solution";
+                                        name     = $contentToImport.Name;
+                                        sourceId = "[variables('_solutionId')]"
+                                    };
+                                    author    = $authorDetails;
+                                    support   = $baseMetadata.support
+                                    # Incase playbook has logic app custom connector, add its dependency to this metadata object
+                                    # "dependencies": {
+                                    #     "criteria": [
+                                    #       {
+                                    #         "kind": "LogicAppsCustomConnector",
+                                    #         "contentId": "[variables('_playbookContentId2')]",
+                                    #         "version": "[variables('playbookVersion2')]"
+                                    #       }
+                                    #     ]
+                                    #   }
+                                }
+                            }
+
+                            if ($playbookDependencies) {
+                                $criteria = [PSCustomObject]@{
+                                    criteria = $playbookDependencies
+                                };
+                                $playbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $criteria
+                            }
+
+                            $playbookVariables = [PSCustomObject]@{};
+                            foreach($var in $playbookData.variables.PsObject.Properties)
+                            {
+                                $playbookVariables | Add-Member -NotePropertyName $var.Name -NotePropertyValue $(($contentToImport.TemplateSpec -and $var.Value.StartsWith("[")) ? "[" + $var.Value : $var.Value);
+                            }
+
+                            $playbookVariables | Add-Member -NotePropertyName "workspace-location-inline" -NotePropertyValue "[concat('[resourceGroup().locatio', 'n]')]";
+                            if ($IsLogicAppsCustomConnector) {
+                                $playbookVariables | Add-Member -NotePropertyName "playbookContentId" -NotePropertyValue $fileName;
+                                # $playbookVariables | Add-Member -NotePropertyName "playbookId" -NotePropertyValue "[[resourceId('Microsoft.Web/customApis', variables('playbookContentId'))]"
+                                $playbookVariables | Add-Member -NotePropertyName "playbookId" -NotePropertyValue "[[resourceId('Microsoft.Web/customApis', parameters('$logicAppsPlaybookId'))]"
+                            }
+                            $playbookVariables | Add-Member -NotePropertyName "workspace-name" -NotePropertyValue "[parameters('workspace')]"
+                            $playbookVariables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+                            $playbookResources = $playbookResources + $playbookMetadata;
+
+                            $playbookMetadata = [PSCustomObject]@{};
+                            foreach($var in $playbookData.metadata.PsObject.Properties)
+                            {
+                                $playbookMetadata | Add-Member -NotePropertyName $var.Name -NotePropertyValue $var.Value;
+                            }
+
+                            # Add templateSpecs/versions resource to hold actual content
+                            $playbookTemplateSpecContent = [PSCustomObject]@{
+                                type       = "Microsoft.Resources/templateSpecs/versions";
+                                apiVersion = "2021-05-01";
+                                name       = "[concat(variables('playbookTemplateSpecName$playbookCounter'),'/',variables('playbookVersion$playbookCounter'))]";
+                                location   = "[parameters('workspace-location')]";
+                                tags       = [PSCustomObject]@{
+                                    "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
+                                    "hidden-sentinelContentType" = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : "Playbook";
+                                };
+                                dependsOn  = @(
+                                    "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName$playbookCounter'))]"
+                                );
+                                properties = [PSCustomObject]@{
+                                    description  = "$($playbookName) Playbook with template version $($contentToImport.Version)";
+                                    mainTemplate = [PSCustomObject]@{
+                                        '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#";
+                                        contentVersion = "[variables('playbookVersion$playbookCounter')]";
+                                        parameters     = $playbookData.parameters;
+                                        variables      = $playbookVariables;
+                                        resources      = $playbookResources;
+                                    }
+                                }
+                            }
+
+                            if (@($playbookMetadata.PsObject.Properties).Count -gt 0) {
+                                Write-Host "creating metadata for playbook"
+                                $playbookTemplateSpecContent.properties.mainTemplate | Add-Member -NotePropertyName "metadata" -NotePropertyValue ([PSCustomObject]@{});
+                                foreach($var in $playbookMetadata.PsObject.Properties) {
+                                    if ($var.Name -ne "author" -and $var.Name -ne "support" -and $var.Name -ne "prerequisitesDeployTemplateFile") {
+                                        $playbookTemplateSpecContent.properties.mainTemplate.metadata | Add-Member -NotePropertyName $var.Name -NotePropertyValue $var.Value;
+                                    }
+                                }
+                                if (!$playbookTemplateSpecContent.properties.mainTemplate.metadata.'lastUpdateTime') {
+                                    $playbookTemplateSpecContent.properties.mainTemplate.metadata | Add-Member -NotePropertyName "lastUpdateTime" -NotePropertyValue (get-date -format "yyyy-MM-ddTHH:mm:ss.fffZ");
+                                }
+                            }
+                            if (!$playbookMetadata.releaseNotes -and $playbookTemplateSpecContent.properties.mainTemplate.metadata) {
+                                Write-Host "adding default release notes"
+                                $releaseNotes = [PSCustomObject]@{
+                                    version = $playbookVersion;
+                                    title      = "[variables('blanks')]";
+                                    notes      = @("Initial version");
+                                }
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata | Add-Member -NotePropertyName 'releaseNotes' -NotePropertyValue $releaseNotes;
+                                if (!$baseMainTemplate.variables.blanks) {
+                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                                }
+                            }
+
+                            $baseMainTemplate.resources += $playbookTemplateSpecContent;
+                        }
+                        else
+                        {
+                            $baseMainTemplate.resources += $playbookResources;
+                        }
+
                         if ($azureManagementUrlExists) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "azureManagementUrl" -NotePropertyValue $azureManagementUrl
                         }
+
                         $playbookCounter += 1
                     }
                     elseif ($objectKeyLowercase -eq "data connectors") {
@@ -838,7 +1153,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 if($existingFunctionApp)
                                 {
                                     $connectorData.title = $connectorData.title + " (using Azure Function)";
-                                }            
+                                }
                                 # if($instructionArray.IndexOf('[Deploy To Azure]') -gt 0)
                                 # {
                                 #     $connectorData.title = $connectorData.title + "(using Azure Function)";
@@ -968,7 +1283,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             if($contentToImport.TemplateSpec){
                                 $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
-                                
+
                             }
 
                             $connectorObj = [PSCustomObject]@{
@@ -1014,7 +1329,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         if ($connectorData.additionalRequirementBanner) {
                             $connectorObj.properties.connectorUiConfig | Add-Member -NotePropertyName "additionalRequirementBanner" -NotePropertyValue $connectorData.additionalRequirementBanner
                         }
-                        
+
                         $baseMainTemplate.resources += $connectorObj
 
                         $syslog = "Syslog"
