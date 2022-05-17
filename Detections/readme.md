@@ -13,3 +13,4 @@ More Specific to Detections:
 
 # Feedback
 For questions or feedback, please contact AzureSentinel@microsoft.com
+
