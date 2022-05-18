@@ -1,28 +1,27 @@
-# Vendor Product API Logic Apps Custom connector
+# AbuseIPDB Logic Apps Custom connector
 
-This Custom Connector is used for connection to Vendor Product API.
+<img src="../abuseipdb-logo.svg" alt="drawing" width="20%"/><br>
 
-### Authentication methods supported by this connector
+This custom connector connects to the AbuseIPDB REST API.
 
-* API Key authentication
+### Authentication methods this connector supports
 
-### Prerequisites in Vendor Product
+*  Api Key authentication
 
-To get Vendor Product API credentials, follow the instructions:
-
-1. 1.
-2. 2.
-3. 3.
-
-## Actions supported by Vendor Product API Custom Connector
-
-| **Component** | **Description** |
-| --------- | -------------- |
-| **action** | short description |
+### Configurations steps
+1. Deploy the connector using **Deploy to Azure** button.
+2. Users will be required to provide the API Key when creating a connection.
 
 
-### Deployment instructions
 
-1. To deploy Custom Connector, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fbase-playbooks-solution%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2FVendorProductAPIConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fbase-playbooks-solution%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2FVendorProductAPIConnector%2Fazuredeploy.json)
+## Actions supported by the connector
+
+The connector supports all the actions of [AbuseIPDB API](https://docs.abuseipdb.com/#introduction).
+
+
+
+### Deployment instructions 
+1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FAbuseIPDB%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDBAPIConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FAbuseIPDB%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDBAPIConnector%2Fazuredeploy.json)
