@@ -11,3 +11,4 @@ Here's an inventory of Microsoft Sentinel tools.
 * [Azure-Sentinel2Go](https://github.com/OTRF/Azure-Sentinel2Go) - Expedites deployment of Microsoft Sentinel lab with pre-recorded datasets
 
 ## Microsoft Sentinel Integrations
+
