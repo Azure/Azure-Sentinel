@@ -317,7 +317,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$workbookCounter" -NotePropertyValue "$($dependencies.workbookKey)"
                             $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookId$workbookCounter" -NotePropertyValue "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId$workbookCounter'))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId$workbookCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "workbookTemplateSpecName$workbookCounter" -NotePropertyValue "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId$workbookCounter')))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbookContentId$workbookCounter" -NotePropertyValue "[variables('workbookContentId$workbookCounter')]"
                             $DependencyCriteria += [PSCustomObject]@{
                                 kind      = "Workbook";
@@ -911,7 +911,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbookId$playbookCounter" -NotePropertyValue "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId$playbookCounter'))]"
                             }
 
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$playbookCounter" -NotePropertyValue ($IsLogicAppsCustomConnector ? "[concat(parameters('workspace'),'-LogicAppsCustomConnector-',variables('_playbookContentId$playbookCounter'))]" : "[concat(parameters('workspace'),'-Playbook-',variables('_playbookContentId$playbookCounter'))]")
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "playbookTemplateSpecName$playbookCounter" -NotePropertyValue ($IsLogicAppsCustomConnector ? "[concat(parameters('workspace'),'-lc-',uniquestring(variables('_playbookContentId$playbookCounter')))]" : "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId$playbookCounter')))]")
                             # Add workspace resource ID if not available
                             if (!$baseMainTemplate.variables.workspaceResourceId) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
@@ -1117,7 +1117,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$connectorCounter" -NotePropertyValue "[variables('dataConnectorContentId$connectorCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorId$connectorCounter" -NotePropertyValue "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorId$connectorCounter" -NotePropertyValue "[variables('dataConnectorId$connectorCounter')]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateSpecName$connectorCounter" -NotePropertyValue "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId$connectorCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateSpecName$connectorCounter" -NotePropertyValue "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId$connectorCounter')))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$connectorCounter" -NotePropertyValue (($null -ne $connectorData.metadata) ? "$($connectorData.metadata.version)" : "1.0.0")  #$contentToImport.Version
                             if (!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "parentId" -NotePropertyValue $solutionId
@@ -1655,7 +1655,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if($contentToImport.TemplateSpec) {
 
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryId$huntingQueryCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('_huntingQuerycontentId$huntingQueryCounter'))]"
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'-HuntingQuery-',variables('_huntingQuerycontentId$huntingQueryCounter'))]"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryTemplateSpecName$huntingQueryCounter" -NotePropertyValue "[concat(parameters('workspace'),'-hq-',uniquestring(variables('_huntingQuerycontentId$huntingQueryCounter')))]"
                                 if (!$baseMainTemplate.variables.workspaceResourceId) {
                                     $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                                 }
@@ -1927,7 +1927,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if($contentToImport.TemplateSpec) {
 
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleId$analyticRuleCounter" -NotePropertyValue "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId$analyticRuleCounter'))]"
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-AnalyticsRule-',variables('_analyticRulecontentId$analyticRuleCounter'))]"
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId$analyticRuleCounter')))]"
                                 if (!$baseMainTemplate.variables.workspaceResourceId) {
                                     $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                                 }
@@ -2076,7 +2076,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-Parser-',variables('_parserContentId$parserCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$parserCounter')))]"
                             # Add workspace resource ID if not available
                             if (!$baseMainTemplate.variables.workspaceResourceId) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
