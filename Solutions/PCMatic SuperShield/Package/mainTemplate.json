@@ -30,7 +30,23 @@
     },
     "connector1-name": {
       "type": "string",
-      "defaultValue": "b781b2e3-c925-4325-ad25-3cfc6e14bbdf"
+      "defaultValue": "acd9f7ba-ac62-4ed1-aee3-55a4c66357f2"
+    },
+    "analytic1-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the scheduled alert rule"
+      }
+    },
+    "analytic2-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the scheduled alert rule"
+      }
     },
     "playbook1-PlaybookName": {
       "defaultValue": "AllowProcess",
@@ -57,6 +73,10 @@
     "_connector1-source": "[variables('connector1-source')]",
     "PCMSSConnector": "PCMSSConnector",
     "_PCMSSConnector": "[variables('PCMSSConnector')]",
+    "KnownBadProcess_AnalyticalRules": "KnownBadProcess_AnalyticalRules",
+    "_KnownBadProcess_AnalyticalRules": "[variables('KnownBadProcess_AnalyticalRules')]",
+    "UnknownProcess_AnalyticalRules": "UnknownProcess_AnalyticalRules",
+    "_UnknownProcess_AnalyticalRules": "[variables('UnknownProcess_AnalyticalRules')]",
     "playbook1-AllowProcess": "playbook1-AllowProcess",
     "_playbook1-AllowProcess": "[variables('playbook1-AllowProcess')]",
     "playbook1-MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('playbook1-PlaybookName'))]",
@@ -211,6 +231,128 @@
           ],
           "additionalRequirementBanner": "This data connector depends on a parser based on Kusto Function to work as expected. Follow the steps to use this Kusto Function alias **SuperShieldActivity** in queries and workbooks. [Follow steps to get this Kusto Function>](https://aka.ms/sentinel-ciscoise-parser)"
         }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "Identifies known bad processes blocked by SuperShield",
+        "displayName": "PCMatic SuperShield Known Bad Processes",
+        "enabled": false,
+        "query": "SuperShieldActivity\n| where TimeGenerated >= ago(5m)\n| where Severity == 0\n| where IsUnknown == 0 or IsUnknown == \"false\"\n| summarize by FileHash, FileName, Host, DeviceAddress, ParentPath, CmdLineArgs, TimeGenerated\n",
+        "queryFrequency": null,
+        "queryPeriod": null,
+        "severity": "High",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": null,
+        "triggerThreshold": null,
+        "tactics": [
+          "Execution"
+        ],
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Value",
+                "columnName": "FileHash"
+              }
+            ],
+            "entityType": "FileHash"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "DeviceAddress"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Host"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "FileName"
+              }
+            ],
+            "entityType": "File"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic2-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "Identifies unknown processes blocked by SuperShield",
+        "displayName": "PCMatic SuperShield Unknown Process",
+        "enabled": false,
+        "query": "SuperShieldActivity\n| where TimeGenerated >= ago(5m)\n| where Severity == 0\n| where IsUnknown == 1\n| summarize by FileHash, FileName, Host, DeviceAddress, ParentPath, CmdLineArgs, TimeGenerated\n",
+        "queryFrequency": null,
+        "queryPeriod": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": null,
+        "triggerThreshold": null,
+        "tactics": [
+          "Execution"
+        ],
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Value",
+                "columnName": "FileHash"
+              }
+            ],
+            "entityType": "FileHash"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "DeviceAddress"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Host"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "FileName"
+              }
+            ],
+            "entityType": "File"
+          }
+        ]
       }
     },
     {
@@ -403,6 +545,16 @@
             {
               "kind": "DataConnector",
               "contentId": "[variables('_PCMSSConnector')]",
+              "version": "1.0.0"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_KnownBadProcess_AnalyticalRules')]",
+              "version": "1.0.0"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_UnknownProcess_AnalyticalRules')]",
               "version": "1.0.0"
             },
             {
