@@ -1079,7 +1079,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "PT$field"
                                 }
                             }
-                            Write-Host $yaml
                             $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
