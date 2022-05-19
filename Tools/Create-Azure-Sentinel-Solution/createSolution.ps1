@@ -120,6 +120,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 catch {
                     $validJson = $false;
                 }
+                Write-Host $validJson;
 				#Replace the special characters in the solution name.
 				function Replace-SpecialChars {
 				param($InputString,$Type)
