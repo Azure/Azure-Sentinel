@@ -11,19 +11,32 @@
 // | project TimeGenerated, IsWorkingTime(TimeGenerated)
 //
 //let Function = (date_time:datetime = datetime(null)){
-    let schedule_start_hour = 8;
-    let schedule_end_hour = 18;
-    let schedule_friday_end_hour = 14;
-    let Winter = 1h; //Central European Time
-    let Summer = 2h; // Central European Summer Time
+    // If empty, take current time
     let parsed_date_time = iff(isnull(date_time), now(), date_time);
-    let FirstEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 3, 1))); //First European Daylight Saving Time
-    let SecondEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 10, 1))); //Second European Daylight Saving Time
-    let corrected_date_time = parsed_date_time + iff(parsed_date_time between (FirstEuropeDST..SecondEuropeDST), Summer, Winter);
-    let _HourOfDay = hourofday(corrected_date_time);
-    let _DayOfWeek = dayofweek(corrected_date_time - 1d)/1d + 1;
-    case(_DayOfWeek < 5 and _HourOfDay between (schedule_start_hour..(schedule_end_hour - 1)), true,
-        _DayOfWeek == 5 and _HourOfDay between (schedule_start_hour..(schedule_friday_end_hour - 1)), true,
+    // Start and end hours of daily work schedule
+    let schedule_start_hour = 8;
+    let schedule_end_hour = 17;
+    let schedule_intensive_end_hour = 15;
+    let schedule_friday_end_hour = 14;
+    // Start date of intensive working time
+    let IntensiveStartTime = make_datetime(getyear(parsed_date_time), 6, 16);
+    // End date of intensive working time
+    let IntensiveEndTime = make_datetime(getyear(parsed_date_time), 9, 16);
+    // Timezone hour offsets versus UTC
+    let winter_UTC_offset = 1h; // For Central European Time
+    let summer_UTC_offset = 2h; // For Central European Summer Time
+    // Compute hour and day integer values of timezone date versus UTC
+    let FirstEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 3, 1))); // First European Daylight Saving Time
+    let SecondEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 10, 1))); // Second European Daylight Saving Time
+    let corrected_date_time = parsed_date_time + iff(parsed_date_time between (FirstEuropeDST..SecondEuropeDST), summer_UTC_offset, winter_UTC_offset);
+    let hour_of_day = hourofday(corrected_date_time);
+    let day_of_week = dayofweek(corrected_date_time - 1d)/1d + 1;
+    let Intensive = corrected_date_time between (IntensiveStartTime..IntensiveEndTime);
+    // Return boolean indicating if a date is working time
+    case(
+        day_of_week < 5 and not(Intensive) and hour_of_day between (schedule_start_hour..(schedule_end_hour - 1)), true, // Monday to Thursday
+        day_of_week < 5 and Intensive and hour_of_day between (schedule_start_hour..(schedule_intensive_end_hour - 1)), true, // Intensive Monday to Thursday
+        day_of_week == 5 and hour_of_day between (schedule_start_hour..(schedule_friday_end_hour - 1)), true, // Friday
         false)
 //};
 //Function(date_time)
