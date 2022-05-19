@@ -1,31 +1,16 @@
-# AcrSight Logger Archives Migration
+# lacat script for AcrSight Logger Archives Migration
 
-The SIEM data migration accelerator helps you with the setup of the different tools and Azure services needed to perform the migration of historical logs from other SIEM vendors to Azure.
+This utility can be used to export CEF records ( available in dat format) from ArcSight Logger archive. The output can be exported to specified output file in the JSON format. When the file is not specified, the output is printed over stdout (by default).
 
-This tool is deployed through an ARM template and performs the following steps:
 
-- Deploys a Windows Virtual Machine that will be used to move the logs from source to target
+- Method to run this script
 
-- Downloads and extracts the following tools into the Virtual Machine's desktop:
+    $META=ArcSight_Metadata_1_504403158265500976.csv.gz
 
-    + [LightIngest](https://docs.microsoft.com/azure/data-explorer/lightingest) (used to migrate data to ADX)
+    $ERRLOG=Err_1_504403158265500976.log
 
-    + [Azure Monitor Custom log ingestion tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/CustomLogsIngestion-DCE-DCR) (used to migrate data to Log Analytics)
-
-    + [AzCopy](https://docs.microsoft.com/azure/storage/common/storage-use-azcopy-v10) (used to migrate data to Azure Blob Storage)
-
-- Deploys the target platform that will host your historical logs. To choose from:
-
-    + Azure Storage account
+    $JSONOUT=Out_1_504403158265500976.json.gz
     
-    + Azure Data Explorer cluster and database
+    $DATIN=ArcSight_Data_1_0504403158265500976.dat
 
-    + Azure Monitor Logs workspace (enabled with Microsoft Sentinel)
-
-    + Skip. You also have the option to skip this step if your target platform has been already created.
-
-## Usage
-
-To deploy this tool, just click on the link below and follow the wizard steps:
-
-[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjaviersoriano%2Fsiem-data-migration%2Fmaster%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fjaviersoriano%2Fsiem-data-migration%2Fmaster%2FcreateUiDefinition.json)
+    ./lacat-opt.py -j $DATIN $META  2> $ERRLOG | gzip -c > $JSONOUT
