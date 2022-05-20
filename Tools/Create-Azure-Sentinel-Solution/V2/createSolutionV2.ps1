@@ -1245,6 +1245,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId$connectorCounter'),'/'))))]";
                                 dependsOn  = @("[variables('_dataConnectorId$connectorCounter')]");
+                                location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject]@{
                                     parentId  = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]";
                                     contentId = "[variables('_dataConnectorContentId$connectorCounter')]";
@@ -2185,6 +2186,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
                                 apiVersion = "2021-06-01";
                                 name       = "[variables('_parserName$parserCounter')]";
+                                location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject] @{
                                     eTag          = "*";
                                     displayName   = "$fileName";
@@ -2199,6 +2201,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $parserMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
+                                location   = "[parameters('workspace-location')]";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
                                 dependsOn  =  @(
                                     "[variables('_parserId$parserCounter')]"
@@ -2292,6 +2295,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 $newMetadata = [PSCustomObject]@{
                     type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                     apiVersion = "2022-01-01-preview";
+                    location   = "[parameters('workspace-location')]";
                     properties = [PSCustomObject] @{
                         version = $contentToImport.Version;
                         kind    = "Solution";
