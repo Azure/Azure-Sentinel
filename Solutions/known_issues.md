@@ -27,20 +27,8 @@ Workbooks and Hunting queries deployed by Solutions may miss correct metadata in
 A central option to uninstall all content associated with an Microsoft Sentinel Solution is not available. Content associated with a Solution can be deleted by exercising the delete option available in the respective galleries for each content type in alignment with the feature gallery UX support (some feature galleries may not provide a content delete option by design). 
 
 ## Known Issue #6 - CSP Program Enablement
-Few Microsoft Sentinel solutions are selectively enabled for CSP Program (Cloud Service Providers) in Content hub. 
+All Microsoft Sentinel solutions are now enabled for CSP Program (Cloud Service Providers) in Content hub. If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription and encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers', please contact Microsoft Support.
 
-* Following solutions in Microsoft Sentinel Content hub have been enabled for CSP Program and should work as expected while installing the solution from a CSP subscription.  
-1. Cloudflare
-2. Log4j Vulnerability Detection
-3. Training Lab
-4. RiskIQ Illuminate
-5. Crowdstrike Falcon Endpoint Protection
-6. Palo Alto Prisma
-7. Imperva WAF Cloud
-8. Cybersecurity Maturity Model Certification CMMC
-9. Sophos Endpoint Protection
-
-* If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription for those solutions not yet enabled for CSP Program (not from the list above), you'll encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers'. 
 
 ## Known Issue #7 - Private solutions in Content hub
 Private solutions or [Azure Marketplace private offers](https://docs.microsoft.com/azure/marketplace/private-plans) are not currently supported in Microsoft Sentinel Content hub. 
