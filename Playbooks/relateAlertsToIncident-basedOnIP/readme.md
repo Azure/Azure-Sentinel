@@ -1,4 +1,4 @@
-# relateAlertsToIncident-basedOnIP-pp
+# relateAlertsToIncident-basedOnIP
  ## Summary
 This playbook looks for other alerts with the same IP as the triggered incident. When such an alert is found, it will add each one to the incident only if they aren't related already to another incident.
 
