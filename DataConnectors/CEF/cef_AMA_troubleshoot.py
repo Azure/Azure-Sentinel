@@ -700,6 +700,7 @@ def main():
                 "In order to open a support case please browse: {}".format(
                     COLLECT_OUTPUT_FILE, PATH_FOR_CSS_TICKET))
             time.sleep(1)
+        # Print help message on how to use the script
         elif str(sys.argv[1]) in help_feature_flag:
             print(SCRIPT_HELP_MESSAGE)
             exit()
