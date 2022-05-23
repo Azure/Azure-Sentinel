@@ -1,11 +1,11 @@
-// Title:           Infoblox parser for type - DNS-client
+// Title:           Infoblox parser for type - DHCPACK
 // Author:          Microsoft
 // Version:         1.1
 // Last Updated:    20/05/2022
 // Comment:         Updated to only parse the MSG (RFC3164) part of the Syslog message. Excluded the Header.
 //
 // DESCRIPTION:
-// This parser comprised of function - Infoblox_dnsclient
+// This parser comprised of function - Infoblox_dhcpack
 //
 // USAGE:
 // USAGE:
@@ -24,16 +24,19 @@
 //      May 13 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020
 let datasource = (_GetWatchlist('Sources_by_SourceType')| project Source);
 Syslog
-    | where ProcessName == "named" and SyslogMessage has "client"
+    | where ProcessName == "dhcpd" and SyslogMessage has "DHCPACK"
     | where Computer in (datasource)
-    | extend dnsclient = extract_all(@"(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+)(\s\((\S+)\))?\:\s(?:view\s)?(\S+)?(?:\:\s)?((UDP|TCP)\:\s?)??query\:\s(\S+)\s(\S+)\s(\S+)(\sresponse:\s([A-Z]+))?\s(\S+)(.*)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), SyslogMessage)[0]
-    | extend Client_IP = tostring(dnsclient[1]),
-        Port = tostring(dnsclient[2]),
-        Protocol = tostring(dnsclient[7]),
-        QueryDomainName = tostring(dnsclient[8]),
-        ClassName = tostring(dnsclient[9]),
-        RecordType = tostring(dnsclient[10]),
-        ResponseCode = tostring(dnsclient[12]),
-        Flag = tostring(dnsclient[13]),
-        Message = tostring(dnsclient[14])
-    | project-away SyslogMessage, dnsclient;
+    | extend dhcpack = extract_all(@"(\s\w+\s(\S+))\sto\s(\S+)\svia\s(\S+)(\srelay\s(\S+))?(\slease-duration\s(\d+))?(\s\(([a-zA-Z]+)\))?(\suid\s(\S+))?", dynamic([1,2,3,4,5,6,7,8,9,10,11]), SyslogMessage)[0]
+    | extend IPAddress = tostring(dhcpack[1]), 
+        Client_MAC_Address = tostring(dhcpack[2]),
+        Interface = tostring(dhcpack[4]),
+        Relay = tostring(dhcpack[5]), 
+        LeaseDuration = tostring(dhcpack[7]),
+        Client_Hostname = tostring(dhcpack[3]),
+        State = tostring(dhcpack[10])
+    | extend dhcpack2 = extract_all(@"to\s(\S+)\s\((\S+)\)\svia\s(\S+)", dynamic([1,2,3]), SyslogMessage)[0]
+    | extend IPAddress = iif(isempty(dhcpack),tostring(dhcpack2[0]),IPAddress),
+            Client_MAC_Address = iif(isempty(dhcpack),tostring(dhcpack2[1]),Client_MAC_Address),
+            Interface = iif(isempty(dhcpack),tostring(dhcpack2[2]),Interface),
+            Log_Type = "DHCPACK"
+    | project-away SyslogMessage, dhcpack, dhcpack2;
