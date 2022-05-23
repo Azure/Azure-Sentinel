@@ -1562,7 +1562,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             };
 
                             if ($huntingQueryCounter -eq 1) {
-                                if (!$(queryResourceExists)) {
+                                if (!$(queryResourceExists) -and !$contentToImport.TemplateSpec) {
                                     $baseHuntingQueryResource = [PSCustomObject] @{
                                         type       = "Microsoft.OperationalInsights/workspaces";
                                         apiVersion = "2021-06-01";
@@ -2224,7 +2224,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $baseMainTemplate.resources += $parserMetadata
                         }
                         else {
-                            if ($parserCounter -eq 1 -and !$(queryResourceExists)) {
+                            if ($parserCounter -eq 1 -and $(queryResourceExists) -and !$contentToImport.TemplateSpec) {
                                 $baseParserResource = [PSCustomObject] @{
                                     type       = "Microsoft.OperationalInsights/workspaces";
                                     apiVersion = "2020-08-01";
@@ -2421,13 +2421,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $parserCounter -= 1
     $huntingQueryCounter -= 1
     $watchlistCounter -= 1
-    updateDescriptionCount $connectorCounter    "**Data Connectors:** " "{{DataConnectorCount}}" $(checkResourceCounts $parserCounter, $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
-    updateDescriptionCount $parserCounter       "**Parsers:** "         "{{ParserCount}}"        $(checkResourceCounts $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
-    updateDescriptionCount $workbookCounter     "**Workbooks:** "       "{{WorkbookCount}}"      $(checkResourceCounts $analyticRuleCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
-    updateDescriptionCount $analyticRuleCounter "**Analytic Rules:** "  "{{AnalyticRuleCount}}"  $(checkResourceCounts $playbookCounter, $huntingQueryCounter, $watchlistCounter)
-    updateDescriptionCount $huntingQueryCounter "**Hunting Queries:** " "{{HuntingQueryCount}}"  $(checkResourceCounts $playbookCounter, $watchlistCounter)
-    updateDescriptionCount $watchlistCounter    "**Watchlists:** "      "{{WatchlistCount}}"     $(checkResourceCounts @($playbookCounter))
-    updateDescriptionCount $playbookCounter     "**Playbooks:** "       "{{PlaybookCount}}"      $false
+    updateDescriptionCount $connectorCounter                                "**Data Connectors:** "                     "{{DataConnectorCount}}"            $(checkResourceCounts $parserCounter, $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $parserCounter                                   "**Parsers:** "                             "{{ParserCount}}"                   $(checkResourceCounts $analyticRuleCounter, $workbookCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $workbookCounter                                 "**Workbooks:** "                           "{{WorkbookCount}}"                 $(checkResourceCounts $analyticRuleCounter, $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $analyticRuleCounter                             "**Analytic Rules:** "                      "{{AnalyticRuleCount}}"             $(checkResourceCounts $playbookCounter, $huntingQueryCounter, $watchlistCounter)
+    updateDescriptionCount $huntingQueryCounter                             "**Hunting Queries:** "                     "{{HuntingQueryCount}}"             $(checkResourceCounts $playbookCounter, $watchlistCounter)
+    updateDescriptionCount $watchlistCounter                                "**Watchlists:** "                          "{{WatchlistCount}}"                $(checkResourceCounts @($playbookCounter))
+    updateDescriptionCount $customConnectorsList.Count                      "**Custom Azure Logic Apps Connectors:** "  "{{LogicAppCustomConnectorCount}}"  $(checkResourceCounts @($playbookCounter))
+    updateDescriptionCount ($playbookCounter - $customConnectorsList.Count) "**Playbooks:** "                           "{{PlaybookCount}}"                   $false
 
     # Update Logo in CreateUiDefinition Description
     if ($contentToImport.Logo) {
