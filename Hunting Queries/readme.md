@@ -12,3 +12,4 @@ More Specific to Hunting Queries:
 
 # Feedback
 For questions or feedback, please contact AzureSentinel@microsoft.com
+
