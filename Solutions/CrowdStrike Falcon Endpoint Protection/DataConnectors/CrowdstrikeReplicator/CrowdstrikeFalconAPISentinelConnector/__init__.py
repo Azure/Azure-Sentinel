@@ -12,6 +12,8 @@ import time
 import aiohttp
 import logging
 import azure.functions as func
+import itertools
+from operator import itemgetter
 from .state_manager import StateManager
 
 WORKSPACE_ID = os.environ['WorkspaceID']
@@ -87,15 +89,36 @@ def customize_event(line):
         event["custom_fields_message"] = custom_fields_data_text
     return event
 
+def sort_files_by_bucket(array_obj):
+    array_obj = sorted(array_obj, key=itemgetter('bucket'))
+    sorted_array = []
+    temp_array = []
+    for key, value in itertools.groupby(array_obj, key=itemgetter('bucket')):
+        for i in value:
+            temp_array.append({'path': i.get('path')})
+        sorted_array.append({'bucket': key, 'files': temp_array})
+    return sorted_array
+
 async def main(mytimer: func.TimerRequest):
     global drop_files_array
     drop_files_array.clear()
     script_start_time = int(time.time())
-    filepath = f'{script_start_time}_file'
+    filepath = 'drop_files_array_file'
     state = StateManager(connection_string=connection_string, share_name='funcstatemarkershare', file_path=filepath)
+    last_dropped_messages = state.get()
+    last_dropped_messages_obj = ''
+    if last_dropped_messages != None and last_dropped_messages != '':
+        last_dropped_messages_obj = json.loads(last_dropped_messages)
+        state.post('')
+        logging.info("Detected files which not processed or previously processed with errors. Files count: {}. These files will be added to the common array for re-processing".format(len(last_dropped_messages_obj)))
     logging.info("Creating SQS connection")
     async with _create_sqs_client() as client:
         async with aiohttp.ClientSession() as session:
+            if len(last_dropped_messages_obj) > 0:
+                logging.info("Processing files which added to re-processing. Files: {}".format(last_dropped_messages_obj))
+                last_dropped_messages_obj_sorted = sort_files_by_bucket(last_dropped_messages_obj)
+                for reprocessing_file_msg in last_dropped_messages_obj_sorted:
+                    await download_message_files(reprocessing_file_msg, session)
             logging.info('Trying to check messages off the queue...')
             try:
                 response = await client.receive_message(
@@ -108,7 +131,7 @@ async def main(mytimer: func.TimerRequest):
                         body_obj = json.loads(msg["Body"])
                         logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}. Timestamp: {}.".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"], body_obj["timestamp"]))
                         await download_message_files(body_obj, session)
-                        logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))       
+                        logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))
                         try:
                             await client.delete_message(
                                 QueueUrl=QUEUE_URL,
@@ -122,7 +145,7 @@ async def main(mytimer: func.TimerRequest):
                 pass
     if len(drop_files_array) > 0:
         logging.info("list of files that were not processed: {}".format(drop_files_array))
-        state.post(str(drop_files_array))
+        state.post(str(json.dumps(drop_files_array)))
 
 async def process_file(bucket, s3_path, client, semaphore, session):
     async with semaphore:
@@ -136,42 +159,35 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                                                 LOG_TYPE, 
                                                 queue_size=MAX_BUCKET_SIZE
                                                 )
-        try_number = 1
-        while True:
-            try:
-                response = await client.get_object(Bucket=bucket, Key=s3_path)
-                s = ''
-                async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
-                    s += decompressed_chunk.decode(errors='ignore')
-                    lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
-                    for n, line in enumerate(lines):
-                        if n < len(lines) - 1:
-                            if line:
-                                try:
-                                    event = customize_event(line)
-                                except ValueError as e:
-                                    logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                                await sentinel.send(event)
-                    s = line
-                if s:
-                    try:
-                        event = customize_event(line)
-                    except ValueError as e:
-                        logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                    await sentinel.send(event)
-                await sentinel.flush()   
-            except Exception as e:
-                if try_number < 3:
-                    await asyncio.sleep(try_number)
-                    try_number += 1
-                    logging.warn('Error while getting data from file {}. Try number: {}. Trying one more time. {}'.format(s3_path,try_number, e))
-                else:
-                    logging.error('Error. File was not read after few attempts. Adding file name to temp bucket. File: {}'.format(s3_path))
-                    drop_files_array.append({"bucket": bucket, "path": s3_path})
-            else:
-                total_events += sentinel.successfull_sent_events_number
-                logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))         
-                break
+        try:
+            response = await client.get_object(Bucket=bucket, Key=s3_path)
+            s = ''
+            async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
+                s += decompressed_chunk.decode(errors='ignore')
+                lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+                for n, line in enumerate(lines):
+                    if n < len(lines) - 1:
+                        if line:
+                            try:
+                                event = customize_event(line)
+                            except ValueError as e:
+                                logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                                raise e
+                            await sentinel.send(event)
+                s = line
+            if s:
+                try:
+                    event = customize_event(line)
+                except ValueError as e:
+                    logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
+                    raise e
+                await sentinel.send(event)
+            await sentinel.flush()
+            total_events += sentinel.successfull_sent_events_number
+            logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
+        except Exception as e:
+            logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
+            drop_files_array.append({'bucket': bucket, 'path': s3_path})
 
 async def download_message_files(msg, session):
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSING_FILES)
