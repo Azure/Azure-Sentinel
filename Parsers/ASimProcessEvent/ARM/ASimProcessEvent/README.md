@@ -1,6 +1,6 @@
 # Source Agnostic ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Source Agnostic.
+ARM template for ASIM ProcessEvent schema parser for Source Agnostic.
 
 This ASIM parser supports normalizing process event logs from all supported sources to the ASIM ProcessEvent normalized schema.
 
