@@ -1,14 +1,15 @@
 # Microsoft 365 Defender for endpoint ASIM ProcessEvent Normalization Parser
 
-This template deploys the ASIM ProcessEvent schema parser for Microsoft 365 Defender for endpoint.
+ARM template for ASIM ProcessEvent schema parser for Microsoft 365 Defender for endpoint.
 
-This ASIM parser supports filtering and normalizing Microsoft 365 Defender for endpoint to the ASIM Process Event normalized schema.
+This ASIM parser supports normalizing Microsoft 365 Defender for endpoint to the ASIM Process Event normalized schema.
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM ProcessEvent normalization schema reference](https://aka.ms/ASimProcessEventDoc)
 
