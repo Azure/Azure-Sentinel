@@ -31,10 +31,10 @@ SentinelGithub
   
 ***KQL Query***
 ```
-let MSFTServices = (externaldata(Alert: string, Description: string, Tactics:string, Severity:string, Provider:string, DetectionService: string)
-[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MSFT-Builtin-Alerts.csv"]
+let MSFTBuiltinAlerts = (externaldata(Alert: string, Description: string, Tactics:string, Severity:string, Provider:string, DetectionService: string)
+[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MSFT-Builtin-Alerts.csv"] with (format="csv", ignoreFirstRecord=True)
 );
-MSFTServices
+MSFTBuiltinAlerts
 ```
 
  ## Setup
