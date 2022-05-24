@@ -1,19 +1,19 @@
-# The Advanced SIEM Information Model (ASIM) Authentication parsers
+# The Advanced Security Information Model (ASIM) Authentication parsers
 
-This folder includes the the Advanced SIEM Information Model (ASIM) Authentication parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
+This folder includes the the Advanced Security Information Model (ASIM) Authentication parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
 
-The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Advanced SIEM Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Microsoft Sentinel Authentication normalization schema reference](https://aka.ms/AzSentinelAuthenticationDoc)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Microsoft Sentinel Authentication normalization schema reference](https://aka.ms/ASimAuthenticationDoc)
 
 <br>
 
 To deploy all parsers to your workspace using ARM templates use the button below:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelAuthenticationARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM)
 
 <br>
 
@@ -40,7 +40,7 @@ This template deploys the following parsers:
 
 ## Parser parameters
 
-Parametersize parsers support the following parameters which allow for pre-filtering and therefore significantly enhance parser perofrmance. All parameters are optional. The results will match all of the used parameters (AND logic).
+Parameterized parsers support the following parameters which allow for pre-filtering and therefore significantly enhance parser perofrmance. All parameters are optional. The results will match all of the used parameters (AND logic).
 
 To use parameters, set their value as you invoke the parser, for example
 
