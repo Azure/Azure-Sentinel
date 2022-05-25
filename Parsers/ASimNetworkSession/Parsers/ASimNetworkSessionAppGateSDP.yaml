@@ -1,0 +1,91 @@
+Parser:
+  Title: Network Session ASIM parser for AppGate SDP
+  Version: '0.1'
+  LastUpdated: May 24, 2021
+Product:
+  Name: AppGate SDP
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing AppGate SDP logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionAppGateSDP
+EquivalentBuiltInParser: _ASim_NetworkSession_AppGateSDP
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false) 
+  {
+    AppGate_CL
+    // | where ProcessName == "cz-sessiond" or ProcessName == "cz-vpnd"
+    | where RawData has_all ("[AUDIT]","ip_access") and RawData has_any ("cz-sessiond", "cz-vpnd")
+    | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  RawData)
+    | where type == "ip_access"
+    | parse RawData with 
+        *
+        '"action":"' action:string '",' // -- to be normalized based on list of values.
+        *
+        '"client_ip":"' SrcIpAddr:string '",'
+        '"client_port":' SrcPortNumber:int ','
+        *
+        '"destination_ip":"' DstIpAddr:string '",'
+        '"destination_port":' DstPortNumber:int ','
+        '"direction":"' direction:string '",' // -- to be normalized based on list of values.
+        *
+        '"distinguished_name_device_id":"' SrcDvcId:string '",'
+        '"distinguished_name_user":"' SrcUsername:string '",'
+        '"entitlement_token_id":"' NetworkSessionId:string '",'
+        *
+        '"city_name":"' SrcGeoCity:string '",'
+        *
+        '"country_name":"' SrcGeoCountry:string '",'
+        *
+        '"lat":' SrcGeoLatitude:real ','        
+        '"lon":' SrcGeoLongitude:real '},'
+        *
+        '"region_name":"' SrcGeoRegion:string '",'      
+        * 
+        '"packet_size":' SrcBytes:long ','
+        '"protocol":"' NetworkProtocol:string '",'  
+        *          
+        '"rule_name":"' NetworkRuleName:string '",'  
+        '"source_ip":"' DvcIpAddr:string '",' 
+        *
+        '"version":' EventProductVersion:string '}'
+        *
+    | extend 
+        SrcDvcIdType = 'AppGateId',
+        SrcUsernameType = 'UPN'
+    // -- Event fields
+    | project-rename 
+        DvcHostname = Computer
+    | extend 
+        EventCount = int(1),
+        EventEndTime = TimeGenerated,
+        EventStartTime = TimeGenerated,
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion = '0.2.3',
+        EventVendor = 'AppGate',
+        EventProduct = 'SDP',
+        EventSeverity = 'Informational', // To do based on action
+        EventType = 'NetworkSession',
+        EventResult = 'Success' // To do based on action
+    // -- Aliases
+    | extend 
+        Src = SrcIpAddr,
+        Dst = DstIpAddr,
+        Dvc = DvcIpAddr,
+        SessionId = NetworkSessionId,
+        IpAddr = SrcIpAddr,
+        Rule = NetworkRuleName
+    | project-away 
+        RawData, type
+  };
+  parser (disabled)
