@@ -1,0 +1,41 @@
+id: f2458594-5671-493d-9c08-aee4bf783a1d
+name: detect-suspicious-rdp-connections
+description: |
+  This query was originally published in the threat analytics report, Exploitation of CVE-2019-0708 (BlueKeep).
+  CVE-2019-0708, also known as BlueKeep, is a critical remote code execution vulnerability involving RDP. Soon after its disclosure, the NSA issued a rare advisory about this vulnerability, out of concern that it could be used to quickly spread malware. Attackers have since used this vulnerability to install cryptocurrency miners on targets.
+  Microsoft has issued updates for this vulnerability, as well as guidance for protecting operating systems that we no longer support. Microsoft Defender ATP also contains behavioral detections for defending against this threat.
+  The following query locates Windows 7 or Windows Server 2008 machines initiating outbound connections to internal or public IP addresses on TCP port 3389. It filters out common RDP programs and scanning tools and shows the number of connections per machine. It can identify machines with relatively intense outbound network activity on the common RDP port (TCP/3389). You can use it to find processes that might be scanning for possible targets or exhibiting worm-like behavior.
+  References:
+  https://nvd.nist.gov/vuln/detail/CVE-2019-0708
+  https://www.nsa.gov/News-Features/News-Stories/Article-View/Article/1865726/nsa-cybersecurity-advisory-patch-remote-desktop-services-on-legacy-versions-of/
+  https://www.wired.com/story/bluekeep-hacking-cryptocurrency-mining/
+  https://portal.msrc.microsoft.com/security-guidance/advisory/CVE-2019-0708
+  https://support.microsoft.com/help/4500705/customer-guidance-for-cve-2019-0708
+  https://www.microsoft.com/security/blog/2019/11/07/the-new-cve-2019-0708-rdp-exploit-attacks-explained/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceInfo
+  - DeviceNetworkEvents
+tactics:
+- Initial access
+- Discovery
+- Lateral movement
+query: |
+  // Find unusual processes on Windows 7 or Windows Server 2008 machines with
+  // outbound connections to TCP port 3389
+  let listMachines = DeviceInfo
+  | where OSVersion == "6.1" //Win7 and Srv2008
+  | distinct DeviceId;
+  DeviceNetworkEvents
+  | where RemotePort == 3389
+  | where Protocol == "Tcp" and ActionType == "ConnectionSuccess"
+  | where InitiatingProcessFileName !in~  //filter some legit programs
+  ("mstsc.exe","RTSApp.exe", "RTS2App.exe","RDCMan.exe","ws_TunnelService.exe","RSSensor.exe"
+  "RemoteDesktopManagerFree.exe","RemoteDesktopManager.exe","RemoteDesktopManager64.exe",
+  "mRemoteNG.exe","mRemote.exe","Terminals.exe","spiceworks-finder.exe",
+  "FSDiscovery.exe","FSAssessment.exe")
+  | join listMachines on DeviceId
+  | project Timestamp, DeviceId, DeviceName, RemoteIP, InitiatingProcessFileName, 
+  InitiatingProcessFolderPath, InitiatingProcessSHA1
+  | summarize conn=count() by DeviceId, InitiatingProcessFileName, bin(Timestamp, 1d)

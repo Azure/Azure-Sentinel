@@ -1,7 +1,7 @@
 # Prompt-User
 author: Nicholas DiCola
 
-This playbook will ask the user if they completed the action from the Incident in Azure Sentinel.  If so, it will close the incident and add a comment.  If not, it will post a message to teams for the SOC to investigate and add a comment to the incident.
+This playbook will ask the user if they completed the action from the Incident in Microsoft Sentinel.  If so, it will close the incident and add a comment.  If not, it will post a message to teams for the SOC to investigate and add a comment to the incident.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
@@ -25,9 +25,13 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 - [This](https://www.linkedin.com/pulse/3-ways-locate-microsoft-team-id-christopher-barber-/) blog shows some simple methods to get the Team Id.  You will need the Team Id and Channel Id.
 
+## Post deployment
+
+1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity
+2. Authorize Azure AD, Microsoft Teams, and Office 365 Outlook Logic App connections
 
 ## Screenshots
 **Incident Trigger**<br>
 ![Incident Trigger](./incident-trigger/images/designerLight.png)<br>
 **Alert Trigger**<br>
-![Alert Trigger](./alert--trigger/images/Prompt-User_alert.png)<br>
+![Alert Trigger](./alert-trigger/images/Prompt-User_alert.png)<br>

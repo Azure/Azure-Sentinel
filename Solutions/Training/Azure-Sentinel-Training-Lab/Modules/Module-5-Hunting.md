@@ -3,10 +3,10 @@
 #### 🎓 Level: 300 (Intermediate)
 #### ⌛ Estimated time to complete this lab: 40 minutes
 
-This module will guide you through a proactive threat hunting procedure and will review Azure Sentinel’s rich hunting features.
+This module will guide you through a proactive threat hunting procedure and will review Microsoft Sentinel’s rich hunting features.
 
 #### Prerequisites
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed on your Azure Sentinel instance.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed on your Microsoft Sentinel instance.
 
 ### Exercise 1: Hunting on a specific MITRE technique
 
@@ -22,13 +22,13 @@ Based on the article, our SOC leads understand that to be able to see the full p
 ![incident1](../Images/hunting-1.png)
 
 
-3.	In the hunting page, we can see that Azure Sentinel provides built-in hunting queries to kick start the proactive hunting process. On the metric bar we can see statistics about how many queries are “active” and have the required data sources to run in your environment.   There are also metrics showing how many queries have been run in during your current session, and how many of these queries produced results. We also see counts of the number of Livestream results and bookmarks created during the hunting process. 
+3.	In the hunting page, we can see that Microsoft Sentinel provides built-in hunting queries to kick start the proactive hunting process. On the metric bar we can see statistics about how many queries are “active” and have the required data sources to run in your environment.   There are also metrics showing how many queries have been run in during your current session, and how many of these queries produced results. We also see counts of the number of Livestream results and bookmarks created during the hunting process. 
 
 ![incident1](../Images/hunting-2.png)
 
 4.	On the top action bar, shown in the above diagram, we can find the **Run All queries** button. Clicking on this button runs all active queries. This can take a significant amount of time depending on the number of queries and amount of log data being queried. To get results faster, it helps to filter down the set of queries to the specific set you need to run. 
 
-5. Azure Sentinel provides many different attributes to filter down to just the queries you want to run. To filter by MITRE technique, click **Add filter**, select **Techniques**, and press **Apply**.
+5. Microsoft Sentinel provides many different attributes to filter down to just the queries you want to run. To filter by MITRE technique, click **Add filter**, select **Techniques**, and press **Apply**.
 
 ![incident1](../Images/hunting-3.png)
 
@@ -117,7 +117,7 @@ As you can see the above query uses a **join** operator to join two data streams
 
 ### Exercise 2: Bookmarking hunting query results 
 
-While reviewing query results in Log Analytics, we use Azure Sentinel’s bookmarking feature to store and enrich these results. We can extract entity identifiers and then use entity pages and the investigation graph to investigate the entity.  We can add tags and notes to the results to say why it is interesting.  Bookmarks will also preserve the query and time range that generated the specific row result so that analysts can reproduce the query in the future  
+While reviewing query results in Log Analytics, we use Microsoft Sentinel’s bookmarking feature to store and enrich these results. We can extract entity identifiers and then use entity pages and the investigation graph to investigate the entity.  We can add tags and notes to the results to say why it is interesting.  Bookmarks will also preserve the query and time range that generated the specific row result so that analysts can reproduce the query in the future  
 If as part of our investigation, we determine that the bookmarked query result contains malicious activity, we can create a new incident from the bookmark, or attach the bookmark to an existing incident. 
 
 1.	On the **Logs** screen, open the **join** hunting query from **Exercise**.  Select one or more rows using the checkbox on the left-hand side of the table. Click **Add bookmark** in the action menu just about the results table.
@@ -125,7 +125,7 @@ If as part of our investigation, we determine that the bookmarked query result c
 ![incident1](../Images/hunting-9.png)
 
 
-2.	On the right-hand bookmark pane modify the **Bookmark Name** to **victim@buildseccxpninja.onmicrosoft.com** added key to **purview-spn** App with **High Risk** 
+2.	On the right-hand bookmark pane modify the **Bookmark Name** to **victim@buildseccxpninja.onmicrosoft.com added key to purview-spn App with High Risk** 
 3.	Using the drop down in the **entities** section of the **bookmark pane**, map the **Account** entity to the InitiatingUserOrApp column.  You can see a sample value in the drop down.  In the diagram below, the sample value is **victim@buildseccxpninja.onmicrosoft.com**.  
 4.	Map the IP entity to the InitiatingIpAddress column. In the diagram below, you can see the sample value **45.153.160.2**. 
 5.	We will also add a tag to map it to the main attack story. In the **tags** section write, **“solorwinds”**

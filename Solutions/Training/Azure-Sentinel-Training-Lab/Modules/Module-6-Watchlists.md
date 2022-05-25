@@ -3,16 +3,16 @@
 #### 🎓 Level: 300 (Intermediate)
 #### ⌛ Estimated time to complete this lab: 20 minutes
 
-This module will show you how to use Azure Sentinel watchlists in event correlation and enrichment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks.
+This module will show you how to use Microsoft Sentinel watchlists in event correlation and enrichment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks.
 
 #### Prerequisites
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed on your Azure Sentinel instance.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed on your Microsoft Sentinel instance.
 
 ### Exercise 1: Create a watchlist
 
 You have received a message from the SOC manager, informing you about a penetration test exercise being performed over the next few weeks. Your manager also informs you that the SIEM is already seeing a bunch of incidents from IP addresses used by the penetration test team. These incidents all come from rule "High count of connections by client IP on many ports", which identifies when 30 or more ports are used for a given client IP in 10 minutes occurring on the IIS server. Your manager provides you [this CSV file](../Artifacts/Telemetry/PenTestsIPaddresses.csv) with the list of the IP addresses involved in the penetration exercise.
 
-1. From Azure Sentinel portal, go to Watchlists menu and click *Add new*.
+1. From Microsoft Sentinel portal, go to Watchlists menu and click *Add new*.
 
 ![watchlists](../Images/watchlists1.png)
 

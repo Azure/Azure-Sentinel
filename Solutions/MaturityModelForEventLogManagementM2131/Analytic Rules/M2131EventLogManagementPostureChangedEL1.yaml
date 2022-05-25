@@ -1,0 +1,36 @@
+id: 036ce0a8-a1ff-4731-a078-02b3207fa4f3
+name: (Preview)M2131_EventLogManagementPostureChanged_EL1
+description: |
+  'This alert is desinged to monitor Azure policies aligned with the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when EL1 policy compliance falls below 70% within a 1 week timeframe.'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let EventLogManagement = externaldata(RecommendationDisplayName:string,LoggingCategory:string,MaturityLevel:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/EventLogManagement.csv"] with (format="csv", ignoreFirstRecord=True);
+  SecurityRecommendation
+  | join kind=leftouter (EventLogManagement) on RecommendationDisplayName
+  | summarize arg_max(TimeGenerated, *) by RecommendationDisplayName, AssessedResourceId, MaturityLevel
+  | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by MaturityLevel
+  | extend PassedControls = (Passed/todouble(Total))*100
+  | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+  | project MaturityLevel, Total, PassedControls, Passed, Failed, RemediationLink, LastObserved=now()
+  | where MaturityLevel <> ''
+  | where MaturityLevel == "Basic Event Logging (EL1)"
+  | where PassedControls < 70 
+  //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within   Organizational Needs
+  | sort by PassedControls desc
+  | extend URLCustomEntity = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

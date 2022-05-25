@@ -41,16 +41,14 @@
         }
     },
     "functions": [],
-    "variables": {
-    },
+    "variables": {},
     "resources": [
         {
             "name": "[parameters('workspaceName')]",
             "type": "Microsoft.OperationalInsights/workspaces",
             "apiVersion": "2020-08-01",
             "location": "[parameters('location')]",
-            "properties": {
-            },
+            "properties": {},
             "resources": [
                 {
                     "type": "savedSearches",
@@ -108,6 +106,30 @@
                             {
                                 "Name": "techniques",
                                 "Value": "T1098"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "solorigateInventoryCheck",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "category": "Hunting Queries",
+                        "displayName": "Solorigate Inventory check",
+                        "query": "let timeframe = 7d;\r\n(union isfuzzy=true\r\n(Event\r\n| where TimeGenerated >= ago(timeframe)\r\n| where Source == \"Microsoft-Windows-Sysmon\"\r\n| where EventID in (17,18)\r\n| extend EvData = parse_xml(EventData)\r\n| extend EventDetail = EvData.DataItem.EventData.Data\r\n| extend NamedPipe = EventDetail.[5].[\"#text\"]\r\n| extend ProcessDetail = EventDetail.[6].[\"#text\"]\r\n| where NamedPipe contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n| extend Account = UserName\r\n| project-away EventDetail, EvData\r\n),\r\n(\r\nSecurityEvent_CL\r\n| where TimeGenerated >= ago(timeframe)\r\n| where EventID_s == '5145'\r\n| where AccessList_s has '%%4418' // presence of CreatePipeInstance value\r\n| where RelativeTargetName_g contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n)\r\n)\r\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account_s, HostCustomEntity = Computer",
+                        "Tags": [
+                            {
+                                "Name": "description",
+                                "Value": "On systems where the malicious SolarWinds DLL is running, it is known that the attacker used a hardcoded named pipe '583da945-62af-10e8-4902-a8f205c72b2e'. This activity can be detected if you are collecting Sysmon Event Id 17/18 or Security Event Id 5145"
+                            },
+                            {
+                                "Name": "tactics",
+                                "Value": "Execution"
                             }
                         ]
                     }

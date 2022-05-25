@@ -3,16 +3,13 @@ import datetime
 import dateutil
 import logging
 import boto3
-import gzip
-import io
-import csv
 import time
 import os
-import sys
 import json
 import hashlib
 import hmac
 import base64
+import re
 from threading import Thread
 from io import StringIO
 
@@ -67,30 +64,9 @@ def main(mytimer: func.TimerRequest) -> None:
         for finding in results['Findings']:
             finding_timestamp = securityHubSession.findingTimestampGenerator(finding['LastObservedAt'])
                         
-            if (finding_timestamp > fresh_events_after_this_time):
-                logging.info ('SecurityHub Finding:{0}'.format(json.dumps(finding)))
-                payload = {}                
-                payload.update({'SchemaVersion':finding['SchemaVersion']})
-                payload.update({'Id':finding['Id']})
-                payload.update({'ProductArn':finding['ProductArn']})
-                payload.update({'GeneratorId':finding['GeneratorId']})
-                payload.update({'AwsAccountId':finding['AwsAccountId']})
-                payload.update({'Types':finding['Types']})
-                payload.update({'FirstObservedAt':finding['FirstObservedAt']})
-                payload.update({'LastObservedAt':finding['LastObservedAt']})
-                payload.update({'UpdatedAt':finding['UpdatedAt']})
-                payload.update({'Severity':json.dumps(finding['Severity'], sort_keys=True)})
-                payload.update({'Title':finding['Title']})                        
-                payload.update({'ProductFields':json.dumps(finding['ProductFields'], sort_keys=True)})
-                payload.update({'ProductArn':finding['ProductArn']})
-                payload.update({'CreatedAt':finding['CreatedAt']})            
-                payload.update({'Resources':finding['Resources']})            
-                payload.update({'WorkflowState':finding['WorkflowState']})                
-                payload.update({'RecordState':finding['RecordState']})
-                
+            if (finding_timestamp > fresh_events_after_this_time):                                             
                 with sentinel:
-                    sentinel.send(payload)
-                    
+                    sentinel.send(finding)                    
                 failed_sent_events_number = sentinel.failed_sent_events_number
                 successfull_sent_events_number = sentinel.successfull_sent_events_number              
             else:

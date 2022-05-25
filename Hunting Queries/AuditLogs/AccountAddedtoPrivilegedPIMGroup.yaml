@@ -1,0 +1,35 @@
+id: 67ca982d-9d61-48cb-a409-acf029ed7311
+name: Account Added to Privileged PIM Group
+description: |
+  'Identifies accounts that have been added to a PIM managed privileged group'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1548
+query: |
+  AuditLogs
+  | where ActivityDisplayName =~ "Add eligible member to role in PIM requested (timebound)"
+  | where AADOperationType =~ "CreateRequestEligibleRole"
+  | where TargetResources has_any ("-PRIV", "Administrator", "Security")
+  | extend BuiltinRole = tostring(parse_json(TargetResources[0].displayName))
+  | extend CustomGroup = tostring(parse_json(TargetResources[3].displayName))
+  | extend TargetAccount = tostring(parse_json(TargetResources[2].displayName))
+  | extend Initiatedby = Identity
+  | project TimeGenerated, ActivityDisplayName, AADOperationType, Initiatedby, TargetAccount, BuiltinRole, CustomGroup, LoggedByService, Result, ResultReason, ResourceId, Id
+  | sort by TimeGenerated desc
+  | extend timestamp = TimeGenerated, AccountCustomEntity = TargetAccount, ResourceCustomEntity = ResourceId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetAccount
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
