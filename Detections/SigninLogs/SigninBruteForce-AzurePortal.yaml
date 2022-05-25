@@ -29,18 +29,38 @@ query: |
   let authenticationWindow = 20m;
   let aadFunc = (tableName:string){
   table(tableName)
-  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
-  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
-  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
   | where AppDisplayName has "Azure Portal"
+  | extend
+      DeviceDetail = todynamic(DeviceDetail),
+      //Status = todynamic(Status),
+      LocationDetails = todynamic(LocationDetails)
+  | extend
+      OS = DeviceDetail.operatingSystem,
+      Browser = DeviceDetail.browser,
+      //StatusCode = tostring(Status.errorCode),
+      //StatusDetails = tostring(Status.additionalDetails),
+      State = tostring(LocationDetails.state),
+      City = tostring(LocationDetails.city),
+      Region = tostring(LocationDetails.countryOrRegion)
   // Split out failure versus non-failure types
   | extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140", "70043", "70044"), "Success", "Failure")
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddress = make_set(IPAddress), make_set(OS), make_set(Browser), make_set(City),
-  make_set(State), make_set(Region),make_set(ResultType), FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success") 
-  by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName, AppDisplayName, Type
+  | summarize
+      StartTime = min(TimeGenerated),
+      EndTime = max(TimeGenerated),
+      IPAddress = make_set(IPAddress),
+      make_set(OS),
+      make_set(Browser),
+      make_set(City),
+      make_set(State),
+      make_set(Region),
+      make_set(ResultType),
+      FailureCount = countif(FailureOrSuccess=="Failure"),
+      SuccessCount = countif(FailureOrSuccess=="Success"),
+      take_anyif(UserPrincipalName, not(UserPrincipalName matches regex @"[a-f\d]+\-[a-f\d]+\-[a-f\d]+\-[a-f\d]+\-[a-f\d]+")),
+      take_anyif(UserDisplayName, isnotempty(UserDisplayName))
+      by bin(TimeGenerated, authenticationWindow), UserId, AppDisplayName, Type
   | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
-  | mvexpand IPAddress
+  | mv-expand IPAddress
   | extend IPAddress = tostring(IPAddress)
   | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress 
   };
@@ -56,5 +76,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled

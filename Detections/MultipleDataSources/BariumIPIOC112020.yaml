@@ -7,7 +7,16 @@ severity: High
 tags:
   - Schema: ASIMDns
     SchemaVersion: 0.1.1
-requiredDataConnectors: 
+requiredDataConnectors:
+  - connectorId: AWSS3
+    datatypes:
+      - AWSVPCFlow
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
   - connectorId: Office365 
     dataTypes: 
      - OfficeActivity
@@ -50,6 +59,25 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics  
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
 queryFrequency: 1d 
 queryPeriod: 1d 
 triggerOperator: gt 
@@ -57,7 +85,6 @@ triggerThreshold: 0
 tactics: 
   - CommandAndControl 
 query:  | 
-
   let IPList = dynamic(["216.24.185.74", "107.175.189.159", "192.210.132.102", "67.230.163.214", 
     "199.19.110.240", "107.148.130.176", "154.212.129.218", "172.86.75.54", "45.61.136.199", 
     "149.28.150.195", "108.61.214.194", "144.202.98.198", "149.28.84.98", "103.99.209.78", 
@@ -82,31 +109,16 @@ query:  |
   | where  SourceIPAddress in (IPList) 
   | extend timestamp = TimeGenerated , IPCustomEntity = SourceIPAddress , AccountCustomEntity = Account 
   ),
-  (DnsEvents  
-  | extend DestinationIPAddress = IPAddresses,  Host = Computer 
-  | where  DestinationIPAddress has_any (IPList)  
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host 
-  ), 
-  (imDns (response_has_any=IPList)
+  (_Im_Dns (response_has_any_prefix=IPList)
   | extend DestinationIPAddress = ResponseName,  Host = SrcIpAddr 
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host 
   ), 
-  (VMConnection  
-  | where isnotempty(SourceIp) or isnotempty(DestinationIp)  
-  | where SourceIp in (IPList) or DestinationIp in (IPList)  
-  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None")  
-  | extend timestamp = TimeGenerated , IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "None"), Host = Computer 
+  (_Im_NetworkSession (srcipaddr_has_any_prefix=IPList)
+   | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Hostname, AccountCustomEntity=User
   ), 
-  (Event 
-  | where Source == "Microsoft-Windows-Sysmon" 
-  | where EventID == 3 
-  | extend EvData = parse_xml(EventData) 
-  | extend EventDetail = EvData.DataItem.EventData.Data 
-  | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"] 
-  | where SourceIP in (IPList) or DestinationIP in (IPList)  
-  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")  
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None") 
-  ),  
+  (_Im_NetworkSession (dstipaddr_has_any_prefix=IPList)
+  | extend timestamp = TimeGenerated, IPCustomEntity = DstIpAddr, HostCustomEntity = Hostname , AccountCustomEntity = User
+  ), 
   (WireData  
   | where isnotempty(RemoteIP) 
   | where RemoteIP in (IPList) 
@@ -178,5 +190,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.1.0
+version: 1.3.1
 kind: Scheduled

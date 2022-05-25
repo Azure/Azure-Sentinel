@@ -27,6 +27,25 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -46,13 +65,7 @@ query: |
   | where FileHash in (SHA256Hash) or DNSName in~ (DomainNames)
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
   ),
-  (DnsEvents 
-  | extend DNSName = Name
-  | where isnotempty(DNSName)
-  | where DNSName has_any (DomainNames)
-  | extend IPAddress = ClientIP
-  ),
-  ( imDns (domain_has_any=DomainNames)
+  ( _Im_Dns(domain_has_any=DomainNames)
   | extend DNSName = DnsQuery
   | extend IPAddress = SrcIpAddr
   ),
@@ -74,16 +87,11 @@ query: |
   | extend Account = UserName
   ),
   (SecurityAlert
-  | where Entities has_any (SigNames)
+  | where ProductName == "Microsoft Defender Advanced Threat Protection"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | where isnotempty(ThreatName)
+  | where ThreatName has_any (SigNames)
   | extend Computer = tostring(parse_json(Entities)[0].HostName)
-  ),
-  (AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallDnsProxy"
-  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
-  | where Request_Name has_any (DomainNames)  
-  | extend DNSName = Request_Name
-  | extend IPAddress = ClientIP 
   ),
   (AzureDiagnostics 
   | where ResourceType == "AZUREFIREWALLS"
@@ -109,5 +117,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.3.0
+version: 1.5.1
 kind: Scheduled

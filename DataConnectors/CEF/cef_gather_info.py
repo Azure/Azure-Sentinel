@@ -7,8 +7,8 @@
 # Supported OS:
 #   64-bit
 #       CentOS 7 and 8
-#       Amazon Linux 2017.09
-#       Oracle Linux 7
+#       Amazon Linux 2017.09 and Amazon Linux 2
+#       Oracle Linux 7, 8
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
