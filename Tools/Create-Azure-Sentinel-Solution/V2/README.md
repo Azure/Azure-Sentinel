@@ -32,8 +32,6 @@ The packaging tool detailed below provides an easy way to generate your solution
 
 Clone the repository [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) to `C:\One`.
 
-For creating solution packages with Template Spec Resource, please refer the instructions mentioned in [Readme](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V2/README.md) File.
-
 ### Create Input File
 
 Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Create-Sentinel-Solution\input`.
@@ -72,6 +70,10 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Description": "{Solution Description}",
   "WorkbookDescription": ["{Description of workbook}"],
   "Workbooks": [],
+  "WorkbookBladeDescription: string; //Description used in the CreateUiDefinition.json for Workbooks Blade
+  "AnalyticalRuleBladeDescription": "{//Description used in the CreateUiDefinition.json for Analytical Rule Blade"
+  "HuntingQueryBladeDescription": "//Description used in the CreateUiDefinition.json for Hunting Query Blade"
+  "PlaybooksBladeDescription": "//Description used in the CreateUiDefinition.json for Playbook Blade"
   "Analytic Rules": [],
   "Playbooks": [],
   "PlaybookDescription": ["{Description of playbook}"],
@@ -82,9 +84,10 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Watchlists": [],
   "WatchlistDescription": [],
   "BasePath": "{Path to Solution Content}",
-  "Version": "1.0.0",
+  "Version": "2.0.0",
   "Metadata": "{Name of Solution Metadata file}",
-  "TemplateSpec": false
+  "TemplateSpec": true,
+  "Is1PConnector": false
 }
 
 ```
@@ -93,31 +96,56 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
 
 ```json
 {
-  "Name": "McAfeePO",
-  "Author": "Eli Forbes - v-eliforbes@microsoft.com",
-  "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/Workbooks/Images/Logo/mcafee_logo.svg\" width=\"75px\" height=\"75px\">",
-  "Description": "The [McAfee ePO](https://www.mcafee.com/enterprise/en-in/products/epolicy-orchestrator.html) is a centralized policy management and enforcement for your endpoints and enterprise security products. McAfee ePO monitors and manages your network, detecting threats and protecting endpoints against these threats.",
-  "WorkbookDescription": "Gain insights into McAfeePO logs.",
-  "Workbooks": [
-    "Workbooks/McAfeeePOOverview.json"
-  ],
-  "Analytic Rules": [
-    "Analytic Rules/McAfeeEPOAgentHandlerDown.yaml",
-    "Analytic Rules/McAfeeEPOAlertError.yaml"
+  "Name": "Cisco Umbrella",
+  "Author": "Microsoft - support@microsoft.com",
+  "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/cisco-logo-72px.svg\" width=\"75px\" height=\"75px\">",
+  "Description": "The [Cisco Umbrella](https://umbrella.cisco.com/) solution for Microsoft Sentinel enables you to ingest [Cisco Umbrella events](https://docs.umbrella.com/deployment-umbrella/docs/log-formats-and-versioning) stored in Amazon S3 into Microsoft Sentinel using the Amazon S3 REST API.
+
+  **Underlying Microsoft Technologies used:**\n\nThis solution takes a dependency on the following technologies, and some of these dependencies either may be in [Preview](https://azure.microsoft.com/support/legal/preview-supplemental-terms/) state or might result in additional ingestion or operational costs:
+  a. [Azure Monitor HTTP Data Collector API](https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api)
+  b. [Azure Functions](https://azure.microsoft.com/services/functions/#overview)  ",
+  "WorkbookBladeDescription": "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences.",
+  "AnalyticalRuleBladeDescription": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view. ",
+  "HuntingQueryBladeDescription": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view",
+  "PlaybooksBladeDescription": "This solution installs the following Playbook templates. After installing the solution, playbooks can be managed in the Manage solution view. ",
+  "Data Connectors": [
+    "DataConnectors/CiscoUmbrella/CiscoUmbrella_API_FunctionApp.json"
   ],
   "Parsers": [
-    "Parsers/McAfeeEPOEvent.txt "
+    "Solutions/CiscoUmbrella/Parsers/Cisco_Umbrella"
   ],
   "Hunting Queries": [
-    "Hunting Queries/McAfeeEPOAgentErrors.yaml"
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaAnomalousFQDNsforDomain.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaBlockedUserAgents.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaDNSErrors.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaDNSRequestsUunreliableCategory.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaHighCountsOfTheSameBytesInSize.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaHighValuesOfUploadedData.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaPossibleConnectionC2.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaPossibleDataExfiltration.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaProxyAllowedUnreliableCategory.yaml",
+    "Solutions/CiscoUmbrella/Hunting Queries/CiscoUmbrellaRequestsUncategorizedURI.yaml"
   ],
-  "Data Connectors": [
-    "Data Connectors/Connector_McAfee_ePO.json"
+  "Analytic Rules": [
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaConnectionNon-CorporatePrivateNetwork.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaConnectionToUnpopularWebsiteDetected.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaCryptoMinerUserAgentDetected.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaEmptyUserAgentDetected.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaHackToolUserAgentDetected.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaPowershellUserAgentDetected.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaRareUserAgentDetected.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaRequestAllowedHarmfulMaliciousURICategory.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaRequestBlocklistedFileType.yaml",
+    "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaURIContainsIPAddress.yaml"
   ],
-  "BasePath": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/McAfeeePO/",
-  "Version": "1.0.0",
+  "Workbooks": [
+    "Solutions/CiscoUmbrella/Workbooks/CiscoUmbrella.json"
+  ],
+  "BasePath": "C:\\GitHub\\Azure-Sentinel",
+  "Version": "2.0.0",
   "Metadata": "SolutionMetadata.json",
-  "TemplateSpec": false
+  "TemplateSpec": true,
+  "Is1PConnector": false
 }
 ```
 
@@ -151,14 +179,14 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
     "lastPublishDate": {Solution recent Published Date},
     "providers": {Solution provider list},
     "categories": {
-	"domains" : {Solution category domain list},
-	"verticals": {Solution category vertical list},
+      "domains" : {Solution category domain list},
+      "verticals": {Solution category vertical list},
      },
-     "support": {
-	"name": {Publisher ID},
-	"email": {Email for Solution Support},
-	"tier": {Support Tier},
-	"link": {Link of Support contacts for Solution},
+    "support": {
+      "name": {Publisher ID},
+      "email": {Email for Solution Support},
+      "tier": {Support Tier},
+      "link": {Link of Support contacts for Solution},
     }
 }
 
@@ -188,8 +216,8 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 ### Generate Solution Package
 
-To generate the solution package from the given input file, run the `createSolution.ps1` script in the automation folder, `Tools/Create-Azure-Sentinel-Solution`.
-> Ex. From repository root, run: `./Tools/Create-Azure-Sentinel-Solution/createSolution.ps1`
+To generate the solution package from the given input file, run the `createSolutionV2.ps1` script in the automation folder, `Tools/Create-Azure-Sentinel-Solution/V2`.
+> Ex. From repository root, run: `./Tools/Create-Azure-Sentinel-Solution/V2/createSolutionV2.ps1`
 
 This will generate and compress the solution package, and name the package using the version provided in the input file.
 
