@@ -21,8 +21,8 @@ This folder has resources to generate MITRE ATT&CK coverage for Microsoft Sentin
  
  ***KQL Query:***
  ```
- let SentinelGithub = (externaldata(MITREMatrix: string, Tactic: string, TechniqueId:string, TechniqueName:string, Platform: string , DetectionType: string , DetectionService: string , DetectionId: string, DetectionName: string, DetectionDescription: string, ConnectorId: string, DataTypes: string, Query: string , QueryFrequency: string , QueryPeriod:string , TriggerOperator: string, TriggerThreshold: string, DetectionSeverity: string, DetctionUrl: string, IngestedDate: string )
-[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MicrosoftSentinel.csv"]
+ let SentinelGithub = (externaldata(Tactic: string, TechniqueId: string, Platform: string, DetectionType: string, DetectionService: string, DetectionId: guid, DetectionName: string, DetectionDescription: string, ConnectorId: string, DataTypes: string, Query: string, QueryFrequency: string, QueryPeriod: string, TriggerOperator: string, TriggerThreshold: real, DetectionSeverity: string, DetectionUrl: string, IngestedDate: datetime)
+[@"https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MITREATT%26CK/MicrosoftSentinel.csv"] with (format="csv", ignoreFirstRecord=True)
 );
 SentinelGithub
 ```
@@ -31,10 +31,10 @@ SentinelGithub
   
 ***KQL Query***
 ```
-let MSFTServices = (externaldata(Alert: string, Description: string, Tactics:string, Severity:string, Provider:string, DetectionService: string)
-[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MSFTAlerts.csv"]
+let MSFTBuiltinAlerts = (externaldata(Alert: string, Description: string, Tactics:string, Severity:string, Provider:string, DetectionService: string)
+[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/MITREATT%26CK-LayerGeneration-Notebook/MSFT-Builtin-Alerts.csv"] with (format="csv", ignoreFirstRecord=True)
 );
-MSFTServices
+MSFTBuiltinAlerts
 ```
 
  ## Setup
