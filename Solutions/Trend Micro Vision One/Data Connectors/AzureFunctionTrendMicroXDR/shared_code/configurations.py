@@ -1,7 +1,7 @@
 import os
 
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 SIEM_NAME = 'SentinelAddon'
 XDR_HOSTS = {
     'us': 'https://api.xdr.trendmicro.com',

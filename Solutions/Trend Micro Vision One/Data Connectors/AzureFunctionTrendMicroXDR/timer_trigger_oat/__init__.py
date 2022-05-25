@@ -96,7 +96,7 @@ def main(mytimer: func.TimerRequest, msg: func.Out[typing.List[str]]) -> None:
 
             messages = []
 
-            # get workbench ids
+            # get oat list
             oat_result = get_oat_list(token, start_time, end_time)
 
             messages.extend(build_queue_message(clp_id, oat_result))
@@ -119,14 +119,14 @@ def main(mytimer: func.TimerRequest, msg: func.Out[typing.List[str]]) -> None:
             health_check_data['newOatCount'] = oat_result.total_count
         except HTTPError as e:
             logging.exception(
-                f'Fail to get workbench list! Exception: {e}',
+                f'Fail to get OAT list! Exception: {e}',
             )
             error, health_check_data['error'] = e, str(e)
         except Exception as e:
             logging.exception('Internal error.')
             error, health_check_data['error'] = e, str(e)
         finally:
-            # send heatch check log to log analytics
+            # send healtch check log to log analytics
             log_analytics.post_data(health_check_data)
 
     if error:

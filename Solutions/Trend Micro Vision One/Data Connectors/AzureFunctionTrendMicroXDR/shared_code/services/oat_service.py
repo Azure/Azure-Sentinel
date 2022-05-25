@@ -31,13 +31,15 @@ def get_oat_list(
     token: str,
     start_time: datetime,
     end_time: datetime,
-    size: int = 20,
+    size: int = 40,
     next_batch_token: str = None,
 ) -> OATDetectionResult:
+    risk_levels = ['low', 'medium', 'high', 'critical']
     query_params = {
         'start': int(start_time.timestamp()),
         'end': int(end_time.timestamp()),
         'size': size,
+        'riskLevels': risk_levels,
     }
     if next_batch_token:
         query_params['nextBatchToken'] = next_batch_token
