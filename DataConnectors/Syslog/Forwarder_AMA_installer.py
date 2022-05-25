@@ -2,8 +2,8 @@
 # ----------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # ----------------------------------------------------------------------------
-# This script is used to install the CEF connector on a linux machine and configure the
-# Syslog daemon on the linux machine.
+# This script is used to install the AMA on a linux machine and configure the
+# Syslog daemon on the linux machine for a data forwarding connector scenario.
 # Supported OS:
 #   64-bit
 #       CentOS 7 and 8
