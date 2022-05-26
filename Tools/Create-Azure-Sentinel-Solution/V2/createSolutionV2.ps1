@@ -438,7 +438,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "playbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text = $contentToImport.PlaybooksBladeDescription ? $contentToImport.PlaybooksBladeDescription : "This solution installs the following Playbook templates. After installing the solution, playbooks can be managed in the Manage solution view. ";
+                                            text = $contentToImport.PlaybooksBladeDescription ? $contentToImport.PlaybooksBladeDescription : "This solution installs the Playbook templates to help implement your Security Orchestration, Automation and Response (SOAR) operations. After installing the solution, these will be deployed under Playbook Templates in the Automation blade in Microsoft Sentinel. They can be configured and managed from the Manage solution view in Content Hub.";
                                         }
                                     },
                                     [PSCustomObject] @{
@@ -468,7 +468,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             )
                         }
                         $currentStepNum = $baseCreateUiDefinition.parameters.steps.Count - 1
-                        $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $playbookElement
+                        #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $playbookElement
 
                         foreach ($param in $playbookData.parameters.PsObject.Properties) {
                             $paramName = $param.Name
@@ -486,7 +486,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         validationMessage = "Please enter a playbook resource name"
                                     }
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookNameObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookNameObject
                                 if(!$contentToImport.TemplateSpec)
                                 {
                                     $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
@@ -510,7 +510,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         validationMessage = "Please enter a playbook username";
                                     }
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookUsernameObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookUsernameObject
                                 if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
                                         defaultValue = $defaultParamValue;
@@ -529,7 +529,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     constraints = [PSCustomObject] @{ required = $true; };
                                     options     = [PSCustomObject] @{ hideConfirmation = $false; };
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
                                 if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
                                         type      = "securestring";
@@ -547,7 +547,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     constraints = [PSCustomObject] @{ required = $true; };
                                     options     = [PSCustomObject] @{ hideConfirmation = $true; };
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
                                 if(!$contentToImport.TemplateSpec)
                                 {
                                     $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
@@ -605,7 +605,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         }
                                     }
                                 )
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookParamObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookParamObject
                                 $defaultValue = $(if ($defaultParamValue) { $defaultParamValue } else { "" })
                                 if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
@@ -1809,7 +1809,21 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "PT$field"
                                 }
                             }
-
+                            function Remove-EmptyArrays($Object) {
+                                ($Object.GetEnumerator() | ? {
+                                    if($_.GetType().fullname -eq "System.Collections.Hashtable"){
+                                        -not $_.Values
+                                    }
+                                    else
+                                    {
+                                      -not $_.Value                                       
+                                    }
+                                }) | 
+                                % { 
+                                    $Object.Remove($_.Name) 
+                                }
+                                return $Object;
+                            }
                             if($yaml.kind.ToUpper() -eq "Scheduled")
                             {
                                 $alertRule.queryFrequency =  $(checkISO8601Format $yaml.queryFrequency.ToUpper())
@@ -1822,14 +1836,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $alertRule.PSObject.Properties.Remove('triggerThreshold');
                             }
                             $alertRule.suppressionDuration = "PT1H"
-
                             # Handle optional fields
                             foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")) {
                                 if ($yaml.$yamlField) {
-                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $yaml.$yamlField
+                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $(Remove-EmptyArrays $yaml.$yamlField)
                                 }
                             }
-
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
                                 type       = $contentToImport.TemplateSpec ? "Microsoft.SecurityInsights/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
