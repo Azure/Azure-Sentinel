@@ -25,4 +25,4 @@ Once deployment is complete, authorize each connection.
 5. Click Authorize
 6. Sign in
 7. Click Save
-8. Repeat steps for tiIndicators connector API Connection.
+8. Repeat steps for tiIndicators connector API Connection

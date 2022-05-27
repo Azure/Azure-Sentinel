@@ -35,12 +35,14 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Azure Sentinel connection resource
-2. Click edit API connection
-3. Click Authorize
-4. Sign in
-5. Click Save
-6. Repeat steps for other connections
+1. Open playbook which has been deployed
+2. Click API connection on left side blade
+3. Click the Azure Sentinel connection resource
+4. Click edit API connection
+5. Click Authorize
+6. Sign in
+7. Click Save
+8. Repeat steps for other connections
 
 #### b. Configurations in Sentinel
 
