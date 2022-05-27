@@ -426,9 +426,9 @@ if [ "$os" == "ubuntu" ]; then
 	#Ubuntu
 	echo 'Updating package lists'
 	sudo apt-get update >/dev/null
-	install_package "jq" "apt install"
+	install_package "jq" "apt install -y -qq"
 	install_package "unzip" "apt install -y -qq"
-	sudo apt install -y -qq docker.io >/dev/null
+	install_package "docker.io" "apt install -y -qq"
 	echo "Installing docker"
 	if [ "$MODE" != "cfgf" ]; then
 		echo "Installing Azure CLI"
@@ -620,7 +620,7 @@ if [ $USESNC ]; then
 
 	if [ -f "$CLIENTPFX" ]; then
 		#PFX file exists. unpack it
-		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -nodes -passin pass:$CLIENTPFXPWD
+		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -clcerts -nodes -passin pass:$CLIENTPFXPWD
 	fi
 
 	if [ ! -f "$CLIENTPFX" ]; then
@@ -789,22 +789,22 @@ done
 
 if [ "$CONNECTIONMODE" == 'abap' ]; then
 	#             '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"ashost=$ABAPSERVER"'' "$sysfileloc"$sysconf
+	sed -i '/\[ABAP Central Instance]/a'"ashost = $ABAPSERVER"'' "$sysfileloc"$sysconf
 elif [ "$CONNECTIONMODE" == 'mserv' ]; then
-	sed -i '/\[ABAP Central Instance]/a'"mshost=$MESSAGESERVERHOST"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"msserv=$MESSAGESERVERHOST"'' "$sysfileloc"$sysconf
-	sed -i '/\[ABAP Central Instance]/a'"group=$LOGONGROUP"'' "$sysfileloc"$sysconf
+	sed -i '/\[ABAP Central Instance]/a'"mshost = $MESSAGESERVERHOST"'' "$sysfileloc"$sysconf
+	sed -i '/\[ABAP Central Instance]/a'"msserv = $MESSAGESERVERPORT"'' "$sysfileloc"$sysconf
+	sed -i '/\[ABAP Central Instance]/a'"group = $LOGONGROUP"'' "$sysfileloc"$sysconf
 fi
 
-sed -i '/\[ABAP Central Instance]/a'"sysnr=$SYSTEMNR"'' "$sysfileloc"$sysconf
-sed -i '/\[ABAP Central Instance]/a'"client=$CLIENTNUMBER"'' "$sysfileloc"$sysconf
-sed -i '/\[ABAP Central Instance]/a'"sysid=$SID"'' "$sysfileloc"$sysconf
+sed -i '/\[ABAP Central Instance]/a'"sysnr = $SYSTEMNR"'' "$sysfileloc"$sysconf
+sed -i '/\[ABAP Central Instance]/a'"client = $CLIENTNUMBER"'' "$sysfileloc"$sysconf
+sed -i '/\[ABAP Central Instance]/a'"sysid = $SID"'' "$sysfileloc"$sysconf
 
 if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 
-	sed -i '/\[Secrets Source]/a'"secrets=AZURE_KEY_VAULT"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"intprefix=$SID"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"keyvault=$kv"'' "$sysfileloc"$sysconf
+	sed -i '/\[Secrets Source]/a'"secrets = AZURE_KEY_VAULT"'' "$sysfileloc"$sysconf
+	sed -i '/\[Secrets Source]/a'"intprefix = $SID"'' "$sysfileloc"$sysconf
+	sed -i '/\[Secrets Source]/a'"keyvault = $kv"'' "$sysfileloc"$sysconf
 
 	if [ ! $USESNC ]; then
 		az keyvault secret set --name "$SID"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
@@ -817,24 +817,24 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 	fi
 	az keyvault secret set --name "$SID"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
 elif [ "$MODE" == 'cfgf' ]; then
-	sed -i '/\[Secrets Source]/a'"secrets=DOCKER_FIXED"'' "$sysfileloc"$sysconf
+	sed -i '/\[Secrets Source]/a'"secrets = DOCKER_FIXED"'' "$sysfileloc"$sysconf
 	sed -i '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf
 	sed -i '/\[Azure Credentials\]/a'"publickey = $logpubkey"'' "$sysfileloc"$sysconf
 	if [ ! $USESNC ]; then
-		sed -i '/\[ABAP Central Instance]/a'"user=$uservar"'' "$sysfileloc"$sysconf
-		sed -i '/\[ABAP Central Instance]/a'"passwd=$passvar"'' "$sysfileloc"$sysconf
+		sed -i '/\[ABAP Central Instance]/a'"user = $uservar"'' "$sysfileloc"$sysconf
+		sed -i '/\[ABAP Central Instance]/a'"passwd = $passvar"'' "$sysfileloc"$sysconf
 	else
 		#workaround for blank username with SNC used causing a fail during audit log collection
-		sed -i '/\[ABAP Central Instance]/a'"user="'' "$sysfileloc"$sysconf
+		sed -i '/\[ABAP Central Instance]/a'"user = X509"'' "$sysfileloc"$sysconf
 	fi
 fi
 
 if [ $USESNC ]; then
-	sed -i '/\[ABAP Central Instance]/a'"snc_lib=\/sapcon-app\/sapcon\/config\/system\/sec\/libsapcrypto.so"'' "$sysfileloc"$sysconf
+	sed -i '/\[ABAP Central Instance]/a'"snc_lib = \/sapcon-app\/sapcon\/config\/system\/sec\/libsapcrypto.so"'' "$sysfileloc"$sysconf
 	MYCERT=$(openssl x509 -in $CLIENTCERT | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
-	sed -i '/\[ABAP Central Instance]/a'"x509cert=$MYCERT"'' "$sysfileloc"$sysconf
+	sed -i '/\[ABAP Central Instance]/a'"x509cert = $MYCERT"'' "$sysfileloc"$sysconf
 	PARTNERNAME=$(openssl x509 -in "$SERVERCERT" -text -noout | grep Subject: | awk -F: '{print $2}')
-	sed -i '/\[ABAP Central Instance]/a'"snc_partnername=p:$PARTNERNAME"'' "$sysfileloc"$sysconf
+	sed -i '/\[ABAP Central Instance]/a'"snc_partnername = p:$PARTNERNAME"'' "$sysfileloc"$sysconf
 fi
 
 echo 'System information and credentials Has been Updated'
