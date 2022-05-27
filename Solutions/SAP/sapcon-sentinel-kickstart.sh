@@ -308,7 +308,7 @@ if [ "$MODE" == 'kvsi' ] && { [ -z "$APPID" ] || [ -z "$APPSECRET" ] || [ -z "$T
 fi
 
 if [ $USESNC ] && { [ -z "$SAPCRYPTOLIB" ] || [ -z "$SAPGENPSE" ] || [ -z "$SERVERCERT" ] || { { [ -z "$CLIENTKEY" ] || [ -z "$CLIENTCERT" ]; } && [ -z "$CLIENTPFX" ]; }; }; then
-	echo 'Invalid parameters -e requires --cryptolib, --sapgenpse, --server-cert, --client-cert, --client-key, or --client-pfx parameters'
+	echo 'Invalid parameters --use-snc requires --cryptolib, --sapgenpse, --server-cert, --client-cert, --client-key, or --client-pfx parameters'
 	exit 1
 elif [ ! $USESNC ] && { [ -n "$SAPCRYPTOLIB" ] || [ -n "$SAPGENPSE" ] || [ -n "$CLIENTCERT" ] || [ -n "$SERVERCERT" ] || [ -n "$CLIENTKEY" ] || [ -n "$CLIENTPFX" ] || [ -n "$CLIENTPFXPWD" ] || [ -n "${TRUSTEDCA[0]}" ]; }; then
 	echo 'Invalid parameters. If using --cryptolib, --sapgenpse, --client-cert, --client-key , --client-pfx, --server-cert parameters, --cacert, specify --use-snc'
@@ -317,6 +317,11 @@ fi
 
 if [ -n "$ABAPSERVER" ] && { [ -n "$MESSAGESERVERHOST" ] || [ -n "$MESSAGESERVERPORT" ] || [ -n "$LOGONGROUP" ]; }; then
 	echo 'Invalid parameters. --abapserver cannot be used in conjunction with --messageserverhost, --messageserverport or --logongroup'
+	exit 1
+fi
+
+if [ $USESNC ] && [ "$MODE" != 'cfgf' ]; then
+	echo 'SNC connectivity only supported in cfgf keymode'
 	exit 1
 fi
 
@@ -620,7 +625,8 @@ if [ $USESNC ]; then
 
 	if [ -f "$CLIENTPFX" ]; then
 		#PFX file exists. unpack it
-		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -clcerts -nodes -passin pass:$CLIENTPFXPWD
+		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -nodes -passin pass:$CLIENTPFXPWD
+		MYCERT=$(openssl pkcs12 -info -in "$CLIENTPFX" -nodes -nokeys -clcerts -passin pass:$CLIENTPFXPWD | awk '/-----BEGIN/{a=1}/-----END/{print;a=0}a' | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
 	fi
 
 	if [ ! -f "$CLIENTPFX" ]; then
@@ -831,7 +837,9 @@ fi
 
 if [ $USESNC ]; then
 	sed -i '/\[ABAP Central Instance]/a'"snc_lib = \/sapcon-app\/sapcon\/config\/system\/sec\/libsapcrypto.so"'' "$sysfileloc"$sysconf
-	MYCERT=$(openssl x509 -in $CLIENTCERT | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
+	if [ -z "$CLIENTPFX" ]; then
+		MYCERT=$(openssl x509 -in "$CLIENTCERT" | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
+	fi
 	sed -i '/\[ABAP Central Instance]/a'"x509cert = $MYCERT"'' "$sysfileloc"$sysconf
 	PARTNERNAME=$(openssl x509 -in "$SERVERCERT" -text -noout | grep Subject: | awk -F: '{print $2}')
 	sed -i '/\[ABAP Central Instance]/a'"snc_partnername = p:$PARTNERNAME"'' "$sysfileloc"$sysconf
