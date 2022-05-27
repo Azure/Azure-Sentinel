@@ -12,7 +12,7 @@ By every day reccurence, this playbook gets triggered and performs the following
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FAbuseIPDB%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDB-BlacklistIpToThreatIntelligence%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FAbuseIPDB%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDB-BlacklistIpToThreatIntelligence%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDB-BlacklistIpToThreatIntelligence%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDB-BlacklistIpToThreatIntelligence%2Fazuredeploy.json)
 
 
 ### Post-Deployment instructions 
