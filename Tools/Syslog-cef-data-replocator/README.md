@@ -1,26 +1,30 @@
 # Syslog or CEF over Syslog data replication
-Author: Anki Narravula
+Author: Anki Narravula - Reachout to anknar@microsoft.com incase of any issues or clarifications required
 
 ## Description
-This repository contains a console application (Python) that helps to generate / replicate data in Syslog or CEF over syslog format. Users need to input a file with sample data in it (minimum 1 event) to start generating the syslog traffic. User can use this tool to mimic as any Syslog datasource (device). Data will be sent to specified destination address (We can have AMA / LA agent installed here to receive the data) over TCP or UDP 514 port. AMA/LA agent will send to Sentinel as per configurations defined on the agent node. 
+This repository contains a console application (Python) that helps to replicate data in Syslog or CEF over syslog format by using sample events. Users need to input a file with sample data in it (minimum 1 event) to start generating the syslog traffic. User can use this tool to mimic as any Syslog datasource (device). Data will be sent to a specified destination address (where we have AMA / LA agent installed here to receive the data) over TCP or UDP 514 port. Further AMA/LA agent can send to Sentinel as per configurations defined on the agent node. To deploy a log forwarder to ingest Syslog and CEF logs to Microsoft Sentinel refer - https://docs.microsoft.com/en-us/azure/sentinel/connect-log-forwarder?tabs=rsyslog
 
-If yours are trying to see specific values for the fields (in case of CEF data), for example deviceVendor need to be always from the array of values [] or any timestamp field shuld sent to current etc then we need to input a file where we have such customizations defined. Otherwise we donet require to input this file.
-
-Two options are available using the tool. The Prerequisites and App Registration steps are required for both options.
+If yours are trying to see specific values for the fields (in case of CEF data), for example deviceVendor need to be always from the array of values ["Fortinet","CISCO","Microsoft"] or any timestamp field should set to current etc then we need to input a file where we have such customizations defined. Otherwise we dont require to input this file.
 
 ## Prerequisites
-To configure the tool, the following assembly is required to post sample data to Azure Log Analytics custom logs via Azure Monitor Http Data Collector API.
 
+- Make sure we have python installed on the system where we are running this utility
+- Sample data (File name and path) is mandatory parameter for invocation. Make sure you have it ready
+- Log forwarding agent is configured already and have IP Address and host name handy
+- Make sure firewall is not blockiign the traffic flow from source (where we are running this utlity) and destination (where we have log forwarder configured)
 
-How to use 
+## How to use 
 
 We have 2 flavors
 1.	Generating syslog / cef traffic from raw log
 2.	Generating syslog / cef traffic from csv file
 	
-Generating syslog / cef traffic from raw log
-Step 1: Make sure raw log present in a file (with any extension) and each record separated by new line char (\n)
+### Generating syslog / cef traffic from raw log
+
+	Step 1: Make sure raw log present in a file (with any extension) and each record separated by new line char (\n)
+
 For example:
+
 Inflobox NIOS raw logs:
 ```
 May 13 2022 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
@@ -28,7 +32,8 @@ May 13 2022 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied tr
 May 13 2022 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
 May 13 2022 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020.
 ```
-	CISCO Meraki raw logs:
+
+CISCO Meraki raw logs:
 ```
 1377449842.514782056 MX84 ids-alerts : signature=129:4:1 priority=3 timestamp=1377449842.512569 direction=ingress protocol=tcp/ip src=74.125.140.132:80
 1380664994.337961231 MX84 events : type=vpn_connectivity_change vpn_type='site-to-site' peer_contact='98.68.191.209:51856' peer_ident='2814ee002c075181bb1b7478ee073860' connectivity='true'
@@ -38,10 +43,10 @@ May 13 2022 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied tr
 1374543213.342705328 MX84 urls : src=192.168.1.186:63735 dst=69.58.188.40:80 mac=58:1F:AA:CE:61:F2 request: GET https://...
 1374543986.038687615 MX84 flows : src=192.168.1.186 dst=8.8.8.8 mac=58:1F:AA:CE:61:F2 protocol=udp sport=55719 dport=53 pattern: allow all
 ```
-	Step 2: Save in same folder as script exist, name and extension can be any thing
+	Step 2: Save in same folder as script exist, name and extension can be any thing. If file is at different location then we need to provide complete path
 	Step 3: Navigate to the script path, where syslogfromraw.py exists
-		For example, if script exists in C:\Repositories\Anki-Playground\CEFReplicator then run
-		cd C:\Repositories\Anki-Playground\CEFReplicator
+		For example, if script exists in C:\Repositories\Anki-Playground\SyslogReplicator then run
+		cd C:\Repositories\Anki-Playground\SyslogReplicator
 Step 4: You can try with the following commands
 1.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype 'syslog' --cust_file fortigate_customizations.json syslog_meraki_raw.log     
 2.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype 'syslog' syslog_meraki_raw.log
@@ -88,10 +93,38 @@ Additional information:
 
 
 Log customizations:
-If you would need to prepare CEF event with any customizations (other than sample event), we must specify customization requirements in a specific schema and this file name also need to be passed as an argument. 
+While replaying the events, if you would like to customize any fields values (for example src must be one of the IPs [“23.2.3.42”,”78.3.78.2”,”34.98.0.9”] ) this comes handy. You just can mention the name of the field and desired values. Our script picks up the customizations and original values will be replaced with the custom values. 
 For example, see below how the customization defiled – 
- 
 
+'''
+"customizations":{
+        "version":{"data_type":"Integer", "values": [0]},
+        "deviceVendor": {"data_type":"String", "values": ["CISCO","JUNIPER","Fortinet","MSFT"]},
+        "deviceProduct": {"data_type":"String", "values": ["Cortex","Vertex","Fortigate", "WSF"]},
+        "deviceVersion": {"data_type":"String", "values": ["2","19","34"]},
+        "signatureId": {"data_type":"String", "values": ["3.6.0.3","3.4.0.6","5.6.7.8","1.6.1.3","9.6.1.7","1.9.0.2","1.89.12.3","14.61.0.31","19.6.01.36"]},
+        "name": {"data_type":"String", "values": ["Phishing","TROJAN_GIPPERS.DC","services-health","Monitoring"]},
+        "severity": {"data_type":"Integer", "values": [1,2,3,4,5,6,7,8,9]},
+        "deviceExternalId": {"data_type":"String", "values": ["FGVMEV9XTHSMYCCF","FGVMEV9XPDFRYYCCF","FGVMEV9XPEPFOCFR"]},
+        "FTNTFGTlogid": {"data_type":"String", "values": ["0100026001","010004554","01566fjj56"]},
+        "cat": {"data_type":"String", "values": ["event","alert","traffic"]},
+        "direction": {"data_type":"String", "values": ["egress","ingress","in"]},
+        "FTNTFGTsubtype": {"data_type":"String", "values": ["system"]},
+        "origisationname": {"data_type":"String", "values": ["Fortigate","CISCO"]},
+        "origin": {"data_type":"String", "values": ["NA","NULL",""]},
+        "logid": {"data_type":"String", "values": ["562ed3w","dfdf564s","3455frs"]},
+        "dst_country": {"data_type":"String", "values": ["US","Canada","Bhutan"]},
+        "dst": {"data_type":"String", "values": ["67.21.32.78","201.32.13.56","76.62.201.10"]},
+        "src": {"data_type":"String", "values": ["101.21.21.1","67.23.21.90","82.78.9.87"]},
+        "ifname": {"data_type":"String", "values": ["eth0","eth1"]},
+        "product": {"data_type":"String", "values": ["FortiWeb","Prisma","Fortigate", "WAF"]},
+        "dpt": {"data_type":"Integer", "values": [1233, 3456, 6738]},
+        "spt": {"data_type":"Integer", "values": [7837,8929,7832,8729]},
+        "start1": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"},
+        "end1": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"},
+        "ISOTimeStamp": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"}    
+    } 
+'''
 Store above customizations into a json file as pass file name as an argument (--cust_file) as shown below
  
 
@@ -103,7 +136,7 @@ Visualizing events:
 Troubleshooting:
 
 If you are not running this utility where we have LA agent installed, then follow below steps that are described at – 
-CEF & Syslog Step by Step Troubleshooter - Overview (azure.com)
-Syslog Workflow - ASA, Check Point, Syslog, Palo Alto, Fortigate, Cisco, CEF - Overview (azure.com)
+https://dev.azure.com/SupportabilityWork/Azure Security/_wiki/wikis/Azure Sentinel CSS wiki/3822/CEF-Syslog-Step-by-Step-Troubleshooter
+https://dev.azure.com/SupportabilityWork/Azure Security/_wiki/wikis/Azure Sentinel CSS wiki/1345/Syslog-Workflow-ASA-Check-Point-Syslog-Palo-Alto-Fortigate-Cisco-CEF
 
 If you are running locally (where we have LA forwarder installed) then you may not require to validate remote communication part of it, check other troubleshooting steps  
