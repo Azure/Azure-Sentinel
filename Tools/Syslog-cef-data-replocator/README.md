@@ -127,8 +127,8 @@ For example, see below how the customization defiled –
         "product": {"data_type":"String", "values": ["FortiWeb","Prisma","Fortigate", "WAF"]},
         "dpt": {"data_type":"Integer", "values": [1233, 3456, 6738]},
         "spt": {"data_type":"Integer", "values": [7837,8929,7832,8729]},
-        "start1": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"},
-        "end1": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"},
+        "start": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"},
+        "end": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"},
         "ISOTimeStamp": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"}    
 	} 
 	```
