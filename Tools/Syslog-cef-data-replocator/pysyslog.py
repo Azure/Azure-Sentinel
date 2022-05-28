@@ -42,14 +42,17 @@ def parse(str_input):
     contains_datetime_format1 = re.search("^(\w{1,3}\s\d{1,2}\s\d{1,4}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2})",str_input)
     contains_datetime_format2 = re.search("^(\d{2}(?:\d{2})?-\d{1,2}-\d{1,2}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2})",str_input)
     contains_datetime_format3 = re.search("^(\d{9,13}[\.][\d]{0,10})\s(.*)",str_input)
+    contains_datetime_format4 = re.search("^(\w{1,3}\s\d{1,2}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2})",str_input)
 
+    # Mar 20 2022 10:00:00
     if contains_datetime_format1:
         header_re = r'^(\w{1,3}\s\d{1,2}\s\d{1,4}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2}[\.\d{0,10}]+)\s(.*)'
         res = re.search(header_re, str_input)
         values["ISOTimeStamp"] = res.group(1)
         str_input = res.group(2)
+    # 2022-03-20T10:00:00
     elif contains_datetime_format2:
-        header_re = r'^(\d{2}(?:\d{2})?-\d{1,2}-\d{1,2}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2}[\.\d{0,10}]+)\s(.*)'
+        header_re = r'^(\d{2}(?:\d{2})?-\d{1,2}-\d{1,2}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2}[\.\d{0,10}Z]+)\s(.*)'
         res = re.search(header_re, str_input)
         values["ISOTimeStamp"] = res.group(1)
         str_input = res.group(2)
@@ -58,11 +61,16 @@ def parse(str_input):
         res = re.search(header_re, str_input)
         values["ISOTimeStamp"] = res.group(1)
         str_input = res.group(2)
+    elif contains_datetime_format4:
+        header_re = r'^(\w{1,3}\s\d{1,2}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2}[\.\d{0,10}]+)\s(.*)'
+        res = re.search(header_re, str_input)
+        values["ISOTimeStamp"] = res.group(1)
+        str_input = res.group(2)
 
-    contains_hostname = re.search("^([\.\w]+)\s(.*)",str_input)
+    contains_hostname = re.search("^([\.\w\-]+)\s(.*)",str_input)
 
     if contains_hostname:
-        header_re = r'^([\.\w]+)\s(.*)'
+        header_re = r'^([\.\w\-]+)\s(.*)'
         res = re.search(header_re, str_input)
         values["hostName"] = res.group(1)
         values["restofmessage"] = res.group(2)

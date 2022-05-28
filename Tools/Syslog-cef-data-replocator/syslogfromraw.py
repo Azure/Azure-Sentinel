@@ -7,7 +7,7 @@
 import json
 import random
 import csv
-from syslog import Syslog, Level, Facility
+#from syslog import Syslog, Level, Facility
 import argparse
 import re
 import datetime
@@ -18,6 +18,7 @@ import pycef
 import pysyslog
 import shlex
 import time
+import socket
 #from joblib import Parallel, delayed
 #from tkinter import E
 #from wsgiref.headers import Headers
@@ -75,7 +76,7 @@ def build_custom_extension_for_raw(schemaSampledata,complete_header, extensions)
 # Post to Syslog
 
 def post_syslog(msg, hostname):
-    print(msg)
+    #print(msg)
     log = Syslog(host=hostname)
     log.send(msg,Level.INFO)
 
@@ -201,6 +202,62 @@ def read_keys_sampledata(line):
     except OSError as e:
         print("Make sure file exists with at least header, taking default header",e)
         return ['externalId', 'lastActivityTime', 'src', 'dst', 'src_hostname', 'dst_hostname', 'src_username', 'dst_username', 'dst_email_id', 'startTime', 'url', 'fileHash', 'fileType', 'malwareCategory', 'malwareSeverity', 'dst_country']
+class Facility:
+  "Syslog facilities"
+  KERN, USER, MAIL, DAEMON, AUTH, SYSLOG, \
+  LPR, NEWS, UUCP, CRON, AUTHPRIV, FTP = range(12)
+
+  LOCAL0, LOCAL1, LOCAL2, LOCAL3, \
+  LOCAL4, LOCAL5, LOCAL6, LOCAL7 = range(16, 24)
+
+class Level:
+  "Syslog levels"
+  EMERG, ALERT, CRIT, ERR, \
+  WARNING, NOTICE, INFO, DEBUG = range(8)
+
+class Syslog:
+  """A syslog client that logs to a remote server.
+
+  Example:
+  >>> log = Syslog(host="foobar.example")
+  >>> log.send("hello", Level.WARNING)
+  """
+  def __init__(self,
+               host="localhost",
+               port=514,
+               facility=Facility.DAEMON,
+               protocol='UDP'):
+    self.host = host
+    self.port = port
+    self.facility = facility
+    self.protocol = protocol
+    if self.protocol == 'UDP':
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    elif self.protocol == 'TCP':
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect((self.host, self.port))
+    else:
+        raise Exception('Invalid protocol {}, valid options are UDP and TCP'.format(self.protocol))
+
+  def send(self, message, level=Level.NOTICE):
+    "Send a syslog message to remote host using UDP or TCP"
+    data = "<%d>%s" % (level + self.facility*8, message)
+    if self.protocol == 'UDP':
+        self.socket.sendto(data.encode('utf-8'), (self.host, self.port))
+    else:
+        self.socket.send(data.encode('utf-8'))
+
+  def warn(self, message):
+    "Send a syslog warning message."
+    self.send(message, Level.WARNING)
+
+  def notice(self, message):
+    "Send a syslog notice message."
+    self.send(message, Level.NOTICE)
+
+  def error(self, message):
+    "Send a syslog error message."
+    self.send(message, Level.ERR)
 
 
 
@@ -211,9 +268,10 @@ if __name__ == '__main__':
     parser.add_argument('--host', type=str, default='localhost', help='Syslog destination address')
     parser.add_argument('--port', type=int, default=514, help='Syslog destination port')
     parser.add_argument('--eventtype', type=str, default='CEF', help='CEF or Syslog')
-    parser.add_argument('--eventcount', type=int, default=200, help='Max events')
+    parser.add_argument('--eps', type=int, default=100, help='Max events')
 
     args = parser.parse_args()
+    #print (args)
     
     """
     #args = []
@@ -223,7 +281,7 @@ if __name__ == '__main__':
     port = 514
     eventtype = "CEF"
     fileformat = "kvpair"
-    eventcount = 100
+    eps = 100
     """
     #'C:\\Repositories\\Anki-Playground\\cefevent\\SampleData.csv'
     #print (args.input_file)
@@ -233,6 +291,10 @@ if __name__ == '__main__':
 
     #if args.fileformat == "kvpair":
     #    headers = read_keys_sampledata(args.input_file)    
+
+    with open(args.input_file, 'r', encoding="utf8") as log_file:
+            lines = log_file.readlines()
+            record_count = len(lines)
 
 
     try:
@@ -259,19 +321,28 @@ if __name__ == '__main__':
 
     now = datetime.datetime.now()
     
+    loop_break = 0
+    total_records_sent = 0
 
-    for i in range(1,100000000000000000000):
+    while not (loop_break):
         time_diff = (datetime.datetime.now() - now).total_seconds()
-        eps = i / (time_diff if time_diff > 0 else 1)
-        if eps > args.eventcount:
-            time.sleep(1)
-            #now = datetime.datetime.now()
+        if time_diff >= 9*60:
+            loop_break = 1
+            break    
+        #eps = i / (time_diff if time_diff > 0 else 1)
+        #if eps > args.eps:
+        #    time.sleep(1)
+        #    #now = datetime.datetime.now()
         else:
+            total_records_sent = total_records_sent + record_count
+            eps = total_records_sent / (time_diff if time_diff > 0 else 1)
+            if eps > args.eps:
+                time.sleep(1)
             #build_message_from_raw(args)
             p = worker(target=build_message_from_raw, args=(args,range(1,10)))
             p.start()
             p.join() 
-        print ("Sent {} messages till  with eps {} ".format(i,eps))
+        #print ("Sent {} messages till  with eps {} ".format(i,eps))
 
     #build_message_from_raw( args)
 

@@ -36,7 +36,7 @@ class Syslog:
                host="localhost",
                port=514,
                facility=Facility.DAEMON,
-               protocol='TCP'):
+               protocol='UDP'):
     self.host = host
     self.port = port
     self.facility = facility
