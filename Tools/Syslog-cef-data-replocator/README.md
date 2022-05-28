@@ -4,7 +4,7 @@ Author: Anki Narravula - Reachout to anknar@microsoft.com incase of any issues o
 ## Description
 This repository contains a console application (Python) that helps to replicate data in Syslog or CEF over syslog format by using sample events. Users need to input a file with sample data in it (minimum 1 event) to start generating the syslog traffic. User can use this tool to mimic as any Syslog datasource (device). Data will be sent to a specified destination address (where we have AMA / LA agent installed here to receive the data) over TCP or UDP 514 port. Further AMA/LA agent can send to Sentinel as per configurations defined on the agent node. To deploy a log forwarder to ingest Syslog and CEF logs to Microsoft Sentinel refer - https://docs.microsoft.com/en-us/azure/sentinel/connect-log-forwarder?tabs=rsyslog
 
-If yours are trying to see specific values for the fields (in case of CEF data), for example deviceVendor need to be always from the array of values ["Fortinet","CISCO","Microsoft"] or any timestamp field should set to current etc then we need to input a file where we have such customizations defined. Otherwise we dont require to input this file.
+   If you are trying to see specific values for the fields (in case of CEF data), for example deviceVendor need to be always from the array of values ["Fortinet","CISCO","Microsoft"] or any timestamp field should set to current etc then we need to input a file where we have such customizations defined. Otherwise we dont require to input this file.
 
 ## Prerequisites
 
@@ -143,9 +143,9 @@ When we have customizations defined, field values from sample events will be rep
 
 ### Troubleshooting:
 
-If you are not running this utility where we have LA agent installed and facing some issues, follow guidelines  – 
+   If you are not running this utility where we have LA agent installed and facing some issues, follow guidelines  – 
 	
 	https://dev.azure.com/SupportabilityWork/Azure Security/_wiki/wikis/Azure Sentinel CSS wiki/3822/CEF-Syslog-Step-by-Step-Troubleshooter
 	https://dev.azure.com/SupportabilityWork/Azure Security/_wiki/wikis/Azure Sentinel CSS wiki/1345/Syslog-Workflow-ASA-Check-Point-Syslog-Palo-Alto-Fortigate-Cisco-CEF
 	
-If you are running locally (where we have LA forwarder installed) then you may not require to validate remote communication part of it, check other troubleshooting steps  
+   If you are running locally (where we have LA forwarder installed) then you may not require to validate remote communication part of it, check other troubleshooting steps  
