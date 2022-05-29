@@ -16,16 +16,16 @@ This repository contains a console application (Python) that helps to replicate 
 ## How to use 
 
 We have 2 flavors
-1.	Generating syslog / cef traffic from raw log
-2.	Generating syslog / cef traffic from csv file
+1.	Generating syslog / cef traffic using raw log
+2.	Generating syslog / cef traffic using csv file
 	
-### Generating syslog / cef traffic from raw log
+### 1. Generating syslog / cef traffic using raw log
 
 - Step 1: Make sure raw log present in a file (with any extension) and each record separated by new line char (\n)
 
-       For example:
+     For example:
 
-       Inflobox NIOS raw logs:
+     Inflobox NIOS raw logs:
        
        
        May 13 2022 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
@@ -34,7 +34,7 @@ We have 2 flavors
        May 13 2022 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020.
        
 
-       CISCO Meraki raw logs:
+     CISCO Meraki raw logs:
        
        1377449842.514782056 MX84 ids-alerts : signature=129:4:1 priority=3 timestamp=1377449842.512569 direction=ingress protocol=tcp/ip src=74.125.140.132:80
        1380664994.337961231 MX84 events : type=vpn_connectivity_change vpn_type='site-to-site' peer_contact='98.68.191.209:51856'   peer_ident='2814ee002c075181bb1b7478ee073860' connectivity='true'
@@ -67,13 +67,15 @@ We have 2 flavors
 	--eps  (optional – default is 100 if not specified)
 	Name of the file where we have same data is mandatory like python syslogfromcsv.py cef_microsoft_ata.log
 	```
-### Generating syslog / cef traffic from csv filelog
+### 2. Generating syslog / cef traffic using csv file
 
 - Step 1: Make sure csv file present with header and at least 1 record, records are separated by new line char (\n)
         For example:
          FortiGate sample data in syslog converted into csv:
  
-        Note: Make sure header fields also exist in csv along with the structured data
+	![image](https://user-images.githubusercontent.com/10404181/170849664-3442063e-a401-4166-87b0-7ac90429c4d3.png)
+
+    Note: For CEF traffic, make sure header fields also exists in csv along with the structured data.
  
 - Step 2: Save in same folder as script exist, name and extension can be any thing
 - Step 3: Navigate to the script path, where syslogfromraw.py exists
@@ -99,11 +101,11 @@ We have 2 flavors
 ## Additional information:
 
 ### Log customizations:
-While replaying the events, if you would like to customize any fields values (for example src must be one of the IPs [“23.2.3.42”,”78.3.78.2”,”34.98.0.9”] ) this comes handy. You just can mention the name of the field and desired values. Our script picks up the customizations and original values will be replaced with the custom values. 
+While replaying the events, if you would like to customize any fields values (for example src must be one of the IPs from an array _[“23.2.3.42”,”78.3.78.2”,”34.98.0.9”]_ ) this comes handy. You just can mention the name of the field and desired values. Our script picks up the customizations and original values will be replaced with the custom values. 
 
 For example, see below how the customization defiled – 
 
-	```	
+		
 	"customizations":{
         "version":{"data_type":"Integer", "values": [0]},
         "deviceVendor": {"data_type":"String", "values": ["CISCO","JUNIPER","Fortinet","MSFT"]},
@@ -131,7 +133,7 @@ For example, see below how the customization defiled –
         "end": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"},
         "ISOTimeStamp": {"data_type":"datetime", "values": ["current"], "format":"%Y-%m-%d %H:%M:%S"}    
 	} 
-	```
+	
 
   Store above customizations into a json file as pass file name as an argument (--cust_file) as shown below
  
