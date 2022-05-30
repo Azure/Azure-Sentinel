@@ -4,7 +4,8 @@ failed=0
 
 # The KqlFuncYaml2Arm script generates deployable ARM templates from KQL function YAML files.
 # Currently, the script only runs on the Schemas listed below.
-
+git config --local user.name "github-actions[bot]"
+git config --local user.email "<>"
 git merge origin/master
 status = $(echo $(git status))
 if [[ "$status" == *"conflict"* ]]; then
