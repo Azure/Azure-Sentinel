@@ -7,7 +7,7 @@ failed=0
 git config --local user.name "github-actions[bot]"
 git config --local user.email "<>"
 git merge origin/master
-status = $(echo $(git status))
+status=$(echo $(git status))
 if [[ "$status" == *"conflict"* ]]; then
 	$failed=1
 	echo "There are merge conflics between origin/master and the pull request branch. Please resolve them."
