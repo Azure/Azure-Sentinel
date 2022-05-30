@@ -23,14 +23,28 @@ ParserParams:
 ParserQuery: |
   let parser = (disabled:bool=false) 
   {
-    AppGate_CL
-    // | where ProcessName == "cz-sessiond" or ProcessName == "cz-vpnd"
-    | where RawData has_all ("[AUDIT]","ip_access") and RawData has_any ("cz-sessiond", "cz-vpnd")
-    | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  RawData)
+    let DirectionLookup = datatable (direction:string, NetworkDirection:string) 
+    [
+      'up', 'Inbound',
+      'down', 'Outbound'
+    ];
+    let ActionLookup = datatable (DvcOriginalAction:string, DvcAction:string)
+    [
+      'allow', 'Allow',
+      'drop', 'Drop',
+      'reject', 'Deny',
+      'block', 'Deny',
+      'block_report', 'Deny',
+      'allow_report', 'Allow'
+    ];
+    Syslog
+    | where ProcessName == "cz-sessiond" or ProcessName == "cz-vpnd"
+    | where SyslogMessage has_all ("[AUDIT]","ip_access") // and SyslogMessage has_any ("cz-sessiond", "cz-vpnd")
+    | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  SyslogMessage)
     | where type == "ip_access"
-    | parse RawData with 
+    | parse SyslogMessage with 
         *
-        '"action":"' action:string '",' // -- to be normalized based on list of values.
+        '"action":"' DvcOriginalAction:string '",' // -- to be normalized based on list of values.
         *
         '"client_ip":"' SrcIpAddr:string '",'
         '"client_port":' SrcPortNumber:int ','
@@ -56,7 +70,7 @@ ParserQuery: |
         '"protocol":"' NetworkProtocol:string '",'  
         *          
         '"rule_name":"' NetworkRuleName:string '",'  
-        '"source_ip":"' DvcIpAddr:string '",' 
+        '"source_ip":"' SrcNatIpAddr:string '",' 
         *
         '"version":' EventProductVersion:string '}'
         *
@@ -77,15 +91,17 @@ ParserQuery: |
         EventSeverity = 'Informational', // To do based on action
         EventType = 'NetworkSession',
         EventResult = 'Success' // To do based on action
+    | lookup DirectionLookup on direction
+    | lookup ActionLookup on DvcOriginalAction
     // -- Aliases
     | extend 
         Src = SrcIpAddr,
         Dst = DstIpAddr,
-        Dvc = DvcIpAddr,
+        Dvc = DvcHostname,
         SessionId = NetworkSessionId,
         IpAddr = SrcIpAddr,
         Rule = NetworkRuleName
     | project-away 
-        RawData, type
+        SyslogMessage, type, direction
   };
   parser (disabled)
