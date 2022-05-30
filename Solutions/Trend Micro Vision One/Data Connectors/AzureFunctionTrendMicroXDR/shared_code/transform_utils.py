@@ -185,7 +185,13 @@ def _convert_meta(meta_object):
     }
 
     for key in meta_object.keys():
-        name = MappingSet.meta_key_mapping[key]
+        if key in MappingSet.meta_key_mapping:
+            name = MappingSet.meta_key_mapping[key]
+        else:
+            # Unknown field name
+            logging.warning(f'rca meta key: "{key}" not in mapping set.')
+            name = key
+
         if name in _META_VALUE_FUNC:
             func_value_list = _META_VALUE_FUNC[name]
             params = [meta_object[key]]
@@ -198,7 +204,7 @@ def _convert_meta(meta_object):
             if exec_func:
                 value = exec_func(params)
             else:
-                logging.error(f'Donot set function in _META_VALUE_FUNC: {name}')
+                logging.error(f'Do not have function in _META_VALUE_FUNC: {name}')
         else:
             value = meta_object[key]
 
