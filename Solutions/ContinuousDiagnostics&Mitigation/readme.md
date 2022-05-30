@@ -15,7 +15,7 @@ You can deploy the solution by clicking on the buttons below:
 ## Getting Started
 This Solution enables Compliance Teams, Architects, SecOps Analysts, and Consultants to gain situational awareness for cloud workload security posture. This solution is designed to augment staffing through automation, visibility, assessment, monitoring and remediation. This Solution demonstrates best practice guidance, but Microsoft does not guarantee nor imply compliance. All CDM requirements, validations, and controls are governed by the 💡[Cybersecurity & Infrastructure Security Agency](https://www.cisa.gov/cdm). This solution provides visibility and situational awareness for security capabilities delivered with Microsoft technologies in predominantly cloud-based environments. Customer experience will vary by user and some panels may require additional configurations for operation. Recommendations do not imply coverage of respective controls as they are often one of several courses of action for approaching requirements which is unique to each customer.<br>
 
-### [Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions) / [Microsoft Defender for Endpoint Roles](https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/user-roles)
+### [Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions) / [Microsoft Defender for Endpoint Roles](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/user-roles)
 | <strong> Roles </strong> | <strong> Rights </strong> | 
 |:--|:--|
 |Security Reader | View Workbooks, Analytics, Hunting, Security Recommendations |
@@ -26,12 +26,12 @@ This Solution enables Compliance Teams, Architects, SecOps Analysts, and Consult
 ### Onboarding Prerequisites 
 1️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
 2️⃣ [Onboard Microsoft Defender for Cloud](https://docs.microsoft.com/azure/security-center/security-center-get-started)<br>
-3️⃣ [Onboard Microsoft Defender for Endpoint](https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/onboard-configure)<br>
-4️⃣ [Enable Microsoft Defender for Endpoint: Threat & Vulnerability Management](https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/tvm-prerequisites)<br>
+3️⃣ [Onboard Microsoft Defender for Endpoint](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/onboard-configure)<br>
+4️⃣ [Enable Microsoft Defender for Endpoint: Threat & Vulnerability Management](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/tvm-prerequisites)<br>
 5️⃣ [Connect Microsoft Defender for Cloud to Microsoft Sentinel via Continuous Export](https://docs.microsoft.com/azure/security-center/continuous-export)<br>
 6️⃣ [Extend Microsoft Sentinel Across Workspaces and Tenants](https://docs.microsoft.com/azure/sentinel/extend-sentinel-across-workspaces-tenants)<br>
-7️⃣ [Connect Microsoft Defender for Endpoint to Microsoft Sentinel](https://docs.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender?tabs=MDE)<br>
-8️⃣ [Automated Data Export to CISA](https://docs.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender?tabs=MDE)<br>
+7️⃣ [Connect Microsoft Defender for Endpoint to Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/connect-microsoft-365-defender?tabs=MDE)<br>
+8️⃣ [Automated Data Export to CISA](https://docs.microsoft.com/azure/sentinel/connect-microsoft-365-defender?tabs=MDE)<br>
 9️⃣ [Add the Microsoft Defender for Cloud: NIST SP 800-53 R4 & R5 Assessments to Your Dashboard](https://docs.microsoft.com/azure/security-center/update-regulatory-compliance-packages#add-a-regulatory-standard-to-your-dashboard)<br>
 
 
