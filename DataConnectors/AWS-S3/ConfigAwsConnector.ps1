@@ -13,7 +13,7 @@
     Specifies the path to save the script log. If not specified, the current path is used.
 
 .PARAMETER AwsLogType
-    Specifies the Aws log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty"
+    Specifies the Aws log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty", "CustomLog"
 
 .EXAMPLE
     .\Config-AwsConnector.ps1
@@ -26,7 +26,7 @@ param (
     [string]
     $LogPath=(Join-Path (Get-Location).Path Logs),
     [Parameter()]
-    [ValidateSet("VPC","CloudTrail","GuardDuty")][string]$AwsLogType
+    [ValidateSet("VPC","CloudTrail","GuardDuty", "CustomLog")][string]$AwsLogType
 )
 # Include helper scripts
 . ".\Utils\HelperFunctions.ps1"
@@ -64,7 +64,7 @@ if ($AwsLogType -eq "")
     {
         try
         {
-            [ValidateSet("VPC","CloudTrail","GuardDuty")]$AwsLogType = Read-ValidatedHost -Prompt "Please enter the AWS log type to configure (VPC, CloudTrail, GuardDuty)"
+            [ValidateSet("VPC","CloudTrail","GuardDuty", "CustomLog")]$AwsLogType = Read-ValidatedHost -Prompt "Please enter the AWS log type to configure (VPC, CloudTrail, GuardDuty, CustomLog)"
         }
         catch{}
     } until ($?)
@@ -75,6 +75,7 @@ switch ($AwsLogType)
     "VPC" {.\ConfigVpcFlowDataConnector.ps1; break}
     "CloudTrail" {.\ConfigCloudTrailDataConnector.ps1 ; break }
     "GuardDuty" {.\ConfigGuardDutyDataConnector.ps1 ; break }
+    "CustomLog" {.\ConfigCustomLogDataConnector.ps1 ; break }
     default {Write-Log -Message "Invalid log type" -LogFileName $LogFileName -Severity Error; exit}
 }
 

@@ -1,14 +1,16 @@
 # Integrating Guardicore Incidents into Azure Sentinel 
 
-Author: Arbala Security
+Author: Accelerynt
 
-For any technical questions, please contact info@arbalasystems.com.
+For any technical questions, please contact info@accelerynt.com
 
 This playbook will give Azure Sentinel the ability to query your Guardicore Centra Cloud instance API to retrieve established incidents. The API query will be sent every 10 minutes. Incidents that have had their data copied to Sentinel logs will be marked with the “Sentinel” tag in Guardicore. 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FGuardicore-Import-Incidents%2Fmaster%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FArbala-Security%2FGuardicore-Import-Incidents%2Fmaster%2Fazuredeploy.json)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGuardicore-Import-Incidents%2Fazuredeploy.json" target="_blank">
+    <img src="https://aka.ms/deploytoazurebutton""/>
+</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Guardicore-Import-Incidents/azuredeploy.json" target="_blank"><img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/></a>
 
 
 #
@@ -23,13 +25,9 @@ You will need the following items to enter in the playbook settings during deplo
 
 * The Primary or Secondary Key to your workspace. 
 
-Open your browser and ensure you are logged into your Azure Sentinel workspace. In separate tab, open the link to our playbook on the Arbala Security GitHub Repository:
+#
 
-https://github.com/Arbala-Security/Guardicore-Import-Incidents
-
-From there, click the “Deploy to Azure” button at the bottom and it will bring you to the Custom Deployment Template.
-
-![Deploy](Images/GitDeploy.png)
+Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
 In the **BASICS** section:  
 
@@ -101,5 +99,3 @@ Click on “Advanced Settings”.
 Next, click on “Connected Sources” and then “Windows Servers” to display your Workspace ID and either Primary or Secondary key. 
 
 ![settings3](Images/settings3.png)
-
-For any technical questions, please contact info@arbalasystems.com.

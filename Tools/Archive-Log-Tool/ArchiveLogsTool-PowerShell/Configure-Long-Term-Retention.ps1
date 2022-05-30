@@ -20,7 +20,7 @@
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 2/18/2022
+        LASTEDIT: 3/9/2022
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -183,7 +183,7 @@ function Get-LATables {
         }    
     }
     catch {
-        Write-Log $_ -LogFileName $LogFileName -Severity Error
+        Write-Log -Message $_ -LogFileName $LogFileName -Severity Error
         Write-Log -Message "An error occurred in querying table names from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Error         
         exit
     }
@@ -559,7 +559,7 @@ foreach($CurrentSubscription in $GetSubscriptions)
     }
     catch [Exception]
     { 
-        Write-Log $_ -LogFileName $LogFileName -Severity Error                         		
+        Write-Log -Message $_ -LogFileName $LogFileName -Severity Error                         		
     }		 
 }
 #endregion DriverProgram 

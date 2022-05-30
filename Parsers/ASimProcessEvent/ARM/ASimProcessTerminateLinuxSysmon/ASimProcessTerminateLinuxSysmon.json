@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimProcessTerminateLinuxSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Terminate Event ASIM parser for Sysmon for Linux",
+            "category": "ASIM",
+            "FunctionAlias": "ASimProcessTerminateLinuxSysmon",
+            "query": "let ParsedProcessEvent=(){\nSyslog\n| where not(disabled)\n| where SyslogMessage has_all ('<Provider Name=\"Linux-Sysmon\"', '<EventID>5</EventID>')\n| parse SyslogMessage with * '<Data Name=\"RuleName\">'RuleName'</Data>'\n                            '<Data Name=\"UtcTime\">'UtcTime'</Data>'\n                            '<Data Name=\"ProcessGuid\">{'ProcessGuid'}</Data>'\n                            '<Data Name=\"ProcessId\">'ProcessId:string'</Data>'\n                            '<Data Name=\"Image\">'Image'</Data>'*\n| parse SyslogMessage with *'<Data Name=\"User\">'ActorUsername '</Data>' *\n| project-away SyslogMessage\n| extend \n                        EventType = \"ProcessTerminated\",\n                        EventStartTime = todatetime(TimeGenerated),\n                        EventEndTime = todatetime(TimeGenerated),\n                        EventCount = int(1),\n                        EventVendor = \"Microsoft\",\n                        EventSchemaVersion = \"0.1.0\",\n                        EventSchema = 'ProcessEvent',\n                        EventOriginalType='5',\n                        EventProduct = \"Sysmon\",\n                        EventResult = 'Success',\n                        DvcOs = \"Linux\"\n                | project-rename\n                        DvcHostname = Computer,\n                        TargetProcessName = Image,\n                        TargetProcessId = ProcessId\n                | extend\n                        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n                        TargetProcessGuid = ProcessGuid,\n                        //***** Aliases ******\n                        User = ActorUsername,\n                        Process = TargetProcessName,\n                        Dvc = DvcHostname\n}; ParsedProcessEvent\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
