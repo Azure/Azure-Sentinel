@@ -30,12 +30,36 @@ jobs:
         with:
             packages: |
                 yamale
-      - name: Run kqlFuncYaml2Arm script
-        run: bash .script/kqlFuncYaml2Arm.sh
       - name: setup git config
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "<>"
+      - name: Merge master into pull request branch
+        run: |
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            echo "mergeConflicts=true" >> $GITHUB_ENV
+          else
+            echo "No merge conflicts"
+            echo "mergeConflicts=false" >> $GITHUB_ENV
+          fi
+      - name: Add merge conflict comment
+        uses: mshick/add-pr-comment@v1
+        if: ${{ env.mergeConflicts == 'true' }}
+        with:
+          message: |
+            ASIM parsers have been changed. ARM templates cannot be regenerated due to a conflict between master and your branch. Please solve the conflicts.
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token-user-login: 'github-actions[bot]' # The user.login for temporary GitHub tokens
+          allow-repeats: false # This is the default
+      - name: If there are merge conflicts, terminate the job
+        if: ${{ env.mergeConflicts == 'true' }}
+        run: exit 1
+      - name: Run kqlFuncYaml2Arm script
+        run: bash .script/kqlFuncYaml2Arm.sh
       - name: Commit changes
         run: |
           # Stage the files and commit
