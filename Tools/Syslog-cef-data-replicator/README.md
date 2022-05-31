@@ -100,7 +100,7 @@ We have 2 flavors
 
 ## Additional information:
 
-### Capturing raw or original data as it as
+### How to capture the original or raw data
 We have several ways to capture the original data that comes from syslog devices and that is getting ingested into syslog-ng or rsyslog sever. One of the way is to capture the traces on syslog-ng or rsyslog server over 514 port. You can use the following command to captre the traffic into pacp file 
 	
 	sudo tcpdump -s 0 -Ani any port 514 -vv -w /var/log/syslog.pcap
