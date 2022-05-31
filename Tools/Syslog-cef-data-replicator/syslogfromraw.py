@@ -75,9 +75,9 @@ def build_custom_extension_for_raw(schemaSampledata,complete_header, extensions)
 
 # Post to Syslog
 
-def post_syslog(msg, hostname):
-    #print(msg)
-    log = Syslog(host=hostname)
+def post_syslog(msg, hostname, facility):
+    print(msg)
+    log = Syslog(host=hostname, facility=facility)
     log.send(msg,Level.INFO)
 
 
@@ -132,7 +132,7 @@ def syslog_message_format_raw(args,schemaSampledata,extenstion_data):
             return_message = template.format(priority=syslog_header['priority'], version=syslog_header['version'],ISOTimeStamp=syslog_header['ISOTimeStamp'],hostName=syslog_header['hostName'],restofmessage=syslog_header['restofmessage'] )
             #print(return_message)
             #return_message = "Hellp"
-        post_syslog(return_message, hostname=args.host) 
+        post_syslog(return_message, hostname=args.host, facility=args.facility) 
     except  Exception as e:
         print("syslog_message_format_raw  Exception {}",str(e))    
 
@@ -266,6 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('input_file', metavar='DEFINITION_FILE', type=str, help='file containing sample events')
     parser.add_argument('--cust_file', metavar='EVENT_CUSTOMIZATIONS_FILE', type=str, default="None", help='Customizations defined here')
     parser.add_argument('--host', type=str, default='localhost', help='Syslog destination address')
+    parser.add_argument('--facility', type=int, default=5, help='Facility of log messages')
     parser.add_argument('--port', type=int, default=514, help='Syslog destination port')
     parser.add_argument('--eventtype', type=str, default='CEF', help='CEF or Syslog')
     parser.add_argument('--eps', type=int, default=100, help='Max events')
