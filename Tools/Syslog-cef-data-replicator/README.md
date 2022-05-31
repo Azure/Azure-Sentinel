@@ -100,6 +100,21 @@ We have 2 flavors
 
 ## Additional information:
 
+### Capturing raw or original data as it as
+We have several ways to capture the original data that comes from syslog devices and that is getting ingested into syslog-ng or rsyslog sever. One of the way is to capture the traces on syslog-ng or rsyslog server over 514 port. You can use the following command to captre the traffic into pacp file 
+	
+	sudo tcpdump -s 0 -Ani any port 514 -vv -w /var/log/syslog.pcap
+	
+![image](https://user-images.githubusercontent.com/10404181/171227166-a146f7e1-a27a-414e-9c68-bee23dee22a8.png)
+
+Once we have the pcap file, we can visualize the events using utility "tcpick" and export into readable format
+	
+	tcpick -C -yP -r syslog.pcap > sampledata.log
+
+![image](https://user-images.githubusercontent.com/10404181/171227514-9de81dcb-46dd-4ba7-9d8b-1ee783dec493.png)
+
+You use the file sampledata.log further as input for this utility to replicate the data.
+
 ### Log customizations:
 While replaying the events, if you would like to customize any fields values (for example src must be one of the IPs from an array _[“23.2.3.42”,”78.3.78.2”,”34.98.0.9”]_ ) this comes handy. You just can mention the name of the field and desired values. Our script picks up the customizations and original values will be replaced with the custom values. 
 
