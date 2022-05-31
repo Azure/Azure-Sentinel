@@ -110,8 +110,10 @@ We have several ways to capture the original data that comes from syslog devices
 Once we have the pcap file, we can visualize the events using utility "tcpick" and export into readable format
 	
 	tcpick -C -yP -r syslog.pcap > sampledata.log
+	nano sampledata.log
 
-![image](https://user-images.githubusercontent.com/10404181/171227514-9de81dcb-46dd-4ba7-9d8b-1ee783dec493.png)
+![image](https://user-images.githubusercontent.com/10404181/171228705-d1ef47c8-25ad-4016-9a5f-14aaa2a61c51.png)
+
 
 You use the file sampledata.log further as input for this utility to replicate the data.
 
