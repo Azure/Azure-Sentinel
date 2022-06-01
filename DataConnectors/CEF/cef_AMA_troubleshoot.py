@@ -69,7 +69,7 @@ class ShellExecute(ColorfulPrint):
         except Exception:
             self.command_result_err = "Error processing command"
         if "not found" in str(self.command_result):
-            self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again".format(
+            self.command_result_err = "Error running command: {}. Command does not exist. Please install it and run again.".format(
                 self.command_to_run)
 
     def print_result_to_prompt(self):
@@ -125,6 +125,9 @@ class FullVerification(ShellExecute):
         :return: True if successful otherwise False.
         '''
         global FAILED_TESTS_COUNT
+        if "command not found" in self.command_result:
+            self.is_successful = "Warn"
+            return True
         if self.command_result_err is None and self.command_result is not None and should_fail is not True:
             self.command_result = str(self.command_result)
             for key_word in self.result_keywords_array:
@@ -254,7 +257,9 @@ class AgentInstallationVerifications:
         result_keywords_array = ["25226", "LISTEN", "tcp"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(exclude=True)
-        if not command_object.is_successful:
+        if command_object.is_successful == "Warn":
+            command_object.print_warning(command_object.command_result_err)
+        elif not command_object.is_successful:
             command_object.print_warning(self.oms_running_error_message)
 
     def run_all_verifications(self):
@@ -413,7 +418,9 @@ class SyslogDaemonVerifications(ColorfulPrint):
         result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
-        if not command_object.is_successful:
+        if command_object.is_successful == "Warn":
+            command_object.print_warning(command_object.command_result_err)
+        elif not command_object.is_successful:
             command_object.print_warning(self.Syslog_daemon_not_listening_warning)
 
     def verify_Syslog_daemon_forwarding_configuration(self):
@@ -467,8 +474,10 @@ class OperatingSystemVerifications:
         result_keywords_array = ["Enforcing"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(True)
-        if not command_object.is_successful:
-            command_object.print_error(self.SELinux_running_error_message)
+        if command_object.is_successful == "Warn":
+            command_object.print_warning(command_object.command_result_err)
+        elif command_object.is_successful:
+           command_object.print_error(self.SELinux_running_error_message)
 
     def verify_iptables(self):
         '''
@@ -479,6 +488,9 @@ class OperatingSystemVerifications:
         result_keywords_array = ["DROP", "REJECT"]
         policy_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         policy_command_object.run_full_test(exclude=True)
+        if policy_command_object.is_successful == "Warn":
+            policy_command_object.print_warning(policy_command_object.command_result_err)
+            return True
         command_name = "verify_iptables_rules_permissive"
         command_to_run = "sudo iptables -S | grep -E '514' | grep INPUT"
         rules_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
