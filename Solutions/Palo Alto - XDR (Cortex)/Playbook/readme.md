@@ -57,4 +57,4 @@ Palo Alto XDR playbook is used in Alert triaging and executing the automatd resp
 <a name="references">
 
 # References
-https://docs.microsoft.com/en-us/power-automate/create-adaptive-cards-teams 
+https://docs.microsoft.com/power-automate/create-adaptive-cards-teams 
