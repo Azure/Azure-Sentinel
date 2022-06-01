@@ -9,6 +9,7 @@ LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
 FAILED_TESTS_COUNT = 0
+WARNING_TESTS_COUNT = 0
 SCRIPT_VERSION = 1.0
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generate a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
@@ -77,7 +78,9 @@ class ShellExecute(ColorfulPrint):
         Printing the test's name and success status to the customer's prompt
         '''
         max_length = 47
-        if self.is_successful:
+        if self.is_successful == "Warn":
+            self.print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failed to check")
+        elif self.is_successful:
             self.print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
         else:
             self.print_error(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failure")
@@ -124,9 +127,10 @@ class FullVerification(ShellExecute):
         :param should_fail: If true, will just return false and not run any further verification
         :return: True if successful otherwise False.
         '''
-        global FAILED_TESTS_COUNT
-        if "command not found" in self.command_result:
+        global FAILED_TESTS_COUNT, WARNING_TESTS_COUNT
+        if "not found" in str(self.command_result):
             self.is_successful = "Warn"
+            WARNING_TESTS_COUNT += 1
             return True
         if self.command_result_err is None and self.command_result is not None and should_fail is not True:
             self.command_result = str(self.command_result)
@@ -735,6 +739,8 @@ def main():
         printer.print_notice("\n----- {} {}".format(class_test[1], '-' * (60 - len(class_test[1]))))
         verification_object = class_test[0]
         verification_object.run_all_verifications()
+    if WARNING_TESTS_COUNT > 0:
+        printer.print_warning("\nTotal amount of tests that ended with a Warning is: " + str(WARNING_TESTS_COUNT))
     if FAILED_TESTS_COUNT > 0:
         printer.print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
