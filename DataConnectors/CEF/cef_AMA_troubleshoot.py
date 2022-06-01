@@ -655,7 +655,7 @@ class SystemInfo():
         "DCR_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
         "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],
-        "top_processes": ["sudo top -bcn1 -w512 head -n 20"],
+        "top_processes": ["sudo top -bcn1 -w512 | head -n 20"],
     }
 
     def __repr__(self, command_object):
