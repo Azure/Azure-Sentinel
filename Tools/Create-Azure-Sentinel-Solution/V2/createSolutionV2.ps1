@@ -1,5 +1,9 @@
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
+$mainTemplateArtifact = [PSCustomObject]@{
+    name = "DefaultTemplate";
+    type = "Template"
+}
 
 function handleEmptyInstructionProperties ($inputObj) {
     $outputObj = $inputObj |
@@ -68,6 +72,54 @@ function getQueryResourceLocation () {
     }
 }
 
+function getParserDetails($solutionName)
+{
+    $API = 'https://catalogapi.azure.com/offers?api-version=2018-08-01-beta&$filter=categoryIds%2Fany(cat%3A%20cat%20eq%20%27AzureSentinelSolution%27)%20or%20keywords%2Fany(key%3A%20contains(key%2C%27f1de974b-f438-4719-b423-8bf704ba2aef%27))'
+    $SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
+    $parserResourceType = [PSObject]@{
+        templateSpecParserType = "Microsoft.OperationalInsights/workspaces/savedSearches"
+        workspaceType = "Microsoft.OperationalInsights/workspaces"
+        normalParserType = "savedSearches"
+    }
+    $variableExpressionRegex = "\[\s?variables\(\'_([\w\W]+)\'\)\s?\]"
+    $parserDisplayDetails = [PSObject]@{
+        name = "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
+        displayName = $fileName
+    };
+
+    $currentSolution = $SolutionDataItems | Where-Object { $_.legacyId -eq $solutionName }
+    if($currentSolution.length -gt 0)
+    {
+        $templateUrl = ($currentSolution.plans[0].artifacts | Where-Object { (($_.name -eq $mainTemplateArtifact.name) -and ($_.type -eq $mainTemplateArtifact.type)) }).uri
+        $templateContent = $(Invoke-WebRequest -URI $templateUrl) | ConvertFrom-Json
+        if ($templateContent.resources -and $templateContent.variables) {
+            $templateVariables = $templateContent.variables
+            $parserTemplate = $templateContent.resources | Where-Object { $_.type -eq $parserResourceType.templateSpecParserType -or $_.type -eq $parserResourceType.workspaceType }
+
+            if ($parserTemplate) {
+                if($parserTemplate.resources)
+                {
+                    $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
+                }
+                $parserDisplayDetails.name = $parserTemplate.name;
+                $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
+
+                $suppressedOutput = $parserDisplayDetails.name -match $variableExpressionRegex
+                if ($suppressedOutput -and $matches[1]) {
+                    $parserDisplayDetails.name = $templateVariables.$($matches[1])
+                }
+
+                $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
+                if ($suppressedOutput -and $matches[1]) {
+                    $parserDisplayDetails.displayName = $templateVariables.$($matches[1])
+                }
+            }
+        }
+    }
+
+    return $parserDisplayDetails;
+}
+
 foreach ($inputFile in $(Get-ChildItem $path)) {
     $inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
 
@@ -123,7 +175,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 }
                 catch {
                     Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
-                    break;
+                    break;`
                 }
 
                 try {
@@ -1033,7 +1085,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $connectorData.resources[0].properties.pollingConfig) {
                                 $ccpPollingConfig = $connectorData.resources[0].properties.pollingConfig
                                 $ccpConnector = $true
-                                $templateSpecConnectorData = $connectorData.resources[0].properties.connectorUiConfig                      
+                                $templateSpecConnectorData = $connectorData.resources[0].properties.connectorUiConfig
                             }
                             else
                             {
@@ -1059,7 +1111,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         #     $baseMainTemplate.parameters | Add-Member -NotePropertyName "connector$connectorCounter-name" -NotePropertyValue $connectorNameParamObj
                         #     $baseMainTemplate.variables | Add-Member -NotePropertyName "connector$connectorCounter-source" -NotePropertyValue "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector$connectorCounter-name'))]"
                         #     $baseMainTemplate.variables | Add-Member -NotePropertyName "_connector$connectorCounter-source" -NotePropertyValue "[variables('connector$connectorCounter-source')]"
-                        #  }; 
+                        #  };
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = "DataConnector";
                             contentId = if ($contentToImport.TemplateSpec){"[variables('_dataConnectorContentId$connectorCounter')]"}else{"[variables('_$connectorId')]"};
@@ -1838,11 +1890,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     else
                                     {
-                                      -not $_.Value                                       
+                                      -not $_.Value
                                     }
-                                }) | 
-                                % { 
-                                    $Object.Remove($_.Name) 
+                                }) |
+                                % {
+                                    $Object.Remove($_.Name)
                                 }
                                 return $Object;
                             }
@@ -2016,8 +2068,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         };
 
                         if($contentToImport.TemplateSpec) {
+                            if($parserCounter -eq 1)
+                            {
+                                $displayDetails = getParserDetails "azuresentinel.azure-sentinel-solution-ciscoise"
+                            }
+                            else
+                            {
+                                $displayDetails = getParserDetails "azuresentinel.azure-sentinel-solution-ossec"
+                            }
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue $displayDetails.name
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$parserCounter')))]"
@@ -2050,7 +2110,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject]@{
                                     eTag          = "*"
-                                    displayName   = "$fileName"
+                                    displayName   = "$($displayDetails.displayName)"
                                     category      = "Samples"
                                     functionAlias = "$functionAlias"
                                     query         = "$content"
@@ -2131,7 +2191,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject] @{
                                     eTag          = "*";
-                                    displayName   = "$fileName";
+                                    displayName   = "$($displayDetails.displayName)";
                                     category      = "Samples";
                                     functionAlias = "$functionAlias";
                                     query         = $content;
