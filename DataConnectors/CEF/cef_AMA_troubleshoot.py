@@ -9,7 +9,7 @@ LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
 FAILED_TESTS_COUNT = 0
-WARNING_TESTS_COUNT = 0
+NOT_RUN_TESTS_COUNT = 0
 SCRIPT_VERSION = 1.0
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generate a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
@@ -127,10 +127,10 @@ class FullVerification(ShellExecute):
         :param should_fail: If true, will just return false and not run any further verification
         :return: True if successful otherwise False.
         '''
-        global FAILED_TESTS_COUNT, WARNING_TESTS_COUNT
+        global FAILED_TESTS_COUNT, NOT_RUN_TESTS_COUNT
         if "not found" in str(self.command_result):
             self.is_successful = "Warn"
-            WARNING_TESTS_COUNT += 1
+            NOT_RUN_TESTS_COUNT += 1
             return True
         if self.command_result_err is None and self.command_result is not None and should_fail is not True:
             self.command_result = str(self.command_result)
@@ -388,7 +388,7 @@ class SyslogDaemonVerifications(ColorfulPrint):
     syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
                                      "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
     No_Syslog_daemon_error_message = "Could not detect any running Syslog daemon on the machine. The supported Syslog daemons are Rsyslog and Syslog-ng. Please install one of them and run this script again."
-    Syslog_daemon_not_listening_warning = "Warning: the Syslog daemon- {} is running but not listening on the machine or it is listening to a non-default port".format(
+    Syslog_daemon_not_listening_warning = "Warning: the Syslog daemon- {} is running but not listening on the machine or is listening to a non-default port".format(
         SYSLOG_DAEMON)
     Syslog_daemon_not_forwarding_error = "{} configuration was found invalid in this file {}. The forwarding of the syslog daemon to the agent might not work. Please install the agent in order to get the updated Syslog daemon forwarding configuration file, and try again.".format(
         SYSLOG_DAEMON, syslog_daemon_forwarding_path[SYSLOG_DAEMON])
@@ -480,7 +480,7 @@ class OperatingSystemVerifications:
         command_object.run_full_test(True)
         if command_object.is_successful == "Warn":
             command_object.print_warning(command_object.command_result_err)
-        elif command_object.is_successful:
+        elif not command_object.is_successful:
            command_object.print_error(self.SELinux_running_error_message)
 
     def verify_iptables(self):
@@ -649,7 +649,9 @@ class SystemInfo():
         "syslog_ng_dir": ["sudo ls -la /etc/syslog-ng/conf.d/"],
         "syslog_ng_dir_content": ["sudo grep -r ^ /etc/syslog-ng/conf.d/"],
         "is_syslog_ng_running_from_boot": ["sudo sudo systemctl list-unit-files --type=service | grep syslog-ng"],
-        "agent_log_snip": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
+        "agent_log_snip_err": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.err"],
+        "agent_log_snip_warn": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.warn"],
+        "agent_log_snip_info": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.info"],
         "is_AMA__running_from_boot": ["sudo systemctl list-unit-files --type=service | grep azuremonitoragent"],
         "AMA_service_status": ["sudo service azuremonitoragent status"],
         "DCR_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
@@ -739,8 +741,8 @@ def main():
         printer.print_notice("\n----- {} {}".format(class_test[1], '-' * (60 - len(class_test[1]))))
         verification_object = class_test[0]
         verification_object.run_all_verifications()
-    if WARNING_TESTS_COUNT > 0:
-        printer.print_warning("\nTotal amount of tests that ended with a Warning is: " + str(WARNING_TESTS_COUNT))
+    if NOT_RUN_TESTS_COUNT > 0:
+        printer.print_warning("\nTotal amount of tests that failed to run: " + str(NOT_RUN_TESTS_COUNT))
     if FAILED_TESTS_COUNT > 0:
         printer.print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
