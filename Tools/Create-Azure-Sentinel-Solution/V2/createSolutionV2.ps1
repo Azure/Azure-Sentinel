@@ -2068,14 +2068,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         };
 
                         if($contentToImport.TemplateSpec) {
-                            if($parserCounter -eq 1)
-                            {
-                                $displayDetails = getParserDetails "azuresentinel.azure-sentinel-solution-ciscoise"
-                            }
-                            else
-                            {
-                                $displayDetails = getParserDetails "azuresentinel.azure-sentinel-solution-ossec"
-                            }
+                            $displayDetails = getParserDetails $solutionId
+
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue $displayDetails.name
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
