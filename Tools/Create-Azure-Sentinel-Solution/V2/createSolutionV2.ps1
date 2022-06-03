@@ -83,7 +83,7 @@ function getParserDetails($solutionName)
     }
     $variableExpressionRegex = "\[\s?variables\(\'_([\w\W]+)\'\)\s?\]"
     $parserDisplayDetails = [PSObject]@{
-        name = "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
+        functionAlias = getFileNameFromPath $file
         displayName = $fileName
     };
 
@@ -101,13 +101,8 @@ function getParserDetails($solutionName)
                 {
                     $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
                 }
-                $parserDisplayDetails.name = $parserTemplate.name;
+                $parserDisplayDetails.functionAlias = $parserTemplate.functionAlias;
                 $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
-
-                $suppressedOutput = $parserDisplayDetails.name -match $variableExpressionRegex
-                if ($suppressedOutput -and $matches[1]) {
-                    $parserDisplayDetails.name = $templateVariables.$($matches[1])
-                }
 
                 $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
                 if ($suppressedOutput -and $matches[1]) {
@@ -175,7 +170,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                 }
                 catch {
                     Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
-                    break;`
+                    break;
                 }
 
                 try {
@@ -2071,7 +2066,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $displayDetails = getParserDetails $solutionId
 
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue $displayDetails.name
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserTemplateSpecName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId$parserCounter')))]"
@@ -2106,12 +2101,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     eTag          = "*"
                                     displayName   = "$($displayDetails.displayName)"
                                     category      = "Samples"
-                                    functionAlias = "$functionAlias"
+                                    functionAlias = "$displayDetails.functionAlias"
                                     query         = "$content"
                                     version       = 1
                                     tags          = @([PSCustomObject]@{
                                         "name"  = "description"
-                                        "value" = "$($fileName)"
+                                        "value" = "$($displayDetails.displayName)"
                                         };
                                     )
                                 }
@@ -2187,7 +2182,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     eTag          = "*";
                                     displayName   = "$($displayDetails.displayName)";
                                     category      = "Samples";
-                                    functionAlias = "$functionAlias";
+                                    functionAlias = "$($displayDetails.functionAlias)";
                                     query         = $content;
                                     version       = 1;
                                 }
