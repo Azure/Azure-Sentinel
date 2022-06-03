@@ -82,10 +82,9 @@ function getParserDetails($solutionName)
         normalParserType = "savedSearches"
     }
     $variableExpressionRegex = "\[\s?variables\(\'_([\w\W]+)\'\)\s?\]"
-    $parserDisplayDetails = [PSObject]@{
-        functionAlias = getFileNameFromPath $file
-        displayName = $fileName
-    };
+    $parserDisplayDetails = New-Object PSObject
+    $parserDisplayDetails | Add-Member -NotePropertyName "functionAlias" -NotePropertyValue $(getFileNameFromPath $file)
+    $parserDisplayDetails | Add-Member -NotePropertyName "displayName" -NotePropertyValue $($fileName)
 
     $currentSolution = $SolutionDataItems | Where-Object { $_.legacyId -eq $solutionName }
     if($currentSolution.length -gt 0)
@@ -101,7 +100,7 @@ function getParserDetails($solutionName)
                 {
                     $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
                 }
-                $parserDisplayDetails.functionAlias = $parserTemplate.functionAlias;
+                $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
                 $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
 
                 $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
@@ -2101,7 +2100,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     eTag          = "*"
                                     displayName   = "$($displayDetails.displayName)"
                                     category      = "Samples"
-                                    functionAlias = "$displayDetails.functionAlias"
+                                    functionAlias = "$($displayDetails.functionAlias)"
                                     query         = "$content"
                                     version       = 1
                                     tags          = @([PSCustomObject]@{
