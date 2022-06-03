@@ -85,6 +85,7 @@ function getParserDetails($solutionName)
     $parserDisplayDetails = New-Object PSObject
     $parserDisplayDetails | Add-Member -NotePropertyName "functionAlias" -NotePropertyValue $(getFileNameFromPath $file)
     $parserDisplayDetails | Add-Member -NotePropertyName "displayName" -NotePropertyValue $($fileName)
+    $parserDisplayDetails | Add-Member -NotePropertyName "name" -NotePropertyValue $($fileName)
 
     $currentSolution = $SolutionDataItems | Where-Object { $_.legacyId -eq $solutionName }
     if($currentSolution.length -gt 0)
@@ -102,10 +103,16 @@ function getParserDetails($solutionName)
                 }
                 $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
                 $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
+                $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
 
                 $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
                 if ($suppressedOutput -and $matches[1]) {
                     $parserDisplayDetails.displayName = $templateVariables.$($matches[1])
+                }
+
+                $suppressedOutput = $parserDisplayDetails.name -match $variableExpressionRegex
+                if ($suppressedOutput -and $matches[1]) {
+                    $parserDisplayDetails.name = $templateVariables.$($matches[1])
                 }
             }
         }
@@ -2064,7 +2071,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         if($contentToImport.TemplateSpec) {
                             $displayDetails = getParserDetails $solutionId
 
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$($displayDetails.name)"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
