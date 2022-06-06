@@ -17,9 +17,14 @@ class GraphApiCollector:
             raise GraphAPIRequestError(
                 "Failed to establish connection with GS API. Server is probably not available at the moment."
             )
-        result = app.acquire_token_silent(["https://graph.microsoft.com/.default"], account=None)
-        if not result:
-            result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+
+        for i in range(4):
+            result = app.acquire_token_silent(["https://graph.microsoft.com/.default"], account=None)
+            if not result:
+                result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+            if result["access_token"]:
+                break
+
         headers = {"Content-type": "application/json", "Authorization": "Bearer " + result["access_token"]}
         return headers
 
