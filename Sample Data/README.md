@@ -13,11 +13,11 @@ Both post-ingestion and raw logs hold relevance and are useful wherever these ca
 
 ### 1. Raw data (Original data from the device / API without any format changes)
 
-   The format for the file varies depends on the type of the connector. The format for the file can be json (for API based Data Connector) / text (.txt) file (for Syslog/CEF based data Connectors) with the column names / property names adhering to the data type property names. Both ingested and raw logs hold relevance and are useful wherever these can be made available. 
+   The format for the file varies depends on the type of the connector. The format for the file can be json (for API based Data Connector) / text (.txt) file (for Syslog/CEF based data Connectors) with the column names / property names adhering to the data type property names.
    
    Below are samples of the acceptable CEF and Syslog logs in their **raw** form:
 
-    ```
+    
      May 13 2022 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
      May 13 2022 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020.
      May 13 2022 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
@@ -28,7 +28,7 @@ Both post-ingestion and raw logs hold relevance and are useful wherever these ca
     1377449842.514782056 MX84 ids-alerts : signature=129:4:1 priority=3 timestamp=1377449842.512569 direction=ingress protocol=tcp/ip src=74.125.140.132:80
     1380664994.337961231 MX84 events : type=vpn_connectivity_change vpn_type='site-to-site' peer_contact='98.68.191.209:51856'   peer_ident='2814ee002c075181bb1b7478ee073860' connectivity='true'
     1377448470.246576346 MX84 ids-alerts : signature=119:15:1 priority=2 timestamp=1377448470.238064 direction=egress protocol=tcp/ip src=192.168.111.254:56240     signature=1:28423:1 priority=1 timestamp=1468531589.810079 dhost=98:5A:EB:E1:81:2F direction=ingress protocol=tcp/ip src=151.101.52.238:80 dst=192.168.128.2:53023  message: EXPLOIT-KIT Multiple exploit kit single digit exe detection url=http://www.eicar.org/download/eicar.com.txt src=192.168.128.2:53150 dst=188.40.238.250:80  mac=98:5A:EB:E1:81:2F name='EICAR:EICAR_Test_file_not_a_virus-tpd'// 1563249630.774247467 remote_DC1_appliance security_event ids_alerted signature=1:41944:2 priority=1 timestamp=TIMESTAMPEPOCH.647461 dhost=74:86:7A:D9:D7:AA direction=ingress 
-    ```
+    
 
 
 Below are samples of the acceptable for Rest API based data connectors in their raw form:
