@@ -187,7 +187,26 @@ Once you have a working POC, you are ready to build, validate the data connector
 
 >>**Note**: This json is loaded only in your session and not shared out. The logo won’t show up since it’s not part of the json. Connector logo will be included when Microsoft builds and deploys the data connector.
 
-4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized sample data for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. This is the test validation set that can be used to build other contribution types on top of this data connector. The format for this file can be json / csv (json preferred) file with the column names / property names adhering to the data type property names. The data file name needs to be the same name as the data type name. Submit the sample data file via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector.
+4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized raw sample data/logs for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. Raw sample logs are extremely useful when troubleshooting issues, supporting and/or enhancing the Data Connectors with more Security-focused content (such as Analytics, Hunting Queries, Workbooks, etc.). The following guidelines are designed to help committing raw sample logs in a usable format into GitHub:
+    1.  The format for the file can be json (for REST API based Data Connector) / text (.txt) file (for Syslog/CEF based data Connectors) with the column names / property names adhering to the data type property names. The data file name needs to be the same name as the data type name. It's important that sample logs are uploaded in the raw form without any transformation or parsing. Below is a sample of the acceptable CEF and Syslog logs:
+    ```
+     May 13 2022 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
+     May 13 2022 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020.
+     May 13 2022 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
+     May 13 2022 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020.
+     
+     or
+
+    1377449842.514782056 MX84 ids-alerts : signature=129:4:1 priority=3 timestamp=1377449842.512569 direction=ingress protocol=tcp/ip src=74.125.140.132:80
+    1380664994.337961231 MX84 events : type=vpn_connectivity_change vpn_type='site-to-site' peer_contact='98.68.191.209:51856'   peer_ident='2814ee002c075181bb1b7478ee073860' connectivity='true'
+    1377448470.246576346 MX84 ids-alerts : signature=119:15:1 priority=2 timestamp=1377448470.238064 direction=egress protocol=tcp/ip src=192.168.111.254:56240     signature=1:28423:1 priority=1 timestamp=1468531589.810079 dhost=98:5A:EB:E1:81:2F direction=ingress protocol=tcp/ip src=151.101.52.238:80 dst=192.168.128.2:53023  message: EXPLOIT-KIT Multiple exploit kit single digit exe detection url=http://www.eicar.org/download/eicar.com.txt src=192.168.128.2:53150 dst=188.40.238.250:80  mac=98:5A:EB:E1:81:2F name='EICAR:EICAR_Test_file_not_a_virus-tpd'// 1563249630.774247467 remote_DC1_appliance security_event ids_alerted signature=1:41944:2 priority=1 timestamp=TIMESTAMPEPOCH.647461 dhost=74:86:7A:D9:D7:AA direction=ingress 
+    ```
+    Data Connectors that depend on APIs for log collection make raw logs available in the json format which can be uploaded.
+
+    2. Submit the sample data via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the Sample data folder. The folder name must be same as the name of the Data Connector. Under the folder created, the following two files must be created:
+        1. **TransformedLogs.txt** - This file must have the logs after they've been ingested into the Log Analytics workspace. To export these, run the query with only the datatype in the Log Analytics Workspace and use the Export option to export these logs in the csv format.
+        2. **RawLogs.txt** - This file must have the raw logs in the format described above.
+    3. Important: Please ensure all Sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
 5.	**Submit your data connector** - Follow the [general contribution guidelines for Microsoft Sentinel](https://aka.ms/sentinelgithubcontributionguidelines) to open a Pull Request (PR) to submit the data connector:
     1.	The json file in the ['Connectors' folder](https://aka.ms/azuresentinelgithubdataconnectors)
     2.	The sample data file in the right subfolder of ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata)
