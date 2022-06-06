@@ -1860,7 +1860,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             # Content Modifications
-                            $triggerOperators = [PSCustomObject] @{ gt = "GreaterThan" ; lt = "LessThan" ; eq = "Equal" ; ne = "NotEqual" }
+                            $triggerOperators = [PSCustomObject] @{ gt = "GreaterThan" ; lt = "LessThan" ; eq = "Equal" ; ne = "NotEqual"; GreaterThan = "GreaterThan" ; LessThan = "LessThan" ; Equal = "Equal" ; NotEqual = "NotEqual" }
                             $alertRule.triggerOperator = $triggerOperators.$($yaml.triggerOperator)
                             if ($yaml.tactics -and ($yaml.tactics.Count -gt 0) ) {
                                 if ($yaml.tactics -match ' ') {
@@ -1912,9 +1912,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             $alertRule.suppressionDuration = "PT1H"
                             # Handle optional fields
-                            foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")) {
+                            foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride", "incidentConfiguration")) {
                                 if ($yaml.$yamlField) {
                                     $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $(Remove-EmptyArrays $yaml.$yamlField)
+
+                                    if($yamlField -eq "entityMappings" -and $yaml.$yamlField.length -lt 2)
+                                    {
+                                        $alertRule.entityMappings = @($alertRule.entityMappings);
+                                    }
                                 }
                             }
                             # Create Alert Rule Resource Object
