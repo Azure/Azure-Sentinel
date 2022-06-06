@@ -4,10 +4,10 @@ The Microsoft Sentinel: Insider Risk Management Solution demonstrates the “bet
 ## Try on Portal
 You can deploy the solution by clicking on the buttons below:
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftInsiderRiskManagement%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftInsiderRiskManagement%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftPurviewInsiderRiskManagement%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazurebutton"/></a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoftPurviewInsiderRiskManagement%2FPackage%2FmainTemplate.json" target="_blank"><img src="https://aka.ms/deploytoazuregovbutton"/></a>
 
-![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftInsiderRiskManagement/Workbooks/Images/InsiderRiskManagementBlack1.png?raw=true)
+![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement/Workbooks/Images/InsiderRiskManagementBlack1.png?raw=true)
 
 ## Getting Started
 1️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
@@ -47,27 +47,27 @@ The Microsoft Insider Risk Management Workbook integrates telemetry from 25+ Mic
 3️⃣ Settings: Layout (Landscape), Pages (All), Print (One Sided), Scale (60), Pages Per Sheet (1), Quality (1,200 DPI), Margins (None) > Print<br>
 
 ## Analytics Rules
-### 1) High User Security Alert Correlations
+### 1) Insider Risk_High User Security Alert Correlations
 This alert joins SecurityAlerts from Microsoft Products with SecurityIncidents from Microsoft Sentinel and Microsoft Purview Defender. This join allows for identifying patterns in user principal names associated with respective security alerts. A machine learning function (Basket) is leveraged with a .001 threshold. Basket finds all frequent patterns of discrete attributes (dimensions) in the data. It returns the frequent patterns passed the frequency threshold. This query evaluates UserPrincipalName for patterns in SecurityAlerts and Reporting Security Tools. This query can be further tuned/configured for higher confidence percentages, security products, or alert severities pending the needs of the organization. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information on the basket plugin, see [basket plugin](https://docs.microsoft.com/azure/data-explorer/kusto/query/basketplugin).<br>
-### 2) High User Security Incidents Correlations
+### 2) Insider Risk_High User Security Incidents Correlations
 This alert joins SecurityAlerts to SecurityIncidents to associate Security Alerts and Incidents with user accounts. This aligns all Microsoft Alerting Products with Microsoft Incident Generating Products (Microsoft Sentinel, Microsoft 365 Defender) for a count of user security incidents over time. The default threshold is 5 security incidents, and this is customizable per the organization's requirements. Results include UserPrincipalName (UPN), SecurityIncident, LastIncident, ProductName, LastObservedTime, and Previous Incidents. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information, see [Investigate incidents with Microsoft Sentinel]( https://docs.microsoft.com/azure/sentinel/investigate-cases).<br>
-### 3) Microsoft Purview Insider Risk Management Alert Observed
+### 3) Insider Risk_Microsoft Purview Insider Risk Management Alert Observed
 This alert is triggered when a Microsoft Purview Insider Risk Management alert is received in Microsoft Sentinel via the Microsoft Purview Insider Risk Management Connector. The alert extracts usernames from security alerts to provide UserPrincipalName, Alert Name, Reporting Product Name, Status, Alert Link, Previous Alerts Links, Time Generated. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information, see [Learn about insider risk management in Microsoft 365](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management).<br>
-### 4) Sensitive Data Access Outside Organizational Geo-location
+### 4) Insider Risk_Sensitive Data Access Outside Organizational Geo-location
 This alert joins Azure Information Protection Logs (InformationProtectionLogs_CL) with Azure Active Directory Sign in Logs (SigninLogs) to provide a correlation of sensitive data access by geo-location. Results include User Principal Name, Label Name, Activity, City, State, Country/Region, and Time Generated. Recommended configuration is to include (or exclude) Sign in geo-locations (City, State, Country and/or Region) for trusted organizational locations. There is an option for configuration of correlations against Microsoft Sentinel watchlists. Accessing sensitive data from a new or unauthorized geo-location warrants further review. For more information see [Sign-in logs in Azure Active Directory: Location Filtering](https://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins).<br>
-### 5) Risky User Access By Application
+### 5) Insider Risk_Risky User Access By Application
 This alert evaluates Azure Active Directory Sign in risk via Machine Learning correlations in the basket operator. The basket threshold is adjustable, and the default is set to .01. There is an optional configuration to configure the percentage rates. The correlations are designed to leverage machine learning to identify patterns of risky user application access. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information, see [Tutorial: Use risk detections for user sign-ins to trigger Azure AD Multi-Factor Authentication or password changes](https://docs.microsoft.com/azure/active-directory/authentication/tutorial-risk-based-sspr-mfa).<br>
 
 ## Hunting Queries
-### 1) Entity Anomaly Followed by IRM Alert
+### 1) Insider Risk_Entity Anomaly Followed by IRM Alert
 This query joins Microsoft Sentinel UEBA with Microsoft Purview Insider Risk Management Alerts. There is also an option for configuration of correlations against watchlists. For more information, see https://docs.microsoft.com/azure/sentinel/watchlists.<br>
-### 2) Internet Service Provider Anomaly followed by Data Exfiltration
+### 2) Insider Risk_Internet Service Provider Anomaly followed by Data Exfiltration
 This query joins UEBA to Security Alerts from Microsoft products for a correlation of Internet Service Provider anomalies to data exfiltration (watchlist options). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists.<br>
-### 3) Multiple Entity-Based Anomalies
+### 3) Insider Risk_Multiple Entity-Based Anomalies
 This query returns entity counts by anomaly and user principal name including ranges for start/end time observed (watchlists configurable). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists.<br>
-### 4) Possible Sabotage
+### 4) Insider Risk_Possible Sabotage
 This query correlates users with entity anomalies, security alerts, and delete/remove actions for identification of possible sabotage activities (watchlists configurable). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists.<br>
-### 5) Sign In Risk Followed By Sensitive Data Access
+### 5) Insider Risk_Sign In Risk Followed By Sensitive Data Access
 This query correlates a risky user sign ins with access to sensitive data classified by data loss prevention capabilities (watchlist configurable). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists.<br>
 
 ## Playbook
