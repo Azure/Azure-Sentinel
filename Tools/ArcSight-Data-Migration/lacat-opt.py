@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-#  MODIFIED VERSION FOR ACHMEA 
+#  MODIFIED VERSION FOR ACHMEA ArcSight Migration to MicroSoft Sentinel
 #  ABLE TO READ AND CONVERT MORE MODERN LOGGER .dat FORMATS
 #  Performace Optimized
 #
