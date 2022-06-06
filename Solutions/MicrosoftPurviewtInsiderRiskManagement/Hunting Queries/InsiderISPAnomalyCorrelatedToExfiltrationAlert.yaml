@@ -1,7 +1,7 @@
-id: 3201b17a-06e1-4a8d-8157-c69345baa808
-name: Insider Risk - Possible Sabotage
+id: 12b6582f-b715-4f91-98e1-1582ebad348a
+name: Insider Risk_ISP Anomaly to Exfil
 description: |
-  'This query correlates users with entity anomalies, security alerts, and delete/remove actions for identification of possible sabotage activities (watchlists configurable). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists'
+  'This query joins UEBA to Security Alerts from Microsoft products for a correlation of Internet Service Provider anomalies to data exfiltration (watchlist options). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists'
 requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
@@ -27,19 +27,12 @@ requiredDataConnectors:
   - connectorId: OfficeATP
     dataTypes:
       - SecurityAlert (Office 365)
-  - connectorId: AzureActivity
-    dataTypes:
-      - AzureActivity
 tactics:
-  - Impact
+  - Exfiltration
 relevantTechniques:
-  - T1485
+  - T1567
 query: |
-  let RemoveActions = AzureActivity
-  | where OperationName contains "delete" or OperationName contains "remove"
-  | extend UserPrincipalName = Caller
-  | project UserPrincipalName, OperationName, Category, Resource, ResourceId, ActivityStatus, TimeGenerated;
-  let InsiderRiskManagementAlerts = SecurityAlert
+  let ExfiltrationAlerts = SecurityAlert
   | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
   | mv-expand todynamic(Entities)
   | where Entities["Type"] =~ "account"
@@ -48,18 +41,17 @@ query: |
   | extend UserPrincipalName = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
   | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
   | where UserPrincipalName <> ""
-  | summarize PreviousSecurityAlertLinks=make_set(AlertLink) by UserPrincipalName, AlertLink, AlertName;
+  | where Tactics contains "exfiltration"
+  | summarize PreviousSecurityAlertLinks=make_set(AlertLink) by UserPrincipalName, AlertName, TimeGenerated
+  | where PreviousSecurityAlertLinks contains "https";
   BehaviorAnalytics
-  | where UserPrincipalName <> ""
-  | where ActivityInsights contains "True"
-  | extend EntityAnomalies = strcat(ActivityInsights)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, EntityAnomalies
-  | join kind=innerunique (InsiderRiskManagementAlerts) on UserPrincipalName
-  | join kind=innerunique (RemoveActions) on UserPrincipalName
-  | project UserPrincipalName, EntityAnomalies, AlertName, AlertLink, PreviousSecurityAlertLinks, OperationName, Category, Resource, ResourceId, ActivityStatus, TimeGenerated
-  //| lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | where ActivityInsights contains "ISP"
+  | extend ISPAnomalies = strcat(ActivityInsights)
+  | join kind=innerunique(ExfiltrationAlerts) on UserPrincipalName
+  // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | project UserPrincipalName, AlertName, PreviousSecurityAlertLinks, ISPAnomalies, TimeGenerated
   | sort by TimeGenerated desc
-  | limit 50
+  | limit 25
   | extend AccountCustomEntity = UserPrincipalName
 entityMappings:
   - entityType: Account
