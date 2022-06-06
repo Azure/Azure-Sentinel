@@ -207,7 +207,7 @@ Once you have a working POC, you are ready to build, validate the data connector
     2. Submit the sample data via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the Sample data folder. The folder name must be same as the name of the Data Connector. Under the folder created, the following two files must be created:
         1. **IngestedLogs.txt** - This file must have the logs after they've been ingested into the Log Analytics workspace. 
         2. **RawLogs.txt** - This file must have the raw logs in the format described above.
-    Guidance on how to extract ingested and raw logs can be found [here](https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/README.md).
+    Guidance on how to extract ingested and raw logs can be found [here](https://github.com/Azure/Azure-Sentinel/blob/prtanej-SampleDataGuidanceUpdate/Sample%20Data/README.md).
     3. Important: Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
 5.	**Submit your data connector** - Follow the [general contribution guidelines for Microsoft Sentinel](https://aka.ms/sentinelgithubcontributionguidelines) to open a Pull Request (PR) to submit the data connector:
     1.	The json file in the ['Connectors' folder](https://aka.ms/azuresentinelgithubdataconnectors)
