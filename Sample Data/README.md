@@ -72,7 +72,118 @@ Below are samples of the acceptable for Rest API based data connectors in their 
 	
 ### 2. Post-ingested logs (logs exported after ingesting into a Log Analytics Workspace)
 
-The format for the file will be JSON irrespective of the data connector type. 
+The format for the file will be JSON irrespective of the data connector type. Below are samples of the acceptable - 
+
+	Exported from Syslog table - 
+	
+	[
+	  {
+	    "TenantId": "02020202a-3f3f-xf3f-0020-abcdefghu23",
+	    "SourceSystem": "Linux",
+	    "TimeGenerated": "9/25/2020, 2:13:24.333 PM",
+	    "Computer": "samplehost1-b.sample.com",
+	    "EventTime": "2011 Apr 19 17:11:12",
+	    "Facility": "%UCSM",
+	    "HostName": "samplehost1-b.SAMPLE.com",
+	    "SeverityLevel": "info",
+	    "SyslogMessage": "2011 Apr 19 17:11:12 UTC: %UCSM-6-LOG_CAPACITY: [F0461][info][log-capacity][sys/chassis-1/blade-7/mgmt/log-SEL-0] Log capacity on Management Controller on server 1/7 is very-low",
+	    "ProcessID": "",
+	    "HostIP": "192.168.23.112",
+	    "ProcessName": "",
+	    "MG": "00000000-0000-0000-0000-000000000002",
+	    "Type": "Syslog",
+	    "_ResourceId": "/subscriptions/f0b5dd0a-6c59-4f56-8a18-ff57093ffb46/resourcegroups/mns-management-rg/providers/microsoft.compute/virtualmachines/mns-sehf-vm01",
+	    "SeverityNumber": "6",
+	    "Mneumonic": "LOG_CAPACITY",
+	    "SrcUserName": "",
+	    "DstUserName": "",
+	    "Action": "",
+	    "System": "sys/chassis-1/blade-7/mgmt/log-SEL-0",
+	    "Description": "Log capacity on Management Controller on server 1/7 is very-low",
+	    "EventId": "F0461",
+	    "Username": "",
+	    "Status": "",
+	    "EventSeverity": "info",
+	    "FaultType": "log-capacity"
+	  },
+	  {
+	    "TenantId": "02020202a-3f3f-xf3f-0020-abcdefghu24",
+	    "SourceSystem": "Linux",
+	    "TimeGenerated": "9/25/2020, 2:13:24.333 PM",
+	    "Computer": "samplehost1-b.sample.com",
+	    "EventTime": "2011 Apr 20 14:33:14",
+	    "Facility": "%UCSM",
+	    "HostName": "samplehost1-b.SAMPLE.com",
+	    "SeverityLevel": "info",
+	    "SyslogMessage": "2011 Apr 20 14:33:14 UTC: %UCSM-3-CONFIGURATION_FAILURE: [F0327][major][configuration-failure][org-root/ls-test] Service profile test configuration failed due to insufficient-resources,mac-address-assignment,system-uuid-as",
+	    "ProcessID": "",
+	    "HostIP": "192.168.23.112",
+	    "ProcessName": "",
+	    "MG": "00000000-0000-0000-0000-000000000002",
+	    "Type": "Syslog",
+	    "_ResourceId": "/subscriptions/f0b5dd0a-6c59-4f56-8a18-ff57093ffb46/resourcegroups/mns-management-rg/providers/microsoft.compute/virtualmachines/mns-sehf-vm01",
+	    "SeverityNumber": "3",
+	    "Mneumonic": "CONFIGURATION_FAILURE",
+	    "SrcUserName": "",
+	    "DstUserName": "",
+	    "Action": "",
+	    "System": "org-root/ls-test",
+	    "Description": "Service profile test configuration failed due to insufficient-resources,mac-address-assignment,system-uuid-as",
+	    "EventId": "F0327",
+	    "Username": "",
+	    "Status": "",
+	    "EventSeverity": "major",
+	    "FaultType": "configuration-failure"
+	  }
+	 ]
+	 
+	 Exported from custom table
+	 
+	[
+	   {
+	      "action":"",
+	      "application":"Google Apps",
+	      "fileid":"1WdkjMqjaVefVSwx-NXaD5_W2ZPJrtpTk",
+	      "filelink":"https://drive.google.com/a/acme-gadget.com/file/d/1WdkjMqjaVefVSwx-NXaD5_W2ZPJrtpTk/view?usp=drivesdk",
+	      "filename":"1-MB-Test.docx",
+	      "folder":"/My Drive/Test Encryption",
+	      "owner":"sanitized@sanitized.com",
+	      "patterns":"",
+	      "sharedwith":"",
+	      "size":"",
+	      "status":"Private",
+	      "syslogheader":"<110>1 2019-11-15T10:30:34Z api.bitglass.com NILVALUE NILVALUE cloudaudit",
+	      "time":"20 Sep 2021 12:22:51",
+	      "log_type": "cloudaudit"
+	   },
+	   {
+	      "action":"Alert, Blocked, DLP, Notify",
+	      "activity":"Cloudstorage, Downloaded, Web",
+	      "application":"Google Drive",
+	      "details":"",
+	      "device":"Mac OS X 10.13.6",
+	      "dlppattern":"SecretProjects [Security Overview (Secret).docx (hawk)]",
+	      "email":"sanitized@sanitized.com",
+	      "emailbcc":"",
+	      "emailcc":"",
+	      "emailfrom":"",
+	      "emailsenttime":"",
+	      "emailsubject":"",
+	      "emailto":"",
+	      "filename":"Security Overview (Secret).docx",
+	      "ipaddress":"106.180.8.231",
+	      "location":"Yokohama||Kanagawa||14||JP",
+	      "pagetitle":"",
+	      "request":"",
+	      "syslogheader":"<114>1 2019-12-03T08:09:31.975000Z api.bitglass.com NILVALUE NILVALUE access",
+	      "time":"20 Sep 2021 12:22:51",
+	      "transactionid":"XeYYOwpaFUoAAL4EdmcAAABj [2019-12-03 08:09:31]",
+	      "url":"docs.google.com/document/u/0",
+	      "user":"Demo O365SF",
+	      "useragent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.97 Safari/537.36 OPR/65.0.3467.48",
+	      "log_type": "access"
+	   }
+	   ]
 
 ## Sample data upload to GitHub
 
