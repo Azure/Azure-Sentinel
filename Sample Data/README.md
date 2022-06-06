@@ -77,11 +77,11 @@ The format for the file will be JSON irrespective of the data connector type.
 ## Sample data upload to GitHub
 
 Once you gathered the both the formats, submit the sample data via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the Sample data folder. The folder name must be same as the name of the Data Connector. Under the folder created, the following two files must be created:
--    1. **DeviceName_IngestedLogs.JSON** or  - This file must have the logs after they've been ingested into the Log Analytics workspace. 
+-    1. **DeviceName_IngestedLogs.JSON**  - This file must have the logs after they've been ingested into the Log Analytics workspace. 
 -    2. **DeviceName_RawLogs.txt**  or  **DeviceName_RawLogs.JSON** - This file must have the raw logs in the format described above.
  
 >Guidance on how to extract ingested and raw logs can be found below.
-Important: Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
+>**Important:** Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
 
 ## Extracting ingested logs from Log Analytics Workspace
 Ingested logs can be extracted by running a KQL query in the **Logs** window in Microsoft Sentinel/Log Analytics Workspace. Typing a basic query to get all all logs ingested by a Data Connector will get you the logs along with the defined schema. After you run the query, click on **Export** and then click **Export to CSV - all columns**
