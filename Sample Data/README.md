@@ -88,7 +88,7 @@ Ingested logs can be extracted by running a KQL query in the **Logs** window in 
 
 ![ExportToCSV](https://github.com/Azure/Azure-Sentinel/blob/prtanej-SampleDataGuidanceUpdate/Sample%20Data/Media/ExportToCSV.png)
 
-## Extracting raw logs
+## Extracting raw logs for CEF/Syslog based connectors
 We have several ways to capture the original data that comes from syslog devices and that is getting ingested into syslog-ng or rsyslog sever. One of the way is to capture the traces on syslog-ng or rsyslog server over 514 port. You can use the following command to captre the traffic into pacp file 
 	
 	sudo tcpdump -s 0 -Ani any port 514 -vv -w /var/log/syslog.pcap
