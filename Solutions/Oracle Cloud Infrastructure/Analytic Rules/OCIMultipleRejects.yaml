@@ -1,0 +1,47 @@
+id: 482c24b9-a700-4b2a-85d3-1c42110ba78c
+name: OCI - Multiple rejects on rare ports
+description: |
+  'Detects multiple rejects on rare ports.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OracleCloudInfrastructureLogsConnector
+    dataTypes:
+      - OCILogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+  let threshold = 50;
+  let r_dports = 
+  OCILogs
+  | where EventType contains 'vcn.flowlogs'
+  | where ipv4_is_private(DstIpAddr)
+  | where ipv4_is_private(SrcIpAddr) == False
+  | summarize count() by DstPortNumber
+  | top 10 by count_ asc
+  | summarize dports = makeset(DstPortNumber)
+  | extend k = 1;
+  OCILogs
+  | where EventType contains 'vcn.flowlogs'
+  | where data_action_s =~ 'REJECT'
+  | where ipv4_is_private(DstIpAddr)
+  | where ipv4_is_private(SrcIpAddr) == False
+  | extend k = 1
+  | join kind=innerunique (r_dports) on k
+  | where dports has tostring(DstPortNumber)
+  | summarize count() by SrcIpAddr, bin(TimeGenerated, 5m)
+  | where count_ > threshold
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

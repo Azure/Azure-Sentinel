@@ -1,0 +1,36 @@
+id: e087d4fb-af0b-4e08-a067-b9ba9e5f8840
+name: OCI - SSH scanner
+description: |
+  'Detects possible SSH scanning activity.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: OracleCloudInfrastructureLogsConnector
+    dataTypes:
+      - OCILogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+  let threshold = 5;
+  OCILogs
+  | where EventType contains 'vcn.flowlogs'
+  | where data_action_s =~ 'REJECT'
+  | where ipv4_is_private(DstIpAddr)
+  | where ipv4_is_private(SrcIpAddr) == False
+  | where DstPortNumber == 22
+  | summarize p_count = dcount(DstIpAddr) by SrcIpAddr, bin(TimeGenerated, 5m)
+  | where p_count > threshold
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled
