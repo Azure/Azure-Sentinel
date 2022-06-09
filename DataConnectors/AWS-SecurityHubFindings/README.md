@@ -29,7 +29,7 @@ AWSRoleSessionName = Name of the session variable. //Leave default
 
 1. [Obtain the thumbprint for Azure AD](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html).
 *The openid endpoint for Azure AD can be found at https://login.microsoftonline.com/$tenantId/v2.0/.well-known/openid-configuration*
-2. Deploy the CloudFormation template and fill in the required fields:
+2. Deploy the [CloudFormation template](https://raw.githubusercontent.com/infernuxmonster/Azure-Sentinel/AWS-SecurityHub-AuthUpgrade/DataConnectors/AWS-SecurityHubFindings/CloudFormation.template.json) and fill in the required fields:
 ```
 IdP ID (TenantId)
 ClientID (ApplicationId of the Managed Identity created for the Azure Function)
