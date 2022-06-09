@@ -46,7 +46,7 @@ The following tasks describe the necessary preparation and configurations steps.
 Onboarding Azure Sentinel is not part of this document post. However, required guidance can be found [here](https://docs.microsoft.com/azure/sentinel/quickstart-onboard). 
 
 ### Register an application in Azure AD 
-The Azure AD app is later required to use it as service principle for the [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) app. 
+The Azure AD app is later required to use it as service principle for the [Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) app. 
 
 1. Go to **Azure Active Directory** / **App Registrations**
 2. Create **New Registration**<br>
@@ -68,7 +68,7 @@ The Azure AD app is later required to use it as service principle for the [Azure
 14. Copy the **client Id** from the application properties and paste it somewhere.
 15. Also copy the **tenant Id** from the AAD directory properties blade.
 
-For the deployment of [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data), make a note of following settings: 
+For the deployment of [Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data), make a note of following settings: 
 - The Azure AD Application ID 
 - The Azure AD Application Secret 
 - The Tenant ID 
@@ -102,13 +102,13 @@ Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.offic
 ![Output](./images/Picture7.png)<br>
 
 ### Deploy the Azure Function App 
-Thanks to the published ARM template the deployment of the [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) is done with just a few clicks. 
+Thanks to the published ARM template the deployment of the [Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) is done with just a few clicks. 
 1. Click to **Deploy the template / Deploy to Azure** below.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json)
 
 2. Now it is time to use the noted details from previous steps.  
-- Select the right **Subscription**, **Resource Group** and **Region** where you what to deploy the Azure Funtion App.  
+- Select the right **Subscription**, **Resource Group** and **Region** where you what to deploy the Azure Function App.  
 - Fill the Instance Details **Client ID**, **Client Secret**, **Tenant Domain**, **Publisher Guid**.  
 - There is also a need of **Workspace ID** and **Workspace Key** from where Azure Sentinel is deployed. 
 - The Content Types you can leave as default with **Audit.General**, or you can also add **DLP.All** as well. Or use only **DLP.All**. 
