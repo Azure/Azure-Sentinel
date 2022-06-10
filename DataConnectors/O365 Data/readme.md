@@ -80,7 +80,7 @@ After successfully creating the service principles, run the following PowerShell
 2. Run the following, replacing variables with strings from the previous steps.
 ```powerhshell
 $ClientID = "<GUID> from AAD App Registration"
-$ClientSecret = "<clientSecret> from AAD App Registrtion"
+$ClientSecret = "<clientSecret> from AAD App Registration"
 $loginURL = "https://login.microsoftonline.com/"
 $tenantdomain = "<domain>.onmicrosoft.com"
 $TenantGUID = "<tenantguid> from AAD"
