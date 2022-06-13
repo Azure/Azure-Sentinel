@@ -1,9 +1,9 @@
 Parser:
-  Title: ASIM Okta identity management authentication parser
+  Title: Authentication ASIM filtering parser for Okta
   Version: '0.1.0'
   LastUpdated: June 17, 2021
 Product:
-  Name: Okta identity management
+  Name: Okta
 Normalization:
   Schema: Authentication
   Version: '0.1.0'
@@ -13,19 +13,38 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-      This Query Parser maps Okta sign in logs (Okta_CL) to the Advanced Security Information Model authenticaion schema.
-ParserName: ASimAuthenticationOktaSSO
+  This ASIM parser supports filtering and normalizing Okta sign in logs, stored in the  Okta_CL table, to the ASIM Authentication schema.
+ParserName: vimAuthenticationOktaSSO
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let OktaSignin=(disabled:bool=false){
+  let OktaSignin=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
     let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
     let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED','DENY']);
     let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
     // https://developer.okta.com/docs/reference/api/event-types/#catalog
     Okta_CL | where not(disabled)
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime) 
+      and (isnull(endtime)     or TimeGenerated <= endtime)
+      and (targetusername_has=='*' or (actor_alternateId_s has targetusername_has))
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
     | where eventType_s in (OktaSigninEvents)
     | extend 
         EventProduct='Okta'
@@ -85,4 +104,4 @@ ParserQuery: |
           User=TargetUsername
           , Dvc=EventVendor
     };
-  OktaSignin(disabled)
+  OktaSignin(starttime, endtime, targetusername_has, disabled)
