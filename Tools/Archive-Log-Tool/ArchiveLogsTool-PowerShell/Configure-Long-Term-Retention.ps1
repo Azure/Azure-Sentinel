@@ -15,22 +15,23 @@
             3. Update Table Retention based to Analytics
            
     
-    .PARAMETER TenantId
+    .PARAMETER TenantId, AzEnvironment
         Enter Azure Tenant Id (required)  
+        Enter Environment [AzureCloud | AzureUSGovernment]
 
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 3/9/2022
+        LASTEDIT: 6/14/2022 Ken Ward
 
     .EXAMPLE
-        .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
+        .\Configure-Long-Term-Retention.ps1 -TenantId xxxx -AzEnvironment [AzureCloud | AzureUSGovernment]
 #>
 
 #region UserInputs
 
 param(
-    [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")]
-    [string] $TenantID
+    [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")] [string] $TenantID,
+    [Parameter(Mandatory = $true, HelpMessage = "Enter Environment [AzureCloud | AzureUSGovernment]")] [string] $AzEnvironment
 ) 
 
 #endregion UserInputs
@@ -171,7 +172,7 @@ function Get-LATables {
 	
 	try {       
         Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-        $WSTables = Get-AllTables
+        $WSTables = Get-AllTables -APIEndpoint $AzEnvironment
                                          
         if ($RetentionMethod -eq "Analytics") {        
             $searchPattern = '(AzureActivity|Usage)'        
@@ -195,13 +196,14 @@ function Set-TableConfiguration {
 	[CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] $QualifiedTables,
-		[parameter(Mandatory = $true)] $RetentionType
+		[parameter(Mandatory = $true)] $RetentionType,
+        [parameter(Mandatory = $true)] $APIEndpoint
     )
 	
 	$SuccessTables = @()
     
     foreach($QTable in $QualifiedTables) {	
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-12-01-preview"								
+		$TablesApi = "https://$APIEndpoint/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-12-01-preview"								
 		
 		$TablesApiBody = @"
 			{
@@ -233,9 +235,13 @@ function Set-TableConfiguration {
     return $SuccessTables
 }
 
-function Get-AllTables {		
+function Get-AllTables {	
+    [CmdletBinding()]
+    param (        
+        [parameter(Mandatory = $true)] $APIEndpoint
+    )	
 	$AllTables = @()	
-    $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-12-01-preview"								
+    $TablesApi = "https://$APIEndpoint/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-12-01-preview"								
 	    		
     try {        
         $TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "GET" -Headers $LaAPIHeaders           			
@@ -271,11 +277,12 @@ function Update-TablesRetention {
 	[CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] $TablesForRetention,		
-		[parameter(Mandatory = $true)] $TotalRetentionInDays
+		[parameter(Mandatory = $true)] $TotalRetentionInDays,
+        [parameter(Mandatory = $true)] $APIEndpoint
     )
 	$UpdatedTablesRetention = @()
     foreach($tbl in $TablesForRetention) {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-12-01-preview"		
+		$TablesApi = "https://$APIEndpoint/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-12-01-preview"		
         $ArchiveDays = [int]($TotalRetentionInDays)
         
         $TablesApiBody = @"
@@ -462,6 +469,14 @@ $AzModulesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescr
 
 $AzModulesQuestionDecision = $Host.UI.PromptForChoice($title, $AzModulesQuestion, $AzModulesQuestionChoices, 1)
 
+#Set API endpoints
+if ($AzEnvironment -eq "AzureUSGovernment") {
+    $APIEndpoint = "management.usgovcloudapi.net"
+}
+else {
+    $APIEndpoint = "management.azure.com"
+}
+
 if ($AzModulesQuestionDecision -eq 0) {
     $UpdateAzModules = $true
 }
@@ -493,7 +508,7 @@ get-azcontext -ListAvailable | ForEach-Object{$_ | remove-azcontext -Force -Verb
 Write-Log "Clearing of existing connection and context completed." -LogFileName $LogFileName -Severity Information
 Try {
     #Connect to tenant with context name and save it to variable
-    Connect-AzAccount -Tenant $TenantID -ContextName 'MyAzContext' -Force -ErrorAction Stop
+    Connect-AzAccount -Tenant $TenantID -ContextName 'MyAzContext' -Force -ErrorAction Stop -Environment $AzEnvironment -UseDeviceAuthentication
         
     #Select subscription to build
     $GetSubscriptions = Get-AzSubscription -TenantId $TenantID | Where-Object {($_.state -eq 'enabled') } | Out-GridView -Title "Select Subscription to Use" -PassThru       
@@ -537,8 +552,8 @@ foreach($CurrentSubscription in $GetSubscriptions)
                         if($SelectedTables) {
                             $WorkspaceRetention = $SelectedTables[0].RetentionInWorkspace
                             $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555
-                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim()
-                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays                    
+                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $AzEnvironment
+                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays -APIEndpoint $AzEnvironment                   
                             $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
                         }
                         else {
@@ -547,7 +562,7 @@ foreach($CurrentSubscription in $GetSubscriptions)
                     }
                     elseif ($tablePlan.Trim() -eq "Basic") {
                         $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
-                        $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim()                                            
+                        $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $AzEnvironment                                      
                         $BasicPlanTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru                    
                     }
                     
