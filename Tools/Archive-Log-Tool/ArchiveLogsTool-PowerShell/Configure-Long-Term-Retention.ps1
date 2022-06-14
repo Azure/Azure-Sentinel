@@ -165,14 +165,15 @@ function Get-RequiredModules {
 function Get-LATables {
 	[CmdletBinding()]
     param (        
-        [parameter(Mandatory = $true)] $RetentionMethod                
+        [parameter(Mandatory = $true)] $RetentionMethod,
+        [parameter(Mandatory = $true)] $APIEndpoint                
     )
 	
 	$TablesArray = New-Object System.Collections.Generic.List[System.Object]
 	
 	try {       
         Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-        $WSTables = Get-AllTables -APIEndpoint $AzEnvironment
+        $WSTables = Get-AllTables -APIEndpoint $APIEndpoint
                                          
         if ($RetentionMethod -eq "Analytics") {        
             $searchPattern = '(AzureActivity|Usage)'        
@@ -548,12 +549,12 @@ foreach($CurrentSubscription in $GetSubscriptions)
                     $tablePlan = Select-Plan
                     if ($tablePlan.Trim() -eq "Analytics") {
                         #Get all the tables from the selected Azure Log Analytics Workspace
-                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()
+                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim() -APIEndpoint $APIEndpoint
                         if($SelectedTables) {
                             $WorkspaceRetention = $SelectedTables[0].RetentionInWorkspace
                             $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555
-                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $AzEnvironment
-                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays -APIEndpoint $AzEnvironment                   
+                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $APIEndpoint
+                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays -APIEndpoint $APIEndpoint                   
                             $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
                         }
                         else {
@@ -561,8 +562,8 @@ foreach($CurrentSubscription in $GetSubscriptions)
                         }
                     }
                     elseif ($tablePlan.Trim() -eq "Basic") {
-                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
-                        $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $AzEnvironment                                      
+                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim() -APIEndpoint $APIEndpoint                   
+                        $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $APIEndpoint                                      
                         $BasicPlanTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru                    
                     }
                     
