@@ -1,54 +1,59 @@
-let AdminDetails =vcenter_CL
-| where Message has ("logged")
-| extend Parser =  extract_all(@"^(\S+\s+\S+\s+\S+\s+\S+)\s+(\d+-\d+-\d+\s\d+:\d+:\d+(.\d{3}|.\d+\+\d+:\d+))\s+(\S+)\s(vpxd|vcenter-server:)(\s+(\d+)\s- -\sEvent\s+\[(\d+)\]\s+\[1-1\]\s+\[(\d+-\d+-\d+T\d+:\d+:\d+.\d+Z)\]\s+\[(\S+)\]\s+\[(\w+)\]\s+\[(\S*)]\s+\[(\S*)]\s+\[(\d+)])*\s+\[*((\S*\s*)*)\]*", dynamic([1,2,4,6,7,8,9,10,11,12,13,14,15]),Message)
+let AdminDetails = vcenter_CL
+| where Message has "logged"
+| extend Parser = extract_all(@"^(\S+\s+\S+\s+\S+\s+\S+)\s+(\d+-\d+-\d+T*\s*\d+:\d+:\d+(.\d{3}|.\d+\+\d+:\d+))\s+(\S+)\s(vpxd|vcenter-server:)(\s+(\d+)\s- -\sEvent\s+\[(\d+)\]\s+\[1-1\]\s+\[(\d+-\d+-\d+T\d+:\d+:\d+.\d+Z)\]\s+\[(\S+)\]\s+\[(\w+)\]\s+\[(\S*)]\s+\[(\S*)]\s+\[(\d+)])*\s+\[*((\S*\s*)*)\]*", dynamic([1,2,4,6,7,8,9,10,11,12,13,14,15]),Message)
 | extend eventTime = todatetime(Parser[0][1]),
-            hostname = tostring(Parser[0][2]),
-            eventid = tostring(Parser[0][4]),
-            raw_substring = tostring(Parser[0][12])
-| project-away  Parser;
+hostname = tostring(Parser[0][2]),
+eventid = tostring(Parser[0][4]),
+raw_substring = tostring(Parser[0][12])
+| project-away Parser;
 let AdminLogoutdetails = AdminDetails
-| where  raw_substring has "logged out"
+| where raw_substring has "logged out"
 | extend logoutdetails = extract_all(@"(User\s+(\S+)\s+logged\s+(out|in)\(Login time:\s+(\S+),\s+(\d{2}\s\S+),\s+(\d+)\s+(\d{2}:\d{2}:\d{2}),\s+number of API invocations:\s+(\d+),\s+user agent:\s+((\S*\s*)*)\)\]*)",dynamic([1,2,3,4,5,6,7,8,9]),raw_substring)
-| extend  LoginTime = strcat(tostring(logoutdetails[0][3]),",",tostring(logoutdetails[0][4]),",",tostring(logoutdetails[0][5]),tostring(logoutdetails[0][6])),
-          Ipaddress = split(tostring(logoutdetails[0][1]),"@",1),
-           username = split(tostring(logoutdetails[0][1]),"@",0),
-          ApiInvocation = tostring(logoutdetails[0][7]),
-          eventtype = "UserLogoutSessionEvent",
-          eventid = "592839",
-          useragent = split(tostring(logoutdetails[0][8])," ",0)
+| extend LoginTime = strcat(tostring(logoutdetails[0][3]),",",tostring(logoutdetails[0][4]),",",tostring(logoutdetails[0][5]),tostring(logoutdetails[0][6])),
+Ipaddress = tostring(split(tostring(logoutdetails[0][1]),"@",1)[0]),
+username = tostring(split(tostring(logoutdetails[0][1]),"@",0)[0]),
+ApiInvocation = toint(logoutdetails[0][7]),
+eventtype = "UserLogoutSessionEvent",
+eventid = "592839",
+useragent = tostring(logoutdetails[0][8])
 | project-away logoutdetails,raw_substring;
 let AdminLoginDetails = AdminDetails
 | where raw_substring has "logged in"
 | extend logindetails = extract_all(@"(User\s+(\S+)\s+logged\s+(out|in))\s+as\s+((\S*\s*)*)",dynamic([1,2,3,4]),raw_substring)
-| extend Ipaddress = split(tostring(logindetails[0][1]),"@",1),
-         username = split(tostring(logindetails[0][1]),"@",0),
-         useragent = split(tostring(logindetails[0][3])," ",0),
-         eventtype = "UserLoginSessionEvent",
-         eventid = "592838"
+| extend Ipaddress = tostring(split(tostring(logindetails[0][1]),"@",1)[0]),
+username = tostring(split(tostring(logindetails[0][1]),"@",0)[0]),
+useragent = tostring(logindetails[0][3]),
+eventtype = "UserLoginSessionEvent",
+eventid = "592838"
 | project-away logindetails,raw_substring;
 let RoleDetails = vcenter_CL
-| where Message has ("Role")
-|  extend Parser =  extract_all(@"^(\S+\s+\S+\s+\S+\s+\S+)\s+(\d+-\d+-\d+\s\d+:\d+:\d+(.\d{3}|.\d+\+\d+:\d+))\s+(\S+)\s(vpxd|vcenter-server:)(\s+(\d+)\s- -\sEvent\s+\[(\d+)\]\s+\[1-1\]\s+\[(\d+-\d+-\d+T\d+:\d+:\d+.\d+Z)\]\s+\[(\S+)\]\s+\[(\w+)\]\s+\[(\S*)]\s+\[(\S*)]\s+\[(\d+)])*\s+\[*((\S*\s*)*)\]*", dynamic([1,2,4,6,7,8,9,10,11,12,13,14,15]),Message)
+| where Message has "Role"
+| extend Parser = extract_all(@"^(\S+\s+\S+\s+\S+\s+\S+)\s+(\d+-\d+-\d+T*\s*\d+:\d+:\d+(.\d{3}|.\d+\+\d+:\d+))\s+(\S+)\s(vpxd|vcenter-server:)(\s+(\d+)\s- -\sEvent\s+\[(\d+)\]\s+\[1-1\]\s+\[(\d+-\d+-\d+T\d+:\d+:\d+.\d+Z)\]\s+\[(\S+)\]\s+\[(\w+)\]\s+\[(\S*)]\s+\[(\S*)]\s+\[(\d+)])*\s+\[*((\S*\s*)*)\]*", dynamic([1,2,4,6,7,8,9,10,11,12,13,14,15]),Message)
 | extend eventTime = todatetime(Parser[0][1]),
-            hostname = tostring(Parser[0][2]),
-            raw_substring = tostring(Parser[0][12])
+hostname = tostring(Parser[0][2]),
+raw_substring = tostring(Parser[0][12])
 | project-away Parser;
 let RoleCreated = RoleDetails
 | where raw_substring has ("created")
-| extend  RoleCreated = split(tostring(raw_substring)," ",2),
-          eventtype = "RoleCreated"
-| project-away  raw_substring;
+| extend RoleCreated = tostring(split(tostring(raw_substring)," ",2)[0]),
+eventtype = "RoleCreated",
+eventid = "580333"
+| project-away raw_substring;
 let RoleRemoved = RoleDetails
 | where Message has ("removed")
-| extend  RoleRemoved = split(tostring(raw_substring)," ",2),
-          eventtype = "RoleRemoved"
-| project-away  raw_substring;
-let RoleModified = RoleDetails
-| where raw_substring has ("modified")
-| extend RoleModified = extract_all(@"^Role\s+modified\s+Previous name:\s+(\S+),\s+new\s+name\s+(\S+)\s+Added\s+privileges:*(\s+(\S*\,*))", dynamic([1,2,3,4,5]),raw_substring)
-| extend eventtype = "RoleModified",
-         oldrolename = tostring(RoleModified[0][0]),
-         newrolename = tostring(RoleModified[0][1]),
-         addedPrivilege = tostring(RoleModified[0][2])
+| extend RoleRemoved = tostring(split(tostring(raw_substring)," ",2)[0]), //Extract the role. currently it is an array of strings
+eventtype = "RoleRemoved",
+eventid = "580349"
 | project-away raw_substring;
-union AdminLogoutdetails, AdminLoginDetails,RoleRemoved, RoleCreated,RoleModified
+let RoleModified =
+RoleDetails
+| where raw_substring has ("modified")
+| extend RoleModified = extract_all(@"^(Role\s+modified\s*\S*Previous name:\s+(\w+),\s+new\s+name\s+(\w+)\s*\S*Added\s+privileges:\s+(((\w+.\w+\,*)\s*)*)\s*\S*Removed\s+privileges:\s+(((\w+.\w+\,*)\s*)*))", dynamic([2,3,4,7]),raw_substring)
+| extend eventtype = "RoleModified",
+oldrolename = tostring(RoleModified[0][0]),
+newrolename = tostring(RoleModified[0][1]),
+addedPrivilege = split(tostring(RoleModified[0][2]),", "),
+removedPrivilege = split(tostring(RoleModified[0][3]),", "),
+eventid = "580348"
+| project-away raw_substring;
+union AdminLogoutdetails,AdminLoginDetails,RoleRemoved,RoleCreated,RoleModified
