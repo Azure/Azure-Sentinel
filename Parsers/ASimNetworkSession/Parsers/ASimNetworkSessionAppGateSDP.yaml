@@ -37,12 +37,14 @@ ParserQuery: |
       'block_report', 'Deny', 'Low', 'Failure',
       'allow_report', 'Allow', 'Informational', 'Success'
     ];
-    Syslog
-    | where ProcessName == "cz-sessiond" or ProcessName == "cz-vpnd"
-    | where SyslogMessage has_all ("[AUDIT]","ip_access")
+    let tcpupd_success = Syslog
+    | where 
+      ProcessName in ("cz-sessiond", "cz-vpnd")
+      and SyslogMessage has_all ("[AUDIT]","ip_access",'"rule_name"')
+      and SyslogMessage has_any ('"protocol":"UDP"','"protocol":"TCP"') 
     | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  SyslogMessage)
     | where type == "ip_access"
-    | parse SyslogMessage with 
+    | parse-where SyslogMessage with 
         *
         '"action":"' DvcOriginalAction:string '",' * 
         '"client_ip":"' SrcIpAddr:string '",' *
@@ -53,19 +55,73 @@ ParserQuery: |
         '"distinguished_name_device_id":"' SrcDvcId:string '",' *
         '"distinguished_name_user":"' SrcUsername:string '",' *
         '"entitlement_token_id":"' NetworkSessionId:string '",' *
-        '"country_name":"' SrcGeoCountry:string '",' *
-        '"lat":' SrcGeoLatitude:real ',' *        
-        '"lon":' SrcGeoLongitude:real '}' *
         '"packet_size":' SrcBytes:long ',' *
         '"protocol":"' NetworkProtocol:string '",' *          
         '"rule_name":"' NetworkRuleName:string '",' *  
         '"source_ip":"' SrcNatIpAddr:string '",' *
         '"source_port":' SrcNatPortNumber:int ',' * 
         '"version":' EventProductVersion:string '}' *
+    ;
+    let tcpupd_fail = 
+      Syslog
+      | where 
+        ProcessName in ("cz-sessiond", "cz-vpnd")
+        and SyslogMessage has_all ("[AUDIT]","ip_access",'"drop-reason"')
+        and SyslogMessage has_any ('"protocol":"UDP"','"protocol":"TCP"') 
+      | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  SyslogMessage)
+      | where type == "ip_access"
+      | parse-where SyslogMessage with 
+          *
+          '"action":"' DvcOriginalAction:string '",' * 
+          '"client_ip":"' SrcIpAddr:string '",' *
+          '"client_port":' SrcPortNumber:int ',' *
+          '"destination_ip":"' DstIpAddr:string '",' *
+          '"destination_port":' DstPortNumber:int ',' *
+          '"direction":"' direction:string '",' * 
+          '"distinguished_name_device_id":"' SrcDvcId:string '",' *
+          '"drop-reason":"' EventOriginalResultDetails:string '",' *
+          '"distinguished_name_user":"' SrcUsername:string '",' *
+          '"entitlement_token_id":"' NetworkSessionId:string '",' *
+          '"packet_size":' SrcBytes:long ',' *
+          '"protocol":"' NetworkProtocol:string '",' *
+          '"source_ip":"' SrcNatIpAddr:string '",' *
+          '"source_port":' SrcNatPortNumber:int ',' * 
+          '"version":' EventProductVersion:string '}' *
+       ;
+    let icmp_success = Syslog
+    | where 
+      ProcessName in ("cz-sessiond", "cz-vpnd")
+      and SyslogMessage has_all ("[AUDIT]","ip_access",'"protocol":"ICMP"') 
+    | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  SyslogMessage)
+    | where type == "ip_access"
+    | parse-where SyslogMessage with 
+        *
+        '"action":"' DvcOriginalAction:string '",' * 
+        '"client_ip":"' SrcIpAddr:string '",' *
+        '"client_port":' SrcPortNumber:int ',' *
+        '"destination_ip":"' DstIpAddr:string '",' *
+        '"direction":"' direction:string '",' * 
+        '"distinguished_name_device_id":"' SrcDvcId:string '",' *
+        '"distinguished_name_user":"' SrcUsername:string '",' *
+        '"entitlement_token_id":"' NetworkSessionId:string '",' *
+        '"icmp_code":' NetworkIcmpSubCode:int ',' *
+        '"icmp_type":' NetworkIcmpCode:int ',' *  
+        '"packet_size":' SrcBytes:long ',' *
+        '"protocol":"' NetworkProtocol:string '",' *          
+        '"rule_name":"' NetworkRuleName:string '",' *  
+        '"source_ip":"' SrcNatIpAddr:string '",' *
+        '"version":' EventProductVersion:string '}' *
+    ;
+    union  tcpupd_success, tcpupd_fail, icmp_success 
     | parse SyslogMessage with 
         *
-       '"city_name":"' SrcGeoCity:string '",' *
-       '"region_name":"' SrcGeoRegion:string '",' *
+        '"country_name":"' SrcGeoCountry:string '",' *
+        '"lat":' SrcGeoLatitude:real ',' *        
+        '"lon":' SrcGeoLongitude:real '}' *
+    | parse SyslogMessage with 
+         *
+        '"city_name":"' SrcGeoCity:string '",' *
+        '"region_name":"' SrcGeoRegion:string '",' *
     | extend 
         SrcDvcIdType = 'AppGateId',
         SrcUsernameType = 'UPN'
@@ -92,6 +148,6 @@ ParserQuery: |
         IpAddr = SrcIpAddr,
         Rule = NetworkRuleName
     | project-away 
-        SyslogMessage, type, direction
+        SyslogMessage, type, direction, Facility, HostIP, HostName, ProcessName, SeverityLevel, SourceSystem, ProcessID
   };
-  parser  (disabled)
+  parser (disabled)
