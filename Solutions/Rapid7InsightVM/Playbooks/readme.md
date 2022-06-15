@@ -10,7 +10,6 @@
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
 1. [Post-Deployment Steps](#postdeployment)
-1. [Known issues and limitations](#limitations)
 
 <a name="overview">
 
@@ -87,7 +86,3 @@ Once deployment is complete, authorize each connection.
 #### b. Configurations in Sentinel
 
 Each Playbook requires a different type of configuration. Check documentation for each Playbook.
-
-<a name="limitations">
-
-## Known Issues and Limitations
