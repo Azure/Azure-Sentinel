@@ -26,6 +26,9 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
+    * Teams Group Id: Id of the Teams Group where the adaptive card will be posted.
+    * Teams Channel Id: Id of the Teams Channel where the adaptive card will be posted.
+
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRapid7InsightVM%2FPlaybooks%2FPlaybooks%2FRapid7InsightVM-RunScan%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRapid7InsightVM%2FPlaybooks%2FPlaybooks%2FRapid7InsightVM-RunScan%2Fazuredeploy.json)
 
