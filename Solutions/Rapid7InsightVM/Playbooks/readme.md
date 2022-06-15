@@ -6,11 +6,10 @@
 
 1. [Overview](#overview)
 1. [Custom Connectors + 3 Playbook templates deployment](#deployall)
-1. [Authentication](#importantnotes)
+1. [Authentication](#authentication)
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
 1. [Post-Deployment Steps](#postdeployment)
-1. [References](#references)
 1. [Known issues and limitations](#limitations)
 
 <a name="overview">
