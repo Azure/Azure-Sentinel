@@ -1,5 +1,5 @@
 # Deploy Function App for getting Office 365 Management API data into Azure Sentinel
-This function app will poll O365 Activity Managment API every 5 mins for logs.  It is designed to get Audit.General and DLP.All events.
+This function app will poll O365 Activity Management API every 5 mins for logs.  It is designed to get Audit.General and DLP.All events.
 
 ## How to Ingest Office 365 Audit.General and DLP.All Activity Logs into Azure Sentinel 
 The Office 365 data connector in Azure Sentinel supports ongoing user and admin activity logs for Microsoft 365 workloads, Exchange Online, SharePoint Online and Microsoft Teams. The activity logs include details of action such as file downloads, access request send, change to group event, mailbox operations. Once the activity logs are ingested into Azure Sentinel, it can be used for custom analytics rules, hunting, visualization as well as for investigation process. 
@@ -55,7 +55,7 @@ The Azure AD app is later required to use it as service principle for the [Azure
 4. Click **API Permissions** Blade.
 5. Click **Add a Permission**.  
 6. Click **Office 365 Management APIs**.
-7. Click **Appplication Permissions**
+7. Click **Application Permissions**
 8. Check **ActivityFeed.Read** and **ActivityFeed.ReadDlp**.  Click **Add permissions**.<br>
 ![Permissions](./images/Picture5.png)<br>
 9. Click **Grant admin consent for ...**.<br>
