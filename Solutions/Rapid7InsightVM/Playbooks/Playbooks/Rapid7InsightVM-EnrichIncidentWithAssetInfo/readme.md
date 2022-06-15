@@ -13,7 +13,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, Rapid7 InsightVM API Connector needs to be deployed under the same subscription.
+1. Prior to the deployment of this playbook, [Rapid7 InsightVM API Connector](../../Rapid7InsightVMCloudAPIConnector/) needs to be deployed under the same subscription.
 2. Obtain Rapid7 InsightVM API credentials. Refer to Rapid7 InsightVM API Custom Connector documentation.
 
 ### Deployment instructions
