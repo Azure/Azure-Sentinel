@@ -1,0 +1,50 @@
+id: ba850be4-2f02-40fb-834d-d0a9ac0672d3
+name: Discovering potentially tampered devices [Nobelium]
+description: |
+  To evade security software and analyst tools, Nobelium malware enumerates the target system looking for certain running processes, loaded drivers, and registry keys, with the goal of disabling them.
+  The Microsoft Defender for Endpoint sensor is one of the processes the malware attempts to disable.
+  Microsoft Defender for Endpoint has built-in protections against many techniques attackers use to disable endpoint sensors ranging from hardened OS protection, anti-tampering policies, and detections for a variety of tampering attempts, including "Attempt to stop Microsoft Defender for Endpoint sensor", "Tampering with Microsoft Defender for Endpoint sensor settings", or "Possible sensor tampering in memory".
+  Successfully disabling Microsoft Defender for Endpoint can prevent the system from reporting observed activities.
+  However, the multitude of signals reported into Microsoft 365 Defender provides a unique opportunity to hunt for systems where the tampering technique used might have been successful.
+  The following advanced hunting query can be used to locate devices that should be reporting but aren't:
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+  - DeviceProcessEvents
+tactics:
+- Defense evasion
+tags:
+- Nobelium
+query: |
+  // Times to be modified as appropriate
+  let timeAgo=1d;
+  let silenceTime=8h;
+  // Get all silent devices and IPs from network events
+  let allNetwork=materialize(DeviceNetworkEvents
+  | where Timestamp > ago(timeAgo)
+  and isnotempty(LocalIP)
+  and isnotempty(RemoteIP)
+  and ActionType in ("ConnectionSuccess", "InboundConnectionAccepted")
+  and LocalIP !in ("127.0.0.1", "::1")
+  | project DeviceId, Timestamp, LocalIP, RemoteIP, ReportId);
+  let nonSilentDevices=allNetwork
+  | where Timestamp > ago(silenceTime)
+  | union (DeviceProcessEvents | where Timestamp > ago(silenceTime))
+  | summarize by DeviceId;
+  let nonSilentIPs=allNetwork
+  | where Timestamp > ago(silenceTime)
+  | summarize by LocalIP;
+  let silentDevices=allNetwork
+  | where DeviceId !in (nonSilentDevices)
+  and LocalIP !in (nonSilentIPs)
+  | project DeviceId, LocalIP, Timestamp, ReportId;
+  // Get all remote IPs that were recently active
+  let addressesDuringSilence=allNetwork
+  | where Timestamp > ago(silenceTime)
+  | summarize by RemoteIP;
+  // Potentially disconnected devices were connected but are silent
+  silentDevices
+  | where LocalIP in (addressesDuringSilence)
+  | summarize ReportId=arg_max(Timestamp, ReportId), Timestamp=max(Timestamp), LocalIP=arg_max(Timestamp, LocalIP) by DeviceId
+  | project DeviceId, ReportId=ReportId1, Timestamp, LocalIP=LocalIP1

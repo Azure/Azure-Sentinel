@@ -1,12 +1,12 @@
 Parser:
-  Title: Network Session ASIM parser for Zscaler ZIA
-  Version: '0.1'
-  LastUpdated: Dec 8, 2021
+  Title: Network Session ASIM parser for Zscaler ZIA Firewall
+  Version: '0.2'
+  LastUpdated: Jan 17, 2022
 Product:
-  Name: Zscaler ZIA
+  Name: Zscaler ZIA Firewall
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.1'
+  Version: '0.2.2'
 References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/ASimNetworkSessionDoc
@@ -17,7 +17,7 @@ References:
 - Title: Zscaler Sentinel deployment guide
   Link: https://help.zscaler.com/zia/zscaler-microsoft-azure-sentinel-deployment-guide
 Description: |
-  This ASIM parser supports normalizing Zscaler ZIA proxy logs produced by the Microsoft Sentinel Zscaler connector to the ASIM Network Session normalized schema. The parser supports squid native log format.
+  This ASIM parser supports normalizing Zscaler ZIA proxy logs produced by the Microsoft Sentinel Zscaler connector to the ASIM Network Session normalized schema.
 ParserName: ASimNetworkSessionZscalerZIA
 EquivalentBuiltInParser: _ASim_NetworkSession_ZscalerZIA
 ParserParams:
@@ -33,7 +33,10 @@ ParserQuery: |
     'Block/ICMP','Drop ICMP',
     'Block/Reset', 'Reset',
     'IPS Drop', 'Drop',
-    'IPS Reset', 'Reset'
+    'IPS Reset', 'Reset',
+    // Observed in real world events
+    'Block ICMP', 'Drop ICMP',
+    'Drop', 'Drop'
   ];
   let parser=(disabled:bool=false){
   CommonSecurityLog | where not(disabled)
@@ -41,7 +44,6 @@ ParserQuery: |
   | where DeviceProduct == "NSSFWlog"
   // Event fields
   | extend 
-    EventCount=DeviceCustomNumber1, 
     EventStartTime=TimeGenerated, 
     EventVendor = "Zscaler", 
     EventProduct = "ZIA Firewall", 
@@ -68,17 +70,25 @@ ParserQuery: |
     SrcNatPortNumber = SourceTranslatedPort, 
     SrcUserDepartment = DeviceCustomString1,  // Not in standard schema
     SrcUserLocation = SourceUserPrivileges,  // Not in standard schema
-    NetworkDuration = DeviceCustomNumber1, 
     ThreatName = DeviceCustomString6, 
     ThreatCategory = DeviceCustomString5, 
     RuleName = Activity 
   // -- Calculated fields
   | lookup ActionLookup on DvcOriginalAction 
   | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventCount=coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber2", int(null))), 
+      toint(column_ifexists("DeviceCustomNumber2",int(null)))
+    ),
+    NetworkDuration = coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
     ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
     SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
-    DstBytes = toint(ReceivedBytes), 
-    SrcBytes = toint(SentBytes)
+    DstBytes = tolong(ReceivedBytes), 
+    SrcBytes = tolong(SentBytes)
   // -- Enrichment
   | extend
     EventResult = iff (DvcOriginalAction == "Allow", "Success", "Failure"),
@@ -88,7 +98,10 @@ ParserQuery: |
   | extend
     Dvc = DvcHostname,
     User = SrcUsername,
-    IpAddr = SrcIpAddr
+    IpAddr = SrcIpAddr,
+    Src = SrcIpAddr,
+    Dst = DstIpAddr,
+    Duration = NetworkDuration
   | project-away 
     DeviceCustom*
   };

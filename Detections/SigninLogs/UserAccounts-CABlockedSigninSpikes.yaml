@@ -13,7 +13,7 @@ requiredDataConnectors:
     dataTypes:
       - AADNonInteractiveUserSignInLogs
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -26,40 +26,38 @@ query: |
   let starttime = 14d;
   let timeframe = 1d;
   let scorethreshold = 3;
-  let baselinethreshold = 5;
+  let baselinethreshold = 50;
   let aadFunc = (tableName:string){
     // Failed Signins attempts with reasoning related to conditional access policies.
     table(tableName)
-    | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(timeframe)))
+    | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))
     | where ResultDescription has_any ("conditional access", "CA") or ResultType in (50005, 50131, 53000, 53001, 53002, 52003, 70044)
     | extend UserPrincipalName = tolower(UserPrincipalName)
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName
+    | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  let allSignins = union isfuzzy=true aadSignin, aadNonInt ;
-  let TimeSeriesData = union isfuzzy=true aadSignin, aadNonInt 
-  | project TimeGenerated, UserPrincipalName
-  | make-series HourlyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by UserPrincipalName
-  | project TimeGenerated, UserPrincipalName, HourlyCount;
-  let TimeSeriesAlerts = TimeSeriesData
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount, scorethreshold, -1, 'linefit')
-  | mv-expand HourlyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
-  | where anomalies > 0 | extend AnomalyHour = TimeGenerated
-  | where baseline > baselinethreshold // Filtering low count events per baselinethreshold
-  | project UserPrincipalName, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;
-  let AnomalyHours = TimeSeriesAlerts | where TimeGenerated > ago(2d) | project TimeGenerated;
+  let allSignins = union isfuzzy=true aadSignin, aadNonInt;
+  let TimeSeriesAlerts = 
+  allSignins
+  | make-series DailyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step 1d by UserPrincipalName
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(DailyCount, scorethreshold, -1, 'linefit')
+  | mv-expand DailyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+  // Filtering low count events per baselinethreshold
+  | where anomalies > 0 and baseline > baselinethreshold
+  | extend AnomalyHour = TimeGenerated
+  | project UserPrincipalName, AnomalyHour, TimeGenerated, DailyCount, baseline, anomalies, score;
   // Filter the alerts for specified timeframe
   TimeSeriesAlerts
-  | where TimeGenerated > ago(2d)
+  | where TimeGenerated > startofday(ago(timeframe))
   | join kind=inner ( 
-  union isfuzzy=true aadSignin, aadNonInt
-  | where TimeGenerated > ago(2d)
-  | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
-  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
-   | summarize HourlyCount=count(), LatestAnomalyTime = arg_max(timestamp,*) by bin(TimeGenerated,1h),  OperationName, Category, ResultType, ResultDescription, UserPrincipalName, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName
-  ) on UserPrincipalName
-  | project LatestAnomalyTime,  OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, HourlyCount, baseline, anomalies, score
+    allSignins
+    | where TimeGenerated > startofday(ago(timeframe))
+    // create a new column and round to hour
+    | extend DateHour = bin(TimeGenerated, 1h)
+    | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated, *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName
+  ) on UserPrincipalName, $left.AnomalyHour == $right.DateHour
+  | project LatestAnomalyTime, OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = DailyCount, baseline, anomalies, score
   | extend timestamp = LatestAnomalyTime, IPCustomEntity = IPAddress, AccountCustomEntity = UserPrincipalName
 entityMappings:
   - entityType: Account
@@ -70,5 +68,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled

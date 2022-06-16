@@ -1,0 +1,293 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Manoj Arimanda - v-marimanda@microsoft.com",
+    "comments": "Solution template for ApacheTomcat"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Sentinel is setup"
+      }
+    },
+    "connector1-name": {
+      "type": "string",
+      "defaultValue": "2be5ca34-a06a-49d4-8375-7a93f8171fc3"
+    }
+  },
+  "variables": {
+    "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
+    "_connector1-source": "[variables('connector1-source')]",
+    "ApacheTomcatConnector": "ApacheTomcatConnector",
+    "_ApacheTomcatConnector": "[variables('ApacheTomcatConnector')]",
+    "workspace-dependency": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
+    "TomcatEvent_Parser": "TomcatEvent_Parser",
+    "_TomcatEvent_Parser": "[variables('TomcatEvent_Parser')]",
+    "sourceId": "azuresentinel.azure-sentinel-solution-apachetomcat",
+    "_sourceId": "[variables('sourceId')]"
+  },
+  "resources": [
+    {
+      "id": "[variables('_connector1-source')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Apache Tomcat",
+          "publisher": "Apache",
+          "descriptionMarkdown": "The Apache Tomcat data connector provides the capability to ingest [Apache Tomcat](http://tomcat.apache.org/) events into Azure Sentinel. Refer to [Apache Tomcat documentation](http://tomcat.apache.org/tomcat-10.0-doc/logging.html) for more information.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Tomcat_CL",
+              "baseQuery": "TomcatEvent"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Clients (Source IP)",
+              "query": "TomcatEvent\n | summarize count() by SrcIpAddr\n | top 10 by count_"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Tomcat_CL",
+              "lastDataReceivedQuery": "TomcatEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "TomcatEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://aka.ms/sentinel-ApacheTomcat-parser) to create the Kusto Functions alias, **TomcatEvent**"
+            },
+            {
+              "description": ">**NOTE:** This data connector has been developed using Apache Tomcat version 10.0.4"
+            },
+            {
+              "description": "Install the agent on the Apache Tomcat Server where the logs are generated.\n\n> Logs from Apache Tomcat Server deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Linux agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux or Windows"
+            },
+            {
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Windows agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Windows Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Windows Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ]
+            },
+            {
+              "description": "Configure the custom log directory to be collected",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenCustomLogsSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "1. Select the link above to open your workspace advanced settings \n2. From the left pane, select **Data**, select **Custom Logs** and click **Add+**\n3. Click **Browse** to upload a sample of a Tomcat log file (e.g. access.log or error.log). Then, click **Next >**\n4. Select **New line** as the record delimiter and click **Next >**\n5. Select **Windows** or **Linux** and enter the path to Tomcat logs based on your configuration. Example: \n - **Linux** Directory:  '/var/log/tomcat/*.log' \n6. After entering the path, click the '+' symbol to apply, then click **Next >** \n7. Add **Tomcat_CL** as the custom log Name and click **Done**"
+            }
+          ],
+          "additionalRequirementBanner": "This data connector depends on a parser based on Kusto Function to work as expected. Follow the steps to use this Kusto Function alias **TomcatEvent** in queries and workbooks. [Follow steps to get this Kusto Function>](https://aka.ms/sentinel-ApacheTomcat-parser)"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2020-08-01",
+      "name": "[parameters('workspace')]",
+      "location": "[parameters('workspace-location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ApacheTomcat Data Parser",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "ApacheTomcat Data Parser",
+            "category": "Samples",
+            "functionAlias": "TomcatEvent",
+            "query": "\nlet tomcat_accesslog_events =() {\r\nTomcat_CL\r\n| where RawData matches regex @'(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}).*\\[.*\\]\\s\\\"(GET|POST).*?\\\"\\s([1-5][0-9]{2})\\s(\\d+)\\s\\\"(.*?)\\\"\\s\\\"(.*?)\\\".*'\r\n| extend EventProduct = 'Tomcat'\r\n| extend EventType = 'AccessLog'\r\n| extend EventData = split(RawData, '\"')\r\n| extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\r\n| extend SubEventData1 = split(EventData[1], ' ')\r\n| extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\r\n| extend SrcIpAddr = tostring(SubEventData0[0])\r\n| extend ClientIdentity = SubEventData0[1]\r\n| extend SrcUserName = SubEventData0[2]\r\n| extend EventStartTime = todatetime(replace(@'\\/', @'-', replace(@'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2', extract(@'\\[(.*?)\\+\\d+\\]', 1, RawData))))\r\n| extend HttpRequestMethod = SubEventData1[0]\r\n| extend UrlOriginal = SubEventData1[1]\r\n| extend HttpVersion = SubEventData1[2]\r\n| extend HttpStatusCode = SubEventData2[0]\r\n| extend HttpResponseBodyBytes = SubEventData2[1]\r\n| extend HttpReferrerOriginal = EventData[3]\r\n| extend HttpUserAgentOriginal = EventData[5]\r\n};\r\nlet tomcat_catalina_event1=() {\r\nTomcat_CL\r\n| where RawData matches regex @'\\A\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM)\\sorg.*'\r\n| extend EventProduct = 'Tomcat'\r\n| extend EventType = 'CatalinaLog'\r\n| extend EventStartTime = todatetime(replace(@',', '', extract(@'\\A(\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM))', 0, RawData)))\r\n| extend ClassName = extract(@'(PM|AM)\\s(.*?)\\s', 2, RawData)\r\n| extend DvcAction = extract(@'(PM|AM)\\sorg.*?\\s(\\S+)', 2, RawData)\r\n};\r\nlet tomcat_catalina_event2=() {\r\nTomcat_CL\r\n| where RawData matches regex @'\\A(INFO|WARN|ERROR|DEBUG):\\s'\r\n| extend EventProduct = 'Tomcat'\r\n| extend EventType = 'CatalinaLog'\r\n| extend EventSeverity = extract(@'(INFO|ERROR|WARN|DEBUG)', 1, RawData)\r\n| extend EventMessage = extract(@'(INFO|ERROR|WARN|DEBUG):\\s(.*)', 2, RawData)\r\n};\r\nunion isfuzzy=true tomcat_accesslog_events, tomcat_catalina_event1, tomcat_catalina_event2\r\n| project TimeGenerated\r\n        , EventProduct\r\n        , EventType\r\n        , EventSeverity\r\n        , EventStartTime\r\n        , SrcIpAddr\r\n        , ClientIdentity\r\n        , SrcUserName\r\n        , HttpRequestMethod\r\n        , UrlOriginal\r\n        , HttpVersion\r\n        , HttpStatusCode\r\n        , HttpResponseBodyBytes\r\n        , HttpReferrerOriginal\r\n        , HttpUserAgentOriginal\r\n        , ClassName\r\n        , DvcAction\r\n        , EventMessage",
+            "version": 1
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "version": "1.0.0",
+        "kind": "Solution",
+        "contentId": "[variables('_sourceId')]",
+        "parentId": "[variables('_sourceId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ApacheTomcat",
+          "sourceId": "[variables('_sourceId')]"
+        },
+        "author": {
+          "name": "Manoj Arimanda",
+          "email": "v-marimanda@microsoft.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_ApacheTomcatConnector')]",
+              "version": "1.0.0"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_TomcatEvent_Parser')]",
+              "version": "1.0.0"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-01-31",
+        "providers": [
+          "Apache"
+        ],
+        "categories": {
+          "domains": [
+            "DevOps",
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+    }
+  ],
+  "outputs": {}
+}

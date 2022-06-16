@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTerminateMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Terminate Event ASIM parser for Microsoft Windows Security Events",
+            "category": "ASIM",
+            "FunctionAlias": "vimProcessTerminateMicrosoftSysmon",
+            "query": "// =======================================================================================================================================\n//    Sysmon from Event table\n// =======================================================================================================================================\nlet ParsedProcessEvent_Event=(){\nEvent \n| where Source == \"Microsoft-Windows-Sysmon\" and EventID==5\n// --------------------------------------------------------------------------------------\n| where\n(isnull(starttime)   or TimeGenerated >= starttime )\nand (isnull(endtime) or TimeGenerated <= endtime )\nand not(disabled)\nand (eventtype=='*' or eventtype=='ProcessTerminated')\nand (array_length(commandline_has_all)==0 ) \nand (array_length(commandline_has_any)==0 ) \nand (array_length(commandline_has_any_ip_prefix)==0 ) \nand (array_length(actingprocess_has_any)==0 ) \nand (array_length(targetprocess_has_any)==0 or EventData has_any (targetprocess_has_any)) \nand (array_length(parentprocess_has_any)==0 ) \nand (actorusername=='*' or EventData has actorusername)  \nand (array_length(dvcipaddr_has_any_prefix)==0)\nand (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   \n// --------------------------------------------------------------------------------------\n| parse EventData with * '<Data Name=\"User\">'ActorUsername '</Data>' *\n// --------------------------------------------------------------------------------------\n| where (actorusername=='*' or ActorUsername has actorusername) \n// --------------------------------------------------------------------------------------\n| parse EventData with * '<Data Name=\"RuleName\">'RuleName'</Data>'\n        '<Data Name=\"UtcTime\">'UtcTime'</Data>'\n        '<Data Name=\"ProcessGuid\">{'ProcessGuid'}</Data>'\n        '<Data Name=\"ProcessId\">'ProcessId:string'</Data>'\n        '<Data Name=\"Image\">'Image'</Data>'*\n// --------------------------------------------------------------------------------------\n| where (array_length(targetprocess_has_any)==0  or Image has targetprocess_has_any) \n// --------------------------------------------------------------------------------------\n| extend \n        EventType = \"ProcessTerminated\",\n        EventStartTime = todatetime(TimeGenerated),\n        EventEndTime = todatetime(TimeGenerated),\n        EventCount = int(1),\n        EventVendor = \"Microsoft\",\n        EventSchemaVersion = \"0.1.0\",\n        EventSchema = 'ProcessEvent',\n        EventOriginalType=tostring(EventID),\n        EventProduct = \"Sysmon\",\n        EventResult = 'Success',\n        DvcOs = \"Windows\"\n| project-rename\n        DvcHostname = Computer,\n        TargetProcessName = Image,\n        TargetProcessId = ProcessId\n| extend\n        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n        TargetProcessGuid = ProcessGuid,\n        //***** Aliases ******\n        User = ActorUsername,\n        Process = TargetProcessName,\n        Dvc = DvcHostname\n| project-away EventData, ParameterXml\n};\n// =======================================================================================================================================\n//    Sysmon from WindowsEvent table\n// =======================================================================================================================================\nlet ParsedProcessEvent_WindowsEvent=(){\nWindowsEvent \n| where Provider == \"Microsoft-Windows-Sysmon\" and EventID==5\n // --------------------------------------------------------------------------------------\n| where\n(isnull(starttime)   or TimeGenerated >= starttime )\nand (isnull(endtime) or TimeGenerated <= endtime )\nand not(disabled)\nand (eventtype=='*' or eventtype=='ProcessTerminated')\nand (array_length(commandline_has_all)==0 ) \nand (array_length(commandline_has_any)==0 ) \nand (array_length(commandline_has_any_ip_prefix)==0 ) \nand (array_length(actingprocess_has_any)==0 ) \nand (array_length(targetprocess_has_any)==0 or EventData.Image has_any (targetprocess_has_any)) \nand (array_length(parentprocess_has_any)==0 ) \nand (actorusername=='*' or EventData.User has actorusername)  \nand (array_length(dvcipaddr_has_any_prefix)==0)\nand (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   \n// --------------------------------------------------------------------------------------\n| extend \n        EventType = \"ProcessTerminated\",\n        EventStartTime = todatetime(TimeGenerated),\n        EventEndTime = todatetime(TimeGenerated),\n        EventCount = int(1),\n        EventVendor = \"Microsoft\",\n        EventSchemaVersion = \"0.1.0\",\n        EventOriginalType=tostring(EventID),\n        EventProduct = \"Sysmon\",\n        EventResult = 'Success',\n        DvcOs = \"Windows\",\n        ActorUsernameType = \"Windows\",\n        ActorUsername = tostring(EventData.User),\n        TargetProcessName = tostring(EventData.Image),\n        TargetProcessId = tostring(EventData.ProcessId),\n        TargetProcessGuid = tostring(EventData.ProcessGuid)\n| project-rename\n        DvcHostname = Computer\n| extend\n        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n        //***** Aliases ******\n        User = ActorUsername,\n        Process = TargetProcessName,\n        Dvc = DvcHostname\n};union isfuzzy=true ParsedProcessEvent_Event,\nParsedProcessEvent_WindowsEvent   \n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),commandline_has_any:dynamic=dynamic([]),commandline_has_all:dynamic=dynamic([]),commandline_has_any_ip_prefix:dynamic=dynamic([]),actingprocess_has_any:dynamic=dynamic([]),targetprocess_has_any:dynamic=dynamic([]),parentprocess_has_any:dynamic=dynamic([]),actorusername:string='*',dvcipaddr_has_any_prefix:dynamic=dynamic([]),dvcname_has_any:dynamic=dynamic([]),eventtype:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

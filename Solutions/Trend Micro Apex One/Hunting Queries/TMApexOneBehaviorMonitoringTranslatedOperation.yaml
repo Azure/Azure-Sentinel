@@ -1,0 +1,46 @@
+id: 0caa3472-67b6-11ec-90d6-0242ac120003
+name: ApexOne - Behavior monitoring operations by users
+description: |
+  'Shows behavior monitoring operations by users.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: TrendMicroApexOne
+    dataTypes:
+      - TMApexOneEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  TMApexOneEvent
+  | where TimeGenerated > ago(24h)
+  | where EventMessage has "Behavior Monitoring"
+  | extend DeviceCustomNumber3 = coalesce(
+                                    column_ifexists("FieldDeviceCustomNumber3", long(null)),
+                                    DeviceCustomNumber3,
+                                    long(null)
+                                )
+  | where isnotempty(DeviceCustomNumber3)
+  | extend Translatedoperation = case(
+  DeviceCustomNumber3 == "101", "Create Process", 
+  DeviceCustomNumber3 == "102", "Open",
+  DeviceCustomNumber3 == "103", "Terminate",
+  DeviceCustomNumber3 == "104", "Terminate", 
+  DeviceCustomNumber3 == "301", "Delete",
+  DeviceCustomNumber3 == "302", "Write",
+  DeviceCustomNumber3 == "303", "Access", 
+  DeviceCustomNumber3 == "401", "Create File",
+  DeviceCustomNumber3 == "402", "Close",
+  DeviceCustomNumber3 == "403", "Execute", 
+  DeviceCustomNumber3 == "501", "Invoke",
+  DeviceCustomNumber3 == "601", "Exploit",
+  DeviceCustomNumber3 == "9999", "Unhandled Operation",
+  "unknown")
+  | summarize OperationCount = count() by Translatedoperation, DstUserName
+  | sort by OperationCount desc 
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity

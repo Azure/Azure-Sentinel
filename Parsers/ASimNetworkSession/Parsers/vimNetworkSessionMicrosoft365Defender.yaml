@@ -1,19 +1,19 @@
 Parser:
-  Title: M365 Defender Network Sessions
-  Version: '0.1'
-  LastUpdated: Aug 4, 2021
+  Title:  Network Session ASIM filtering parser for M365 Defender for Endpoint
+  Version: '0.2'
+  LastUpdated: Jan 17, 2022
 Product:
   Name: M365 Defender for Endpoint
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.0'
+  Version: '0.2.3'
 References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
   Link: https:/aka.ms/MsASIM
 Description: |
-  This Query Parser maps M365 Defender network events to the Advanced SIEM Information Model Network Session schema.
+  This ASIM parser supports filtering and normalizing M365 Defender for Endpoint to the ASIM Network Session schema.
 ParserName: vimNetworkSessionMicrosoft365Defender
 EquivalentBuiltInParser: _Im_NetworkSession_Microsoft365Defender
 ParserParams:
@@ -29,15 +29,12 @@ ParserParams:
   - Name: dstipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: dstportnumber
     Type: int
     Default: int(null)
-  - Name: url_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: httpuseragent_has_any
-    Type: dynamic 
-    Default: dynamic([])
   - Name: hostname_has_any
     Type: dynamic
     Default: dynamic([])
@@ -56,9 +53,8 @@ ParserQuery: |
     , endtime:datetime=datetime(null)
     , srcipaddr_has_any_prefix:dynamic=dynamic([])
     , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , ipaddr_has_any_prefix:dynamic=dynamic([])
     , dstportnumber:int=int(null)
-    , url_has_any:dynamic=dynamic([])
-    , httpuseragent_has_any:dynamic=dynamic([])
     , hostname_has_any:dynamic=dynamic([])
     , dvcaction:dynamic=dynamic([])
     , eventresult:string='*'
@@ -70,29 +66,43 @@ ParserQuery: |
     ,'ConnectionRequest','Outbound', true
     ,'InboundConnectionAccepted', 'Inbound', false
     ,'ConnectionFound', 'Unknown', false
-    ,'ListeningConnectionCreated', 'Listening', false 
+    ,'ListeningConnectionCreated', 'Listen', false 
   ];
+  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
   // -- Common preprocessing to both input and outbound events
-  let RawNetworkEvents =
-    DeviceNetworkEvents | where not(disabled)
-    // ***************  Prefilterring *****************************************************************
-    |where (isnull(starttime) or TimeGenerated>=starttime) 
-           and (array_length(httpuseragent_has_any) ==0) // if filtering by ua - return nothing
-           and (array_length(dvcaction)==0 )     /// if filtered by action return nothing
+  let RawNetworkEvents = (select_outbound:boolean) {
+    DeviceNetworkEvents 
+    | where    (isnull(starttime) or TimeGenerated>=starttime) 
            and (isnull(endtime) or TimeGenerated<=endtime) 
-           and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort) 
-           and (array_length(url_has_any)==0  or RemoteUrl has_any (url_has_any)) 
-           and (array_length(srcipaddr_has_any_prefix)==0 
-                or has_any_ipv4_prefix(RemoteIP,srcipaddr_has_any_prefix)
-                or has_any_ipv4_prefix(LocalIP ,srcipaddr_has_any_prefix)
-                )
-           and (array_length(dstipaddr_has_any_prefix)==0 
-                or has_any_ipv4_prefix(RemoteIP,dstipaddr_has_any_prefix)
-                or has_any_ipv4_prefix(LocalIP ,dstipaddr_has_any_prefix)
-                )
+    | where not(disabled)
+    | lookup DirectionLookup on ActionType
+    | where Outbound == select_outbound
+    // ***************  Prefilterring *****************************************************************
+    |where  (array_length(dvcaction)==0 )     /// if filtered by action return nothing
+           and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort)
            and (array_length(hostname_has_any)==0 
               or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any)
-              ) 
+              )
+    | extend temp_isSrcMatch=( // only one of each pair has_any_ipv4_prefix is calculated
+                    (Outbound and has_any_ipv4_prefix(LocalIP,src_or_any))
+                    or
+                    (not(Outbound) and has_any_ipv4_prefix(RemoteIP,src_or_any))
+                    ) 
+           , temp_isDstMatch=(
+                    (not(Outbound) and has_any_ipv4_prefix(LocalIP,dst_or_any))
+                    or
+                    (Outbound and has_any_ipv4_prefix(RemoteIP,dst_or_any))
+                    ) 
+    | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+    ) 
+    | where ASimMatchingIpAddr != "No match"
+    | project-away temp_*
     | extend EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
     | where (eventresult=='*' or EventResult==eventresult)
     // *************** / Prefilterring *****************************************************************
@@ -103,43 +113,55 @@ ParserQuery: |
       EventProduct = 'M365 Defender for Endpoint',
       EventVendor = 'Microsoft',
       EventSchema = 'NetworkSession',
-      EventSchemaVersion = '0.1.0',
+      EventSchemaVersion = '0.2.3',
       EventStartTime = TimeGenerated,
       EventEndTime = TimeGenerated,
       EventType = 'NetworkSession',
       EventSeverity = "Informational",
       DvcIdType = 'MDEid'
-    | project-rename
-      NetworkProtocol = Protocol,
-      DvcFQDN = DeviceName
+    | extend
+      RemoteUrl = extract (@"(?:https?://)?(.*)", 1, RemoteUrl)
     | extend
       User = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)),
       UsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),
-      SplitHostname = split(DvcFQDN,"."),
-      SplitUrl = split(RemoteUrl,".")
+      SplitHostname = split(DeviceName,"."),
+      SplitUrl = split(RemoteUrl,"."),
+      NetworkProtocol = case (
+        Protocol startswith "Tcp", "TCP",
+        Protocol == "Unknown", "",
+        toupper(Protocol)
+      )
     | extend  
       DvcHostname = tostring(SplitHostname[0]),
-      DvcDomain = strcat_array(array_slice(SplitHostname, 1, -1), '.'),
+      DvcDomain = tostring(strcat_array(array_slice(SplitHostname, 1, -1), '.')),
+      DvcFQDN = iif (DeviceName contains ".", DeviceName, ""),
       UrlHostname = tostring(SplitUrl[0]),
-      UrlDomain = strcat_array(array_slice(SplitUrl, 1, -1), '.'),
-      SrcDomainType = "FQDN",
-      DvcDomainType = "FQDN",
-      DstDomainType = "FQDN",
+      UrlDomain = tostring(strcat_array(array_slice(SplitUrl, 1, -1), '.')),
+      UrlFQDN = iif(RemoteUrl contains ".", RemoteUrl, "")
+    | extend
+      DvcDomainType = iif(DvcFQDN != "", "FQDN", ""),
+      UrlDomainType = iff(UrlFQDN != "", "FQDN", ""),
       DvcIpAddr = LocalIP
     | extend
       Dvc = DvcHostname  
     | project-rename
       DvcId = DeviceId
     | project-away SplitUrl, SplitHostname
-  ;
+  };
   let OutboundNetworkEvents = 
-    RawNetworkEvents
+    RawNetworkEvents (true)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==RemotePort)
-        and (array_length(hostname_has_any)==0 or UrlHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
-    | lookup DirectionLookup on ActionType
-    | where Outbound
+    | extend temp_isMatchSrcHostname=DvcHostname has_any(hostname_has_any)
+           , temp_isMatchDstHostname=UrlHostname has_any(hostname_has_any)
+    |extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"-",
+                                temp_isMatchDstHostname and temp_isMatchSrcHostname, "Both",
+                                temp_isMatchDstHostname, "DstHostname",
+                                temp_isMatchSrcHostname, "SrcHostname",
+                                  "No match"
+                              )
+    | where ASimMatchingHostname != "No match"
     | project-rename
        DstIpAddr = RemoteIP,
        SrcIpAddr = LocalIP,
@@ -158,11 +180,13 @@ ParserQuery: |
       DstHostname = UrlHostname
     | project-rename
        DstDomain = UrlDomain,
-       DstFQDN = RemoteUrl
+       DstFQDN = UrlFQDN,
+       DstDomainType = UrlDomainType
     | extend  
        SrcHostname = DvcHostname,
        SrcDomain = DvcDomain,
-       SrcFQDN = DvcDomain
+       SrcFQDN = DvcFQDN,
+       SrcDomainType = DvcDomainType
     // Processes
     | extend
        SrcProcessId = tostring(InitiatingProcessId),
@@ -175,13 +199,6 @@ ParserQuery: |
        SrcProcessTokenElevation = InitiatingProcessTokenElevation,
        ParentProcessName = InitiatingProcessParentFileName,
        ParentProcessCreationTime = InitiatingProcessParentCreationTime
-       // SrcProcessFileSize = InitiatingProcessFileSize,
-       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
-       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
-       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
-       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
-       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
-       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
     | extend
        Process = SrcProcessName,
        ProcessId = SrcProcessId,
@@ -189,13 +206,16 @@ ParserQuery: |
        SrcAppType = "Process"
   ;
   let InboundNetworkEvents = 
-    RawNetworkEvents
+    RawNetworkEvents (false)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==LocalPort)
-        and (array_length(hostname_has_any)==0 or DvcHostname has_any (hostname_has_any))
     // *************** /Postfilterring *****************************************************************
-    | lookup DirectionLookup on ActionType
-    | where not(Outbound)
+      |extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"",
+                                  UrlHostname has_any(hostname_has_any), "SrcHostname",
+                                  DvcHostname has_any(hostname_has_any), "DstHostname",
+                                  "No match"
+                              )
+    | where ASimMatchingHostname != "No match"
     | project-rename
        SrcIpAddr = RemoteIP,
        DstIpAddr = LocalIP,
@@ -205,16 +225,16 @@ ParserQuery: |
        DstUserAadId = InitiatingProcessAccountObjectId,
        DstUserId = InitiatingProcessAccountSid,
        DstUserUpn = InitiatingProcessAccountUpn,
-       DstUserDomain = InitiatingProcessAccountDomain
+       DstUserDomain = InitiatingProcessAccountDomain,
+       SrcDomain = UrlDomain,
+       SrcFQDN = UrlFQDN,
+       SrcDomainType = UrlDomainType
     | extend
        DstUsername = User,
        DstDvcId = DvcId,
        DstDvcIdType = 'MDEid',
-       DstUserIdType = 'SID'
-   | project-rename
-       SrcHostname = UrlHostname,
-       SrcDomain = UrlDomain,
-       SrcFQDN = RemoteUrl
+       DstUserIdType = 'SID',
+       SrcHostname = UrlHostname
     | extend  
        DstHostname = DvcHostname,
        DstDomain = DvcDomain,
@@ -231,13 +251,6 @@ ParserQuery: |
        DstProcessTokenElevation = InitiatingProcessTokenElevation,
        ParentProcessName = InitiatingProcessParentFileName,
        ParentProcessCreationTime = InitiatingProcessParentCreationTime
-       // SrcProcessFileSize = InitiatingProcessFileSize,
-       // SrcProcessCompany = InitiatingProcessVersionInfoCompanyName,
-       // SrcProcessFileProduct = InitiatingProcessVersionInfoProductName,
-       // SrcProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
-       // SrcProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
-       // SrcProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
-       // SrcProcessFileDescription = InitiatingProcessVersionInfoFileDescription
     | extend
        Process = DstProcessName,
        ProcessId = DstProcessId,
@@ -246,9 +259,9 @@ ParserQuery: |
   ;
   union InboundNetworkEvents, OutboundNetworkEvents
   | extend // aliases
-     Hostname = DstHostname,
+     Hostname = UrlHostname,
      IpAddr = SrcIpAddr,
      Src = SrcIpAddr,
      Dst = DstIpAddr 
   };
-  M365Defender(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, dstportnumber, url_has_any, httpuseragent_has_any, hostname_has_any, dvcaction, eventresult, disabled)
+  M365Defender (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

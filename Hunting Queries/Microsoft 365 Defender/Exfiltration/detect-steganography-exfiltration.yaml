@@ -1,0 +1,37 @@
+id: e0003bf6-b5f2-4dd1-a130-8651eb0b9f04
+name: detect-steganography-exfiltration
+description: |
+  This query can be used to detect instances of malicious users who attempt to create steganographic images and then immediately browse to a webmail URL.  This query would require additional investigation to determine whether the co-occurrance of generating a steganographic image and browsing to a webmail URL is an indication of a malicious event.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceFileEvents
+  - DeviceNetworkEvents
+tactics:
+- Exfiltration
+query: |
+  let stegProcesses= view() {
+  let stegnames = pack_array ("camouflage","crypture", "hidensend", "openpuff","picsel","slienteye","steg","xiao");
+  let ProcessQuery = view()
+  {
+  DeviceProcessEvents
+  | where Timestamp > ago(30d)
+  | where ProcessCommandLine has_any (stegnames)
+  };
+  let FileQuery = view(){
+  DeviceFileEvents
+  | where FileName has_any (stegnames)
+  };
+  union ProcessQuery, FileQuery
+  | project StegProcessTimestamp=Timestamp, DeviceName, InitiatingProcessAccountName, FileName, InitiatingProcessFileName, InitiatingProcessParentFileName, InitiatingProcessCommandLine};
+  let WebMailUsage=view(){
+  // This query finds network communication to specific webmail URL
+  let webmailURLs = pack_array ("mail.google.com", "mail.yahoo.com", "mail.protonmail.com"); // Change or append additional webmail URLs
+  DeviceNetworkEvents 
+  | where Timestamp > ago(30d)
+  and RemoteUrl contains webmailURLs};
+  WebMailUsage
+  | join stegProcesses on DeviceName
+  | where (Timestamp - StegProcessTimestamp) between (0min..30min)
+  |project StegProcessTimestamp,Timestamp,RemoteUrl,DeviceName,InitiatingProcessAccountName,FileName
