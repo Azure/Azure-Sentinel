@@ -18,11 +18,12 @@ Class Parser {
 
 function run {
     $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
-    $global:schemas | ForEach-Object { testSchema($_) }
+    $modifiedSchemas = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
+    $modifiedSchemas | ForEach-Object { testSchema($_) }
 }
 
 function testSchema([string] $schema) {
-    $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/ASim$($schema)/Parsers"
+    $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/$($schema)/Parsers"
     Write-Host "Testing $($schema) schema, $($parsersAsObjects.count) parsers were found"
     $parsersAsObjects | ForEach-Object {
         $functionName = "$($_.EquivalentBuiltInParser)V$($_.Parser.Version.Replace('.',''))"
@@ -30,7 +31,7 @@ function testSchema([string] $schema) {
             Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
         }
         else {
-            testParser([Parser]::new($functionName, $_.ParserQuery, $schema, $_.ParserParams))
+            testParser([Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams))
         }
     }
 }
