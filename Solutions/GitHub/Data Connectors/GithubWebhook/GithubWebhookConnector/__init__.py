@@ -12,7 +12,6 @@ import re
 sentinel_customer_id = os.environ.get('WorkspaceID')
 sentinel_shared_key = os.environ.get('WorkspaceKey')
 sentinel_log_type =  'githubscanaudit'
-print(sentinel_log_type)
 logging.info("Sentinel Logtype:{}".format(sentinel_log_type))
 logAnalyticsUri = os.environ.get('LogAnaltyicsUri')
 
@@ -58,9 +57,15 @@ def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
 
 def customizeJson(inputJson):
     required_fields_data = {}
+    count = 1
     newJson_dict = json.loads(inputJson)
+    #for key, value in newJson_dict.items():
+       #required_fields_data[key] = str(value)
     for key, value in newJson_dict.items():
-       required_fields_data[key] = str(value)
+        if(type(value) == type({})):
+         required_fields_data[key] = json.dumps(value, indent=4)
+        else:
+         required_fields_data[key] = value
     return required_fields_data  
      
 # Build the API signature

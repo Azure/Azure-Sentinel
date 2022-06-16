@@ -27,6 +27,7 @@ Following are the configuration steps to deploy Function App.
 	"Workspace Key": The Sentinel Log Analytics Workspace Key  
 	
 ## Post Deployment Steps
+   ### Build Function app endpoint
 1. Build the funtion app endpoint to which Github needs to be connected and post the events here.
 2. Follow the below steps to buidl the endpoint. 
 	 * Go to Azure function Overview page and go to url which is in the format of 
