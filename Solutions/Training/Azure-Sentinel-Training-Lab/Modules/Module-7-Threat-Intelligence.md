@@ -79,7 +79,7 @@ After we ingested our TI data into the ThreatIntelligenceIndicator table, our mi
 
  
 1. On the Microsoft Sentinel left menu press on the Threat intelligence (Preview)
-This menu id a visual representation of the ThreatIntelligenceIndicator table.
+This menu is a visual representation of the ThreatIntelligenceIndicator table.
 
 ![Acitve](../Images/m7-Tiblade.png)
 
