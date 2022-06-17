@@ -64,7 +64,7 @@ The Azure AD app is later required to use it as service principle for the [Azure
 11. Click **New Client Secret**.
 12. Enter a description, select **never**.  Click **Add**.<br>
 ![Secret](./images/Picture3.png)<br>
-13. **IMPORTANT**.  Click **copy** next to the new secret and paste it somewhere temporaily.  You can not come back to get the secret once you leave the blade.
+13. **IMPORTANT**.  Click **copy** next to the new secret and paste it somewhere temporarily.  You can not come back to get the secret once you leave the blade.
 14. Copy the **client Id** from the application properties and paste it somewhere.
 15. Also copy the **tenant Id** from the AAD directory properties blade.
 
@@ -78,7 +78,7 @@ For the deployment of [Azure Function App](https://github.com/Azure/Azure-Sentin
 After successfully creating the service principles, run the following PowerShell script to register the API subscription.
 1. Open a PowerShell terminal.
 2. Run the following, replacing variables with strings from the previous steps.
-```powerhshell
+```powershell
 $ClientID = "<GUID> from AAD App Registration"
 $ClientSecret = "<clientSecret> from AAD App Registration"
 $loginURL = "https://login.microsoftonline.com/"
