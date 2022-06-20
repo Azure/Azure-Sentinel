@@ -48,6 +48,8 @@ This alert leverages Defender for IoT to detect an unauthorized DHCP configurati
 This alert leverages Defender for IoT to detect unauthorized changes to PLC ladder logic code indicating new functionality in the PLC, improper configuration of an application, or malicious activity on the network.<br>
 ### 14) Unauthorized remote access to the network (Microsoft Defender for IoT)
 This alert leverages Defender for IoT to detect unauthorized remote access to network devices, if another device on the network is compromised, target devices can be accessed remotely, increasing the attack surface.<br>
+### 15) No traffic on sensor detected (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect that a sensor can no longer detect the network traffic, which indicates that the system is potentially insecure.<br>
 
 ## Playbooks
 ### 1) Auto Close Incidents
