@@ -188,7 +188,7 @@ Once you have a working POC, you are ready to build, validate the data connector
 >>**Note**: This json is loaded only in your session and not shared out. The logo won’t show up since it’s not part of the json. Connector logo will be included when Microsoft builds and deploys the data connector.
 
 4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized raw sample data/logs for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. Sample data is extremely useful when troubleshooting issues, supporting and/or enhancing the Data Connectors with more Security-focused content (such as Analytics, Hunting Queries, Workbooks, etc.). The following guidelines are designed to help committing sample data in a usable format into GitHub:
-    1.  The extension for the file can be .json (for API based Data Connector) / .txt (for Syslog/CEF based data Connectors) with the column names / property names adhering to the data type property names. Post-ingestion, raw logs and table schema.
+    1.  The extension for the file can be .json (for API based Data Connector) / .txt (for Syslog/CEF based data Connectors) with the column names / property names adhering to the data type property names.
 
     2. Submit the sample data via a GitHub PR to the [Sample data folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the Sample data folder. 
     
