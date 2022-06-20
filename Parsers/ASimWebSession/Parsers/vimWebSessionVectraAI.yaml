@@ -102,18 +102,17 @@ ParserQuery: |
         HttpReferrer = referrer_s,
         HttpRequestMethod = method_s,
         HttpUserAgent = user_agent_s,
-        NetworkSessionId = community_id_s,
-        SrcIpAddr = id_orig_h_s,
         DvcId = sensor_uid_s,
+        // -- community id is just a hash of addresses and ports, and not unique for the session
+        // NetworkSessionId = community_id_s,
+        SrcIpAddr = id_orig_h_s,
         SrcSessionId = orig_sluid_s,
         DstSessionId = resp_sluid_s,
         HttpResponseCacheControl = response_cache_control_s,
         HttpRequestCacheControl = request_cache_control_s,
-        HttpCookie = cookie_s
+        HttpCookie = cookie_s,
         HttpResponseExpires = response_expires_s,
         HttpIsProxied = is_proxied_b,
-        HttpContentType = resp_mime_types_s,
-        HttpRequestContentType = orig_mime_type_s,
         EventOriginalStatusDetails = status_msg_s
     | extend
         DstHostname = iff (DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "", DstDescription),
@@ -124,39 +123,51 @@ ParserQuery: |
         DstPortNumber = toint(id_resp_p_d),
         EventCount = toint(1),
         EventStartTime = unixtime_milliseconds_todatetime(ts_d),
-        EventOriginalSubType = split(metadata_type_s, '_')[1],
+        EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),
         EventProduct = 'Vectra Stream',
         EventResultDetails = tostring(toint(status_code_d)),
         HttpRequestBodyBytes = tolong(request_body_len_d),
-        HttpRequestBodyBytes = tolong(response_body_len_d),
+        HttpResponseBodyBytes = tolong(response_body_len_d),
         HttpRequestHeaderCount = toint(request_header_count_d),
         HttpResponseHeaderCount = toint(response_header_count_d),
         EventSchema = 'WebSession',
-        EventSchemaVersion='0.1.0',
-        SrcDvcIdType = 'VectraId',
-        DstDvcIdType = 'VectraId',
+        EventSchemaVersion='0.2.3',
         DvcIdType = 'VectraId',
-        EventSeverity = iff (EventResult == 'Success', 'Informational', 'Warning'),
+        EventSeverity = iff (EventResult == 'Success', 'Informational', 'Low'),
         EventType = 'HTTPsession',
         EventVendor = 'Vectra AI',
         SrcBytes = tolong(orig_ip_bytes_d),
         SrcPackets = tolong(orig_pkts_d),
         SrcPortNumber = toint(id_orig_p_d),
-        Url = strcat('http://', host_s, uri_s), // ?? What's the protocol?
-        resp_mime_types_s -> [ "text/xml; charset=utf-8" ]
+        Url = strcat('http://', host_s, uri_s) // ?? What's the protocol?
     | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
     | lookup NetworkProtocolVersionLookup on id_ip_ver_s
+    // -- preserving non-normalized important fields
+    | project-rename 
+        first_orig_resp_data_pkt = first_orig_resp_data_pkt_s,
+        first_resp_orig_data_pkt = first_resp_orig_data_pkt_s,
+        orig_huid = orig_huid_s,
+        resp_huid = resp_huid_s,
+        community_id = community_id_s,
+        resp_multihome = resp_multihomed_b,
+        host_multihomed = host_multihomed_b
+    | extend
+        first_orig_resp_data_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
+        first_orig_resp_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
+        first_resp_orig_data_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
+        first_resp_orig_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
     | project-away
-        *_d, *_s, *_b, *_g
+        *_d, *_s, *_b, *_g, Computer, MG, ManagementGroupName, RawData, SourceSystem
     | extend
         Dst = DstIpAddr,
+        Dvc = DvcId,
         EventEndTime = EventStartTime,
         Hostname = DstHostname,
         HttpStatusCode = EventResultDetails,
         IpAddr = SrcIpAddr,
         NetworkBytes = SrcBytes + DstBytes,
         NetworkPackets = SrcPackets + DstPackets,
-        SessionId = NetworkSessionId,
+        //SessionId = NetworkSessionId,
         Src = SrcIpAddr,
         UserAgent = HttpUserAgent 
   };
