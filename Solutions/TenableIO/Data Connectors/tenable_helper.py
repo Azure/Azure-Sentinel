@@ -46,6 +46,7 @@ class TenableStatus(Enum):
     processing = 'PROCESSING'
     sending_to_queue = 'SENDING_TO_QUEUE'
     sent_to_queue = 'SENT_TO_QUEUE'
+    sent_to_queue_failed = 'SENT_TO_QUEUE_FAILED'
     sent_to_sub_orchestrator = 'SENT_TO_SUB_ORCHESTRATOR'
 
 class TenableExportType(Enum):
