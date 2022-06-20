@@ -79,7 +79,7 @@ The post-ingestion logs are exported from log analytics using the Export option 
 
 ### Schema
 
-The schema, imilar to post-ingestion logs can be exported from log analytics using the Export option in the query window. The exported file is a csv file. This is import to understand the schema of the table that the logs are ingested in.
+The schema, similar to post-ingestion logs can be exported from log analytics using the Export option in the query window. The exported file is a csv file. This is import to understand the schema of the table that the logs are ingested in.
 
 ## Log Extraction Guidance
 
