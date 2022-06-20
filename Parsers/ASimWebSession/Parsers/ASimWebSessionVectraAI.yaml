@@ -41,29 +41,6 @@ ParserQuery: |
         'ipv4', 'IPv4',
         'ipv6', 'IPv6'
     ];
-    let remove_protocol_from_list = (list:dynamic) 
-    {
-        print list 
-        | mv-apply l = print_0 to typeof(string) on
-        ( 
-          extend l = extract_all(@'^(?i:.*?://)?([^/])(.*)$', l)[0]
-        ) 
-        | project l
-    };
-let parser = (disabled: bool = false)
-  {
-    let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)
-    [
-        false, true, 'Inbound',
-        true, false, 'Outbound',
-        true, true, 'Local',
-        false, false, 'Local'
-    ];
-    let NetworkProtocolVersionLookup = datatable(id_ip_ver_s:string, NetworkApplicationProtocol:string)
-    [
-        'ipv4', 'IPv4',
-        'ipv6', 'IPv6'
-    ];
     let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
     VectraStream_CL
     | where metadata_type_s == 'metadata_httpsessioninfo'
@@ -89,8 +66,6 @@ let parser = (disabled: bool = false)
         HttpCookie = cookie_s,
         HttpResponseExpires = response_expires_s,
         HttpIsProxied = is_proxied_b,
-        //HttpContentType = resp_mime_types_s,
-        //HttpRequestContentType = orig_mime_type_s,
         EventOriginalStatusDetails = status_msg_s
     | extend
         DstHostname = iff (DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "", DstDescription),
@@ -101,7 +76,7 @@ let parser = (disabled: bool = false)
         DstPortNumber = toint(id_resp_p_d),
         EventCount = toint(1),
         EventStartTime = unixtime_milliseconds_todatetime(ts_d),
-        EventOriginalSubType = split(metadata_type_s, '_')[1],
+        EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),
         EventProduct = 'Vectra Stream',
         EventResultDetails = tostring(toint(status_code_d)),
         HttpRequestBodyBytes = tolong(request_body_len_d),
@@ -111,22 +86,19 @@ let parser = (disabled: bool = false)
         EventSchema = 'WebSession',
         EventSchemaVersion='0.2.3',
         DvcIdType = 'VectraId',
-        EventSeverity = iff (EventResult == 'Success', 'Informational', 'Warning'),
+        EventSeverity = iff (EventResult == 'Success', 'Informational', 'Low'),
         EventType = 'HTTPsession',
         EventVendor = 'Vectra AI',
         SrcBytes = tolong(orig_ip_bytes_d),
         SrcPackets = tolong(orig_pkts_d),
         SrcPortNumber = toint(id_orig_p_d),
         Url = strcat('http://', host_s, uri_s) // ?? What's the protocol?
-        // resp_mime_types_s -> [ "text/xml; charset=utf-8" ]
     | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
     | lookup NetworkProtocolVersionLookup on id_ip_ver_s
     // -- preserving non-normalized important fields
     | project-rename 
         first_orig_resp_data_pkt = first_orig_resp_data_pkt_s,
         first_resp_orig_data_pkt = first_resp_orig_data_pkt_s,
-        orig_sluid = orig_sluid_s, 
-        resp_sluid = resp_sluid_s,
         orig_huid = orig_huid_s,
         resp_huid = resp_huid_s,
         community_id = community_id_s,
@@ -138,7 +110,7 @@ let parser = (disabled: bool = false)
         first_resp_orig_data_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
         first_resp_orig_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
     | project-away
-        *_d, *_s, *_b, *_g
+        *_d, *_s, *_b, *_g, Computer, MG, ManagementGroupName, RawData, SourceSystem
     | extend
         Dst = DstIpAddr,
         Dvc = DvcId,
@@ -148,8 +120,8 @@ let parser = (disabled: bool = false)
         IpAddr = SrcIpAddr,
         NetworkBytes = SrcBytes + DstBytes,
         NetworkPackets = SrcPackets + DstPackets,
-        SessionId = NetworkSessionId,
+        //SessionId = NetworkSessionId,
         Src = SrcIpAddr,
         UserAgent = HttpUserAgent 
   };
-  parser(disabled)
+  parser (disabled)
