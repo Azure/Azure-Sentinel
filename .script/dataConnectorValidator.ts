@@ -74,7 +74,7 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
     {
         return ConnectorCategory.AzureFunction;
     }
-    else if(dataTypes[0].name.includes("meraki") && JSON.stringify(instructionSteps).includes("\"type\":\"InstallAgent\""))
+    else if((dataTypes[0].name.includes("meraki") || dataTypes[0].name.includes("vcenter")) && JSON.stringify(instructionSteps).includes("\"type\":\"InstallAgent\""))
     {
         return ConnectorCategory.SysLog;
     }
