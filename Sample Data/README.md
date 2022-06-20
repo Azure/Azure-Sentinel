@@ -32,7 +32,7 @@ _*Guidance on how to extract these files is below._
 
    Below is a sample of a syslog message in its **raw** form:
    ```
-		<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] BOMAn application event log entry.
+	<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] BOMAn application event log entry.
    ```
    Raw logs from API-based connectors can be extracted by leveraging an API usage platform (such as Postman) and using it to make an API call to the product and capturing a response. Below is a sample API response captured in its **raw** form:
 
@@ -79,12 +79,12 @@ The post-ingestion logs are exported from log analytics using the Export option 
 
 ### Schema
 
-The schema, similar to post-ingestion logs can be exported from log analytics using the Export option in the query window. The exported file is a csv file. This is import to understand the schema of the table that the logs are ingested in.
+The schema, similar to post-ingestion logs can be exported from log analytics using the Export option in the query window. The exported file is a csv. This is important to understand the schema of the table that the logs are ingested in.
 
 ## Log Extraction Guidance
 
 ### Extracting ingested logs from Log Analytics Workspace
-Ingested logs can be extracted by running a KQL query in the Logs window in Microsoft Sentinel/Log Analytics Workspace. Typing a basic query to get all all logs ingested by a Data Connector will get you the logs along with the defined schema. After you run the query, click on Export and then click Export to CSV - all columns.
+Ingested logs can be extracted by running a KQL query in the Logs window in Microsoft Sentinel/Log Analytics Workspace. Typing a basic query to get all all logs ingested by a Data Connector will get you the logs along with the defined schema. After you run the query, click on Export and then click **Export to CSV - all columns**.
 
 ![ExportToCSV](https://github.com/Azure/Azure-Sentinel/blob/prtanej-SampleDataGuidanceUpdate/Sample%20Data/Media/ExportToCSV.png)
 
@@ -109,9 +109,10 @@ TableName | getschema
 ```
 **Note:** Replace "TableName" in the above query with the actual name of the table before executing it in Log Analytics. This will return the schema of the table which can then be exported to a csv file using the Export option as described above for post-ingested logs.
 
+![ExportSchemaToCSV](https://github.com/Azure/Azure-Sentinel/blob/prtanej-SampleDataGuidanceUpdate/Sample%20Data/Media/ExportSchemaToCSV.png)
 
 ## Sample data upload to GitHub
 
-Once you gathered all three files, submit them via a GitHub PR to the [Sample data folder](https://aka.ms/azuresentinelgithubsampledata) in the appropriate subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the subfolder. The name of the new folder must be same as the name of the Data Connector. Inside this folder, add the three files described above.
+Once you've gathered all three files, submit them via a GitHub PR to the [Sample data folder](https://aka.ms/azuresentinelgithubsampledata) in the appropriate subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the subfolder. The name of the new folder must be same as the name of the Data Connector. Inside this folder, add the three files described above.
 
 **Important:** Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
