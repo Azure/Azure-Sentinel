@@ -33,7 +33,7 @@ _*Guidance on how to extract these files is below._
    Below is a sample of a syslog message in its **raw** form:
    ```
 		<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"] BOMAn application event log entry.
-	```
+   ```
    Raw logs from API-based connectors can be extracted by leveraging an API usage platform (such as Postman) and using it to make an API call to the product and capturing a response. Below is a sample API response captured in its **raw** form:
 
 	[
@@ -113,3 +113,5 @@ TableName | getschema
 ## Sample data upload to GitHub
 
 Once you gathered all three files, submit them via a GitHub PR to the [Sample data folder](https://aka.ms/azuresentinelgithubsampledata) in the appropriate subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the subfolder. The name of the new folder must be same as the name of the Data Connector. Inside this folder, add the three files described above.
+
+**Important:** Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
