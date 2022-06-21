@@ -1,5 +1,5 @@
 # Deploy Function App for getting Office 365 Management API data into Azure Sentinel
-This function app will poll O365 Activity Managment API every 5 mins for logs.  It is designed to get Audit.General and DLP.All events.
+This function app will poll O365 Activity Management API every 5 mins for logs.  It is designed to get Audit.General and DLP.All events.
 
 ## How to Ingest Office 365 Audit.General and DLP.All Activity Logs into Azure Sentinel 
 The Office 365 data connector in Azure Sentinel supports ongoing user and admin activity logs for Microsoft 365 workloads, Exchange Online, SharePoint Online and Microsoft Teams. The activity logs include details of action such as file downloads, access request send, change to group event, mailbox operations. Once the activity logs are ingested into Azure Sentinel, it can be used for custom analytics rules, hunting, visualization as well as for investigation process. 
@@ -46,7 +46,7 @@ The following tasks describe the necessary preparation and configurations steps.
 Onboarding Azure Sentinel is not part of this document post. However, required guidance can be found [here](https://docs.microsoft.com/azure/sentinel/quickstart-onboard). 
 
 ### Register an application in Azure AD 
-The Azure AD app is later required to use it as service principle for the [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) app. 
+The Azure AD app is later required to use it as service principle for the [Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) app. 
 
 1. Go to **Azure Active Directory** / **App Registrations**
 2. Create **New Registration**<br>
@@ -55,7 +55,7 @@ The Azure AD app is later required to use it as service principle for the [Azure
 4. Click **API Permissions** Blade.
 5. Click **Add a Permission**.  
 6. Click **Office 365 Management APIs**.
-7. Click **Appplication Permissions**
+7. Click **Application Permissions**
 8. Check **ActivityFeed.Read** and **ActivityFeed.ReadDlp**.  Click **Add permissions**.<br>
 ![Permissions](./images/Picture5.png)<br>
 9. Click **Grant admin consent for ...**.<br>
@@ -64,11 +64,11 @@ The Azure AD app is later required to use it as service principle for the [Azure
 11. Click **New Client Secret**.
 12. Enter a description, select **never**.  Click **Add**.<br>
 ![Secret](./images/Picture3.png)<br>
-13. **IMPORTANT**.  Click **copy** next to the new secret and paste it somewhere temporaily.  You can not come back to get the secret once you leave the blade.
+13. **IMPORTANT**.  Click **copy** next to the new secret and paste it somewhere temporarily.  You can not come back to get the secret once you leave the blade.
 14. Copy the **client Id** from the application properties and paste it somewhere.
 15. Also copy the **tenant Id** from the AAD directory properties blade.
 
-For the deployment of [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data), make a note of following settings: 
+For the deployment of [Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data), make a note of following settings: 
 - The Azure AD Application ID 
 - The Azure AD Application Secret 
 - The Tenant ID 
@@ -78,9 +78,9 @@ For the deployment of [Azure Funtion App](https://github.com/Azure/Azure-Sentine
 After successfully creating the service principles, run the following PowerShell script to register the API subscription.
 1. Open a PowerShell terminal.
 2. Run the following, replacing variables with strings from the previous steps.
-```powerhshell
+```powershell
 $ClientID = "<GUID> from AAD App Registration"
-$ClientSecret = "<clientSecret> from AAD App Registrtion"
+$ClientSecret = "<clientSecret> from AAD App Registration"
 $loginURL = "https://login.microsoftonline.com/"
 $tenantdomain = "<domain>.onmicrosoft.com"
 $TenantGUID = "<tenantguid> from AAD"
@@ -102,13 +102,13 @@ Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.offic
 ![Output](./images/Picture7.png)<br>
 
 ### Deploy the Azure Function App 
-Thanks to the published ARM template the deployment of the [Azure Funtion App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) is done with just a few clicks. 
+Thanks to the published ARM template the deployment of the [Azure Function App](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/O365%20Data) is done with just a few clicks. 
 1. Click to **Deploy the template / Deploy to Azure** below.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FO365%20Data%2Fazuredeploy.json)
 
 2. Now it is time to use the noted details from previous steps.  
-- Select the right **Subscription**, **Resource Group** and **Region** where you what to deploy the Azure Funtion App.  
+- Select the right **Subscription**, **Resource Group** and **Region** where you what to deploy the Azure Function App.  
 - Fill the Instance Details **Client ID**, **Client Secret**, **Tenant Domain**, **Publisher Guid**.  
 - There is also a need of **Workspace ID** and **Workspace Key** from where Azure Sentinel is deployed. 
 - The Content Types you can leave as default with **Audit.General**, or you can also add **DLP.All** as well. Or use only **DLP.All**. 
