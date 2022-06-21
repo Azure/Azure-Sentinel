@@ -113,6 +113,6 @@ TableName | getschema
 
 ## Sample data upload to GitHub
 
-Once you've gathered all three files, submit them via a GitHub PR to the [Sample data folder](https://aka.ms/azuresentinelgithubsampledata) in the appropriate subfolder - CEF / Syslog / Custom depending on the type of data connector. Create a new folder under the subfolder. The name of the new folder must be same as the name of the Data Connector. Inside this folder, add the three files described above.
+Once you've gathered all three files, submit them via a GitHub PR. All three files must reside inside a folder called "Sample Data" within the Solution folder. Example folder structure - "Azure-Sentinel/Solutions/<ProductName>/Sample Data/".
 
 **Important:** Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
