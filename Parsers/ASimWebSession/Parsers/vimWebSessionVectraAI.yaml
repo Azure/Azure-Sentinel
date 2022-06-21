@@ -54,6 +54,7 @@ ParserQuery: |
   let parser = (starttime: datetime = datetime(null),
                 endtime: datetime = datetime(null),
                 srcipaddr_has_any_prefix: dynamic = dynamic([]),
+                ipaddr_has_any_prefix: dynamic = dynamic([]),
                 url_has_any: dynamic = dynamic([]),
                 httpuseragent_has_any: dynamic = dynamic([]),
                 eventresultdetails_in: dynamic = dynamic([]),
@@ -72,6 +73,7 @@ ParserQuery: |
         'ipv4', 'IPv4',
         'ipv6', 'IPv6'
     ];
+    let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
     let remove_protocol_from_list = (list:dynamic) 
     {
         print list 
@@ -81,16 +83,27 @@ ParserQuery: |
         ) 
         | project l
     };
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
     VectraStream_CL
     | where not(disabled)
     | where (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
     | where metadata_type_s == 'metadata_httpsessioninfo'
-    | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(id_orig_h_s, srcipaddr_has_any_prefix))
     | where (array_length(url_has_any) == 0 or strcat(host_s, uri_s) has_any(url_has_any))
     | where (array_length(httpuseragent_has_any) == 0 or user_agent_s has_any(httpuseragent_has_any))
     | where (array_length(eventresultdetails_in) == 0 or tostring(status_code_d) has_any(eventresultdetails_in))
-    | extend EventResult = iff(tolong(status_code_d) >= 400, "Failure", "Success"),
+    | extend temp_SrcMatch=has_any_ipv4_prefix(id_orig_h_s,src_or_any)
+           , temp_DstMatch=has_any_ipv4_prefix(id_resp_h_s,ipaddr_has_any_prefix)
+    | extend ASimMatchingIpAddr=case(
+                                  array_length(src_or_any) == 0 ,"-",
+                                  temp_SrcMatch and temp_DstMatch, "Both",
+                                  temp_SrcMatch, "SrcIpAddr",
+                                  temp_DstMatch, "DstIpAddr",
+                                  "No match"
+                              )
+    | where ASimMatchingIpAddr != "No match" 
+    | project-away temp_*
+    | extend EventResult = iff(tolong(status_code_d) >= 400, "Failure", "Success")
     | where (eventresult == '*' or EventResult =~ eventresult)
     | project-rename
         DvcDescription = hostname_s,
@@ -139,7 +152,7 @@ ParserQuery: |
         SrcBytes = tolong(orig_ip_bytes_d),
         SrcPackets = tolong(orig_pkts_d),
         SrcPortNumber = toint(id_orig_p_d),
-        Url = strcat('http://', host_s, uri_s) // ?? What's the protocol?
+        Url = strcat('http://', host_s, uri_s)
     | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
     | lookup NetworkProtocolVersionLookup on id_ip_ver_s
     // -- preserving non-normalized important fields
@@ -171,4 +184,4 @@ ParserQuery: |
         Src = SrcIpAddr,
         UserAgent = HttpUserAgent 
   };
-  parser(starttime, endtime, srcipaddr_has_any_prefix, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult, disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresulteventresult, disabled=disabled)
