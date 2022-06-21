@@ -86,7 +86,7 @@ The schema, similar to post-ingestion logs can be exported from log analytics us
 ### Extracting ingested logs from Log Analytics Workspace
 Ingested logs can be extracted by running a KQL query in the Logs window in Microsoft Sentinel/Log Analytics Workspace. Typing a basic query to get all all logs ingested by a Data Connector will get you the logs along with the defined schema. After you run the query, click on Export and then click **Export to CSV - all columns**.
 
-![ExportToCSV](https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/Media/ExportSchemaToCSV.png) 
+![ExportToCSV](https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/Media/ExportToCSV.png) 
 
 ### Extracting raw logs for CEF/Syslog based connectors
 We have several ways to capture the original data that comes from syslog devices and that is getting ingested into syslog-ng or rsyslog sever. One of the way is to capture the traces on syslog-ng or rsyslog server over 514 port. You can use the following command to captre the traffic into pacp file 
