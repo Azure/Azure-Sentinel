@@ -88,7 +88,7 @@ This menu is a visual representation of the ThreatIntelligenceIndicator table.
 
 ![Acitve](../Images/m7-Tiblade1.png)
 	
-3. On the top area of the main blade, we can filter the list of the IOC's based on a specific parameters. In our case, we only ingested one type of IOC (IP), but the **Type** filter allow us to filter based on diffrent types. If we ingested IOC's from multiple TI data sources, the **source** filter allows us to slice it.
+3. On the top area of the main blade, we can filter the list of the IOC's based on a specific parameters. In our case, we only ingested one type of IOC (IP), but the **Type** filter allow us to filter based on different types. If we ingested IOC's from multiple TI data sources, the **source** filter allows us to slice it.
 
 ![Acitve](../Images/m7-ITbladeFilter.png)
 
