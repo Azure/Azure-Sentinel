@@ -1,6 +1,6 @@
 # Sysmon for Linux ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Sysmon for Linux.
+ARM template for ASIM NetworkSession schema parser for Sysmon for Linux.
 
 This ASIM parser supports filtering and normalizing Sysmon for Linux event 3 to the ASIM Network Session schema.
 
