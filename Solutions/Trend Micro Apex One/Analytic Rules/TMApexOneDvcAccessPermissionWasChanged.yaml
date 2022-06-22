@@ -1,0 +1,46 @@
+id: b463b952-67b8-11ec-90d6-0242ac120003
+name: ApexOne - Device access permissions was changed
+description: |
+  'Query shows device access permissions was changed.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TrendMicroApexOne
+    dataTypes:
+      - TMApexOneEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let threshold = 1;
+  TMApexOneEvent
+  | where EventMessage has "Device access"
+  | extend DeviceCustomNumber3 = coalesce(
+                                    column_ifexists("FieldDeviceCustomNumber3", long(null)),
+                                    DeviceCustomNumber3,
+                                    long(null)
+                                )
+  | extend Permission = case(
+                              DeviceCustomNumber3 == "0", "Modify", 
+                              DeviceCustomNumber3 == "1", "Read and execute",
+                              DeviceCustomNumber3 == "2", "Read",
+                              DeviceCustomNumber3 == "3", "List device content only", 
+                              DeviceCustomNumber3 == "4", "Block",
+                              "unknown"
+                        )
+  | summarize Permissions = make_set(Permission) by DstUserName
+  | extend PermissionCount = array_length(Permissions)
+  | where PermissionCount > threshold
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.1
+kind: Scheduled

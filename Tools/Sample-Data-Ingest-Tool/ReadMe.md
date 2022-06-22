@@ -48,7 +48,7 @@ Follow these steps to register a new application:
    1. From the left menu that opens, select **Access Control (IAM)**. Click Add, and select **Log Analytics Reader** for the Role in the blade that appears. Search for your AAD App by name, and then click save.
    1. You app is now setup to make API calls to your workspace.
 
-## Option 1: Post existing custom log data
+## Option 1: Post sample log data
 This option allows users to post the readily available sample custom data in the **Sample Data** directory to Azure Log Analytics Custom logs.
 
 ### Setup

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessCreateLinuxSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Create Event ASIM filtering parser for Sysmon for Linux",
+            "category": "ASIM",
+            "FunctionAlias": "vimProcessCreateLinuxSysmon",
+            "query": "let ParsedProcessEvent=(){\n    Syslog\n    // --------------------------------------------------------------------------------------\n    | where\n    (isnull(starttime)   or TimeGenerated >= starttime )\n    and (isnull(endtime) or TimeGenerated <= endtime )\n    and not(disabled)\n    and (eventtype=='*' or eventtype=='ProcessCreated')\n    and (array_length(commandline_has_all)==0 or SyslogMessage has_all (commandline_has_all)) \n    and (array_length(commandline_has_any)==0 or SyslogMessage has_any (commandline_has_any)) \n    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, commandline_has_any_ip_prefix) ) \n    and (array_length(actingprocess_has_any)==0 or SyslogMessage has_any (actingprocess_has_any)) \n    and (array_length(targetprocess_has_any)==0 or SyslogMessage has_any (targetprocess_has_any)) \n    and (array_length(parentprocess_has_any)==0)  /// ????\n    and (targetusername=='*' or SyslogMessage has targetusername)  \n    and (array_length(dvcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(HostIP,dvcipaddr_has_any_prefix) )\n    and (array_length(dvcname_has_any)==0 or SyslogMessage has_any (dvcname_has_any))   \n    // --------------------------------------------------------------------------------------\n    | where SyslogMessage has_all ('<Provider Name=\"Linux-Sysmon\"', '<EventID>1</EventID>')\n    | parse SyslogMessage with \n            *\n            '<EventRecordID>' EventRecordId:int '</EventRecordID>'\n            *\n            '<Computer>' SysmonComputer:string '</Computer>'\n            *\n            '<Data Name=\"RuleName\">'RuleName // parsing the XML using the original fields name - for readability \n            '</Data><Data Name=\"UtcTime\">'UtcTime\n            '</Data><Data Name=\"ProcessGuid\">{'ProcessGuid\n            '}</Data><Data Name=\"ProcessId\">'ProcessId:string\n            '</Data><Data Name=\"Image\">'Image\n            '</Data><Data Name=\"FileVersion\">'FileVersion\n            '</Data><Data Name=\"Description\">'Description\n            '</Data><Data Name=\"Product\">'Product\n            '</Data><Data Name=\"Company\">'Company'</Data>' *\n    // --------------------------------------------------------------------------------------\n    | where \n        (array_length(dvcname_has_any)==0 or SysmonComputer has_any (dvcname_has_any))\n        and (array_length(targetprocess_has_any)==0 or Image has_any (targetprocess_has_any))\n    // --------------------------------------------------------------------------------------\n    | extend  OriginalFileName = extract (@'\"OriginalFileName\">([^<]+)<',1,SyslogMessage) // this field exists in sysmon version 10.42 and above - using extact to avoid parsing failure\n    | parse SyslogMessage with *\n            '<Data Name=\"CommandLine\">'CommandLine'</Data>'\n            '<Data Name=\"CurrentDirectory\">'CurrentDirectory\n            '</Data><Data Name=\"User\">'User\n            '</Data><Data Name=\"LogonGuid\">{'LogonGuid\n            '}</Data><Data Name=\"LogonId\">'LogonId\n            '</Data><Data Name=\"TerminalSessionId\">'TerminalSessionId\n            '</Data><Data Name=\"IntegrityLevel\">'IntegrityLevel\n            '</Data><Data Name=\"Hashes\">'Hashes\n            '</Data><Data Name=\"ParentProcessGuid\">{'ParentProcessGuid\n            '}</Data><Data Name=\"ParentProcessId\">'ParentProcessId:string\n            '</Data><Data Name=\"ParentImage\">'ParentImage\n            '</Data><Data Name=\"ParentCommandLine\">'ParentCommandLine '</Data>'*\n    // --------------------------------------------------------------------------------------\n    | where \n        (array_length(commandline_has_all)==0 or CommandLine has_all (commandline_has_all))\n    and (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any)) // \n    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix) )\n    and (array_length(actingprocess_has_any)==0 or ParentImage has_any (actingprocess_has_any))\n    and (targetusername=='*' or User has targetusername)\n    // --------------------------------------------------------------------------------------\n    | parse SyslogMessage with *'<Data Name=\"ParentUser\">'ActorUsername '</Data>' *// this field appears in newer versions of Sysmon \n    | extend    TargetProcessSHA1=extract(@'SHA1=(\\w+)',1, tostring(Hashes)),\n                TargetProcessSHA256=extract(@'SHA256=(\\w+)',1, tostring(Hashes)),\n                TargetProcessIMPHASH=extract(@'IMPHASH=(\\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file\n                TargetProcessMD5=extract(@'MD5=(\\w+)',1, tostring(Hashes))\n    // End of XML parse\n    | project-away SyslogMessage, Hashes\n    | extend \n                EventType = \"ProcessCreated\",\n                EventStartTime = TimeGenerated,\n                EventEndTime = TimeGenerated,\n                EventCount = int(1),\n                EventVendor = \"Microsoft\",\n                EventSchemaVersion = \"0.1.0\",\n                EventSchema = 'ProcessEvent',\n                EventProduct = \"Sysmon for Linux\",\n                EventResult = 'Success',\n                EventOriginalUid = tostring(EventRecordId),\n                DvcOs = \"Linux\",\n                TargetUserSessionId = tostring(LogonId)  ,           \n                TargetUsernameType = \"Simple\",\n                TargetUsername = User,\n                TargetProcessCommandLine = CommandLine,\n                TargetProcessCurrentDirectory = CurrentDirectory,\n                ActorUsernameType = \"Simple\",\n                EventOriginalType = '1' // Set with a constant value to avoid parsing\n    | project-rename \n                // EventMessage = RenderedDescription, // field not available in Linux\n                DvcHostName = SysmonComputer, // Computer may be different than HostName, in which case HostIP may be incorrect. \n                DvcIpAddr = HostIP, \n                TargetUserSessionGuid = LogonGuid, \n                TargetProcessId = ProcessId,\n                TargetProcessGuid = ProcessGuid,\n                TargetProcessName = Image,\n                TargetProcessIntegrityLevel = IntegrityLevel,\n                TargetProcessCompany = Company,\n                TargetProcessFileDescription = Description,\n                TargetProcessFileVersion = FileVersion,\n                TargetProcessFileProduct = Product,\n                ActingProcessId = ParentProcessId,\n                ActingProcessGuid = ParentProcessGuid,                          \n                ActingProcessCommandLine = ParentCommandLine,\n                ActingProcessName = ParentImage\n    | extend // aliases\n                User = ActorUsername,\n                Process = TargetProcessName,\n                Dvc = DvcHostName,\n                Hash = coalesce(TargetProcessSHA256, TargetProcessSHA1, TargetProcessMD5) // which appears first - will be aliases to \"Hash\"\n    | project-away\n                ProcessName, ProcessID\n}; ParsedProcessEvent",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),commandline_has_any:dynamic=dynamic([]),commandline_has_all:dynamic=dynamic([]),commandline_has_any_ip_prefix:dynamic=dynamic([]),actingprocess_has_any:dynamic=dynamic([]),targetprocess_has_any:dynamic=dynamic([]),parentprocess_has_any:dynamic=dynamic([]),targetusername:string='*',dvcipaddr_has_any_prefix:dynamic=dynamic([]),dvcname_has_any:dynamic=dynamic([]),eventtype:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

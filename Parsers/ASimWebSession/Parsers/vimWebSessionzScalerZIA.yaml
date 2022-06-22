@@ -1,12 +1,12 @@
 Parser:
   Title: Web Session ASIM filtering parser for Zscaler ZIA
-  Version: '0.3'
-  LastUpdated: Jan 13, 2022
+  Version: '0.5'
+  LastUpdated: Jun 15, 2022
 Product:
-  Name: Zscaler ZIA
+  Name: Zscaler ZIA Proxy
 Normalization:
   Schema: WebSession
-  Version: '0.1.0'
+  Version: '0.2.3'
 References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
@@ -31,6 +31,9 @@ ParserParams:
   - Name: srcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
   - Name: url_has_any
     Type: dynamic
     Default: dynamic([])
@@ -43,9 +46,6 @@ ParserParams:
   - Name: eventresult
     Type: string
     Default: '*'
-  - Name: eventresultdetails_has_any
-    Type: dynamic
-    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
@@ -67,6 +67,7 @@ ParserQuery: |
   starttime:datetime=datetime(null), 
   endtime:datetime=datetime(null),
   srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+  ipaddr_has_any_prefix:dynamic=dynamic([]), 
   url_has_any:dynamic=dynamic([]),
   httpuseragent_has_any:dynamic=dynamic([]),
   eventresultdetails_in:dynamic=dynamic([]),
@@ -76,35 +77,59 @@ ParserQuery: |
   CommonSecurityLog | where not(disabled)
   | where DeviceVendor == "Zscaler"
   | where DeviceProduct == "NSSWeblog"
-    // -- Pre filtering
+  // -- Pre filtering
   | where  
     (isnull(starttime) or TimeGenerated >= starttime) 
     and (isnull(endtime) or TimeGenerated <= endtime) 
     and ((array_length(httpuseragent_has_any) == 0) or (RequestClientApplication has_any (httpuseragent_has_any)))
     and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
+  | extend 
+      ASimMatchingIpAddr = case( 
+        array_length(ipaddr_has_any_prefix) == 0 , "-",
+        has_any_ipv4_prefix(DestinationIP, ipaddr_has_any_prefix), "DstIpAddr",
+        has_any_ipv4_prefix(SourceIP,  ipaddr_has_any_prefix), "SrcIpAddr"
+                                                             , "No match"
+            )
+  | where
+    (ASimMatchingIpAddr != "No match")
     and ((array_length(eventresultdetails_in) == 0) or (AdditionalExtensions has_any (eventresultdetails_in)))
     and ((array_length(url_has_any) == 0) or (RequestURL has_any (remove_protocol_from_list(url_has_any))))
   // -- Parse
   | parse AdditionalExtensions with 
-      "reason=" EventResultOriginalDetails:string ";"
-      "outcome=" EventResultDetails:string ";"
-      "cat=" * ";"
-      "rulelabel=" RuleName:string ";"
+      * "rulelabel=" RuleName:string ";"
       "ruletype=" ruletype:string ";"
       "urlclass=" urlclass:string ";"
       "devicemodel=" * 
-  // -- Post filtering
+   // -- Post filtering
+  | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventResultDetails = coalesce(
+      column_ifexists("EventOutcome", ""),
+      extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    )
   | where
     ((array_length(eventresultdetails_in) == 0) or (EventResultDetails in (eventresultdetails_in)))
+  | extend
+    EventResult = iff (EventResultDetails == "NA" or toint(EventResultDetails) >= 400, "Failure", "Success")
+  | where eventresult == "*" or eventresult == EventResult
   // -- Event fields
   | lookup DvcActionLookup on DeviceAction
   | extend 
+    // -- Adjustment to support both old and new CSL fields.
+    EventOriginalResultDetails = coalesce(
+      column_ifexists("Reason", ""),
+      extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    ),
+    ThreatRiskLevel = coalesce(
+      toint(column_ifexists("fieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
     EventCount=int(1), 
     EventStartTime=TimeGenerated,  
     EventVendor = "Zscaler", 
     EventProduct = "ZIA Proxy", 
     EventSchema = "WebSession", 
-    EventSchemaVersion="0.1.0", 
+    EventSchemaVersion="0.2.3", 
     EventType = 'HTTPsession',
     EventEndTime=TimeGenerated
   // -- Field mapping
@@ -121,7 +146,6 @@ ParserQuery: |
     SrcUsername = SourceUserName,
     SrcNatIpAddr= SourceTranslatedAddress,
     SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
-    ThreatRiskLevel = DeviceCustomNumber1,
     UrlCategory = DeviceCustomString2,
     ThreatName = DeviceCustomString5,
     FileMD5 = DeviceCustomString6
@@ -136,8 +160,8 @@ ParserQuery: |
     DstAppName = iff (DstAppName == "General Browsing", "", DstAppName),
     DstFQDNparts = split (DstFQDN, "."),
     DstHostnameNotAddr = DstIpAddr != DstFQDN,
-    DstBytes = toint(ReceivedBytes),
-    SrcBytes = toint(SentBytes),
+    DstBytes = tolong(ReceivedBytes),
+    SrcBytes = tolong(SentBytes),
     DvcHostname = tostring(Computer)
   | extend
     DstHostname = iff (DstHostnameNotAddr, tostring(DstFQDNparts[0]), DstFQDN),
@@ -145,7 +169,6 @@ ParserQuery: |
     DstFQDN = iff (DstHostnameNotAddr, DstFQDN, "") 
   // -- Enrichment
   | extend
-    EventResult = iff (EventResultDetails == "NA" or toint(EventResultDetails) >= 400, "Failure", "Success"),
     EventSeverity = case (ThreatRiskLevel > 90, "High", ThreatRiskLevel > 60, "Medium", ThreatRiskLevel > 10, "Low",  "Informational"),
     DstAppType = "SaaS application",
     DstDomainType = iff (DstHostnameNotAddr, "FQDN", ""),
@@ -153,6 +176,7 @@ ParserQuery: |
   // -- Aliases
   | extend
     Dvc = DvcHostname,
+    Hostname = DstHostname,
     UserAgent = HttpUserAgent,
     User = SrcUsername,
     HttpStatusCode = EventResultDetails,
@@ -160,9 +184,11 @@ ParserQuery: |
     Src = SrcNatIpAddr,
     Dst = DstFQDN,
     Hash = FileMD5,
-    Hostname = DstHostname,
     FileHashType = iff(FileMD5 == "", "", "MD5")
   | project-away 
     DstFQDNparts, AdditionalExtensions, DeviceCustom*
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult, disabled)
+  parser (starttime, endtime
+     , srcipaddr_has_any_prefix, ipaddr_has_any_prefix
+     , url_has_any, httpuseragent_has_any
+     , eventresultdetails_in, eventresult, disabled)

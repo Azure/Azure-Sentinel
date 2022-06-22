@@ -4,6 +4,9 @@ description: |
   'Tracking via user agent is one way to differentiate between types of connecting device.
   In homogeneous enterprise environments the user agent associated with an attacker device may stand out as unusual.'
 requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
   - connectorId: Office365
     dataTypes:
       - OfficeActivity (SharePoint)
@@ -16,19 +19,27 @@ query: |
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
-  let historicalActivity=
+  let MINIMUM_BLOCKS = 10;
+  let SUCCESS_THRESHOLD = 0.2;
+  let HistoricalActivity = 
+  SigninLogs
+  | where TimeGenerated > lookback
+  | where isnotempty(UserAgent)
+  | summarize SuccessfulSignins=countif(ResultType=="0"), BlockedSignins=countif(ResultType=="50053") by UserAgent
+  | extend SuccessBlockRatio = 1.00 * SuccessfulSignins / BlockedSignins
+  | where SuccessBlockRatio < SUCCESS_THRESHOLD
+  | where BlockedSignins > MINIMUM_BLOCKS 
+  ;
   OfficeActivity
-  | where RecordType == "SharePointFileOperation"
-  | where Operation in ("FileDownloaded", "FileUploaded")
-  | where TimeGenerated between(lookback..starttime)
-  | summarize historicalCount=count() by UserAgent, RecordType;
-  let recentActivity = OfficeActivity
+  | where TimeGenerated between (starttime .. endtime)
   | where  RecordType == "SharePointFileOperation"
   | where Operation in ("FileDownloaded", "FileUploaded")
-  | where TimeGenerated between(starttime..endtime)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), recentCount=count() by UserAgent, RecordType;
-  recentActivity | join kind = leftanti (
-     historicalActivity
-  ) on UserAgent, RecordType
-  | order by recentCount asc, UserAgent
-  | extend timestamp = StartTime
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities=count() by UserAgent
+  | join (HistoricalActivity) on UserAgent
+  | project-away UserAgent1
+  | extend timestamp = StartTime, UserAgentCustomEntity = UserAgent
+entityMappings:
+  - entityType: CloudLogonSession
+    fieldMappings:
+      - identifier: UserAgent
+        columnName: UserAgent
