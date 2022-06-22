@@ -12,6 +12,7 @@ import re
 sentinel_customer_id = os.environ.get('WorkspaceID')
 sentinel_shared_key = os.environ.get('WorkspaceKey')
 sentinel_log_type =  'githubscanaudit'
+primarykey = 'Kg73symq258vO38CZHY6/cp6ADxvKSEBaeCMY27P5R4vLenhEKoXft5pW69HN3zMZr6'
 logging.info("Sentinel Logtype:{}".format(sentinel_log_type))
 logAnalyticsUri = os.environ.get('LogAnaltyicsUri')
 
