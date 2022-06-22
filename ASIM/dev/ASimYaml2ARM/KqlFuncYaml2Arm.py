@@ -211,11 +211,9 @@ for f in files:
                     ParamString = param["Name"]
                 else:
                     try:
+                        Default = param["Default"] 
                         if param['Type']=='string':
-                            Default = f"\'{param[Default]}\'"
-                            
-                        else:
-                            Default = param["Default"]   
+                            Default = f"\'{Default}\'"
                         ParamString = f'{param["Name"]}:{param["Type"]}={Default}'
                     except:
                         ParamString = f'{param["Name"]}:{param["Type"]}'
