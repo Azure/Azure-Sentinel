@@ -1,7 +1,7 @@
 # Ingest GitHub events into sentinel
 Author: Prathibha Tadikamalla
 
- Githubwebhook connector Azure Function ingests the following logs from GitHub. All these logs will be placed into the table called "GitHubScanAudit_CL"
+ The Azure function based github dataconnector using webhook pushes all the github events into Sentinel. All these logs will be placed into the table called "githubscanaudit_CL". As of now the solution has 3 parsers based on the below events.
   *	https://docs.github.com/en/rest/reference/code-scanning
   *	https://docs.github.com/en/rest/reference/dependabot
   *	https://docs.github.com/en/rest/reference/secret-scanning
@@ -13,7 +13,7 @@ Following are the configuration steps to deploy Function App.
 ## Configuration Steps to Deploy Function App
 1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%20Connectors%2FGithubWebhook%2Fazuredeploy_GithubWebhook_API_FunctionApp.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%20Connectors%2FGithubWebhook%2Fazuredeploy_GithubWebhook_API_FunctionApp.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%20Connectors%2FGithubWebhook%2Fazuredeploy_GithubWebhook_API_FunctionApp.json)
   
 
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  
@@ -22,33 +22,35 @@ Following are the configuration steps to deploy Function App.
    Group
    
 3. Enter the following value in the ARM template deployment
-	```
-	"Workspace Id": The Sentinel Log Analytics Workspace Id  
-	"Workspace Key": The Sentinel Log Analytics Workspace Key  
-	
-## Post Deployment Steps
-   ### Build Function app endpoint
-1. Build the funtion app endpoint to which Github needs to be connected and post the events here.
-2. Follow the below steps to buidl the endpoint. 
-	 * Go to Azure function Overview page and go to url which is in the format of 
-       ### https://{FunctionName}.azurewebsites.net
-         ![](/Images/FunctionAppUrlPart1.jpg)
-	 * Append the below route prefix to the function app url from above step.
-         ![](/Images/FuncionAppUrlPart2.jpg)
-	 * Append the internal Function Name.
-         ![](/images/FunctionAppUrlfunctionNamePart3.JPG)
-	 * Copy the key you have generated. You can generate a new api key and provide in the query parameter as code = {}
+```
+"FunctionName": The name of the Azure function. Default value will be given as "fngithubwebhook"
+"Workspace Id": The Sentinel Log Analytics Workspace Id  
+"Workspace Key": The Sentinel Log Analytics Workspace Key  
+```	
+## **Post Deployment Steps**
+   #### **Get the Function app endpoint**
+1. Follow the below steps to get the endpoint. 
+	 * Go to Azure function Overview page and go to "Functions" and click on "GithubwebhookConnector"      
+         ![](/Images/GotoFunction.jpg)
+	 * Go to "GetFunctionUrl" highlighted in the below image and copy the function url.
+         ![](/Images/functionappcompleteurl.jpg)
+	 * You can also generate a new function key as provided in the below image and replace the {code} parameter value in the function app url.
+    Ex: https://fngithubwebhookconnector.azurewebsites.net/api/GithubWebhookConnector?code={apikey}
 	    ![](Images/FunctionAppfunctionKey.jpg)
-Ex: https://fn-githubwebhookconnector.azurewebsites.net/github/GithubWebhookConnector?code={functionKey}
-3. Configure the above endpoint to your Gitbug organaization as webhook as given below.
-    * Go to settings
-    ![](images/Githubstep1.JPG)
-    * Click on "Webhooks" and configure the function app endpoint as shown in below figure. 
-     ![](images/Githubwebhooksettings.jpg)
 
-4. The `http Trigger` makes it incredibly easy to push your notifications on demand. 	
-5. there are three parsers (here)[https://github.com/Azure/Azure-Sentinel/Solutions/GitHub/Parsers] to make the logs useful. This parser pulls the logs those are collected into a custom log table entitled githubscanaudit_CL. This table supports all the possible events from Github and it will create columns only for first level nodes of the json payload and inserts data as string. Please refer below images for more details.
-    *Sample security_Advisory json payload from github
-      ![](images/GithubSamplePayload.JPG)
-    * security_advisory json will be inserted into "githubscanaudit_CL" table as string as given below.
-      ![](images/LogAnalyticsdata.jpg)
+   ### **Configure Webhook to Github Organization**        
+    *  Go to github and open your account and click on "Your Organizations"
+
+       ![](images/Githubstep1.JPG)
+
+    *  Click on Settings
+
+       ![](images/GithubStep2.jpg)
+
+    *  Click on "Webhooks" and configure the function app endpoint as shown below. 
+
+       ![](images/GithubStep3.jpg)
+
+4. With that you are done with the github configuration. After the delay of 10 to 20 mins (since LogAnalytics needs sometime to spin up the resources for the first time), you should be able to see all the transactional events from the Github into LogAnalytics workspace table called "githubscanaudit_CL" as shown below.	
+
+    ![](images/LogAnalyticsdata.jpg)
