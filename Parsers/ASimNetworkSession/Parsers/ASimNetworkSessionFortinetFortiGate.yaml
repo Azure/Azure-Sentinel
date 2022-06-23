@@ -15,6 +15,10 @@ References:
 Description: |
   This ASIM parser supports normalizing Fortinet FortiGate logs to the ASIM Web Session normalized schema.
 ParserName: ASimNetworkSessionFortinetFortiGate
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
   let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventResultDetails:string)
   [
@@ -176,11 +180,12 @@ ParserQuery: |
       , "253",""
       , "254",""
       , "255","Reserved"];
-  let Parser=
+  let Parser=(disabled:bool=false){
       CommonSecurityLog 
+      | where not(disabled)
       | where DeviceVendor == "Fortinet" and DeviceProduct startswith "FortiGate" and AdditionalExtensions has "cat=traffic"
-      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceName,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated
       | where DeviceAction != "dns"
+      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceName,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated
       | project-rename DstBytes = ReceivedBytes
           , DstInterfaceName = DeviceOutboundInterface
           , DstIpAddr = DestinationIP
@@ -223,7 +228,12 @@ ParserQuery: |
               , DstIpAddr contains ":", "IPv6"
               , "")
           , NetworkPackets = DstPackets + SrcPackets
-      | extend Rule = NetworkRuleNumber
+      | extend 
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          SessionId = NetworkSessionId,
+          IpAddr = SrcIpAddr,
+          Rule = NetworkRuleName
       | project-away Protocol
-  ;
-  Parser
+  };
+  Parser (disabled=disabled)
