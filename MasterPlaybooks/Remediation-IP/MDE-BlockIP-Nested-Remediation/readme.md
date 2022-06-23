@@ -33,5 +33,5 @@ New-AzRoleAssignment -ObjectId $MIGuid -RoleDefinitionName $RoleName -Scope /sub
 ```
 
 ## Screenshots
-![part 1](./Images/mde1.PNG)
-![part 2](./Images/mde2.PNG)
+![part 1](./Images/mde1.png)
+![part 2](./Images/mde2.png)
