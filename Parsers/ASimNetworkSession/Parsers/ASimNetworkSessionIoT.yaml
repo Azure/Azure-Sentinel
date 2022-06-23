@@ -1,0 +1,61 @@
+Parser:
+  Title: Network Session ASIM parser for Microsoft Defender for IoT 
+  Version: '0.1'
+  LastUpdated: Mar 8, 2021
+Product:
+  Name: Microsoft Defender for IoT
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Microsoft Defender for IoT network logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionIoT
+EquivalentBuiltInParser: _ASim_NetworkSession_MicrosoftD4IoT
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false) 
+  {
+    SecurityIoTRawEvent
+    | where RawEventName == "ConnectionData"
+    | project-rename 
+        DvcId = DeviceId
+    | parse EventDetails with 
+        *
+        '"SchemaVersion":"' EventProductVersion:string '",' *
+        '"ClientDevice"' *
+        '"ipAddress":"' SrcIpAddr:string '",' *
+        '"deviceId":' SrcDvcId:string ',' *
+        '"deviceName":"' SrcDescription:string '",' *
+        '"deviceType":"' SrcDvcType:string '",' * // what are the possible values?
+        '"isExternal":' SrcIsExternal:bool '}' *
+        '"ServerDevice"' *
+        '"ipAddress":"' DstIpAddr:string '",' *
+        '"deviceId":' DstDvcId:string ',' *
+        '"deviceName":"' DstDescription:string '",' *
+        '"deviceType":"' DstDvcType:string '",' * // what are the possible values?
+        '"isExternal":' DstIsExternal:bool '}' *
+        '"ServerPort":'  DstPortNumber:int ',' *
+        '"Protocol":"'  NetworkProtocol:string '",' *
+    | extend
+        EventProduct = 'Defender for IoT',
+        EventResult = 'Success',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion='0.2.3',
+        EventSeverity = 'Informational',
+        EventType = 'NetworkSession',
+        EventVendor = 'Microsoft'
+    | extend // -- Aliases
+        IpAddr = SrcIpAddr,
+        Src = SrcIpAddr,
+        Dvc = DvcId 
+    | project-away EventDetails
+  };
+  parser (disabled)
