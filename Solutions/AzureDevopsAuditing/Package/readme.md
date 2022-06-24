@@ -16,7 +16,7 @@ The possible options can also be found in the Data Connector after this has been
 
 Use this method for automated configuration of the data connector using an ARM Template.
 
-[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2FcreateUiDefinition.json)
+[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2FUiDefinition.json)
 
 ### Option 2 - PowerShell onboarding
 
@@ -26,7 +26,7 @@ $workspaceKey = "*****"
 $organization = "MyOrganization"
 $pattoken = "*****"
 
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/AzureDevOpsAuditing/scripts/Set-AzureDevOpsAuditing.ps1' -OutFile 'Set-AzureDevOpsAuditing.ps1' && .\/Set-AzureDevOpsAuditing.ps1 -workspaceId $workspaceId -workspaceKey $workspaceKey -organization $organization -personalaccesstoken $pattoken
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/SecureHats/Sentinel-playground/main/DataConnectors/AzureDevOpsAuditing/scripts/Set-AzureDevOpsAuditing.ps1' -OutFile 'Set-AzureDevOpsAuditing.ps1' && .\/Set-AzureDevOpsAuditing.ps1 -workspaceId $workspaceId -workspaceKey $workspaceKey -organization $organization -personalaccesstoken $pattoken
 ```
 
 ## Prerequisites

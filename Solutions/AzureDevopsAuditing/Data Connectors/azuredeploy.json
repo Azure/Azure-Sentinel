@@ -1,0 +1,120 @@
+  
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "organization": {
+            "type": "string"
+        },
+        "pattoken": {
+            "type": "securestring"
+        },
+        "guid": {
+            "type": "string",
+            "defaultValue": "[newGuid()]"
+        }
+    },
+    "variables": {
+        "Contributor": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+        "identityName": "AzureDevOpsAuditing",
+        "KeyVaultName": "[tolower(concat('devopskv', uniqueString(resourceGroup().id, subscription().id)))]",
+        "SecretName": "PersonalAccessToken"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+            "apiVersion": "2018-11-30",
+            "name": "[variables('identityName')]",
+            "location": "[resourceGroup().location]"
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2020-04-01-preview",
+            "name": "[parameters('guid')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('Contributor')]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName')), '2018-11-30', 'Full').properties.principalId]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2021-06-01-preview",
+            "name": "[variables('KeyVaultName')]",
+            "location": "[resourcegroup().location]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "Standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [
+                {
+                  "tenantId": "[subscription().tenantId]",
+                  "objectId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName')), '2018-11-30', 'Full').properties.principalId]",
+                  "permissions": {
+                    "secrets": [ 
+                        "Get",
+                        "List"
+                    ]
+                  }
+                }
+              ],
+              "enabledForDeployment": false,
+              "enabledForDiskEncryption": false,
+              "enabledForTemplateDeployment": true,
+              "enableSoftDelete": true
+            }
+          },
+          {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('KeyVaultName'), '/', variables('SecretName'))]",
+            "dependsOn": [
+              "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
+            ],
+            "properties": {
+              "value": "[parameters('pattoken')]",
+              "contentType": "string",
+              "attributes": {
+                "enabled": true
+              }
+            }
+          },
+        {
+            "type": "Microsoft.Resources/deploymentScripts",
+            "apiVersion": "2020-10-01",
+            "name": "AzureDevOpsAuditing",
+            "location": "[resourceGroup().location]",
+            "kind": "AzurePowerShell",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('KeyVaultName'))]"
+            ],
+            "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                    "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities/', variables('identityName'))]": {}
+                }
+            },
+            "properties": {
+                "forceUpdateTag": "[parameters('guid')]",
+                "azPowerShellVersion": "5.4",
+                "arguments": "[format(' -WorkspaceName {0} -Organization {1} -PersonalAccessToken {2} -VaultName {3}', parameters('workspaceName'), parameters('organization'), parameters('pattoken'), variables('KeyVaultName'))]",
+                "primaryScriptUri": "[concat('https://raw.githubusercontent.com/azure/azure-sentinel/master/', 'Solutions/AzureDevOpsAuditing/Data%20Connectors/scripts/Set-AzureDevOpsAuditing.ps1')]",
+                "supportingScriptUris": [],
+                "timeout": "PT30M",
+                "cleanupPreference": "Always",
+                "retentionInterval": "P1D",
+                "containerSettings": {
+                    "containerGroupName": "pwshcontainer"
+                }
+            }
+        }
+    ]
+}
