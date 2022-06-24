@@ -5,7 +5,7 @@ The DigitalShadowsPlaybook-UpdateIncidentStatus is triggered when an alert is cr
 
 1. Digital Shadows Data Connector fetches the Triage Items from Digital Shadows Searchlight portal
 1. The analytic rule identifies an update in the Triage Item as an alert
-1. Each alert with new triage item (indentified by the unique triage item id) generates an Azure Sentinel Incident
+1. Each alert with new triage item (identified by the unique triage item id) generates an Azure Sentinel Incident
 1. All the updates detected by Analytic rule are identified as alerts and correlated with an incident if the Incident (with same triage item id) already exists
 1. Creation of each alert triggers the "DigitalShadowsPlaybook-UpdateIncidentStatus" playbook so that the "Status" of the incident, associated with alert's triage item id, is updated
 
