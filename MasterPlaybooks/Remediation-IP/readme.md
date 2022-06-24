@@ -24,7 +24,13 @@ Atlease one of the below mentioned nested playbooks must be deployed prior to de
 - [Forcepoint-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/ForcepointNGFW-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Forcepoint. 
 - [Fortinet-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/Fortinet-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Fortinet. 
 - [Meraki-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/Meraki-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Meraki. 
-- [PaloAlto-PAN-OS-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/PaloAlto-PAN-OS-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto. 
+- [PaloAlto-PAN-OS-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/PaloAlto-PAN-OS-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
+
+- [CiscoASA-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/CiscoASA-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
+- [CiscoFirepower-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/CiscoFirepower-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
+- [CiscoUmbrella-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/CiscoUmbrella-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
+- [F5-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/F5-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
+- [MDE-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/MDE-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
 
 If any one of the above mentioned playbooks are not deployed then default playbook will deploy in its place.
 
@@ -76,14 +82,20 @@ To add new nested playbook to master playbook:
 
  2. Fill in the required parameters for deploying the playbook.
 
- | Parameter  | Description |
-| ------------- | ------------- |
-| **Playbook Name** | Enter the master playbook name here without spaces. |
-| **Azure Firewall Playbook Name**|Enter the name of Azure Firewall Nested playbook without spaces. |
-| **Forcepoint Playbook Name** | Enter the name of Forcepoint Nested playbook without spaces. |
-| **Fortinet Playbook Name**| Enter the name of Fortinet Nested playbook without spaces. | 
-| **Cisco Meraki Playbook Name**|Enter the name of Meraki Nested playbook without spaces.|
-| **Palo Alto PAN-OS Playbook Name**|Enter the name of PaloAlto PAN OS Nested playbook without spaces.|
+ | Parameter                          | Description                                                       |
+|------------------------------------|-------------------------------------------------------------------|
+| **Playbook Name**                  | Enter the master playbook name here without spaces.               |
+| **Azure Firewall Playbook Name**   | Enter the name of Azure Firewall Nested playbook without spaces.  |
+| **Forcepoint Playbook Name**       | Enter the name of Forcepoint Nested playbook without spaces.      |
+| **Fortinet Playbook Name**         | Enter the name of Fortinet Nested playbook without spaces.        |
+| **Cisco Meraki Playbook Name**     | Enter the name of Meraki Nested playbook without spaces.          |
+| **Palo Alto PAN-OS Playbook Name** | Enter the name of PaloAlto PAN OS Nested playbook without spaces. |
+| **CiscoASA Playbook Name**         | Enter the name of CiscoASA Nested playbook without spaces.        |
+| **CiscoFirepower Playbook Name**   | Enter the name of CiscoFirepower Nested playbook without spaces.  |
+| **CiscoUmbrella Playbook Name**    | Enter the name of CiscoUmbrella Nested playbook without spaces.   |
+| **F5Big-IP Playbook Name**         | Enter the name of F5Big-IP Nested playbook without spaces.        |
+| **MDE Playbook Name**       | Enter the name of MDE Nested playbook without spaces.             |
+
 
 
 # Post-Deployment Instructions
