@@ -29,6 +29,7 @@ This package includes:
 * These three playbook templates leverage AWS IAM connector:
   * [AWSIAM-EnrichIncidentWithUserInfo](./Playbooks/AWSIAM-EnrichIncidentWithUserInfo/)
   * [AWSIAM-AddTagToUser](./Playbooks/AWSIAM-AddTagToUser/)
+  * [AWSIAM-DeleteAccessKeys](./Playbooks/AWSIAM-DeleteAccessKeys/)
 
 You can choose to deploy the whole package: connector + all three playbook templates, or each one seperately from its specific folder.
 
@@ -63,6 +64,7 @@ AWS Access Key Id and AWS Secret Access Key are required. Check the [documentati
 |**For Playbooks**|
 |**AWSIAM-AddTagToUser Playbook Name** | Name of the Playbook |
 |**AWSIAM-EnrichIncidentWithUserInfo Playbook Name** | Name of the Playbook |
+|**AWSIAM-DeleteAccessKeys Playbook Name** | Name of the Playbook |
 |**TagKey** | Tag key which will be added to the incident in AWSIAM-AddTagToUser playbook |
 |**TagValue** | Tag value which will be added to the incident in AWSIAM-AddTagToUser playbook |
 
