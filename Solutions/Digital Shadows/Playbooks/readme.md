@@ -1,21 +1,21 @@
 # DigitalShadowsPlaybook-UpdateIncidentStatus
 
 ## Overview
-The DigitalShadowsPlaybook-UpdateIncidentStatus is triggered when an alert is created by the Digital Shadows Data Connector Analytic rules. The main purpose of the playbook is to updates the Azure Sentinel Incident state as per the logs received by Data connector. Following is the sequence of events take place for triggering the playbook:
+The DigitalShadowsPlaybook-UpdateIncidentStatus is triggered when an alert is created by the Digital Shadows Data Connector Analytic rules. The main purpose of the playbook is to updates the Azure Sentinel Incident Status as per the logs received by Data connector. Following is the sequence of events take place for triggering the playbook:
 
 1. Digital Shadows Data Connector fetches the Triage Items from Digital Shadows Searchlight portal
 1. The analytic rule identifies an update in the Triage Item as an alert
 1. Each alert with new triage item (indentified by the unique triage item id) generates an Azure Sentinel Incident
 1. All the updates detected by Analytic rule are identified as alerts and correlated with an incident if the Incident (with same triage item id) already exists
-1. Creation of each alert triggers the "DigitalShadowsPlaybook-UpdateIncidentStatus" playbook so that the "State" of the incident, associated with alert's triage item id, is updated
+1. Creation of each alert triggers the "DigitalShadowsPlaybook-UpdateIncidentStatus" playbook so that the "Status" of the incident, associated with alert's triage item id, is updated
 
 ## Playbook Workflow
 Following is the workflow of the playbook:
 1. Playbook is triggered on alert creation
 1. Get incident associated with the alert
 1. Get the custom details from the alert
-1. Retrieve the updated value for State
-1. Update the Incident state by mapping the Digital Shadows state to corresponding Azure Sentinel Incident State
+1. Retrieve the updated value for Status
+1. Update the Incident Status by mapping the Digital Shadows Status to corresponding Azure Sentinel Incident Status
 
 ## Prerequisite
 1. Prior to the deployment of this playbook, Digital Shadows Data Connector needs to be deployed under the same subscription.
