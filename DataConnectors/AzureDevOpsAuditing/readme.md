@@ -5,7 +5,7 @@ Author: Rogier Dijkman
 The Azure DevOps Auditing Sentinel connector provides the capability to ingest Azure DevOps events in Microsoft Sentinel.
 It helps you gain visibility into what is happening in your environment, such as who is connected, which applications are installed and running, and much more.
 
-[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSecureHats%2FSentinel-playground%2Fmain%2FDataConnectors%2FAzureDevOpsAuditing%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FSecureHats%2FSentinel-playground%2Fmain%2FDataConnectors%2FAzureDevOpsAuditing%2FuiMainTemplate.json)
+[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2FuiMainTemplate.json)
 
 ## Configuring the Azure DevOps Audit Streams
 
@@ -16,7 +16,7 @@ The possible options can also be found in the Data Connector after this has been
 
 Use this method for automated configuration of the data connector using an ARM Template.
 
-[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSecureHats%2FSentinel-playground%2Fmain%2FDataConnectors%2FAzureDevOpsAuditing%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FSecureHats%2FSentinel-playground%2Fmain%2FDataConnectors%2FAzureDevOpsAuditing%2FUiDefinition.json)
+[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAzureDevOpsAuditing%2FUiDefinition.json)
 
 ### Option 2 - PowerShell onboarding
 
@@ -26,7 +26,7 @@ $workspaceKey = "*****"
 $organization = "MyOrganization"
 $pattoken = "*****"
 
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/SecureHats/Sentinel-playground/main/DataConnectors/AzureDevOpsAuditing/scripts/Set-AzureDevOpsAuditing.ps1' -OutFile 'Set-AzureDevOpsAuditing.ps1' && .\/Set-AzureDevOpsAuditing.ps1 -workspaceId $workspaceId -workspaceKey $workspaceKey -organization $organization -personalaccesstoken $pattoken
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/AzureDevOpsAuditing/scripts/Set-AzureDevOpsAuditing.ps1' -OutFile 'Set-AzureDevOpsAuditing.ps1' && .\/Set-AzureDevOpsAuditing.ps1 -workspaceId $workspaceId -workspaceKey $workspaceKey -organization $organization -personalaccesstoken $pattoken
 ```
 
 ## Prerequisites
