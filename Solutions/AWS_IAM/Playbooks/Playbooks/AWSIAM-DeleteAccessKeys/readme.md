@@ -1,12 +1,13 @@
-# AWSIAM-EnrichIncidentWithUserInfo
+# AWSIAM-DeleteAccessKeys
 
 ## Summary
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
 1. Gets users from incident.
-2. Obtains information about users in AWS IAM.
-3. Adds obtained information as a comment to the incident.
+2. [Get list of access keys](https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAccessKeys.html) from these users.
+3. Delete selected access keys.
+4. Adds information about deleted user's access keys as a comment to the incident.
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 
@@ -21,7 +22,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FPlaybooks%2FAWSIAM-EnrichIncidentWithUserInfo%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FPlaybooks%2FAWSIAM-EnrichIncidentWithUserInfo%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FPlaybooks%2FAWSIAM-DeleteAccessKeys%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FPlaybooks%2FAWSIAM-DeleteAccessKeys%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
