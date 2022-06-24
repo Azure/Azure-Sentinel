@@ -1,15 +1,18 @@
-# Microsoft Windows Events ASIM Authentication Normalization Parser
+# Source agnostic ASIM Authentication Normalization Parser
 
-This template deploys the ASIM Authentication schema parser for Microsoft Windows Events. The parser is a part of the Advanced Security Information Model.
+ARM template for ASIM Authentication schema parser for Source agnostic.
+
+This ASIM parser supports filtering and normalizing Authentication logs from all supported sources to the ASIM Authentication normalized schema.
+
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
-- [Microsoft Sentinel Authentication normalization schema reference](https://aka.ms/ASimAuthenticationDoc)
+- [Deploy all of ASIM](https://aka.ms/DeployASIM)
+- [ASIM Authentication normalization schema reference](https://aka.ms/ASimAuthenticationDoc)
 
 <br>
- 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FimAuthentication%2FimAuthentication.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FimAuthentication%2FimAuthentication.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuthentication%2FARM%2FimAuthentication%2FimAuthentication.json)
