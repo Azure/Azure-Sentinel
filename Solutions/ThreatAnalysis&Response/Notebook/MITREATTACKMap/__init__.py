@@ -11,6 +11,7 @@ import tempfile
 import zipfile
 from datetime import date
 from pathlib import Path
+from requests.exceptions import HTTPError
 
 import azure.functions as func
 import IPython
@@ -27,22 +28,22 @@ from msticpy.data.uploaders.loganalytics_uploader import LAUploader
 
 def get_sentinel_queries_from_github(git_url, outputdir):
     logging.info("Downloading from Azure Sentinel Github, may take 2-3 mins..")
-    r = requests.get(git_url)
-
-    repo_zip = io.BytesIO(r.content)
-
-    archive = zipfile.ZipFile(repo_zip, mode="r")
-
-    # Only extract Detections and Hunting Queries Folder
-    for file in archive.namelist():
-        if file.startswith(
-            (
-                "Azure-Sentinel-master/Detections/",
-                "Azure-Sentinel-master/Hunting Queries/",
-            )
-        ):
-            archive.extract(file, path=outputdir)
-    logging.info("Downloaded and Extracted Files successfully")
+    try:
+        r = requests.get(git_url)
+        repo_zip = io.BytesIO(r.content)
+        archive = zipfile.ZipFile(repo_zip, mode="r")
+        # Only extract Detections and Hunting Queries Folder
+        for file in archive.namelist():
+            if file.startswith(
+                (
+                    "Azure-Sentinel-master/Detections/",
+                    "Azure-Sentinel-master/Hunting Queries/",
+                )
+            ):
+                archive.extract(file, path=outputdir)
+        logging.info("Downloaded and Extracted Files successfully")
+    except HTTPError as http_err:
+        warnings.warn(f"HTTP error occurred trying to download from Github: {http_err}")
 
 
 def parse_yaml(parent_dir, child_dir):
@@ -189,6 +190,16 @@ def get_fusion_alerts():
                 ["MicrosoftDefenderAdvancedThreatProtection", "PaloAltoNetworks"],
                 ["SecurityAlert"],
             ],
+            [
+                "Suspicious resource / resource group deployment by a previously unseen caller following suspicious Azure AD sign-in",
+                [
+                    "InitialAccess",
+                    "Impact",
+                ],
+                ["T1078", "T1496"],
+                ["MicrosoftSentinel", "AzureActiveDirectoryIdentityProtection"],
+                ["SecurityAlert"],
+            ],
         ],
         columns=[
             "name",
@@ -201,8 +212,8 @@ def get_fusion_alerts():
 
     result = fusion_df.append(df2, ignore_index=True)
     result["DetectionType"] = "Fusion"
-    result["DetectionService"] = "Azure Sentinel"
-    result["DetectionURL"] = "https://docs.microsoft.com/azure/sentinel/fusion"
+    result["DetectionService"] = "Microsoft Sentinel"
+    result["DetectionURL"] = alerts_url
 
     # Exploding columns to flatten the table
     columns_to_expand = [
@@ -330,14 +341,32 @@ def clean_and_preprocess_data(df):
     )
     null_df["Platform"] = ""
 
-    new_columns.append("Platform")
+    new_columns = [
+        "DetectionType",
+        "DetectionService",
+        "id",
+        "name",
+        "description",
+        "connectorId",
+        "dataTypes",
+        "query",
+        "queryFrequency",
+        "queryPeriod",
+        "triggerOperator",
+        "triggerThreshold",
+        "tactics",
+        "relevantTechniques",
+        "severity",
+        "DetectionURL",
+        "IngestedDate",
+        "Platform",
+    ]
+
     result_null_df = null_df[new_columns]
 
     result = pd.concat([result_not_null_df, result_null_df], axis=0)
 
     return result
-
-
 
 
 # Custom ConnectorId to Platform Mapping
@@ -431,8 +460,7 @@ def get_azure_defender_alerts():
         "Windows",
         "Linux",
         "Azure App Service",
-        "Azure Kubernetes Service clusters",
-        "Containers- Host Level",
+        "Azure Containers and Kubernetes clusters",
         "SQL Database and Synapse Analytics",
         "Open source relational Databases",
         "Azure Resource Manager",
@@ -444,7 +472,7 @@ def get_azure_defender_alerts():
         "Azure DDoS Protection",
         "Security Incident",
     ]
-    for i in range(15):
+    for i in range(14):
         list_of_df[i]["Provider"] = providers[i]
 
     # Clean-up dataset by renaming some columns
@@ -452,12 +480,12 @@ def get_azure_defender_alerts():
     list_of_df[1] = list_of_df[1].rename(columns={"Alert (alert type)": "Alert"})
     list_of_df[2] = list_of_df[2].rename(columns={"Alert (alert type)": "Alert"})
     list_of_df[3] = list_of_df[3].rename(columns={"Alert (alert type)": "Alert"})
-    list_of_df[4] = list_of_df[4].rename(columns={"Alert (alert type)": "Alert"})
+    list_of_df[5] = list_of_df[5].rename(columns={"Alert (alert type)": "Alert"})
     list_of_df[6] = list_of_df[6].rename(columns={"Alert (alert type)": "Alert"})
     list_of_df[7] = list_of_df[7].rename(columns={"Alert (alert type)": "Alert"})
     list_of_df[8] = list_of_df[8].rename(columns={"Alert (alert type)": "Alert"})
-    list_of_df[9] = list_of_df[9].rename(columns={"Alert (alert type)": "Alert"})
-    list_of_df[12] = list_of_df[12].rename(columns={"Alert (alert type)": "Alert"})
+    list_of_df[11] = list_of_df[11].rename(columns={"Alert (alert type)": "Alert"})
+
 
     # Merge all the tables
     frames = [
@@ -475,7 +503,6 @@ def get_azure_defender_alerts():
         list_of_df[11],
         list_of_df[12],
         list_of_df[13],
-        list_of_df[14],
     ]
 
     azdefender_df = pd.concat(frames).reset_index().dropna().drop("index", axis=1)
@@ -684,7 +711,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
         # Export the whole dataset
         logging.info(f"Writing csv files to temporary directory")
-        out_path = tmp_path + "/AzureSentinel.csv"
+        out_path = tmp_path + "/MicrosoftSentinel.csv"
 
         az_defender_alerts = get_azure_defender_alerts()
         logging.info(

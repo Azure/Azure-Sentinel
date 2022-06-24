@@ -8,6 +8,9 @@ tags:
   - Schema: ASIMDns
     SchemaVersion: 0.1.1
 requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
   - connectorId: DNS
     dataTypes:
       - DnsEvents
@@ -32,6 +35,25 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -132,21 +154,13 @@ query: |
   | where FileHash in (SHA256Hashes) or DNSName in~ (DomainNames)
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
   ),
-  (DnsEvents 
-  | extend DNSName = Name
-  | where isnotempty(DNSName)
-  | where DNSName has_any (DomainNames)
-  | extend IPAddress = ClientIP
-  ),
-  (imDns(domain_has_any = DomainNames)
+  (_Im_Dns(domain_has_any = DomainNames)
   | extend DNSName = DnsQuery
   | extend IPAddress = SrcIpAddr
   ),
-  (VMConnection 
-  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | where isnotempty(DNSName)
-  | where DNSName in~ (DomainNames)
-  | extend IPAddress = RemoteIp
+  (_Im_WebSession(url_has_any = DomainNames)
+  | extend DNSName = tostring(parse_url(Url)["Host"])
+  | extend IPAddress = SrcIpAddr
   ),
   (Event
   //This query uses sysmon data depending on table name used this may need updataing
@@ -181,14 +195,6 @@ query: |
   | where ThreatName has_any (SigNames)
   | extend Computer = tostring(parse_json(Entities)[0].HostName)
   ),
-  (AzureDiagnostics
-  | where ResourceType == "AZUREFIREWALLS"
-  | where Category == "AzureFirewallDnsProxy"
-  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
-  | where Request_Name has_any (DomainNames)  
-  | extend DNSName = Request_Name
-  | extend IPAddress = ClientIP 
-  ),
   (AzureDiagnostics 
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
@@ -213,5 +219,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.2.1
 kind: Scheduled
