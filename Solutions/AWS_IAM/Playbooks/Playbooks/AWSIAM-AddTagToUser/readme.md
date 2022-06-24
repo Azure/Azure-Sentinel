@@ -6,7 +6,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 1. Gets users from incident.
 2. [Adds tag](https://docs.aws.amazon.com/IAM/latest/APIReference/API_TagUser.html) to users in AWS (tag key and value are defined during the playbook deployment).
-3. Adds inforamtion about added tags as a comment to the incident.
+3. Adds information about added tags as a comment to the incident.
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 
@@ -18,7 +18,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
     * Tag Key: Tag key that will be added to user in AWS
     * Tag Value: Tag value that will be added to user in AWS
