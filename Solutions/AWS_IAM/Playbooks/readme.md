@@ -1,6 +1,6 @@
 # AWS IAM Function App connector and playbook templates
 
-<img src="./logo.png" alt="drawing" width="20%"/><br>
+<img src="./aws-logo.svg" alt="drawing" width="20%"/><br>
 
 ## Table of Contents
 
