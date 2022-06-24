@@ -29,8 +29,8 @@ When this playbook gets triggered performs below actions:
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCiscoFirepower-BlockIP-NetworkGroup%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCiscoFirepower-BlockIP-NetworkGroup%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FPS-1757-BlockIP_MasterPlaybook%2FMasterPlaybooks%2FRemediation-IP%2FCiscoFirepower-BlockIP-Nested-Remediation%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FPS-1757-BlockIP_MasterPlaybook%2FMasterPlaybooks%2FRemediation-IP%2FCiscoFirepower-BlockIP-Nested-Remediation%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (ex:CiscoFirepower-BlockIP-NetworkGroup)
