@@ -51,9 +51,17 @@
         "description": "Name for the workbook"
       }
     },
+    "analytic1-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the scheduled alert rule"
+      }
+    },
     "connector1-name": {
       "type": "string",
-      "defaultValue": "079ce073-24d3-4a8a-8a55-7703ca211aab"
+      "defaultValue": "3e20bde0-45a2-490c-a0ec-e344ff90de0c"
     }
   },
   "variables": {
@@ -61,6 +69,8 @@
     "_SecurityBridgeThreatDetectionforSAP_workbook": "[variables('SecurityBridgeThreatDetectionforSAP_workbook')]",
     "workbook-source": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]",
     "_workbook-source": "[variables('workbook-source')]",
+    "CriticalEventTriggered_AnalyticalRules": "CriticalEventTriggered_AnalyticalRules",
+    "_CriticalEventTriggered_AnalyticalRules": "[variables('CriticalEventTriggered_AnalyticalRules')]",
     "workspace-dependency": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
     "SecurityBridgeLogs_Parser": "SecurityBridgeLogs_Parser",
     "_SecurityBridgeLogs_Parser": "[variables('SecurityBridgeLogs_Parser')]",
@@ -68,7 +78,7 @@
     "_connector1-source": "[variables('connector1-source')]",
     "SecurityBridgeSAPConnector": "SecurityBridgeSAPConnector",
     "_SecurityBridgeSAPConnector": "[variables('SecurityBridgeSAPConnector')]",
-    "sourceId": "azuresentinel.azure-sentinel-solution-securitybridge",
+    "sourceId": "securitybridge1647511278080.securitybridge-sentinel-app-1",
     "_sourceId": "[variables('sourceId')]"
   },
   "resources": [
@@ -84,6 +94,58 @@
         "version": "1.0",
         "sourceId": "[variables('_workbook-source')]",
         "category": "sentinel"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "This rule alerts if there is any critical event occured in the SAP system",
+        "displayName": "SecurityBridge: A critical event occured",
+        "enabled": false,
+        "query": "\nSecurityBridgeLogs\n| where Severity contains \"Critical\"\n",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "maincontact"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "dhost"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Computer"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -104,7 +166,7 @@
             "displayName": "SecurityBridge Threat Detection for SAP Data Parser",
             "category": "Samples",
             "functionAlias": "SecurityBridgeLogs",
-            "query": "\nSecurityBridgeLogs_CL\n| extend CEFVersion = tostring(split(RawData, '|')[0]), DeviceVendor = tostring(split(RawData, '|')[1]), DeviceProduct = tostring(split(RawData, '|')[2]), DeviceVersion = tostring(split(RawData, '|')[3]), DeviceEventClassID = tostring(split(RawData, '|')[4]), Name = tostring(split(RawData, '|')[5]), Severity = tostring(split(RawData, '|')[6]), AdditionalExtensions = tostring(split(RawData, '|')[7])\n| extend SAPsid = tostring(split(split(AdditionalExtensions, \"cs1=\")[1], \"cs1\")[0]),\n        SAPclient = tostring(split(split(AdditionalExtensions, \"cs2=\")[1], \"cs2\")[0]),\n        SAPdb = tostring(split(split(AdditionalExtensions, \"cs3=\")[1], \"cs3\")[0]),\n        [\"Email address event originator\"] = tostring(split(split(AdditionalExtensions, \"cs4=\")[1], \"cs4\")[0]),\n        [\"Main contact area of responsibility\"] = tostring(split(split(AdditionalExtensions, \"cs5=\")[1], \"cs5\")[0]),\n        [\"Backup contact area of responsibility\"] = tostring(split(split(AdditionalExtensions, \"cs6=\")[1], \"cs6\")[0])\n| extend dhost = tostring(replace_string(tostring(split(split(RawData, \"dhost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"dhost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         duid = tostring(replace_string(tostring(split(split(RawData, \"duid=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"duid=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         duser = tostring(replace_string(tostring(split(split(RawData, \"duser=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"duser=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         dvchost = tostring(replace_string(tostring(split(split(RawData, \"dvchost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"dvchost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         msg = tostring(split(split(RawData, \"msg=\")[1], \"rt=\")[0]),\n         rt = tostring(replace_string(tostring(split(split(RawData, \"rt=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"rt=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         src = tostring(replace_string(tostring(split(split(RawData, \"src=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"src=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         shost = tostring(replace_string(tostring(split(split(RawData, \"shost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"shost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         type = tostring(replace_string(tostring(split(split(RawData, \"type=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"type=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         externalid = tostring(replace_string(tostring(split(split(RawData, \"externalid=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"externalid=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPos = tostring(replace_string(tostring(split(split(RawData, \"SAPos=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPos=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPrelease = tostring(replace_string(tostring(split(split(RawData, \"SAPrelease=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPrelease=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPinstallationnumber = tostring(replace_string(tostring(split(split(RawData, \"SAPinstallationnumber=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPinstallationnumber=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPhost = tostring(replace_string(tostring(split(split(RawData, \"SAPhost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPhost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         Severity = case(toint(Severity) < 3, \"Low\", toint(Severity) < 7, \"Medium\", toint(Severity) < 9, \"High\", toint(Severity) >= 9, \"Critical\", \"None\")",
+            "query": "\nSecurityBridgeLogs_CL\n| extend CEFVersion = tostring(split(RawData, '|')[0]), DeviceVendor = tostring(split(RawData, '|')[1]), DeviceProduct = tostring(split(RawData, '|')[2]), DeviceVersion = tostring(split(RawData, '|')[3]), DeviceEventClassID = tostring(split(RawData, '|')[4]), Name = tostring(split(RawData, '|')[5]), Severity = tostring(split(RawData, '|')[6]), AdditionalExtensions = tostring(split(RawData, '|')[7])\n| extend SAPsid = tostring(split(split(AdditionalExtensions, \"cs1=\")[1], \"cs1\")[0]),\n        SAPclient = tostring(split(split(AdditionalExtensions, \"cs2=\")[1], \"cs2\")[0]),\n        SAPdb = tostring(split(split(AdditionalExtensions, \"cs3=\")[1], \"cs3\")[0]),\n        [\"Email address event originator\"] = tostring(split(split(AdditionalExtensions, \"cs4=\")[1], \"cs4\")[0]),\n        [\"Main contact area of responsibility\"] = tostring(split(split(AdditionalExtensions, \"cs5=\")[1], \"cs5\")[0]),\n        [\"Backup contact area of responsibility\"] = tostring(split(split(AdditionalExtensions, \"cs6=\")[1], \"cs6\")[0])\n| extend dhost = tostring(replace_string(tostring(split(split(RawData, \"dhost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"dhost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         duid = tostring(replace_string(tostring(split(split(RawData, \"duid=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"duid=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         duser = tostring(replace_string(tostring(split(split(RawData, \"duser=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"duser=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         dvchost = tostring(replace_string(tostring(split(split(RawData, \"dvchost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"dvchost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         msg = tostring(split(split(RawData, \"msg=\")[1], \"rt=\")[0]),\n         rt = tostring(replace_string(tostring(split(split(RawData, \"rt=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"rt=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         src = tostring(replace_string(tostring(split(split(RawData, \"src=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"src=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         shost = tostring(replace_string(tostring(split(split(RawData, \"shost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"shost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         type = tostring(replace_string(tostring(split(split(RawData, \"type=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"type=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         externalid = tostring(replace_string(tostring(split(split(RawData, \"externalid=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"externalid=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPos = tostring(replace_string(tostring(split(split(RawData, \"SAPos=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPos=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPrelease = tostring(replace_string(tostring(split(split(RawData, \"SAPrelease=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPrelease=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPinstallationnumber = tostring(replace_string(tostring(split(split(RawData, \"SAPinstallationnumber=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPinstallationnumber=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         SAPhost = tostring(replace_string(tostring(split(split(RawData, \"SAPhost=\")[1], \"=\")[0]), tostring(split(split(split(RawData, \"SAPhost=\")[1], \"=\")[0], \" \")[-1]), \"\")),\n         Severity = case(toint(Severity) < 3, \"Low\", toint(Severity) < 7, \"Medium\", toint(Severity) < 9, \"High\", toint(Severity) >= 9, \"Critical\", \"None\"),\n         maincontact = split(split([\"Main contact area of responsibility\"], ',')[-1], ' ')[2]",
             "version": 1
           }
         }
@@ -286,7 +348,7 @@
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "version": "1.0.1",
+        "version": "1.1.3",
         "kind": "Solution",
         "contentId": "[variables('_sourceId')]",
         "parentId": "[variables('_sourceId')]",
@@ -311,17 +373,22 @@
             {
               "kind": "Workbook",
               "contentId": "[variables('_SecurityBridgeThreatDetectionforSAP_workbook')]",
-              "version": "1.0.1"
+              "version": "1.1.3"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_CriticalEventTriggered_AnalyticalRules')]",
+              "version": "1.1.3"
             },
             {
               "kind": "Parser",
               "contentId": "[variables('_SecurityBridgeLogs_Parser')]",
-              "version": "1.0.1"
+              "version": "1.1.3"
             },
             {
               "kind": "DataConnector",
               "contentId": "[variables('_SecurityBridgeSAPConnector')]",
-              "version": "1.0.1"
+              "version": "1.1.3"
             }
           ]
         },

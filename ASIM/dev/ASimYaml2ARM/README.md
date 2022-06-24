@@ -9,6 +9,8 @@ To use:
 - Download all the files in this directory to a folder.
 - Download and install the latest Python 3 for your platform, for example from [here](https://www.python.org/downloads/). This script was tested on Windows.
 - Optionally enable the script to run as a command. This document assumes you performed this. On Windows do the following:
+    - Install the requirements.
+        - python -m pip install -r requirements.txt
     - Add the folder to downloaded the files to to your system path.
     - Add `.py` to your system PATHEXT system variable
     - Run the following commands:
