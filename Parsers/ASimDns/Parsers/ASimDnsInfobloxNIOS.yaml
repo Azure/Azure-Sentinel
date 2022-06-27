@@ -29,7 +29,7 @@ ParserQuery: |
         "client "
         SrcIpAddr:string "#" 
         SrcPortNumber:int " "
-        NetworkProtocol:string ": query:"
+        NetworkProtocol:string ": query: "
         DnsQuery:string " "
         DnsQueryClassName:string " "
         DnsQueryTypeName:string " "
@@ -42,7 +42,6 @@ ParserQuery: |
         DnsResponseCodeName = tostring(extract[0]),
         DnsFlags = tostring(extract[1]),
         DnsResponseName = tostring(extract[2])
-        // ++ Extract flags
     | extend 
         EventSubType = "response"
     | project-away extract, rest_of_string,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
@@ -55,6 +54,7 @@ ParserQuery: |
     | extend SyslogMessage = trim_start (@'^(?:[\w\: ]+)?client (?:@.*? )?', SyslogMessage)
     // -- trim_end needed to remove optional repetative IP address at the end.
     | extend SyslogMessage = trim_end (@' \([\d\.]+\)', SyslogMessage)
+    | extend SyslogMessage = replace_string (SyslogMessage, '\\ ', '@@@')
     | parse SyslogMessage with
         SrcIpAddr:string "#" 
         SrcPortNumber:int *
@@ -63,8 +63,10 @@ ParserQuery: |
         DnsQueryClassName:string " "
         DnsQueryTypeName:string " "
         DnsFlags:string
+    | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
     | extend 
-        EventSubType = "request"
+        EventSubType = "request",
+        DnsResponseCodeName = "NA"
     | project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
   };
   let parser = (disabled:boolean=false) {
@@ -78,9 +80,8 @@ ParserQuery: |
         EventSchema="Dns",
         EventSchemaVersion="0.1.3",
         EventType="Query", 
-        EventResult=iff(EventSubType=="request" or DnsResponseCodeName=="NOERROR","Success","Failure")
-    | project-rename
-        DvcIpAddr=HostIP
+        EventResult=iff(EventSubType=="request" or DnsResponseCodeName=="NOERROR","Success","Failure"),
+        DvcIpAddr=iff (HostIP == "Unknown IP", "", HostIP)
     // -- Aliases
     | invoke _ASIM_ResolveDvcFQDN ("Computer")
     | project-away Computer
