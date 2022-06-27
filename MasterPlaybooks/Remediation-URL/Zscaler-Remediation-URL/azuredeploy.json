@@ -32,118 +32,62 @@
         }
     },
     "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "ZscalerAuthenticationFlow": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Zscaler Authentation Playbook'))]"
     },
     "resources": [
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('AzureSentinelConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "kind": "V1",
-            "properties": {
-                "displayName": "[variables('AzureSentinelConnectionName')]",
-                "customParameterValues": {},
-                "parameterValueType": "Alternative",
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                }
-            }
-        },
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
-            ],
-            "tags": {
-                "hidden-SentinelTemplateName": "BlockURL-Zscaler",
-                "hidden-SentinelTemplateVersion": "1.0"
-            },
+            "dependsOn": [],
             "properties": {
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
+                    "parameters": {},
                     "triggers": {
-                        "Microsoft_Sentinel_incident": {
-                            "type": "ApiConnectionWebhook",
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
                             "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
+                                "schema": {
+                                    "properties": {
+                                        "URLs": {
+                                            "items": {
+                                                "properties": {
+                                                    "url": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "Url"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
                             }
                         }
                     },
                     "actions": {
-                        "Set_Zscaler_Block_Category": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "Category",
-                                        "type": "string",
-                                        "value": "[parameters('Block Category')]"
-                                    }
-                                ]
-                            }
-                        },
-                        "Entities_-_Get_URLs": {
-                            "runAfter": {
-                                "Set_Zscaler_Block_Category": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/entities/url"
-                            }
-                        },
                         "For_each": {
-                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "foreach": "@triggerBody()?['URLs']",
                             "actions": {
-                                "Add_comment_to_incident_(V3)": {
+                                "Append_to_string_variable": {
                                     "runAfter": {
                                         "Compose": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "ApiConnection",
+                                    "type": "AppendToStringVariable",
                                     "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "[concat('<p>@{outputs(''Compose'')}<br>Url @{items(''For_each'')?[''Url'']} has been added to category @{variables(''Category'')}</p>')]"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
+                                        "name": "response",
+                                        "value": "@{outputs('Compose')}\nUrl @{items('For_each')?['Url']} has been added to category @{variables('Category')}\n"
                                     }
                                 },
                                 "Compose": {
@@ -154,6 +98,19 @@
                                     },
                                     "type": "Compose",
                                     "inputs": "<img src=\"https://www.zscaler.com//themes/custom/zscaler/logo.svg\" alt=\"Zscaler\">"
+                                },
+                                "HTTP_Activate_Changes": {
+                                    "runAfter": {
+                                        "HTTP_Add_Url": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "cookie": "@body('Parse_Authentication_Response')?['cookie']",
+                                        "method": "POST",
+                                        "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/status/activate')]"
+                                    }
                                 },
                                 "HTTP_Add_Url": {
                                     "runAfter": {},
@@ -172,19 +129,6 @@
                                         },
                                         "method": "PUT",
                                         "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/urlCategories/@{variables(''Category'')}?action=ADD_TO_LIST')]"
-                                    }
-                                },
-                                "HTTP_Activate_Changes": {
-                                    "runAfter": {
-                                        "HTTP_Add_Url": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "cookie": "@body('Parse_Authentication_Response')?['cookie']",
-                                        "method": "POST",
-                                        "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/status/activate')]"
                                     }
                                 }
                             },
@@ -208,6 +152,22 @@
                                 "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/authenticatedSession')]"
                             }
                         },
+                        "Initialize_variable_response": {
+                            "runAfter": {
+                                "Set_Zscaler_Block_Category": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "response",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
                         "Parse_Authentication_Response": {
                             "runAfter": {
                                 "zscaler": [
@@ -227,9 +187,35 @@
                                 }
                             }
                         },
+                        "Response": {
+                            "runAfter": {
+                                "HTTP_Delete_Api_Session": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "@variables('response')",
+                                "statusCode": 200
+                            }
+                        },
+                        "Set_Zscaler_Block_Category": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Category",
+                                        "type": "string",
+                                        "value": "[parameters('Block Category')]"
+                                    }
+                                ]
+                            }
+                        },
                         "zscaler": {
                             "runAfter": {
-                                "Entities_-_Get_URLs": [
+                                "Initialize_variable_response": [
                                     "Succeeded"
                                 ]
                             },
@@ -246,17 +232,7 @@
                     },
                     "outputs": {}
                 },
-                "parameters": {
-                    "$connections": {
-                        "value": {
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                            }
-                        }
-                    }
-                }
+                "parameters": {}
             }
         }
     ]
