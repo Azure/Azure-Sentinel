@@ -82,12 +82,13 @@ class poller:
             }
 
             comment_data = self.DS_obj.get_triage_comments(triage_item['id'])
-            
+
             for comment in comment_data:
-                if not comment['content']:
+                if 'content' not in comment:
                     continue
+                uname = comment['user']['name'] if comment['user'] and 'name' in comment['user'] else None
                 azure_obj['comments'].append({
-                    'user_name': comment['user']['name'],
+                    'user_name': uname,
                     'content': comment['content'],
                     'id': comment['id'],
                     'created': comment['created']
