@@ -1,7 +1,7 @@
 # DigitalShadowsPlaybook-UpdateIncidentStatus
 
 ## Overview
-The DigitalShadowsPlaybook-UpdateIncidentStatus is triggered when an alert is created by the Digital Shadows Data Connector Analytic rules. The main purpose of the playbook is to updates the Azure Sentinel Incident Status as per the logs received by Data connector. Following is the sequence of events take place for triggering the playbook:
+The DigitalShadowsPlaybook-UpdateIncidentStatus is triggered when an alert is created by the Digital Shadows Data Connector Analytic Rules. The main purpose of the playbook is to update the Microsoft Sentinel Incident Status as per the logs received by Data Connector. Following is the sequence of events take place for triggering the playbook:
 
 1. Digital Shadows Data Connector fetches the Triage Items from Digital Shadows Searchlight portal
 1. The analytic rule identifies an update in the Triage Item as an alert
