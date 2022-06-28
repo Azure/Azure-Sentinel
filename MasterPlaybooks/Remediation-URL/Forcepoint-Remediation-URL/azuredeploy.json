@@ -1,34 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata": {
-        "title": "Block URLs - ForcepointNGFW",
-        "description": "This playbook checks if malicious URL is blocked or unblocked by SMC firewall.",
-        "mainSteps": [
-            "1. Fetches a list of potentially malicious URLs",
-            "2. If malicious URL is not blocked by SMC firewall then blocks it."
-        ],
-        "prerequisites": [
-            "1. Forcepoint SMC Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
-            "2. Forcepoint SMC API Key should be known.[Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )",
-            "3. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/)",
-            "4. URL list name for blocking URLs present in SMC should be known."
-        ],
-        "prerequisitesDeployTemplateFile": "../../ForcepointSMCApiConnector/azuredeploy.json",
-        "lastUpdateTime": "2021-07-26T00:00:00.000Z",
-        "entities": [
-            "Url"
-        ],
-        "tags": [
-            "Remediation"
-        ],
-        "support": {
-            "tier": "community"
-        },
-        "author": {
-            "name": "Accenture"
-        }
-    },
     "parameters": {
         "PlaybookName": {
             "type": "String",
@@ -65,8 +37,7 @@
         }
     },
     "variables": {
-        "Forcepoint_Connector": "[concat('ForcepointSMCApiConnector-',parameters('PlaybookName'))]",
-        "azureSentinel_Connection": "[concat('azuresentienl-',parameters('PlaybookName'))]"
+        "Forcepoint_Connector": "[concat('ForcepointSMCApiConnector-',parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -75,8 +46,7 @@
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('Forcepoint_Connector'))]",
-                "[resourceId('Microsoft.Web/connections', variables('azureSentinel_Connection'))]"
+                "[resourceId('Microsoft.Web/connections', variables('Forcepoint_Connector'))]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -90,18 +60,29 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_incident": {
-                            "type": "ApiConnectionWebhook",
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
                             "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
+                                "schema": {
+                                    "properties": {
+                                        "URLs": {
+                                            "items": {
+                                                "properties": {
+                                                    "url": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "url"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
                             }
                         }
                     },
@@ -147,45 +128,13 @@
                                                             },
                                                             "else": {
                                                                 "actions": {
-                                                                    "Add_comment_to_incident_(V3)": {
+                                                                    "Response": {
                                                                         "runAfter": {},
-                                                                        "type": "ApiConnection",
+                                                                        "type": "Response",
+                                                                        "kind": "Http",
                                                                         "inputs": {
-                                                                            "body": {
-                                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                                                "message": "<p>@{outputs('Forcepoint_Logo')}<strong>Forcepoint NGFW-Block URL</strong><br>\nThe below URL are found to be malicious and playbook taken action against to that URLs.<br>\n<br>\n@{body('Create_HTML_table_for_Add_comment_to_incident')}</p>"
-                                                                            },
-                                                                            "host": {
-                                                                                "connection": {
-                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                                                }
-                                                                            },
-                                                                            "method": "post",
-                                                                            "path": "/Incidents/Comment"
-                                                                        }
-                                                                    },
-                                                                    "Update_incident": {
-                                                                        "runAfter": {
-                                                                            "Add_comment_to_incident_(V3)": [
-                                                                                "Succeeded"
-                                                                            ]
-                                                                        },
-                                                                        "type": "ApiConnection",
-                                                                        "inputs": {
-                                                                            "body": {
-                                                                                "classification": {
-                                                                                    "ClassificationAndReason": "TruePositive - SuspiciousActivity"
-                                                                                },
-                                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                                                "status": "Closed"
-                                                                            },
-                                                                            "host": {
-                                                                                "connection": {
-                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                                                }
-                                                                            },
-                                                                            "method": "put",
-                                                                            "path": "/Incidents"
+                                                                            "body": "@{outputs('Forcepoint_Logo')}Forcepoint NGFW-Block URL\nThe below URL are found to be malicious and playbook taken action against to that URLs.\n\n@{body('Create_HTML_table_for_Add_comment_to_incident')}",
+                                                                            "statusCode": 200
                                                                         }
                                                                     }
                                                                 }
@@ -255,7 +204,7 @@
                                                             }
                                                         },
                                                         "Looping_URLs": {
-                                                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                                                            "foreach": "@triggerBody()?['URLs']",
                                                             "actions": {
                                                                 "Check_the_result_length_from_filter_output": {
                                                                     "actions": {
@@ -278,8 +227,8 @@
                                                                                 "name": "Consolidatevrbl",
                                                                                 "value": {
                                                                                     "Action": "Already blocked",
-                                                                                    "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
-                                                                                    "URLAddres": "@{items('Looping_URLs')?['Url']}",
+                                                                                    "IncidentSeverity": "",
+                                                                                    "URLAddres": "@{items('Looping_URLs')?['url']}",
                                                                                     "URLStatus": "Blocked"
                                                                                 }
                                                                             }
@@ -321,7 +270,7 @@
                                                                                     "name": "Consolidatevrbl",
                                                                                     "value": {
                                                                                         "Action": "Blocked by playbook",
-                                                                                        "IncidentSeverity": "@{triggerBody()?['object']?['properties']?['severity']}",
+                                                                                        "IncidentSeverity": "",
                                                                                         "URLAddres": "@{items('Looping_URLs')?['Url']}",
                                                                                         "URLStatus": "Blocked"
                                                                                     }
@@ -335,7 +284,7 @@
                                                                             {
                                                                                 "contains": [
                                                                                     "@body('Get_URL_address')?['url_entry']",
-                                                                                    "@items('Looping_URLs')?['Url']"
+                                                                                    "@items('Looping_URLs')?['url']"
                                                                                 ]
                                                                             }
                                                                         ]
@@ -548,7 +497,7 @@
                                 "and": [
                                     {
                                         "greater": [
-                                            "@length(body('Entities_-_Get_URLs')?['URLs']?[0]?['Url'])",
+                                            "@length(triggerBody())",
                                             0
                                         ]
                                     }
@@ -556,20 +505,6 @@
                             },
                             "type": "If",
                             "description": "Form this condition, we will check like if body present in the sentinel incident or not and we will check the URL are available or not."
-                        },
-                        "Entities_-_Get_URLs": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/entities/url"
-                            }
                         },
                         "Forcepoint_Logo": {
                             "runAfter": {
@@ -703,11 +638,7 @@
                             "description": "To store URL , severity , action to be taken into one array varriable and we can create a table."
                         },
                         "SMC_API_Key": {
-                            "runAfter": {
-                                "Entities_-_Get_URLs": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -730,11 +661,6 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('Forcepoint_Connector'))]",
                                 "connectionName": "[variables('Forcepoint_Connector')]",
                                 "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('ForcepointSMCConnectorName'))]"
-                            },
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureSentinel_Connection'))]",
-                                "connectionName": "[variables('azureSentinel_Connection')]",
-                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
                             }
                         }
                     }
@@ -749,20 +675,6 @@
             "properties": {
                 "api": {
                     "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('ForcepointSMCConnectorName'))]"
-                }
-            }
-        },
-        {
-            "type": "MICROSOFT.WEB/CONNECTIONS",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('azureSentinel_Connection')]",
-            "kind": "V1",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "displayName": "[variables('azuresentinel_Connection')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
                 }
             }
         }
