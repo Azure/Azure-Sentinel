@@ -13,21 +13,21 @@
 
 # Overview 
 
-Palo Alto XDR playbook is used in Alert triaging and executing the automatd response towards issue, and it also helps in evidence collection.
+Palo Alto XDR playbook is used in Alert triaging and executing the automated response towards issue, and it also helps in evidence collection.
 
 <a name="prerequisites">
 
 # Prerequisites 
-- This playbook uses Teams connector and VirusTotal external connector to enrich the investigation, so please configure your account if not already and keep the authorized API key handy.
+- This playbook uses Teams connector and VirusTotal external connector to enrich the investigation, so please configure your account if not already and keep the authorized API key handy. Reference link - https://www.virustotal.com/
 
-
+  
 <a name="deployall">
 
 # Deploy the Playbook
 - You may copy the JSON file and deploy the custom template in azure with variables of own choice or do single click deploy from below tab.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc03vikas%2FAzure-Sentinel-1%2Fc03vikas%2FPlaybooks%2FPaloAltoXDR%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fc03vikas%2FAzure-Sentinel-1%2Fc03vikas%2FPlaybooks%2FPaloAltoXDR%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAltoXDR%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAltoXDR%2Fazuredeploy.json)
 
 
 <a name="instructions">
@@ -50,7 +50,7 @@ Palo Alto XDR playbook is used in Alert triaging and executing the automatd resp
   - Repeat steps for other connections as well.
 * In Logic App designer authorize Teams channel connection as well, for playbooks posting adaptive cards.
 * For VirusTotal connector please enter the valid API key to activate the connector.
-* For Log analytics workspace action you will have to configure the desired query which your analysts should received prior to their investigation as a kick starter.
+* For Log analytics workspace action you will have to configure the desired query which your analysts should receive prior to their investigation as a kick starter.
 
 
 
