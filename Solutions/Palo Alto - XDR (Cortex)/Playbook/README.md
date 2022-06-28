@@ -18,7 +18,8 @@ Palo Alto XDR playbook is used in Alert triaging and executing the automated res
 <a name="prerequisites">
 
 # Prerequisites 
-- This playbook uses Teams connector and VirusTotal external connector to enrich the investigation, so please configure your account if not already and keep the authorized API key handy. Reference link - https://www.virustotal.com/
+- This playbook uses Microsoft Teams connector and VirusTotal connector to enrich the investigation, so you will have to set up your account if not already to use the Microsoft ID to authorize the teams connector. You will also have to visit this VT site create your free account and once you do, you shall get a  standard free public API Key, this key will be required to authorize the connector. Reference link - https://www.virustotal.com/
+- To do so all you have to go to API connections blade after deployment and click on properties and supply the your Virus Total Public free API Key to Authorize the connector.
 
   
 <a name="deployall">
@@ -26,8 +27,8 @@ Palo Alto XDR playbook is used in Alert triaging and executing the automated res
 # Deploy the Playbook
 - You may copy the JSON file and deploy the custom template in azure with variables of own choice or do single click deploy from below tab.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAltoXDR%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAltoXDR%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPalo%2520Alto%2520-%2520XDR%2520(Cortex)%2FPlaybook%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPalo%2520Alto%2520-%2520XDR%2520(Cortex)%2FPlaybook%2Fazuredeploy.json)
 
 
 <a name="instructions">
