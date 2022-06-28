@@ -16,12 +16,20 @@
       "metadata": {
         "description": "Enter name for Zscaler playbook without spaces"
       }
+    },
+    "ForcepointPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Forcepoint playbook without spaces"
+      }
     }
   },
   "variables": {
     "AzureSentinelConnectionName": "[concat('azuresentienl-',parameters('MasterPlaybookName'))]",
     "Defaultplaybookname": "MSDefaultNestedPlaybook",
-    "ZscalerID": "[ if(not(empty(parameters('ZscalerPlaybookName'))),parameters('ZscalerPlaybookName'),variables('Defaultplaybookname'))]"
+    "ZscalerID": "[ if(not(empty(parameters('ZscalerPlaybookName'))),parameters('ZscalerPlaybookName'),variables('Defaultplaybookname'))]",
+    "ForcepointID": "[ if(not(empty(parameters('ForcepointPlaybookName'))),parameters('ForcepointPlaybookName'),variables('Defaultplaybookname'))]"
   },
   "resources": [
     {
@@ -187,6 +195,85 @@
               },
               "type": "Scope"
             },
+            "Forcepoint": {
+              "actions": {
+                "Append_Forcepoint_status_code": {
+                  "runAfter": {
+                    "Forcepoint-BlockURLs-ForcepointNGFW": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('Forcepoint-BlockURLs-ForcepointNGFW')['statusCode']"
+                  }
+                },
+                "Forcepoint-BlockURLs-ForcepointNGFW": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "URLs": "@body('Entities_-_Get_URLs')?['URLs']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('ForcepointID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_Forcepoint_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_Forcepoint-BlockURLs-ForcepointNGFW": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Forcepoint-BlockURLs-ForcepointNGFW')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_Forcepoint_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('Forcepoint-BlockURLs-ForcepointNGFW')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
             "Condition_to_check_any_one_of_the_playbook_failed_before_closing_the_incident": {
               "actions": {
                 "Update_incident": {
@@ -244,6 +331,9 @@
             "Filter_Success_Status_Codes": {
               "runAfter": {
                 "Zscaler": [
+                  "Succeeded"
+                ],
+                "Forcepoint": [
                   "Succeeded"
                 ]
               },
