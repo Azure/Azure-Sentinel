@@ -38,4 +38,4 @@ It will lead to a custom deployment page where after entering accurate credentia
 ![Create resources](https://user-images.githubusercontent.com/88835344/142581668-5d5dd767-55a2-49fc-a9c9-eb458f75a2a7.png)
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDigital Shadows%2FPlaybooksk%2FDigitalShadowsPlaybook-UpdateIncidentStatus.json)
+![Deploy to Azure](https://aka.ms/deploytoazurebutton)(https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDigital%20Shadows%2FPlaybooksk%2FDigitalShadowsPlaybook-UpdateIncidentStatus.json)
