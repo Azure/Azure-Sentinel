@@ -21,6 +21,7 @@ Following is the workflow of the playbook:
 1. Prior to the deployment of this playbook, Digital Shadows Data Connector needs to be deployed under the same subscription.
 1. Obtain Digital Shadows SearchLight API credentials from Digital Shadows. These credentials will be needed to configure the connector.
 
+
 **Note**: This playbook is intended to be used with the Digital Shadows Data Connector and is not intended to be used standalone. When being used with the Digital Shadows Data Connector, it needs to be deployed under the same subscription. If the Playbook is to be deployed manually or as a standalone resource, please ignore the prerequisites.
 
 
@@ -28,7 +29,24 @@ Following is the workflow of the playbook:
 The Playbook is deployed with the Digital Shadows Data Connector. To deploy the Data connector, follow the below steps:
 1. Go to Azure Sentinel -> Data Connectors
 1. Click on the Digital Shadows connector, connector page will open. 
-1. Click on the `Deploy to Azure` button.   
+1. Click on the `Deploy to Azure` button.
+1. Configuring permissions:
+    - Go to Microsoft Sentinel > Settings
+    - Click “Workspace settings” to navigate to the Log Analytics workspace
+    - Click “Access control (IAM)”
+    - Click “Add” > Add role assignment
+    - Select “Microsoft Sentinel Responder” from the list of Roles and click “Next”
+    - On the “Members” tab
+        - Assign access to: Managed identity
+        - Click “Select members”
+        - In the pop-out menu, click the “Managed identity” drop down and select “Logic app”
+        - Select the Logic app named “DigitalShadowsPlaybook-UpdateIncidentStatus” and click the Select button
+    - Optionally provide a description such as “Provide access to the Digital Shadows UpdateIncidentStatus playbook to update the status of Microsoft Sentinel Incidents from changes in Digital Shadows SearchLight Portal”.
+    - Click “Review + assign” twice to create the new role assignment
+
+
+&emsp;&emsp;&emsp;&emsp;[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDigital%20Shadows%2FPlaybooksk%2FDigitalShadowsPlaybook-UpdateIncidentStatus.json)
+
 
 ![Deploy to Azure](https://user-images.githubusercontent.com/88835344/143393168-018f97fb-95c1-4884-ba93-09306dd168b0.png)
 
@@ -36,6 +54,3 @@ The Playbook is deployed with the Digital Shadows Data Connector. To deploy the 
 It will lead to a custom deployment page where after entering accurate credentials and other information, the playbook will be created with other  resources. 
 
 ![Create resources](https://user-images.githubusercontent.com/88835344/142581668-5d5dd767-55a2-49fc-a9c9-eb458f75a2a7.png)
-
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDigital%20Shadows%2FPlaybooksk%2FDigitalShadowsPlaybook-UpdateIncidentStatus.json)
