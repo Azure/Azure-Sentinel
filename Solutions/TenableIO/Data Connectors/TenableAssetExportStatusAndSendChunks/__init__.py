@@ -1,9 +1,8 @@
 import logging
 import os
 
-from ..exports_store import ExportsTableStore, ExportsTableNames
 from ..exports_queue import ExportsQueue, ExportsQueueNames
-
+from ..exports_store import ExportsTableStore, ExportsTableNames
 from ..tenable_helper import TenableIO, TenableStatus, TenableExportType
 
 connection_string = os.environ['AzureWebJobsStorage']
@@ -19,6 +18,16 @@ def send_chunks_to_queue(exportJobDetails):
     if len(chunks) > 0:
         assets_table = ExportsTableStore(connection_string, assets_table_name)
         for chunk in chunks:
+            chunk_dtls = assets_table.get(exportJobId, str(chunk))
+            if chunk_dtls:
+                current_chunk_status = chunk_dtls['jobStatus']
+                if (
+                        current_chunk_status == TenableStatus.sent_to_queue.value or
+                        current_chunk_status == TenableStatus.finished.value
+                ):
+                    logging.warning(f'Avoiding asset chunk duplicate processing -- {exportJobId} {chunk}. Current status: {current_chunk_status}')
+                    continue
+
             assets_table.merge(exportJobId, str(chunk), {
                 'jobStatus': TenableStatus.sending_to_queue.value,
                 'jobType': TenableExportType.asset.value
@@ -30,12 +39,17 @@ def send_chunks_to_queue(exportJobDetails):
                 logging.warn(f'chunk queued -- {exportJobId} {chunk}')
                 logging.warn(sent)
                 assets_table.merge(exportJobId, str(chunk), {
-                                   'jobStatus': TenableStatus.sent_to_queue.value
-                                   })
+                    'jobStatus': TenableStatus.sent_to_queue.value
+                })
             except Exception as e:
                 logging.warn(
                     f'Failed to send {exportJobId} - {chunk} to be processed')
                 logging.warn(e)
+
+                assets_table.merge(exportJobId, str(chunk), {
+                    'jobStatus': TenableStatus.sent_to_queue_failed.value,
+                    'jobType': TenableExportType.asset.value
+                })
     else:
         logging.info('no chunk found to process.')
         return
