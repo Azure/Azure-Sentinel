@@ -2,7 +2,9 @@
 
 Master playbook is integrated with multiple firewall Endpoint protection products.  
  - CarbonBlack 
- - Crowdstrike.
+ - Crowdstrike
+ - CiscoMeraki
+ - MDE
 
 Endpoint protection products are deployed as child/nested playbooks.
 
@@ -15,8 +17,6 @@ If a malicious host is detected from the Azure sentinel, master playbook calls a
  3. Response from individual playbooks are returned to master playbook for incident comment. 
 
 ![Master](./Images/PlaybookDesignerLight.png)
-
-![Master](./Images/PlaybookDesignerDark.png)
 
 
  ## Pre-requisites for deployment
@@ -76,11 +76,13 @@ To add new nested playbook to master playbook:
 
  2. Fill in the required parameters for deploying the playbook.
 
- | Parameter  | Description |
-| ------------- | ------------- |
-| **Playbook Name** | Enter the master playbook name here without spaces. |
-| **CarbonBlack Playbook Name**|Enter the name of CarbonBlack Nested playbook without spaces. |
+ | Parameter                     | Description                                                   |
+|-------------------------------|---------------------------------------------------------------|
+| **Playbook Name**             | Enter the master playbook name here without spaces.           |
+| **CarbonBlack Playbook Name** | Enter the name of CarbonBlack Nested playbook without spaces. |
 | **Crowdstrike Playbook Name** | Enter the name of Crowdstrike Nested playbook without spaces. |
+| **CiscoMeraki Playbook Name** | Enter the name of CiscoMeraki Nested playbook without spaces. |
+| **MDEIsolate Playbook Name**  | Enter the name of MDEIsolate Nested playbook without spaces.  |
 
 
 # Post-Deployment Instructions
