@@ -23,13 +23,21 @@
       "metadata": {
         "description": "Enter name for Forcepoint playbook without spaces"
       }
+    },
+    "FortinetPlaybookName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Enter name for Fortinet playbook without spaces"
+      }
     }
   },
   "variables": {
     "AzureSentinelConnectionName": "[concat('azuresentienl-',parameters('MasterPlaybookName'))]",
     "Defaultplaybookname": "MSDefaultNestedPlaybook",
     "ZscalerID": "[ if(not(empty(parameters('ZscalerPlaybookName'))),parameters('ZscalerPlaybookName'),variables('Defaultplaybookname'))]",
-    "ForcepointID": "[ if(not(empty(parameters('ForcepointPlaybookName'))),parameters('ForcepointPlaybookName'),variables('Defaultplaybookname'))]"
+    "ForcepointID": "[ if(not(empty(parameters('ForcepointPlaybookName'))),parameters('ForcepointPlaybookName'),variables('Defaultplaybookname'))]",
+    "FortinetID": "[ if(not(empty(parameters('FortinetPlaybookName'))),parameters('FortinetPlaybookName'),variables('Defaultplaybookname'))]"
   },
   "resources": [
     {
@@ -274,6 +282,85 @@
               },
               "type": "Scope"
             },
+            "Fortinet": {
+              "actions": {
+                "Append_Fortinet_status_code": {
+                  "runAfter": {
+                    "Fortinet-FortiGate-ResponseOnBlockURL": [
+                      "Succeeded",
+                      "TimedOut",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "StatusCodes",
+                    "value": "@outputs('FFortinet-FortiGate-ResponseOnBlockURL')['statusCode']"
+                  }
+                },
+                "Fortinet-FortiGate-ResponseOnBlockURL": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "body": {
+                      "URLs": "@body('Entities_-_Get_URLs')?['URLs']"
+                    },
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('FortinetID'))]"
+                      }
+                    }
+                  }
+                },
+                "Verify_Fortinet_response_body": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)_Fortinet-FortiGate-ResponseOnBlockURL": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Fortinet-FortiGate-ResponseOnBlockURL')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Append_Fortinet_status_code": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@Outputs('Fortinet-FortiGate-ResponseOnBlockURL')?['headers']?['x-ms-workflow-name']",
+                            "MSDefaultNestedPlaybook"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Status_Codes": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            },
             "Condition_to_check_any_one_of_the_playbook_failed_before_closing_the_incident": {
               "actions": {
                 "Update_incident": {
@@ -334,6 +421,9 @@
                   "Succeeded"
                 ],
                 "Forcepoint": [
+                  "Succeeded"
+                ],
+                "Fortinet": [
                   "Succeeded"
                 ]
               },
