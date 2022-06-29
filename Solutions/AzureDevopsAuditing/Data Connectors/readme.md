@@ -26,7 +26,7 @@ $workspaceKey = "*****"
 $organization = "MyOrganization"
 $pattoken = "*****"
 
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/SecureHats/Sentinel-playground/main/DataConnectors/AzureDevOpsAuditing/scripts/Set-AzureDevOpsAuditing.ps1' -OutFile 'Set-AzureDevOpsAuditing.ps1' && .\/Set-AzureDevOpsAuditing.ps1 -workspaceId $workspaceId -workspaceKey $workspaceKey -organization $organization -personalaccesstoken $pattoken
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/AzureDevOpsAuditing/scripts/Set-AzureDevOpsAuditing.ps1' -OutFile 'Set-AzureDevOpsAuditing.ps1' && .\/Set-AzureDevOpsAuditing.ps1 -workspaceId $workspaceId -workspaceKey $workspaceKey -organization $organization -personalaccesstoken $pattoken
 ```
 
 ## Prerequisites
