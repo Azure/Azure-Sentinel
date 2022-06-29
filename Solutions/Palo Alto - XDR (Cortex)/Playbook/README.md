@@ -51,7 +51,7 @@ This Video demonstarte on how to obtain the API Key https://youtu.be/9ftKViq71eQ
   - Repeat steps for other connections as well.
 * In Logic App designer authorize Teams channel connection as well, for playbooks posting adaptive cards.
 * For VirusTotal connector please enter the valid API key to activate the connector.
-* For Log analytics workspace action you will have to configure the desired query which your analysts should receive prior to their investigation as a kick starter.
+* For Log analytics workspace action you will have to provide the Resouirce group name where your deployment is done, specify the resource name, resource type will be Log Analytics Workspace, your Subscription detail, time range can be like Last 12 hours, and then configure the desired query which your analysts should receive prior to their investigation as a kick starter.
 
 
 
