@@ -8,8 +8,8 @@ This playbook will isolate (full) the machine in Microsoft Defender for Endpoint
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIsolate-MDEMachine%2Fincident-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIsolate-MDEMachine%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fa56b2c6ffa23e0a9bc414a4e44d7bf3819de7af5%2FMasterPlaybooks%2FRemediation-Host%2FMDEIsolate-Remediation-Host%2Fazurdeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fa56b2c6ffa23e0a9bc414a4e44d7bf3819de7af5%2FMasterPlaybooks%2FRemediation-Host%2FMDEIsolate-Remediation-Host%2Fazurdeploy.json)
 
 ## Prerequisites
 

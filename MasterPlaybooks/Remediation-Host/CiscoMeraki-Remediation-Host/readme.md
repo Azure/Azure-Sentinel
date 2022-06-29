@@ -33,8 +33,8 @@
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FPlaybooks%2FBlock-Device-Client%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FPlaybooks%2FBlock-Device-Client%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fa56b2c6ffa23e0a9bc414a4e44d7bf3819de7af5%2FMasterPlaybooks%2FRemediation-Host%2FCiscoMeraki-Remediation-Host%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fa56b2c6ffa23e0a9bc414a4e44d7bf3819de7af5%2FMasterPlaybooks%2FRemediation-Host%2FCiscoMeraki-Remediation-Host%2Fazuredeploy.json)
 
 
  2. Fill in the required parameters for deploying the playbook.
