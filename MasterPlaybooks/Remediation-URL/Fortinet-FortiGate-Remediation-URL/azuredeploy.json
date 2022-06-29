@@ -107,18 +107,29 @@
                         }
                     },
                     "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
-                            "type": "ApiConnectionWebhook",
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
                             "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
+                                "schema": {
+                                    "properties": {
+                                        "URLs": {
+                                            "items": {
+                                                "properties": {
+                                                    "url": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "url"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
                             }
                         }
                     },
@@ -139,106 +150,8 @@
                             },
                             "description": "This is used to compose the list of actions taken by SOC on respective URL addresses"
                         },
-                        "Condition_based_on_the_incident_configuration_from_adaptive_card": {
-                            "actions": {
-                                "Add_comment_to_incident_(V3)_3": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>Fortinet Playbook ran and performed the following actions:<br>\n@{variables('Comment')}<br>\nActions taken on Sentinel : Add comment to incident and closure with classification reason &nbsp;: @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_2')['data']['incidentStatus']}</p>"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
-                                    }
-                                },
-                                "Update_incident": {
-                                    "runAfter": {
-                                        "Add_comment_to_incident_(V3)_3": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "classification": {
-                                                "ClassificationAndReason": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_2')['data']['incidentStatus']}"
-                                            },
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "severity": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_2')['data']['incidentSeverity']}",
-                                            "status": "Closed"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                            }
-                                        },
-                                        "method": "put",
-                                        "path": "/Incidents"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "For_each": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "else": {
-                                "actions": {
-                                    "Add_comment_to_incident_(V3)": {
-                                        "runAfter": {},
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "body": {
-                                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                "message": "<p>Fortinet Playbook ran and performed the following actions:<br>\n@{variables('Comment')}<br>\nActions taken on Sentinel : Add comment to incident&nbsp;</p>"
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                }
-                                            },
-                                            "method": "post",
-                                            "path": "/Incidents/Comment"
-                                        }
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_2')?['submitActionId']",
-                                            "Change incident configuration"
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If",
-                            "description": "This decides the action taken on the summarized adaptive card"
-                        },
-                        "Entities_-_Get_URLs": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/entities/url"
-                            }
-                        },
                         "For_each": {
-                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "foreach": "@triggerBody()?['URLs']",
                             "actions": {
                                 "Append_to_string_variable": {
                                     "runAfter": {
@@ -259,7 +172,7 @@
                                         "columns": [
                                             {
                                                 "header": "URL_Address",
-                                                "value": "@items('For_each')?['Url']"
+                                                "value": "@items('For_each')?['url']"
                                             },
                                             {
                                                 "header": "Action_Taken",
@@ -273,14 +186,14 @@
                                 }
                             },
                             "runAfter": {
-                                "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_2": [
+                                "Compose_actions_on_URL_to_be_displayed_on_adaptive_card": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Foreach"
                         },
                         "For_each_malicious_URL": {
-                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "foreach": "@triggerBody()?['URLs']",
                             "actions": {
                                 "Address_group_details": {
                                     "runAfter": {
@@ -330,7 +243,7 @@
                                             "type": "AppendToArrayVariable",
                                             "inputs": {
                                                 "name": "URLAddressAction",
-                                                "value": "URL Address : @{items('For_each_malicious_URL')?['Url']} ,  Action Taken :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']}  "
+                                                "value": "URL Address : @{items('For_each_malicious_URL')?['url']} ,  Action Taken :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']}  "
                                             }
                                         },
                                         "Condition_to_check_if_user_chosen_Block_URL": {
@@ -356,8 +269,8 @@
                                                     "type": "ApiConnection",
                                                     "inputs": {
                                                         "body": {
-                                                            "fqdn": "@{items('For_each_malicious_URL')?['Address']}",
-                                                            "name": "@{items('For_each_malicious_URL')?['Address']}",
+                                                            "fqdn": "@{items('For_each_malicious_URL')?['url']}",
+                                                            "name": "@{items('For_each_malicious_URL')?['url']}",
                                                             "type": "fqdn"
                                                         },
                                                         "host": {
@@ -425,7 +338,7 @@
                                                 "type": "AppendToArrayVariable",
                                                 "inputs": {
                                                     "name": "URLAddressAction",
-                                                    "value": "URL Address : @{items('For_each_malicious_URL')?['Url']} ,  Action Taken :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']}"
+                                                    "value": "URL Address : @{items('For_each_malicious_URL')?['url']} ,  Action Taken :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']}"
                                                 },
                                                 "description": "This appends the array variable action taken on URL"
                                             }
@@ -456,7 +369,7 @@
                                                     "inputs": {
                                                         "name": "adaptivecardBody",
                                                         "value": {
-                                                            "text": "The URL  @{items('For_each_malicious_URL')?['Address']} is already a member of the blocked address group",
+                                                            "text": "The URL  @{items('For_each_malicious_URL')?['url']} is already a member of the blocked address group",
                                                             "type": "TextBlock",
                                                             "wrap": true
                                                         }
@@ -524,7 +437,7 @@
                                                         "inputs": {
                                                             "name": "adaptivecardBody",
                                                             "value": {
-                                                                "text": "The URL  @{items('For_each_malicious_URL')?['Address']} is not a member of the blocked address group ",
+                                                                "text": "The URL  @{items('For_each_malicious_URL')?['url']} is not a member of the blocked address group ",
                                                                 "type": "TextBlock",
                                                                 "wrap": true
                                                             }
@@ -605,7 +518,7 @@
                                                 "inputs": {
                                                     "name": "adaptivecardBody",
                                                     "value": {
-                                                        "text": "The URL @{items('For_each_malicious_URL')?['Address']} is not a member of the blocked address group ",
+                                                        "text": "The URL @{items('For_each_malicious_URL')?['url']} is not a member of the blocked address group ",
                                                         "type": "TextBlock",
                                                         "wrap": true
                                                     }
@@ -1204,7 +1117,7 @@
                                         },
                                         "path": "/flowbot/actions/flowcontinuation/recipienttypes/channel/$subscriptions",
                                         "queries": {
-                                            "groupId": "18de1100-ab2e-4505-be42-8263b915b221"
+                                            "groupId": "[parameters('Teams GroupId')]"
                                         }
                                     }
                                 },
@@ -1305,7 +1218,7 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "filter",
-                                        "value": "filter=fqdn=@{concat('@',items('For_each_malicious_URL')?['Url'])}"
+                                        "value": "filter=fqdn=@{concat('@',items('For_each_malicious_URL')?['url'])}"
                                     },
                                     "description": "This sets the variable filter for address object azure function"
                                 }
@@ -1359,11 +1272,7 @@
                             "description": "This holds the action taken on each URL "
                         },
                         "Initialize_variable_action_name": {
-                            "runAfter": {
-                                "Entities_-_Get_URLs": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -1442,33 +1351,17 @@
                             },
                             "description": "This is used to hold the filter condition to use in the azure function"
                         },
-                        "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_2": {
+                        "Response": {
                             "runAfter": {
-                                "Compose_actions_on_URL_to_be_displayed_on_adaptive_card": [
+                                "For_each": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "ApiConnectionWebhook",
+                            "type": "Response",
+                            "kind": "Http",
                             "inputs": {
-                                "body": {
-                                    "body": {
-                                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n           \n            \"weight\": \"Bolder\",\n            \"text\": \"Below is the summary of actions taken on URL's by SOC\",\n            \"wrap\": true\n        },\n {\n    \"size\": \"Small\",\n    \"style\": \"Person\",\n    \"type\": \"Image\",\n    \"url\": \"https://www.fortinet.com/content/dam/fortinet-blog/article-images/individual-images/logo.png\"\n  },\n       {\n  \"columns\": [\n    {\n      \"items\":@{body('Compose_actions_on_URL_to_be_displayed_on_adaptive_card')} ,\n      \"type\": \"Column\",\n      \"wrap\": true\n    }\n  ],\n  \"separator\": \"true\",\n  \"type\": \"ColumnSet\",\n  \"width\": \"stretch\"\n},\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident]()\",\n            \"wrap\": true\n        },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Azure Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n       \n     \n        \n    ],\n\"width\":\"auto\",\n   \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Change incident configuration\"\n                    },\n {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Ignore\"\n                    }\n   ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
-                                        "recipient": {
-                                            "channelId": "19:7abc1180c1d84a3fba83770e34231132@thread.tacv2"
-                                        },
-                                        "shouldUpdateCard": true
-                                    },
-                                    "notificationUrl": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['teams']['connectionId']"
-                                    }
-                                },
-                                "path": "/flowbot/actions/flowcontinuation/recipienttypes/channel/$subscriptions",
-                                "queries": {
-                                    "groupId": "[parameters('Teams GroupId')]"
-                                }
+                                "body": "Fortinet Playbook ran and performed the following actions:\n@{variables('Comment')}",
+                                "statusCode": 200
                             }
                         }
                     },
