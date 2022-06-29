@@ -421,11 +421,22 @@ class SyslogDaemonVerifications(ColorfulPrint):
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
-        command_object.run_full_test()
-        if command_object.is_successful == "Warn":
-            command_object.print_warning(command_object.command_result_err)
-        elif not command_object.is_successful:
-            command_object.print_warning(self.Syslog_daemon_not_listening_warning)
+        command_object.run_command()
+        is_command_successful = command_object.is_command_successful()
+        if is_command_successful is True:
+            command_object.print_result_to_prompt()
+            command_object.log_result_to_file()
+        else:
+            result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":6514 "]
+            command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
+            command_object.run_command()
+            command_object.is_command_successful()
+            command_object.print_result_to_prompt()
+            command_object.log_result_to_file()
+            if command_object.is_successful == "Warn":
+                command_object.print_warning(command_object.command_result_err)
+            elif not command_object.is_successful:
+                command_object.print_warning(self.Syslog_daemon_not_listening_warning)
 
     def verify_Syslog_daemon_forwarding_configuration(self):
         '''
@@ -440,6 +451,8 @@ class SyslogDaemonVerifications(ColorfulPrint):
             command_to_run = "sudo cat " + self.syslog_daemon_forwarding_path[self.SYSLOG_DAEMON]
             result_keywords_array = syslog_daemon_forwarding_keywords[self.SYSLOG_DAEMON]
             command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
+            # Use is command successful for logic
+            # Use putty, password
             command_object.run_full_test()
             if not command_object.is_successful:
                 command_object.print_error(self.Syslog_daemon_not_forwarding_error)
