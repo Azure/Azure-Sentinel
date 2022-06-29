@@ -2,7 +2,7 @@
 
 ARM template for ASIM NetworkSession schema parser for Fortinet FortiGate.
 
-This ASIM parser supports normalizing Fortinet FortiGate logs to the ASIM Web Session normalized schema. 
+This ASIM parser supports normalizing Fortinet FortiGate logs to the ASIM Web Session normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
