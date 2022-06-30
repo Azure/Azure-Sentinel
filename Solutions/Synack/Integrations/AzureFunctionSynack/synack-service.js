@@ -19,14 +19,16 @@ exports.fetchSynackVulns = async function fetchSynackVulns(context) {
                 resolve(allTheVulns)
             })
             .catch((error) => {
-                context.error(`error occurred while trying to fetch a vulnerability page from Synack\n ${error}`)
+                context.log.error(`error occurred while trying to fetch a vulnerability page from Synack\n ${error}`)
                 reject(error)
             })
     })
 
 }
 
-function fetchSynackVulnsRecursively(context, pageSize, pageNumber, allVulnerabilities) {
+async function fetchSynackVulnsRecursively(context, pageSize, pageNumber, allVulnerabilities) {
+
+    context.log("fetching vulns recursively")
     return new Promise((resolve, reject) => {
         fetchSynackVulnsPage(context, pageSize, pageNumber)
             .then((pageOfVulns) => {
@@ -45,7 +47,7 @@ function fetchSynackVulnsRecursively(context, pageSize, pageNumber, allVulnerabi
                 }
             })
             .catch((error) => {
-                context.error(`error occurred while trying to fetch a vulnerability page from Synack\n ${error}`)
+                context.log.error(`error occurred while trying to fetch a vulnerability page from Synack\n ${error}`)
                 reject(error)
             })
     })
@@ -70,7 +72,7 @@ function fetchSynackVulnsPage(context, pageSize, pageNumber) {
                 responseContent += chunk
             })
             response.on('error', function (error) {
-                context.error(`ERROR: ${error}`)
+                context.log.error(`ERROR: ${error}`)
                 reject(error)
             })
             response.on('end', function () {
