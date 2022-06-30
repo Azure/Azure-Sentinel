@@ -6,6 +6,7 @@ const WORKSPACE_ID = process.env.AZURE_WORKSPACE_ID
 const CLIENT_ID = process.env.AZURE_CLIENT_ID
 const CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET
 const TENANT_ID = process.env.AZURE_TENANT_ID
+const MAX_DESCRIPTION_LENGTH = 5000
 
 exports.getAzureAuthenticationToken = function getAzureAuthenticationToken(context) {
 
@@ -30,7 +31,7 @@ exports.getAzureAuthenticationToken = function getAzureAuthenticationToken(conte
                     responseContent += chunk
                 })
                 response.on('error', function (error) {
-                    context.error(`ERROR: ${error}`)
+                    context.log.error(`ERROR: ${error}`)
                     reject(error)
                 })
                 response.on('end', function () {
@@ -49,10 +50,9 @@ exports.getAzureAuthenticationToken = function getAzureAuthenticationToken(conte
 
 }
 
-exports.createOrUpdateIncident = function createOrUpdateIncident(context, vulnJson, incidentDto, accessToken) {
+exports.createOrUpdateIncident = function createOrUpdateIncident(vulnJson, accessToken, incidentDto, context) {
 
-    return new Promise(((resolve, reject) => {
-
+    return new Promise((resolve, reject) => {
         let vulnId = vulnJson.id
         let path = `/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.OperationalInsights/workspaces/${WORKSPACE_ID}/providers/Microsoft.SecurityInsights/incidents/${vulnId}?api-version=2021-04-01`
         let options = {
@@ -65,11 +65,13 @@ exports.createOrUpdateIncident = function createOrUpdateIncident(context, vulnJs
             },
         }
 
+        let description = incidentDto.description !== null && incidentDto.description.length >= MAX_DESCRIPTION_LENGTH ?
+            incidentDto.description.substring(0, MAX_DESCRIPTION_LENGTH - 16) + " ...(truncated)" : incidentDto.description
         let requestBody = JSON.stringify(
             {
                 "properties": {
                     "severity": incidentDto.severity,
-                    "description": incidentDto.description,
+                    "description": description,
                     "status": incidentDto.status.name,
                     "classification": incidentDto.status.classification,
                     "classificationReason": incidentDto.status.classificationReason,
@@ -77,14 +79,13 @@ exports.createOrUpdateIncident = function createOrUpdateIncident(context, vulnJs
                 }
             }
         )
-
         let request = https.request(options, function (response) {
             let responseContent = ''
             response.on('data', function (chunk) {
                 responseContent += chunk
             })
             response.on('error', function (error) {
-                context.error(`ERROR: ${error}`)
+                context.log.error(`ERROR: ${error}`)
                 reject(error)
             })
             response.on('end', function () {
@@ -100,7 +101,7 @@ exports.createOrUpdateIncident = function createOrUpdateIncident(context, vulnJs
         })
         request.write(requestBody)
         request.end()
-    }))
+    })
 }
 
 exports.createComment = function createComment(context, incidentId, commentId, commentBody, accessToken) {
@@ -132,7 +133,7 @@ exports.createComment = function createComment(context, incidentId, commentId, c
                 responseContent += chunk
             })
             response.on('error', function (error) {
-                context.error(`ERROR: ${error}`)
+                context.log.error(`ERROR: ${error}`)
                 reject(error)
             })
             response.on('end', function () {
@@ -172,7 +173,7 @@ exports.fetchComments = function fetchComments(context, incidentId, accessToken)
                 responseContent += chunk
             })
             response.on('error', function (error) {
-                context.error(`ERROR: ${error}`)
+                context.log.error(`ERROR: ${error}`)
                 reject(error)
             })
             response.on('end', function () {
