@@ -194,7 +194,7 @@ Once you have a working POC, you are ready to build, validate the data connector
     
     3. Important: Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
 
-    _**IMPORTANT!:** Detailed guidance on Sample Data contribution including expected file names, format, file extensions and extraction method is available [here](https://github.com/Azure/Azure-Sentinel/master/tree/Sample%20Data/README.md)_
+    _**IMPORTANT!:** Detailed guidance on Sample Data contribution including expected file names, format, file extensions and extraction method is available [here](https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/README.md).
 
 5.	**Submit your data connector** - Follow the [general contribution guidelines for Microsoft Sentinel](https://aka.ms/sentinelgithubcontributionguidelines) to open a Pull Request (PR) to submit the data connector:
     1.	The json file in the ['Connectors' folder](https://aka.ms/azuresentinelgithubdataconnectors)
