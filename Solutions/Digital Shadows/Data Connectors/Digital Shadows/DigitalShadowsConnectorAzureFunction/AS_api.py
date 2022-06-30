@@ -22,7 +22,7 @@ class logs_api:
         self.customer_id = id
         self.shared_key = key
 
-    
+    @staticmethod
     def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
         """ 
             Build the API signature

@@ -70,7 +70,7 @@ class State:
 
         try:
             day = int(historical_days)
-        except:
+        except Exception:
             day = constant.DAYS
         current_time = datetime.utcnow() - timedelta(minutes=constant.MINUTE)
         past_time = self.get()
@@ -89,7 +89,7 @@ class State:
         event = None
         try:
             event = int(self.get_event())
-        except:
+        except Exception:
             event = self.get_last_polled_time(historical_days)
-        
+
         return event

@@ -1,5 +1,4 @@
 """ handles all DS api related functions """
-from distutils.log import error
 import logging
 import requests
 import base64
