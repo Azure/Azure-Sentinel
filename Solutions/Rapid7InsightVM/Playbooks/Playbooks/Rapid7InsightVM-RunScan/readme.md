@@ -43,7 +43,11 @@ Once deployment is complete, authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps for other connections
+6. Repeat steps 1-5 for Teams connection resource
+7. Click the Rapid7 connection resource
+8. Click edit API connection
+9. Provide API key
+10. Click Save
 
 #### b. Configurations in Sentinel
 
