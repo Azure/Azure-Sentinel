@@ -709,7 +709,7 @@ def main():
             running_in_collect_mode = True
             printer.print_notice("Starting to collect data. This may take a couple of seconds")
             time.sleep(2)
-            subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
+            subprocess.Popen(['rm', '-f', COLLECT_OUTPUT_FILE],
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
             system_info = SystemInfo()
             system_info.handle_commands()
@@ -734,7 +734,7 @@ def main():
         (IncomingEventsVerifications(), "Starting validation tests for capturing incoming events")]
     printer.print_notice("\nStarting to run the CEF validation script")
     time.sleep(1)
-    subprocess.Popen(['rm', LOG_OUTPUT_FILE, '2>', '/dev/null'],
+    subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
     for class_test in class_tests_array:
