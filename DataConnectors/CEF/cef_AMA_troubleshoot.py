@@ -422,17 +422,17 @@ class SyslogDaemonVerifications(ColorfulPrint):
         result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_command()
-        is_command_successful = command_object.is_command_successful()
-        if is_command_successful is True:
-            command_object.print_result_to_prompt()
-            command_object.log_result_to_file()
+        command_object.is_command_successful()
+        if command_object.is_successful is True or command_object.is_successful == "Warn":
+            command_object.document_result()
+            if command_object.is_successful == "Warn":
+                command_object.print_warning(command_object.command_result_err)
         else:
+            # In case we don't find any daemon on port 514 we will make sure it's not listening to TLS port: 6514
             result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":6514 "]
             command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
             command_object.run_full_test()
-            if command_object.is_successful == "Warn":
-                command_object.print_warning(command_object.command_result_err)
-            elif not command_object.is_successful:
+            if not command_object.is_successful:
                 command_object.print_warning(self.Syslog_daemon_not_listening_warning)
 
     def verify_Syslog_daemon_forwarding_configuration(self):
