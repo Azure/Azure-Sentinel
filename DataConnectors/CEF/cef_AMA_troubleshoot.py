@@ -423,7 +423,7 @@ class SyslogDaemonVerifications(ColorfulPrint):
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_command()
         command_object.is_command_successful()
-        if command_object.is_successful is True or command_object.is_successful == "Warn":
+        if command_object.is_successful is not False:
             command_object.document_result()
             if command_object.is_successful == "Warn":
                 command_object.print_warning(command_object.command_result_err)
