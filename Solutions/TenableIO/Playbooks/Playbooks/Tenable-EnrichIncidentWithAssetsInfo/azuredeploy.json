@@ -1,0 +1,349 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Tenable-EnrichIncidentWithAssetsInfo",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TenablePlatformConnectionName": "[concat('tenableplatform-connection-', parameters('PlaybookName'))]",
+        "customApis_TenablePlatform_name": "TenablePlatform",
+        "TenableVMConnectionName": "[concat('tenablevm-connection-', parameters('PlaybookName'))]",
+        "customApis_TenableVM_name": "TenableVulnerabilityManagement"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TenablePlatformConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TenablePlatformConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', variables('customApis_TenablePlatform_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TenableVMConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TenableVMConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', variables('customApis_TenableVM_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TenablePlatformConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TenableVMConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Create_HTML_table": {
+                            "runAfter": {
+                                "For_each_asset_id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('results_list')"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_variable_results_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_IP_in_incident": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Append_IP_to_ips_array": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "ips",
+                                        "value": "@items('For_each_IP_in_incident')?['Address']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_asset": {
+                            "foreach": "@body('Search_assets')?['assets']",
+                            "actions": {
+                                "Append_asset_id_to_asset_ids_array": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "asset_ids",
+                                        "value": "@item()['id']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Search_assets": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_asset_id": {
+                            "foreach": "@variables('asset_ids')",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {
+                                        "Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "results_list",
+                                        "value": "@outputs('Compose')"
+                                    }
+                                },
+                                "Compose": {
+                                    "runAfter": {
+                                        "Get_asset_information": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "acr_score": "@body('Get_asset_information')?['info']?['acr_score']",
+                                        "fqdn": "@body('Get_asset_information')?['info']?['fqdn']",
+                                        "hostname": "@body('Get_asset_information')?['info']?['hostname']",
+                                        "id": "@body('Get_asset_information')?['info']?['id']",
+                                        "ipv4": "@body('Get_asset_information')?['info']?['ipv4']",
+                                        "mac_address": "@body('Get_asset_information')?['info']?['mac_address']",
+                                        "operating_system": "@body('Get_asset_information')?['info']?['operating_system']",
+                                        "vulnerabilities_count": "@body('Get_asset_information')?['info']?['counts']"
+                                    }
+                                },
+                                "Get_asset_information": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['tenablevm']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/workbenches/assets/@{encodeURIComponent(items('For_each_asset_id'))}/info",
+                                        "queries": {
+                                            "all_fields": "full"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_asset": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_asset_ids": {
+                            "runAfter": {
+                                "Initialize_variable_ips": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "asset_ids",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_ips": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ips",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_results_list": {
+                            "runAfter": {
+                                "Initialize_variable_asset_ids": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "results_list",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Search_assets": {
+                            "runAfter": {
+                                "For_each_IP_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "filter": {
+                                        "and": [
+                                            {
+                                                "operator": "eq",
+                                                "property": "ipv4_addresses",
+                                                "value": "@variables('ips')"
+                                            }
+                                        ]
+                                    },
+                                    "limit": 100
+                                },
+                                "headers": {
+                                    "Accept": "application/json"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['tenableplatform']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/v3/assets/search"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "tenableplatform": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TenablePlatformConnectionName'))]",
+                                "connectionName": "[variables('TenablePlatformConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', variables('customApis_TenablePlatform_name'))]"
+                            },
+                            "tenablevm": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TenableVMConnectionName'))]",
+                                "connectionName": "[variables('TenableVMConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', variables('customApis_TenableVM_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
