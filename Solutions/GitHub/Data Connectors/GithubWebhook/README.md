@@ -1,7 +1,7 @@
-# Ingest GitHub events into sentinel
+# Ingest GitHub events into sentinel through Webhook dataconnector
 Author: Prathibha Tadikamalla
 
- The Azure function based github dataconnector using webhook pushes all the github events into Sentinel. All these logs will be placed into the table called "githubscanaudit_CL". As of now the solution has 3 parsers based on the below events.
+ The Azure function based github dataconnector using webhook pushes all the github subscribed events into Sentinel. All these events will be placed into the table called "githubscanaudit_CL". As of now the solution has 3 parsers based on the below events.
   *	https://docs.github.com/en/rest/reference/code-scanning
   *	https://docs.github.com/en/rest/reference/dependabot
   *	https://docs.github.com/en/rest/reference/secret-scanning
@@ -12,8 +12,8 @@ Following are the configuration steps to deploy Function App.
 
 ## Configuration Steps to Deploy Function App
 1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%20Connectors%2FGithubWebhook%2Fazuredeploy_GithubWebhook_API_FunctionApp.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%20Connectors%2FGithubWebhook%2Fazuredeploy_GithubWebhook_API_FunctionApp.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-GitHubwebhookAPI-azuredeploy)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/sentinel-GitHubwebhookAPI-azuredeploy-gov)
   
 
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  
