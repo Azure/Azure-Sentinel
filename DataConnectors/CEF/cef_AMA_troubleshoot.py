@@ -437,6 +437,7 @@ class SyslogDaemonVerifications(ColorfulPrint):
             command_object = BasicCommand(self.command_name, command_to_run, result_keywords_array)
             command_object.run_command()
             command_object.is_command_successful(should_increase=False)
+            command_object.print_result_to_prompt()
             command_object.log_result_to_file()
             if not command_object.is_successful:
                 command_object.print_warning(self.Syslog_daemon_not_listening_warning(self.SYSLOG_DAEMON))
