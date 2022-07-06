@@ -56,11 +56,8 @@ def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
 #Build new Json Object
 
 def customizeJson(inputJson):
-    required_fields_data = {}
-    count = 1
-    newJson_dict = json.loads(inputJson)
-    #for key, value in newJson_dict.items():
-       #required_fields_data[key] = str(value)
+    required_fields_data = {}    
+    newJson_dict = json.loads(inputJson)    
     for key, value in newJson_dict.items():
         if(type(value) == type({})):
          required_fields_data[key] = json.dumps(value, indent=4)
