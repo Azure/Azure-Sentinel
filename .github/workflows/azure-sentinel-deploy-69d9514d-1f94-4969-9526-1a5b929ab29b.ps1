@@ -15,6 +15,7 @@ $contentTypeMapping = @{
     "Workbook"=@("Microsoft.Insights/workbooks");
 }
 $sourceControlId = $Env:sourceControlId 
+$rootDirectory = $Env:rootDirectory
 $githubAuthToken = $Env:githubAuthToken
 $githubRepository = $Env:GITHUB_REPOSITORY
 $branchName = $Env:branch
@@ -155,22 +156,13 @@ function PushCsvToRepo($getTreeResponse) {
 }
 
 function ReadCsvToTable {
-    $csvTable = Import-Csv -Path $csvPath
+    $csvTable = Import-Csv -Path "$rootDirectory\$csvPath"
     $HashTable=@{}
     foreach($r in $csvTable)
     {
         $HashTable[$r.FileName]=$r.CommitSha
     }   
     return $HashTable    
-}
-
-#Checks and removes any deleted content files
-function CleanDeletedFilesFromTable {
-    $global:updatedCsvTable.Clone().GetEnumerator() | ForEach-Object {
-        if (!(Test-Path -Path $_.Key)) {
-            $global:updatedCsvTable.Remove($_.Key)
-        }
-    }
 }
 
 function AttemptInvokeRestMethod($method, $url, $body, $contentTypes, $maxRetries) {
@@ -294,11 +286,12 @@ function ToContentKind($contentKinds, $resource, $templateObject) {
 
 function IsValidTemplate($path, $templateObject) {
     Try {
+        $fullPath = "$rootDirectory\$path"
         if (DoesContainWorkspaceParam $templateObject) {
-            Test-AzResourceGroupDeployment -ResourceGroupName $ResourceGroupName -TemplateFile $path -workspace $WorkspaceName
+            Test-AzResourceGroupDeployment -ResourceGroupName $ResourceGroupName -TemplateFile $fullPath -workspace $WorkspaceName
         }
         else {
-            Test-AzResourceGroupDeployment -ResourceGroupName $ResourceGroupName -TemplateFile $path
+            Test-AzResourceGroupDeployment -ResourceGroupName $ResourceGroupName -TemplateFile $fullPath
         }
 
         return $true
@@ -353,24 +346,26 @@ function AttemptDeployment($path, $parameterFile, $deploymentName, $templateObje
         Try 
         {
             Write-Host "[Info] Deploy $path with parameter file: [$parameterFile]"
+            $fullPath = "$rootDirectory\$path"
+            $fullParameterFilePath = "$rootDirectory\$parameterFile"
             if (DoesContainWorkspaceParam $templateObject) 
             {
                 if ($parameterFile) {
-                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $path -workspace $workspaceName -TemplateParameterFile $parameterFile -ErrorAction Stop | Out-Host
+                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $fullPath -workspace $workspaceName -TemplateParameterFile $fullParameterFilePath -ErrorAction Stop | Out-Host
                 }
                 else 
                 {
-                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $path -workspace $workspaceName -ErrorAction Stop | Out-Host
+                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $fullPath -workspace $workspaceName -ErrorAction Stop | Out-Host
                 }
             }
             else 
             {
                 if ($parameterFile) {
-                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $path -TemplateParameterFile $parameterFile -ErrorAction Stop | Out-Host
+                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $fullPath -TemplateParameterFile $fullParameterFilePath -ErrorAction Stop | Out-Host
                 }
                 else 
                 {
-                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $path -ErrorAction Stop | Out-Host
+                    New-AzResourceGroupDeployment -Name $deploymentName -ResourceGroupName $ResourceGroupName -TemplateFile $fullPath -ErrorAction Stop | Out-Host
                 }
             }
             AttemptDeployMetadata $deploymentName $ResourceGroupName $templateObject
@@ -414,8 +409,8 @@ function LoadDeploymentConfig() {
     $global:prioritizedContentFiles = @()
     $global:excludeContentFiles = @()
     try {
-        if (Test-Path $configPath) {
-            $deployment_config = Get-Content $configPath | Out-String | ConvertFrom-Json
+        if (Test-Relative-Path $configPath) {
+            $deployment_config = Get-Content "$rootDirectory\$configPath" | Out-String | ConvertFrom-Json
             $parameterFileMappings = @{}
             if ($deployment_config.parameterfilemappings) {
                 $deployment_config.parameterfilemappings.psobject.properties | ForEach { $parameterFileMappings[$_.Name] = $_.Value }
@@ -431,7 +426,7 @@ function LoadDeploymentConfig() {
             if ($deployment_config.excludecontentfiles) {
                 $excludeList = $excludeList + $deployment_config.excludecontentfiles
             }
-            $global:excludeContentFiles = $excludeList | Where-Object { Test-Path $_ }
+            $global:excludeContentFiles = $excludeList | Where-Object { Test-Relative-Path $_ }
         }
     }
     catch {
@@ -441,8 +436,8 @@ function LoadDeploymentConfig() {
     }
 }
 
-function filterContentFile($path) {
-	$temp = $path.Replace($Directory + "\", "").Replace("\", "/")
+function filterContentFile($fullPath) {
+	$temp = $fullPath.Replace($rootDirectory + "\", "").Replace("\", "/")
 	return $global:excludeContentFiles | ? {$temp.StartsWith($_, 'CurrentCultureIgnoreCase')}
 }
 
@@ -452,7 +447,7 @@ function GetParameterFile($path) {
     $key = ($global:parameterFileMapping.Keys | ? { $_ -eq $index })
     if ($key) {
         $mappedParameterFile = $global:parameterFileMapping[$key].Replace("/", "\")
-        if (Test-Path $mappedParameterFile) {
+        if (Test-Relative-Path $mappedParameterFile) {
             return $mappedParameterFile
         }
     }
@@ -460,12 +455,12 @@ function GetParameterFile($path) {
     $parameterFilePrefix = $path.TrimEnd(".json")
     
     $workspaceParameterFile = $parameterFilePrefix + ".parameters-$WorkspaceId.json"
-    if (Test-Path $workspaceParameterFile) {
+    if (Test-Relative-Path $workspaceParameterFile) {
         return $workspaceParameterFile
     }
     
     $defaultParameterFile = $parameterFilePrefix + ".parameters.json"
-    if (Test-Path $defaultParameterFile) {
+    if (Test-Relative-Path $defaultParameterFile) {
         return $defaultParameterFile
     }
     
@@ -478,20 +473,20 @@ function Deployment($fullDeploymentFlag, $remoteShaTable, $tree) {
     {
         $totalFiles = 0;
         $totalFailed = 0;
-	    $iterationList = @()
+	      $iterationList = @()
         $global:prioritizedContentFiles | ForEach-Object  { $iterationList += $_.Replace("/", "\") }
         Get-ChildItem -Path $Directory -Recurse -Filter *.json -exclude *metadata.json, *.parameters*.json |
                         Where-Object { $null -eq ( filterContentFile $_.FullName ) } |
                         Select-Object -Property FullName |
-                        ForEach-Object { $iterationList += $_.FullName.Replace($Directory + "\", "") }
+                        ForEach-Object { $iterationList += $_.FullName.Replace($rootDirectory + "\", "") }
         $iterationList | ForEach-Object {
             $path = $_
             Write-Host "[Info] Try to deploy $path"
-            if (-not (Test-Path $path)) {
+            if (-not (Test-Relative-Path $path)) {
                 Write-Host "[Warning] Skipping deployment for $path. The file doesn't exist."
                 return
             }
-            $templateObject = Get-Content $path | Out-String | ConvertFrom-Json
+            $templateObject = Get-Content "$rootDirectory\$path" | Out-String | ConvertFrom-Json
             if (-not (IsValidResourceType $templateObject))
             {
                 Write-Host "[Warning] Skipping deployment for $path. The file contains resources for content that was not selected for deployment. Please add content type to connection if you want this file to be deployed."
@@ -505,14 +500,13 @@ function Deployment($fullDeploymentFlag, $remoteShaTable, $tree) {
             if (-not $result.skip) {
                 $totalFiles++
             }
-            if ($result.isSuccess) {
+            if ($result.isSuccess -or $result.skip) {
                 $global:updatedCsvTable[$path] = $remoteShaTable[$path]
                 if ($parameterFile) {
                     $global:updatedCsvTable[$parameterFile] = $remoteShaTable[$parameterFile]
                 }
             }
         }
-        CleanDeletedFilesFromTable
         PushCsvToRepo $tree
         if ($totalFiles -gt 0 -and $totalFailed -gt 0) 
         {
@@ -555,6 +549,10 @@ function SmartDeployment($fullDeploymentFlag, $remoteShaTable, $path, $parameter
     }
 }
 
+function Test-Relative-Path($path) {
+    return (Test-Path "$rootDirectory\$path")
+}
+
 function main() {
     if ($CloudEnv -ne 'AzureCloud') 
     {
@@ -562,9 +560,8 @@ function main() {
         ConnectAzCloud
     }
 
-    if (Test-Path $csvPath) {
+    if (Test-Relative-Path $csvPath) {
         $global:localCsvTablefinal = ReadCsvToTable
-        $global:updatedCsvTable = $global:localCsvTablefinal.Clone()
     }
 
     LoadDeploymentConfig
@@ -574,10 +571,12 @@ function main() {
 
     $existingConfigSha = $global:localCsvTablefinal[$configPath]
     $remoteConfigSha = $remoteShaTable[$configPath]
-    $modifiedConfig = $false
-    $global:updatedCsvTable[$configPath] = $remoteConfigSha
+    $modifiedConfig = ($existingConfigSha -xor $remoteConfigSha) -or ($existingConfigSha -and $remoteConfigSha -and ($existingConfigSha -ne $remoteConfigSha))
+    if ($remoteConfigSha) {
+        $global:updatedCsvTable[$configPath] = $remoteConfigSha
+    }
 
-    $fullDeploymentFlag = $modifiedConfig -or (-not (Test-Path $csvPath)) -or ($smartDeployment -eq "false")
+    $fullDeploymentFlag = $modifiedConfig -or (-not (Test-Relative-Path $csvPath)) -or ($smartDeployment -eq "false")
     Deployment $fullDeploymentFlag $remoteShaTable $tree
 }
 
