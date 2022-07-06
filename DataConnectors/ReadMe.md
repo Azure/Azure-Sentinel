@@ -187,10 +187,18 @@ Once you have a working POC, you are ready to build, validate the data connector
 
 >>**Note**: This json is loaded only in your session and not shared out. The logo won’t show up since it’s not part of the json. Connector logo will be included when Microsoft builds and deploys the data connector.
 
-4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized sample data for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. This is the test validation set that can be used to build other contribution types on top of this data connector. The format for this file can be json / csv (json preferred) file with the column names / property names adhering to the data type property names. The data file name needs to be the same name as the data type name. Submit the sample data file via a GitHub PR to the ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata) in the right subfolder - CEF / Syslog / Custom depending on the type of data connector.
+4. **Prepare sample data for validation and submission** – Plan to submit some real-world, sanitized raw sample data/logs for your connectors that covers all types of logs, events, alerts, etc. depending on the data type. Sample data is extremely useful when troubleshooting issues, supporting and/or enhancing the Data Connectors with more Security-focused content (such as Analytics, Hunting Queries, Workbooks, etc.). The following guidelines are designed to help committing sample data in a usable format into GitHub:
+    1.  The extension for the file can be .json (for API based Data Connector) / .txt (for Syslog/CEF based data Connectors) with the column names / property names adhering to the data type property names.
+
+    2. Submit the Sample Data via a GitHub PR. All sample data files must reside inside a folder called "Sample Data" within the Solution folder. Example folder structure - "Azure-Sentinel/Solutions/<ProductName>/Sample Data/".
+    
+    3. Important: Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
+
+    _**IMPORTANT!:** Detailed guidance on Sample Data contribution including expected file names, format, file extensions and extraction method is available [here](https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/README.md).
+
 5.	**Submit your data connector** - Follow the [general contribution guidelines for Microsoft Sentinel](https://aka.ms/sentinelgithubcontributionguidelines) to open a Pull Request (PR) to submit the data connector:
     1.	The json file in the ['Connectors' folder](https://aka.ms/azuresentinelgithubdataconnectors)
-    2.	The sample data file in the right subfolder of ['Sample data' folder](https://aka.ms/azuresentinelgithubsampledata)
+    2.	The sample data file in the right folder. Example folder structure - "Azure-Sentinel/Solutions/<ProductName>/Sample Data/"
     3.	The company logo adhering to the following requirements in the ['Logo' folder](https://aka.ms/azuresentinelgithublogos)
         1.	Logo needs to be in SVG format and under 5 Kb
         2.	Ensure raw file of logo does **not** have any of the following: 
