@@ -8,8 +8,8 @@ This playbook uses a custom connector in Logic Apps.
 
 **If you want to deploy just the customer connector:**
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIpAndTagIncident%2FcustomConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-GeoFromIpAndTagIncident%2FcustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FPS-1680_IP_enrichment%2FMasterPlaybooks%2FIP-Enrichment%2FGeoIP-IP-Enrichment%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2FPS-1680_IP_enrichment%2FMasterPlaybooks%2FIP-Enrichment%2FGeoIP-IP-Enrichment%2Fazuredeploy.json)
 
 ## Quick Deployment
 
