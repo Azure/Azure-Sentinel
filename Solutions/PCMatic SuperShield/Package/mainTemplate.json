@@ -28,10 +28,6 @@
         "description": "Workspace name for Log Analytics where Sentinel is setup"
       }
     },
-    "connector1-name": {
-      "type": "string",
-      "defaultValue": "953e1393-cf3b-4519-a99d-cab63482e039"
-    },
     "analytic1-id": {
       "type": "string",
       "defaultValue": "[newGuid()]",
@@ -48,8 +44,16 @@
         "description": "Unique id for the scheduled alert rule"
       }
     },
+    "analytic3-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the scheduled alert rule"
+      }
+    },
     "playbook1-PlaybookName": {
-      "defaultValue": "AllowProcess",
+      "defaultValue": "Allow",
       "type": "string",
       "minLength": 1,
       "metadata": {
@@ -57,7 +61,7 @@
       }
     },
     "playbook2-PlaybookName": {
-      "defaultValue": "BlockProcess",
+      "defaultValue": "Block",
       "type": "string",
       "minLength": 1,
       "metadata": {
@@ -69,14 +73,12 @@
     "workspace-dependency": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
     "PCMSS_Parser": "PCMSS_Parser",
     "_PCMSS_Parser": "[variables('PCMSS_Parser')]",
-    "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
-    "_connector1-source": "[variables('connector1-source')]",
-    "PCMSSConnector": "PCMSSConnector",
-    "_PCMSSConnector": "[variables('PCMSSConnector')]",
     "KnownBadProcess_AnalyticalRules": "KnownBadProcess_AnalyticalRules",
     "_KnownBadProcess_AnalyticalRules": "[variables('KnownBadProcess_AnalyticalRules')]",
     "UnknownProcess_AnalyticalRules": "UnknownProcess_AnalyticalRules",
     "_UnknownProcess_AnalyticalRules": "[variables('UnknownProcess_AnalyticalRules')]",
+    "AllowedProcess_AnalyticalRules": "AllowedProcess_AnalyticalRules",
+    "_AllowedProcess_AnalyticalRules": "[variables('AllowedProcess_AnalyticalRules')]",
     "playbook1-AllowProcess": "playbook1-AllowProcess",
     "_playbook1-AllowProcess": "[variables('playbook1-AllowProcess')]",
     "playbook1-MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('playbook1-PlaybookName'))]",
@@ -113,141 +115,12 @@
         }
       ]
     },
-    {
-      "id": "[variables('_connector1-source')]",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
-      "apiVersion": "2021-03-01-preview",
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "location": "[parameters('workspace-location')]",
-      "kind": "GenericUI",
-      "properties": {
-        "connectorUiConfig": {
-          "title": "PCMatic SuperShield",
-          "publisher": "PC Matic",
-          "descriptionMarkdown": "The [PC Matic SuperShield](https://www.pcmatic.com/pro/) connector allows you to easily connect your PC Matic Pro process activity with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.",
-          "graphQueries": [
-            {
-              "metricName": "Total data received",
-              "legend": "PCMSS",
-              "baseQuery": "SuperShieldActivity"
-            }
-          ],
-          "sampleQueries": [
-            {
-              "description": "Top 10 Known Bad Processes",
-              "query": "SuperShieldActivity \n | where Severity == 0 \n | where IsUnknown == 0 or IsUnknown == \"false\" \n | top 10 by FileHash \n | order by TimeGenerated desc"
-            },
-            {
-              "description": "Top 10 Unknown Blocked Processes",
-              "query": "SuperShieldActivity \n | where Severity == 0 \n | where IsUnknown == 1 \n | top 10 by FileHash \n | order by TimeGenerated desc"
-            }
-          ],
-          "dataTypes": [
-            {
-              "name": "SuperShieldActivity",
-              "lastDataReceivedQuery": "SuperShieldActivity \n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-            }
-          ],
-          "connectivityCriterias": [
-            {
-              "type": "IsConnectedQuery",
-              "value": [
-                "SuperShieldActivity \n      | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-              ]
-            }
-          ],
-          "availability": {
-            "status": 1,
-            "isPreview": true
-          },
-          "permissions": {
-            "resourceProvider": [
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "write permission is required.",
-                "providerDisplayName": "Workspace",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "write": true,
-                  "delete": true
-                }
-              }
-            ],
-            "customs": [
-              {
-                "name": "SuperShieldActivity",
-                "description": "must be configured to export logs via Syslog"
-              }
-            ]
-          },
-          "instructionSteps": [
-            {
-              "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow the steps](https://raw.githubusercontent.com/johnpcmatic/Azure-Sentinel/pcm-sentinel/Solutions/PCMatic%20SuperShield/Parsers/PCMSS.txt) to use the Kusto function alias, **SuperShieldActivity**. Do not include ** **."
-            },
-            {
-              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
-              "instructions": [
-                {
-                  "parameters": {
-                    "title": "Choose where to install the agent:",
-                    "instructionSteps": [
-                      {
-                        "title": "Install agent on Azure Linux Virtual Machine",
-                        "description": "Select the machine to install the agent on and then click **Connect**.",
-                        "instructions": [
-                          {
-                            "parameters": {
-                              "linkType": "InstallAgentOnLinuxVirtualMachine"
-                            },
-                            "type": "InstallAgent"
-                          }
-                        ]
-                      },
-                      {
-                        "title": "Install agent on a non-Azure Linux Machine",
-                        "description": "Download the agent on the relevant machine and follow the instructions.",
-                        "instructions": [
-                          {
-                            "parameters": {
-                              "linkType": "InstallAgentOnLinuxNonAzure"
-                            },
-                            "type": "InstallAgent"
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  "type": "InstructionStepsGroup"
-                }
-              ],
-              "title": "1. Install and onboard the agent for Linux"
-            },
-            {
-              "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
-              "instructions": [
-                {
-                  "parameters": {
-                    "linkType": "OpenSyslogSettings"
-                  },
-                  "type": "InstallAgent"
-                }
-              ],
-              "title": "2. Configure the logs to be collected"
-            },
-            {
-              "description": "[Follow these instructions](https://www.cisco.com/c/en/us/support/docs/servers-unified-computing/ucs-manager/110265-setup-syslog-for-ucs.html#configsremotesyslog) to configure PC Matic Pro to forward syslog. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
-              "title": "3. Configure and connect PC Matic Pro Process Activity Logs"
-            }
-          ],
-          "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on a Kusto Function to work as expected. Follow the steps to use this Kusto functions alias **SuperShieldActivity** in queries and workbooks. [Follow these steps to create this Kusto function.](https://raw.githubusercontent.com/johnpcmatic/Azure-Sentinel/pcm-sentinel/Solutions/PCMatic%20SuperShield/Parsers/PCMSS.txt)"
-        }
-      }
-    },
+
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
       "apiVersion": "2021-03-01-preview",
-      "kind": "Scheduled",
+      "kind": "NRT",
       "location": "[parameters('workspace-location')]",
       "properties": {
         "description": "Identifies known bad processes blocked by SuperShield",
@@ -308,13 +181,74 @@
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic2-id'))]",
       "apiVersion": "2021-03-01-preview",
-      "kind": "Scheduled",
+      "kind": "NRT",
       "location": "[parameters('workspace-location')]",
       "properties": {
         "description": "Identifies unknown processes blocked by SuperShield",
         "displayName": "PCMatic SuperShield Unknown Process",
         "enabled": false,
         "query": "SuperShieldActivity\n| where TimeGenerated >= ago(5m)\n| where Severity == 0\n| where IsUnknown == 1\n| summarize by FileHash, FileName, Host, DeviceAddress, ParentPath, CmdLineArgs, TimeGenerated\n",
+        "queryFrequency": "PT1M",
+        "queryPeriod": "PT5M",
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Execution"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "FileHash",
+            "fieldMappings": [
+              {
+                "identifier": "Value",
+                "columnName": "FileHash"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "DeviceAddress"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Host"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "FileName"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic3-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "NRT",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "Identifies processes allowed by SuperShield",
+        "displayName": "PCMatic SuperShield Allowed Process",
+        "enabled": false,
+        "query": "SuperShieldActivity\n| where TimeGenerated >= ago(5m)\n| where Severity > 1\n| summarize by FileHash, FileName, Host, DeviceAddress, ParentPath, CmdLineArgs, TimeGenerated\n",
         "queryFrequency": "PT1M",
         "queryPeriod": "PT5M",
         "severity": "Medium",
@@ -422,9 +356,6 @@
       "name": "[parameters('playbook1-PlaybookName')]",
       "type": "Microsoft.Logic/workflows",
       "location": "[parameters('workspace-location')]",
-      "tags": {
-        "pcmatic": "block_process"
-      },
       "apiVersion": "2017-07-01",
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('playbook1-MicrosoftSentinelConnectionName'))]"
@@ -500,9 +431,6 @@
       "name": "[parameters('playbook2-PlaybookName')]",
       "type": "Microsoft.Logic/workflows",
       "location": "[parameters('workspace-location')]",
-      "tags": {
-        "pcmatic": "block_process"
-      },
       "apiVersion": "2017-07-01",
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('playbook2-MicrosoftSentinelConnectionName'))]"
@@ -553,11 +481,6 @@
               "version": "1.0.0"
             },
             {
-              "kind": "DataConnector",
-              "contentId": "[variables('_PCMSSConnector')]",
-              "version": "1.0.0"
-            },
-            {
               "kind": "AnalyticsRule",
               "contentId": "[variables('_KnownBadProcess_AnalyticalRules')]",
               "version": "1.0.0"
@@ -565,6 +488,11 @@
             {
               "kind": "AnalyticsRule",
               "contentId": "[variables('_UnknownProcess_AnalyticalRules')]",
+              "version": "1.0.0"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_AllowedProcess_AnalyticalRules')]",
               "version": "1.0.0"
             },
             {
