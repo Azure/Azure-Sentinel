@@ -1,5 +1,9 @@
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
+$mainTemplateArtifact = [PSCustomObject]@{
+    name = "DefaultTemplate";
+    type = "Template"
+}
 
 function handleEmptyInstructionProperties ($inputObj) {
     $outputObj = $inputObj |
@@ -66,6 +70,55 @@ function getQueryResourceLocation () {
             return $i
         }
     }
+}
+
+function getParserDetails($solutionName)
+{
+    $API = 'https://catalogapi.azure.com/offers?api-version=2018-08-01-beta&$filter=categoryIds%2Fany(cat%3A%20cat%20eq%20%27AzureSentinelSolution%27)%20or%20keywords%2Fany(key%3A%20contains(key%2C%27f1de974b-f438-4719-b423-8bf704ba2aef%27))'
+    $SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
+    $parserResourceType = [PSObject]@{
+        templateSpecParserType = "Microsoft.OperationalInsights/workspaces/savedSearches"
+        workspaceType = "Microsoft.OperationalInsights/workspaces"
+        normalParserType = "savedSearches"
+    }
+    $variableExpressionRegex = "\[\s?variables\(\'_([\w\W]+)\'\)\s?\]"
+    $parserDisplayDetails = New-Object PSObject
+    $parserDisplayDetails | Add-Member -NotePropertyName "functionAlias" -NotePropertyValue $(getFileNameFromPath $file)
+    $parserDisplayDetails | Add-Member -NotePropertyName "displayName" -NotePropertyValue $($fileName)
+    $parserDisplayDetails | Add-Member -NotePropertyName "name" -NotePropertyValue $($fileName)
+
+    $currentSolution = $SolutionDataItems | Where-Object { $_.legacyId -eq $solutionName }
+    if($currentSolution.length -gt 0)
+    {
+        $templateUrl = ($currentSolution.plans[0].artifacts | Where-Object { (($_.name -eq $mainTemplateArtifact.name) -and ($_.type -eq $mainTemplateArtifact.type)) }).uri
+        $templateContent = $(Invoke-WebRequest -URI $templateUrl) | ConvertFrom-Json
+        if ($templateContent.resources -and $templateContent.variables) {
+            $templateVariables = $templateContent.variables
+            $parserTemplate = $templateContent.resources | Where-Object { $_.type -eq $parserResourceType.templateSpecParserType -or $_.type -eq $parserResourceType.workspaceType }
+
+            if ($parserTemplate) {
+                if($parserTemplate.resources)
+                {
+                    $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
+                }
+                $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
+                $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
+                $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
+
+                $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
+                if ($suppressedOutput -and $matches[1]) {
+                    $parserDisplayDetails.displayName = $templateVariables.$($matches[1])
+                }
+
+                $suppressedOutput = $parserDisplayDetails.name -match $variableExpressionRegex
+                if ($suppressedOutput -and $matches[1]) {
+                    $parserDisplayDetails.name = $templateVariables.$($matches[1])
+                }
+            }
+        }
+    }
+
+    return $parserDisplayDetails;
 }
 
 foreach ($inputFile in $(Get-ChildItem $path)) {
@@ -438,7 +491,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "playbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text = $contentToImport.PlaybooksBladeDescription ? $contentToImport.PlaybooksBladeDescription : "This solution installs the following Playbook templates. After installing the solution, playbooks can be managed in the Manage solution view. ";
+                                            text = $contentToImport.PlaybooksBladeDescription ? $contentToImport.PlaybooksBladeDescription : "This solution installs the Playbook templates to help implement your Security Orchestration, Automation and Response (SOAR) operations. After installing the solution, these will be deployed under Playbook Templates in the Automation blade in Microsoft Sentinel. They can be configured and managed from the Manage solution view in Content Hub.";
                                         }
                                     },
                                     [PSCustomObject] @{
@@ -468,7 +521,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             )
                         }
                         $currentStepNum = $baseCreateUiDefinition.parameters.steps.Count - 1
-                        $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $playbookElement
+                        #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $playbookElement
 
                         foreach ($param in $playbookData.parameters.PsObject.Properties) {
                             $paramName = $param.Name
@@ -486,7 +539,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         validationMessage = "Please enter a playbook resource name"
                                     }
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookNameObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookNameObject
                                 if(!$contentToImport.TemplateSpec)
                                 {
                                     $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
@@ -510,7 +563,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         validationMessage = "Please enter a playbook username";
                                     }
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookUsernameObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookUsernameObject
                                 if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
                                         defaultValue = $defaultParamValue;
@@ -529,7 +582,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     constraints = [PSCustomObject] @{ required = $true; };
                                     options     = [PSCustomObject] @{ hideConfirmation = $false; };
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
                                 if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
                                         type      = "securestring";
@@ -547,7 +600,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     constraints = [PSCustomObject] @{ required = $true; };
                                     options     = [PSCustomObject] @{ hideConfirmation = $true; };
                                 }
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookPasswordObject
                                 if(!$contentToImport.TemplateSpec)
                                 {
                                     $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
@@ -605,7 +658,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         }
                                     }
                                 )
-                                $baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookParamObject
+                                #$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements[$baseCreateUiDefinition.parameters.steps[$currentStepNum].elements.Length - 1].elements += $playbookParamObject
                                 $defaultValue = $(if ($defaultParamValue) { $defaultParamValue } else { "" })
                                 if(!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.parameters | Add-Member -NotePropertyName "playbook$playbookCounter-$paramName" -NotePropertyValue ([PSCustomObject] @{
@@ -1022,35 +1075,53 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     elseif ($objectKeyLowercase -eq "data connectors") {
                         Write-Host "Generating Data Connector using $file"
                         try {
+                            $ccpPollingConfig = [PSCustomObject] @{}
+                            $ccpConnector = $false
                             $connectorData = ConvertFrom-Json $rawData
+                            # If both ID and Title exist, is standard GenericUI data connector
+                            if ($connectorData.resources -and
+                            $connectorData.resources[0] -and
+                            $connectorData.resources[0].properties -and
+                            $connectorData.resources[0].properties.connectorUiConfig -and
+                            $connectorData.resources[0].properties.pollingConfig) {
+                                $ccpPollingConfig = $connectorData.resources[0].properties.pollingConfig
+                                $ccpConnector = $true
+                                $templateSpecConnectorData = $connectorData.resources[0].properties.connectorUiConfig
+                            }
+                            else
+                            {
+                                $ccpPollingConfig = $null
+                                $ccpConnector = $false
+                                $templateSpecConnectorData = $connectorData
+                            }
                         }
                         catch {
                             Write-Host "Failed to deserialize $file" -ForegroundColor Red
                             break;
                         }
-                        $connectorNameParamObj = [PSCustomObject] @{
-                            type         = "string";
-                            defaultValue = $(New-Guid).Guid
-                        }
-                        $connectorId = $connectorData.id + 'Connector';
-                        if ($contentToImport.Metadata -and !$contentToImport.TemplateSpec) {
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName $connectorId -NotePropertyValue $connectorId
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_$connectorId" -NotePropertyValue "[variables('$connectorId')]"
-                        }
-                         if (!$contentToImport.TemplateSpec){
-                            $baseMainTemplate.parameters | Add-Member -NotePropertyName "connector$connectorCounter-name" -NotePropertyValue $connectorNameParamObj
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "connector$connectorCounter-source" -NotePropertyValue "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector$connectorCounter-name'))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "_connector$connectorCounter-source" -NotePropertyValue "[variables('connector$connectorCounter-source')]"
-                         };
+                        # $connectorNameParamObj = [PSCustomObject] @{
+                        #     type         = "string";
+                        #      defaultValue = $(New-Guid).Guid
+                        # }
+                        #  $connectorId = $connectorData.id + 'Connector';
+                        # if ($contentToImport.Metadata -and !$contentToImport.TemplateSpec) {
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName $connectorId -NotePropertyValue $connectorId
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName "_$connectorId" -NotePropertyValue "[variables('$connectorId')]"
+                        # }
+                        #  if (!$contentToImport.TemplateSpec){
+                        #     $baseMainTemplate.parameters | Add-Member -NotePropertyName "connector$connectorCounter-name" -NotePropertyValue $connectorNameParamObj
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName "connector$connectorCounter-source" -NotePropertyValue "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector$connectorCounter-name'))]"
+                        #     $baseMainTemplate.variables | Add-Member -NotePropertyName "_connector$connectorCounter-source" -NotePropertyValue "[variables('connector$connectorCounter-source')]"
+                        #  };
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = "DataConnector";
                             contentId = if ($contentToImport.TemplateSpec){"[variables('_dataConnectorContentId$connectorCounter')]"}else{"[variables('_$connectorId')]"};
                             version   = if ($contentToImport.TemplateSpec){"[variables('dataConnectorVersion$connectorCounter')]"}else{$contentToImport.Version};
                         };
-                        foreach ($step in $connectorData.instructionSteps) {
+                        foreach ($step in $templateSpecConnectorData.instructionSteps) {
                             # Remove empty properties from each instructionStep
-                            $stepIndex = $connectorData.instructionSteps.IndexOf($step)
-                            $connectorData.instructionSteps[$stepIndex] = handleEmptyInstructionProperties $step
+                            $stepIndex = $templateSpecConnectorData.instructionSteps.IndexOf($step)
+                            $templateSpecConnectorData.instructionSteps[$stepIndex] = handleEmptyInstructionProperties $step
                         }
 
                         if ($contentToImport.TemplateSpec) {
@@ -1060,16 +1131,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                             }
                             # If both ID and Title exist, is standard GenericUI data connector
-                            if ($connectorData.id -and $connectorData.title) {
-                                $baseMainTemplate.variables | Add-Member -NotePropertyName "uiConfigId$connectorCounter" -NotePropertyValue $connectorData.id
+                            if ($templateSpecConnectorData.id -and $templateSpecConnectorData.title) {
+                                $baseMainTemplate.variables | Add-Member -NotePropertyName "uiConfigId$connectorCounter" -NotePropertyValue $templateSpecConnectorData.id
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_uiConfigId$connectorCounter" -NotePropertyValue "[variables('uiConfigId$connectorCounter')]"
                             }
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorContentId$connectorCounter" -NotePropertyValue $connectorData.id
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorContentId$connectorCounter" -NotePropertyValue $templateSpecConnectorData.id
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$connectorCounter" -NotePropertyValue "[variables('dataConnectorContentId$connectorCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorId$connectorCounter" -NotePropertyValue "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId$connectorCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorId$connectorCounter" -NotePropertyValue "[variables('dataConnectorId$connectorCounter')]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorTemplateSpecName$connectorCounter" -NotePropertyValue "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId$connectorCounter')))]"
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$connectorCounter" -NotePropertyValue (($null -ne $connectorData.metadata) ? "$($connectorData.metadata.version)" : "1.0.0")
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$connectorCounter" -NotePropertyValue (($null -ne $templateSpecConnectorData.metadata) ? "$($templateSpecConnectorData.metadata.version)" : "1.0.0")
                             if (!$contentToImport.TemplateSpec){
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "parentId" -NotePropertyValue $solutionId
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_parentId" -NotePropertyValue "[variables('parentId')]"
@@ -1095,20 +1166,20 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             if(!$contentToImport.Is1PConnector)
                             {
                                 $existingFunctionApp = $false;
-                                $instructionArray = $connectorData.instructionSteps
+                                $instructionArray = $templateSpecConnectorData.instructionSteps
                                 ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
                                 if($existingFunctionApp)
                                 {
-                                    $connectorData.title = $connectorData.title + " (using Azure Function)";
+                                    $templateSpecConnectorData.title = $templateSpecConnectorData.title + " (using Azure Function)";
                                 }
                             }
                             # Data Connector Content -- *Assumes GenericUI
                             if($contentToImport.Is1PConnector)
                             {
-                                $1pconnectorData = $connectorData
+                                $1pconnectorData = $templateSpecConnectorData
                                 $1pconnectorData = $1pconnectorData | Select-Object -Property id,title,publisher,descriptionMarkdown, graphQueries, connectivityCriterias,dataTypes
                             }
-                            $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $connectorData
+                            $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $templateSpecConnectorData
                             $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$connectorCounter')]"
                             if($contentToImport.Is1PConnector -eq $false)
                             {
@@ -1119,10 +1190,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 apiVersion = "2021-03-01-preview";
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                                 location   = "[parameters('workspace-location')]";
-                                kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
+                                kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
                                 properties = [PSCustomObject]@{
                                     connectorUiConfig = $templateSpecConnectorUiConfig
                                 }
+                            }
+                            if($null -ne $ccpPollingConfig)
+                            {
+                                $dataConnectorContent.properties | Add-Member -NotePropertyName "pollingConfig" -NotePropertyValue $ccpPollingConfig
                             }
                             $author = $contentToImport.Author.Split(" - ");
                             $authorDetails = [PSCustomObject]@{
@@ -1225,7 +1300,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             if($contentToImport.TemplateSpec){
-                                $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_uiConfigId$connectorCounter'))]"
 
                             }
 
@@ -1785,7 +1860,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             # Content Modifications
-                            $triggerOperators = [PSCustomObject] @{ gt = "GreaterThan" ; lt = "LessThan" ; eq = "Equal" ; ne = "NotEqual" }
+                            $triggerOperators = [PSCustomObject] @{ gt = "GreaterThan" ; lt = "LessThan" ; eq = "Equal" ; ne = "NotEqual"; GreaterThan = "GreaterThan" ; LessThan = "LessThan" ; Equal = "Equal" ; NotEqual = "NotEqual" }
                             $alertRule.triggerOperator = $triggerOperators.$($yaml.triggerOperator)
                             if ($yaml.tactics -and ($yaml.tactics.Count -gt 0) ) {
                                 if ($yaml.tactics -match ' ') {
@@ -1809,7 +1884,21 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     "PT$field"
                                 }
                             }
-
+                            function Remove-EmptyArrays($Object) {
+                                ($Object.GetEnumerator() | ? {
+                                    if($_.GetType().fullname -eq "System.Collections.Hashtable"){
+                                        -not $_.Values
+                                    }
+                                    else
+                                    {
+                                      -not $_.Value
+                                    }
+                                }) |
+                                % {
+                                    $Object.Remove($_.Name)
+                                }
+                                return $Object;
+                            }
                             if($yaml.kind.ToUpper() -eq "Scheduled")
                             {
                                 $alertRule.queryFrequency =  $(checkISO8601Format $yaml.queryFrequency.ToUpper())
@@ -1822,14 +1911,17 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $alertRule.PSObject.Properties.Remove('triggerThreshold');
                             }
                             $alertRule.suppressionDuration = "PT1H"
-
                             # Handle optional fields
-                            foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")) {
+                            foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride", "incidentConfiguration", "sentinelEntitiesMappings")) {
                                 if ($yaml.$yamlField) {
-                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $yaml.$yamlField
+                                    $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $(Remove-EmptyArrays $yaml.$yamlField)
+
+                                    if($yamlField -eq "entityMappings" -and $yaml.$yamlField.length -lt 2)
+                                    {
+                                        $alertRule.entityMappings = @($alertRule.entityMappings);
+                                    }
                                 }
                             }
-
                             # Create Alert Rule Resource Object
                             $newAnalyticRule = [PSCustomObject]@{
                                 type       = $contentToImport.TemplateSpec ? "Microsoft.SecurityInsights/AlertRuleTemplates" : "Microsoft.OperationalInsights/workspaces/providers/alertRules";
@@ -1982,7 +2074,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         };
 
                         if($contentToImport.TemplateSpec) {
-                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$fileName"
+                            $displayDetails = getParserDetails $solutionId
+
+                            $baseMainTemplate.variables | Add-Member -NotePropertyName "parserName$parserCounter" -NotePropertyValue "$($displayDetails.name)"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserName$parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/',variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "parserId$parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
                             $baseMainTemplate.variables | Add-Member -NotePropertyName "_parserId$parserCounter" -NotePropertyValue "[variables('parserId$parserCounter')]"
@@ -2016,14 +2110,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject]@{
                                     eTag          = "*"
-                                    displayName   = "$fileName"
+                                    displayName   = "$($displayDetails.displayName)"
                                     category      = "Samples"
-                                    functionAlias = "$functionAlias"
+                                    functionAlias = "$($displayDetails.functionAlias)"
                                     query         = "$content"
                                     version       = 1
                                     tags          = @([PSCustomObject]@{
                                         "name"  = "description"
-                                        "value" = "$($fileName)"
+                                        "value" = "$($displayDetails.displayName)"
                                         };
                                     )
                                 }
@@ -2097,9 +2191,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 properties = [PSCustomObject] @{
                                     eTag          = "*";
-                                    displayName   = "$fileName";
+                                    displayName   = "$($displayDetails.displayName)";
                                     category      = "Samples";
-                                    functionAlias = "$functionAlias";
+                                    functionAlias = "$($displayDetails.functionAlias)";
                                     query         = $content;
                                     version       = 1;
                                 }
