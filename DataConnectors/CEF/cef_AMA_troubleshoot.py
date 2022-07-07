@@ -9,6 +9,7 @@ LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
 FAILED_TESTS_COUNT = 0
+WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
 SCRIPT_VERSION = 1.0
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
@@ -78,7 +79,7 @@ class ShellExecute(ColorfulPrint):
         Printing the test's name and success status to the customer's prompt
         """
         max_length = 47
-        if self.is_successful == "Warn":
+        if self.is_successful == "Skip":
             self.print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failed to check")
         elif self.is_successful:
             self.print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
@@ -131,7 +132,7 @@ class FullVerification(ShellExecute):
         """
         global FAILED_TESTS_COUNT, NOT_RUN_TESTS_COUNT
         if "not found" in str(self.command_result):
-            self.is_successful = "Warn"
+            self.is_successful = "Skip"
             if should_increase:
                 NOT_RUN_TESTS_COUNT += 1
             return True
@@ -267,7 +268,7 @@ class AgentInstallationVerifications:
         result_keywords_array = ["25226", "LISTEN", "tcp"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(exclude=True)
-        if command_object.is_successful == "Warn":
+        if command_object.is_successful == "Skip":
             command_object.print_warning(command_object.command_result_err)
         elif not command_object.is_successful:
             command_object.print_warning(self.oms_running_error_message)
@@ -422,6 +423,7 @@ class SyslogDaemonVerifications(ColorfulPrint):
         """
         Verifying the Syslog daemon is listening on the default 514 port for incoming traffic
         """
+        global WARNING_TESTS_COUNT
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, ":514 "]
         command_object = BasicCommand(self.command_name, command_to_run, result_keywords_array)
@@ -429,7 +431,7 @@ class SyslogDaemonVerifications(ColorfulPrint):
         command_object.is_command_successful(should_increase=False)
         if command_object.is_successful is not False:
             command_object.document_result()
-            if command_object.is_successful == "Warn":
+            if command_object.is_successful == "Skip":
                 command_object.print_warning(command_object.command_result_err)
         else:
             # In case we don't find any daemon on port 514 we will make sure it's not listening to TLS port: 6514
@@ -437,9 +439,9 @@ class SyslogDaemonVerifications(ColorfulPrint):
             command_object = BasicCommand(self.command_name, command_to_run, result_keywords_array)
             command_object.run_command()
             command_object.is_command_successful(should_increase=False)
-            command_object.print_result_to_prompt()
             command_object.log_result_to_file()
             if not command_object.is_successful:
+                WARNING_TESTS_COUNT += 1
                 command_object.print_warning(self.Syslog_daemon_not_listening_warning(self.SYSLOG_DAEMON))
 
     def verify_Syslog_daemon_forwarding_configuration(self):
@@ -511,7 +513,7 @@ class OperatingSystemVerifications:
         result_keywords_array = ["DROP", "REJECT"]
         policy_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         policy_command_object.run_full_test(exclude=True)
-        if policy_command_object.is_successful == "Warn":
+        if policy_command_object.is_successful == "Skip":
             policy_command_object.print_warning(policy_command_object.command_result_err)
             return True
         command_name = "verify_iptables_rules_permissive"
@@ -762,6 +764,8 @@ def main():
         verification_object.run_all_verifications()
     if NOT_RUN_TESTS_COUNT > 0:
         printer.print_warning("\nTotal amount of tests that failed to run: " + str(NOT_RUN_TESTS_COUNT))
+    if WARNING_TESTS_COUNT > 0:
+        printer.print_warning("\nTotal amount of tests ended with warning status is: " + str(WARNING_TESTS_COUNT))
     if FAILED_TESTS_COUNT > 0:
         printer.print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
