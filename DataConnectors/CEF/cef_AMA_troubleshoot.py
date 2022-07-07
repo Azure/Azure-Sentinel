@@ -9,6 +9,7 @@ LOG_OUTPUT_FILE = "/tmp/cef_troubleshooter_output_file.log"
 COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
 FAILED_TESTS_COUNT = 0
+WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
 SCRIPT_VERSION = 1.0
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
@@ -22,47 +23,47 @@ SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
 
 
 class ColorfulPrint:
-    '''
+    """
     This class is in order to print text in color according to the severity level.
-    '''
+    """
 
     def print_error(self, input_str):
-        '''
+        """
         Print given text in red color for Error text
         :param input_str:
-        '''
+        """
         print("\033[1;31;40m" + input_str + "\033[0m")
 
     def print_ok(self, input_str):
-        '''
+        """
         Print given text in green color for Ok text
         :param input_str:
-        '''
+        """
         print("\033[1;32;40m" + input_str + "\033[0m")
 
     def print_warning(self, input_str):
-        '''
+        """
         Print given text in yellow color for warning text
         :param input_str:
-        '''
+        """
         print("\033[1;33;40m" + input_str + "\033[0m")
 
     def print_notice(self, input_str):
-        '''
+        """
         Print given text in white background
         :param input_str:
-        '''
+        """
         print("\033[0;30;47m" + input_str + "\033[0m")
 
 
 class ShellExecute(ColorfulPrint):
-    '''
+    """
     This class is for executing all the shell related commands in the terminal for each test.
-    '''
+    """
     def run_command(self):
-        '''
+        """
         Running the bash commands using the subprocess library
-        '''
+        """
         try:
             self.command_result, self.command_result_err = subprocess.Popen(self.command_to_run, shell=True,
                                                                             stdout=subprocess.PIPE,
@@ -74,29 +75,31 @@ class ShellExecute(ColorfulPrint):
                 self.command_to_run)
 
     def print_result_to_prompt(self):
-        '''
+        """
         Printing the test's name and success status to the customer's prompt
-        '''
+        """
         max_length = 47
-        if self.is_successful == "Warn":
+        if self.is_successful == "Skip":
             self.print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failed to check")
+        elif self.is_successful == "Warn":
+            self.print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Warning")
         elif self.is_successful:
             self.print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
         else:
             self.print_error(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failure")
 
     def document_result(self):
-        '''
+        """
         A simple way to only document the response to prompt and to the log file
         Can be used in case some special commands that don't require a verification to be ran
-        '''
+        """
         self.print_result_to_prompt()
         self.log_result_to_file()
 
     def log_result_to_file(self):
-        '''
+        """
         Logging each test to a log file that can be used for troubleshooting. Is done by the use of the object repr function
-        '''
+        """
         output = self.__repr__()
         output_file = open(LOG_OUTPUT_FILE, 'a')
         try:
@@ -105,33 +108,65 @@ class ShellExecute(ColorfulPrint):
             print(str(self.command_name.command) + "was not documented successfully")
         output_file.close()
 
-    def run_full_test(self, exclude=False):
-        '''
+    def run_full_test(self, exclude=False, should_increase=True, should_warn=False):
+        """
         A simple way to run a full test- executing the command, validating it's result, printing it to the prompt and logging it to a file
         :param exclude: A parameter given to the is_command_successful function.
-        '''
+        :param should_increase: If false, FAILED_TESTS_COUNT and NOT_RUN_TESTS_COUNT will not be increased
+        :param should_warn: If True, self.is_successful value will be "Warn"
+        """
         self.run_command()
-        self.is_command_successful(exclude)
+        self.is_command_successful(exclude=exclude, should_increase=should_increase, should_warn=should_warn)
         self.print_result_to_prompt()
         self.log_result_to_file()
 
 
 class FullVerification(ShellExecute):
-    '''
+    """
     This class is running all the necessary verifications for the running test.
-    '''
-    def is_command_successful(self, exclude=False, should_fail=False):
-        '''
+    """
+    def is_command_successful(self, exclude=False, should_fail=False, should_increase=True, should_warn=False):
+        """
+        Verifying the command output indicates success. It's done by searching for key words in the result
+        :param exclude: If true, will verify the key words do not exist in the command result
+        :param should_fail: If true, will just return false and not run any further verification
+        :param should_increase: If false, FAILED_TESTS_COUNT and NOT_RUN_TESTS_COUNT will not be increased
+        :param should_warn: If True, self.is_successful value will be "Warn"
+        :return: True if successful otherwise False.
+        """
+        global FAILED_TESTS_COUNT, NOT_RUN_TESTS_COUNT, WARNING_TESTS_COUNT
+        if "not found" in str(self.command_result):
+            self.is_successful = "Skip"
+            if should_increase:
+                NOT_RUN_TESTS_COUNT += 1
+            return True
+
+        value = self.calc_is_command_successful(exclude, should_fail)
+        if value is True:
+            self.is_successful = True
+            return True
+        else:
+            if should_warn:
+                self.is_successful = "Warn"
+                if should_increase:
+                    WARNING_TESTS_COUNT += 1
+            else:
+                self.is_successful = False
+                if should_increase:
+                    FAILED_TESTS_COUNT += 1
+
+            return False
+
+    """
+    This class is running all the necessary verifications for the running test.
+    """
+    def calc_is_command_successful(self, exclude=False, should_fail=False):
+        """
         Verifying the command output indicates success. It's done by searching for key words in the result
         :param exclude: If true, will verify the key words do not exist in the command result
         :param should_fail: If true, will just return false and not run any further verification
         :return: True if successful otherwise False.
-        '''
-        global FAILED_TESTS_COUNT, NOT_RUN_TESTS_COUNT
-        if "not found" in str(self.command_result):
-            self.is_successful = "Warn"
-            NOT_RUN_TESTS_COUNT += 1
-            return True
+        """
         if self.command_result_err is None and self.command_result is not None and should_fail is not True:
             self.command_result = str(self.command_result)
             for key_word in self.result_keywords_array:
@@ -139,36 +174,29 @@ class FullVerification(ShellExecute):
                 if exclude:
                     if key_word in self.command_result:
                         self.fault_keyword = key_word
-                        self.is_successful = False
-                        FAILED_TESTS_COUNT += 1
                         return False
                 elif key_word not in self.command_result:
                     self.fault_keyword = key_word
-                    self.is_successful = False
-                    FAILED_TESTS_COUNT += 1
                     return False
-            self.is_successful = True
             return True
-        self.is_successful = False
-        FAILED_TESTS_COUNT += 1
         return False
 
     def run_full_verification(self, exclude=False, should_fail=False):
-        '''
+        """
         A simple way to run only the verification on documentation steps of the test.
         Can be used in case some special commands are not run using the run_command function
         :param exclude: A parameter given to the is_command_successful function.
         :param should_fail: A parameter given to the is_command_successful function.
-        '''
+        """
         self.is_command_successful(exclude, should_fail)
         self.print_result_to_prompt()
         self.log_result_to_file()
 
 
 class BasicCommand(FullVerification):
-    '''
+    """
     This class is for creating a command object. The object has execution, validation and documentation functions
-    '''
+    """
 
     def __init__(self, command_name, command_to_run, result_keywords_array=[], fault_keyword=None,
                  command_result=None,
@@ -183,9 +211,9 @@ class BasicCommand(FullVerification):
         self.is_successful = is_successful
 
     def __repr__(self):
-        '''
+        """
         Printing the command details in a built in format
-        '''
+        """
         delimiter = "\n" + "-" * 20 + "\n"
         return str(
             delimiter + str(self.command_name) + '\n' + "command to run: " + str(
@@ -200,9 +228,9 @@ class BasicCommand(FullVerification):
 
 
 class AgentInstallationVerifications:
-    '''
+    """
     This class is for agent related verifications
-    '''
+    """
     # CONSTANTS
     Agent_installation_doc = "https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage"
     agent_not_installed_error_message = "Could not detect an AMA service running and listening on the machine." \
@@ -218,9 +246,9 @@ class AgentInstallationVerifications:
     oms_running_error_message = "Detected the OMS Agent running on your machine. If not necessary please remove it to avoid duplicated data in the workspace, which can result in an increase in costs"
 
     def verify_agent_is_running(self):
-        '''
+        """
         Verifying the agent service called mdsd is listening on its default port
-        '''
+        """
         command_name = "verify_ama_agent_service_is_running"
         command_to_run = "sudo service azuremonitoragent status"
         result_keywords_array = ["azuremonitoragent.service", "Azure", "Monitor", "Agent", "active", "running"]
@@ -240,9 +268,9 @@ class AgentInstallationVerifications:
                 "Detected AMA running version- {}".format(command_object.command_result.decode('UTF-8').strip('\n')))
 
     def print_arc_version(self):
-        '''
+        """
         Checking if ARC is installed. If so- prints the version of it.
-        '''
+        """
         command_name = "print_arc_version"
         command_to_run = "azcmagent version"
         command_object = BasicCommand(command_name, command_to_run)
@@ -253,32 +281,32 @@ class AgentInstallationVerifications:
                 command_object.command_result.decode('UTF-8').strip('\n')))
 
     def verify_oms_not_running(self):
-        '''
+        """
         Verify the old MMA agent is not running together with the new AMA agent.
-        '''
+        """
         command_name = "verify_oms_agent_not_running"
         command_to_run = "sudo netstat -lnpvt | grep ruby"
         result_keywords_array = ["25226", "LISTEN", "tcp"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(exclude=True)
-        if command_object.is_successful == "Warn":
+        if command_object.is_successful == "Skip":
             command_object.print_warning(command_object.command_result_err)
         elif not command_object.is_successful:
             command_object.print_warning(self.oms_running_error_message)
 
     def run_all_verifications(self):
-        '''
+        """
         This function is only called by main and runs all the tests in this class
-        '''
+        """
         self.verify_agent_is_running()
         self.print_arc_version()
         self.verify_oms_not_running()
 
 
 class DCRConfigurationVerifications:
-    '''
+    """
     This class is for data collection rules verifications
-    '''
+    """
     # CONSTANTS
     DCR_doc = "https://docs.microsoft.com/azure/azure-monitor/agents/data-collection-rule-overview"
     DCRA_doc = "https://docs.microsoft.com/rest/api/monitor/data-collection-rule-associations"
@@ -293,9 +321,9 @@ class DCRConfigurationVerifications:
     CEF_multi_homing_message = "Detected multiple collection rules sending the CEF stream. This scenario is called multi-homing and might have effect on the agent's performance"
 
     def verify_DCR_exists(self):
-        '''
+        """
         Verifying there is at least one dcr on the machine
-        '''
+        """
         command_name = "verify_DCR_exists"
         command_to_run = "sudo ls -l /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"
         result_keywords_array = [".json"]
@@ -307,9 +335,9 @@ class DCRConfigurationVerifications:
         return True
 
     def verify_DCR_content_has_CEF_stream(self):
-        '''
+        """
         Verifying there is a DCR on the machine for forwarding cef data
-        '''
+        """
         command_name = "verify_DCR_content_has_CEF_stream"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.CEF_stream_name)
@@ -322,9 +350,9 @@ class DCRConfigurationVerifications:
         return True
 
     def verify_dcr_has_valid_content(self):
-        '''
+        """
         Verifying that the CEF DCR on the machine has valid content with all necessary DCR components
-        '''
+        """
         command_name = "verify_CEF_dcr_has_valid_content"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/".format(
             self.CEF_stream_name)
@@ -347,9 +375,9 @@ class DCRConfigurationVerifications:
         command_object.run_full_verification()
 
     def check_cef_multi_homing(self):
-        '''
+        """
         Counting the amount of DCRs forwarding CEF data in order to alert from multi-homing scenarios.
-        '''
+        """
 
         command_name = "check_cef_multi_homing"
         command_to_run = "sudo grep -ri \"{}\" /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/ | wc -l".format(
@@ -368,9 +396,9 @@ class DCRConfigurationVerifications:
             command_object.print_warning("Failed to run this test since no DCRs were found")
 
     def run_all_verifications(self):
-        '''
+        """
         This function is only called by main and runs all the tests in this class
-        '''
+        """
         if not self.verify_DCR_exists():
             return False
         if not self.verify_DCR_content_has_CEF_stream():
@@ -380,23 +408,23 @@ class DCRConfigurationVerifications:
 
 
 class SyslogDaemonVerifications(ColorfulPrint):
-    '''
+    """
     This class is for Syslog daemon related verifications
-    '''
-    # CONSTANTS
-    SYSLOG_DAEMON = "rsyslog"
-    syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
-                                     "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
-    No_Syslog_daemon_error_message = "Could not detect any running Syslog daemon on the machine. The supported Syslog daemons are Rsyslog and Syslog-ng. Please install one of them and run this script again."
-    Syslog_daemon_not_listening_warning = "Warning: the Syslog daemon- {} is running but not listening on the machine or is listening to a non-default port".format(
-        SYSLOG_DAEMON)
-    Syslog_daemon_not_forwarding_error = "{} configuration was found invalid in this file {}. The forwarding of the syslog daemon to the agent might not work. Please install the agent in order to get the updated Syslog daemon forwarding configuration file, and try again.".format(
-        SYSLOG_DAEMON, syslog_daemon_forwarding_path[SYSLOG_DAEMON])
+    """
+    def __init__(self):
+        self.command_name = "verify_Syslog_daemon_listening"
+        self.SYSLOG_DAEMON = ""
+        self.syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
+                                         "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
+        self.No_Syslog_daemon_error_message = "Could not detect any running Syslog daemon on the machine. The supported Syslog daemons are Rsyslog and Syslog-ng. Please install one of them and run this script again."
+        self.Syslog_daemon_not_listening_warning = (lambda daemon_name: "Warning: the Syslog daemon- {} is running but not listening on the machine or is listening to a non-default port".format(daemon_name))
+        self.Syslog_daemon_not_forwarding_error = (lambda daemon_name: "{} configuration was found invalid in this file {}. The forwarding of the syslog daemon to the agent might not work. Please install the agent in order to get the updated Syslog daemon forwarding configuration file, and try again.".format(
+            daemon_name, self.syslog_daemon_forwarding_path[daemon_name]))
 
     def determine_Syslog_daemon(self):
-        '''
+        """
         This function is in order to determine what Syslog daemon is running on the machine (Rsyslog or Syslog-ng)
-        '''
+        """
         is_Rsyslog_running = BasicCommand("find_Rsyslog_daemon",
                                           "if [ `ps -ef | grep rsyslog | grep -v grep | wc -l` -gt 0 ]; then echo \"True\"; else echo \"False\"; fi")
         is_Syslog_ng_running = BasicCommand("find_Syslog-ng_daemon",
@@ -410,27 +438,33 @@ class SyslogDaemonVerifications(ColorfulPrint):
             return True
         is_Rsyslog_running.log_result_to_file()
         is_Syslog_ng_running.log_result_to_file()
-        self.print_error(self.No_Syslog_daemon_error_message)
         return False
 
     def verify_Syslog_daemon_listening(self):
-        '''
+        """
         Verifying the Syslog daemon is listening on the default 514 port for incoming traffic
-        '''
-        command_name = "verify_Syslog_daemon_listening"
+        """
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
-        result_keywords_array = [self.SYSLOG_DAEMON, "LISTEN", ":514 "]
-        command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
-        command_object.run_full_test()
-        if command_object.is_successful == "Warn":
-            command_object.print_warning(command_object.command_result_err)
-        elif not command_object.is_successful:
-            command_object.print_warning(self.Syslog_daemon_not_listening_warning)
+        result_keywords_array = [self.SYSLOG_DAEMON, ":514 "]
+        command_object = BasicCommand(self.command_name, command_to_run, result_keywords_array)
+        command_object.run_command()
+        command_object.is_command_successful(should_increase=False)
+        if command_object.is_successful is not False:
+            command_object.document_result()
+            if command_object.is_successful == "Skip":
+                command_object.print_warning(command_object.command_result_err)
+        else:
+            # In case we don't find any daemon on port 514 we will make sure it's not listening to TLS port: 6514
+            result_keywords_array = [self.SYSLOG_DAEMON, ":6514 "]
+            command_object = BasicCommand(self.command_name, command_to_run, result_keywords_array)
+            command_object.run_full_test(should_warn=True)
+            if command_object.is_successful == "Warn":
+                command_object.print_warning(self.Syslog_daemon_not_listening_warning(self.SYSLOG_DAEMON))
 
     def verify_Syslog_daemon_forwarding_configuration(self):
-        '''
+        """
         Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
-        '''
+        """
         if self.SYSLOG_DAEMON != "":
             syslog_daemon_forwarding_keywords = {
                 "rsyslog": ['omuxsock', 'azuremonitoragent', 'OMUxSockSocket', 'OMUxSockDefaultTemplate'],
@@ -442,21 +476,27 @@ class SyslogDaemonVerifications(ColorfulPrint):
             command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
             command_object.run_full_test()
             if not command_object.is_successful:
-                command_object.print_error(self.Syslog_daemon_not_forwarding_error)
+                command_object.print_error(self.Syslog_daemon_not_forwarding_error(self.SYSLOG_DAEMON))
 
     def run_all_verifications(self):
-        '''
+        """
         This function is only called by main and runs all the tests in this class
-        '''
+        """
+        global FAILED_TESTS_COUNT
         if self.determine_Syslog_daemon():
             self.verify_Syslog_daemon_listening()
             self.verify_Syslog_daemon_forwarding_configuration()
+        else:
+            mock_command = BasicCommand(self.command_name, "")
+            mock_command.print_result_to_prompt()
+            mock_command.print_error(self.No_Syslog_daemon_error_message)
+            FAILED_TESTS_COUNT += 1
 
 
 class OperatingSystemVerifications:
-    '''
+    """
     This class is for general operating system verifications
-    '''
+    """
     # CONSTANTS
     SELinux_documentation = "https://access.redhat.com/documentation/red_hat_enterprise_linux/8/html/using_selinux/changing-selinux-states-and-modes_using-selinux#changing-selinux-modes_changing-selinux-states-and-modes"
     SELinux_running_error_message = "Detected SELinux running on the machine. The CEF connector does not support any form of hardening at the moment," \
@@ -470,29 +510,27 @@ class OperatingSystemVerifications:
                               " Please free disk space on this machine and run again."
 
     def verify_selinux_disabled(self):
-        '''
+        """
         Verify SELinux is not in enforcing mode, which can harm the events' forwarding to the agent.
-        '''
+        """
         command_name = "verify_selinux_disabled"
-        command_to_run = "sudo getenforce"
+        command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(True)
-        if command_object.is_successful == "Warn":
-            command_object.print_warning(command_object.command_result_err)
-        elif not command_object.is_successful:
+        if not command_object.is_successful:
            command_object.print_error(self.SELinux_running_error_message)
 
     def verify_iptables(self):
-        '''
+        """
         Verify there is no firewall rule in the iptables blocking the Syslog daemon or agent incoming ports
-        '''
+        """
         command_name = "verify_iptables_policy_permissive"
         command_to_run = "sudo iptables -S | grep \\\\-P | grep -E 'INPUT|OUTPUT'"
         result_keywords_array = ["DROP", "REJECT"]
         policy_command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         policy_command_object.run_full_test(exclude=True)
-        if policy_command_object.is_successful == "Warn":
+        if policy_command_object.is_successful == "Skip":
             policy_command_object.print_warning(policy_command_object.command_result_err)
             return True
         command_name = "verify_iptables_rules_permissive"
@@ -504,9 +542,9 @@ class OperatingSystemVerifications:
             policy_command_object.print_warning(self.iptables_blocking_traffic_error_message)
 
     def verify_free_disk_space(self):
-        '''
+        """
         Verify there is enough free disk space on the machine for the event forwarding to work as expected. The minimal is set to 1 GB
-        '''
+        """
         minimal_free_space_kb = 1048576
         command_name = "verify_free_disk_space"
         command_to_run = "sudo df --output=avail / | head -2 | tail -1"
@@ -520,18 +558,18 @@ class OperatingSystemVerifications:
             command_object.document_result()
 
     def run_all_verifications(self):
-        '''
+        """
         This function is only called by main and runs all the tests in this class
-        '''
+        """
         self.verify_selinux_disabled()
         self.verify_iptables()
         self.verify_free_disk_space()
 
 
 class IncomingEventsVerifications:
-    '''
+    """
     This class is for sending and capturing CEF events in the incoming stream of events to the syslog daemon port
-    '''
+    """
     # CONSTANTS
     Fixed_cef_message = "0|TestCommonEventFormat|MOCK|common=event-format-test|end|TRAFFIC|1|rt=$common=event-formatted-receive_time deviceExternalId=0002D01655 src=1.1.1.1 dst=2.2.2.2 sourceTranslatedAddress=1.1.1.1 destinationTranslatedAddress=3.3.3.3 cs1Label=Rule cs1=CEF_TEST_InternetDNS"
     Tcpdump_not_installed_error_message = "Notice that \'tcpdump\' is not installed in your Linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'."
@@ -540,21 +578,21 @@ class IncomingEventsVerifications:
     CEF_events_not_found_error_message = "Could not locate \"CEF\" message in tcpdump. Please verify CEF events can be sent to the machine and there is not firewall blocking incoming traffic"
 
     def handle_tcpdump_line(self, line):
-        '''
+        """
         Validate there are incoming CEF events.
         :param line: a text line from the tcpdump stream
         :return: True if CEF exists in the line. Otherwise false.
-        '''
+        """
         if "CEF" in line:
             return True
         return False
 
     def incoming_logs_validations(self, mock_message=False):
-        '''
+        """
         Validate that there is incoming traffic of CEF messages
         :param mock_message: Tells if to generate mock messages
         :return: True if successfully captured CEF events.
-        '''
+        """
         tcpdump_time_restriction = 10
         start_seconds = int(round(time.time()))
         end_seconds = int(round(time.time()))
@@ -596,11 +634,11 @@ class IncomingEventsVerifications:
         return False
 
     def send_cef_message_local(self, port, amount):
-        '''
+        """
         Generate local CEF events in a given amount to a given port
         :param port: A destination port to send the events
         :param amount: The amount of events to send
-        '''
+        """
         try:
             for index in range(0, amount):
                 command_tokens = ["logger", "-p", "local4.warn", "-t", "CEF:", self.Fixed_cef_message, "-P", str(port),
@@ -614,9 +652,9 @@ class IncomingEventsVerifications:
             print(self.Logger_not_installed_error_message)
 
     def run_all_verifications(self):
-        '''
+        """
         This function is only called by main and runs all the tests in this class
-        '''
+        """
         printer = ColorfulPrint()
         if not self.incoming_logs_validations():
             printer.print_notice("Generating CEF mock events and trying again")
@@ -709,7 +747,7 @@ def main():
             running_in_collect_mode = True
             printer.print_notice("Starting to collect data. This may take a couple of seconds")
             time.sleep(2)
-            subprocess.Popen(['rm', COLLECT_OUTPUT_FILE, '2>', '/dev/null'],
+            subprocess.Popen(['rm', '-f', COLLECT_OUTPUT_FILE],
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
             system_info = SystemInfo()
             system_info.handle_commands()
@@ -734,7 +772,7 @@ def main():
         (IncomingEventsVerifications(), "Starting validation tests for capturing incoming events")]
     printer.print_notice("\nStarting to run the CEF validation script")
     time.sleep(1)
-    subprocess.Popen(['rm', LOG_OUTPUT_FILE, '2>', '/dev/null'],
+    subprocess.Popen(['rm', '-f', LOG_OUTPUT_FILE],
                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT).communicate()
     printer.print_notice("Please validate you are sending CEF messages to the agent machine")
     for class_test in class_tests_array:
@@ -743,6 +781,8 @@ def main():
         verification_object.run_all_verifications()
     if NOT_RUN_TESTS_COUNT > 0:
         printer.print_warning("\nTotal amount of tests that failed to run: " + str(NOT_RUN_TESTS_COUNT))
+    if WARNING_TESTS_COUNT > 0:
+        printer.print_warning("\nTotal amount of tests that ended with a warning status is: " + str(WARNING_TESTS_COUNT))
     if FAILED_TESTS_COUNT > 0:
         printer.print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
