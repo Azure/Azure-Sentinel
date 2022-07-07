@@ -474,13 +474,11 @@ class OperatingSystemVerifications:
         Verify SELinux is not in enforcing mode, which can harm the events' forwarding to the agent.
         '''
         command_name = "verify_selinux_disabled"
-        command_to_run = "sudo getenforce"
+        command_to_run = "sudo getenforce 2> /dev/null; if [ $? != 0 ]; then echo 'Disabled'; fi"
         result_keywords_array = ["Enforcing"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test(True)
-        if command_object.is_successful == "Warn":
-            command_object.print_warning(command_object.command_result_err)
-        elif not command_object.is_successful:
+        if not command_object.is_successful:
            command_object.print_error(self.SELinux_running_error_message)
 
     def verify_iptables(self):
