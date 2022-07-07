@@ -81,6 +81,8 @@ class ShellExecute(ColorfulPrint):
         max_length = 47
         if self.is_successful == "Skip":
             self.print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Failed to check")
+        elif self.is_successful == "Warn":
+            self.print_warning(self.command_name + "-" * (max_length - len(self.command_name)) + "> Warning")
         elif self.is_successful:
             self.print_ok(self.command_name + "-" * (max_length - len(self.command_name)) + "> Success")
         else:
@@ -106,14 +108,15 @@ class ShellExecute(ColorfulPrint):
             print(str(self.command_name.command) + "was not documented successfully")
         output_file.close()
 
-    def run_full_test(self, exclude=False, should_increase=False):
+    def run_full_test(self, exclude=False, should_increase=True, should_warn=False):
         """
         A simple way to run a full test- executing the command, validating it's result, printing it to the prompt and logging it to a file
         :param exclude: A parameter given to the is_command_successful function.
         :param should_increase: If false, FAILED_TESTS_COUNT and NOT_RUN_TESTS_COUNT will not be increased
+        :param should_warn: If True, self.is_successful value will be "Warn"
         """
         self.run_command()
-        self.is_command_successful(exclude, should_increase)
+        self.is_command_successful(exclude=exclude, should_increase=should_increase, should_warn=should_warn)
         self.print_result_to_prompt()
         self.log_result_to_file()
 
@@ -122,20 +125,48 @@ class FullVerification(ShellExecute):
     """
     This class is running all the necessary verifications for the running test.
     """
-    def is_command_successful(self, exclude=False, should_fail=False, should_increase=True):
+    def is_command_successful(self, exclude=False, should_fail=False, should_increase=True, should_warn=False):
         """
         Verifying the command output indicates success. It's done by searching for key words in the result
         :param exclude: If true, will verify the key words do not exist in the command result
         :param should_fail: If true, will just return false and not run any further verification
         :param should_increase: If false, FAILED_TESTS_COUNT and NOT_RUN_TESTS_COUNT will not be increased
+        :param should_warn: If True, self.is_successful value will be "Warn"
         :return: True if successful otherwise False.
         """
-        global FAILED_TESTS_COUNT, NOT_RUN_TESTS_COUNT
+        global FAILED_TESTS_COUNT, NOT_RUN_TESTS_COUNT, WARNING_TESTS_COUNT
         if "not found" in str(self.command_result):
             self.is_successful = "Skip"
             if should_increase:
                 NOT_RUN_TESTS_COUNT += 1
             return True
+
+        value = self.calc_is_command_successful(exclude, should_fail)
+        if value is True:
+            self.is_successful = True
+            return True
+        else:
+            if should_warn:
+                self.is_successful = "Warn"
+                if should_increase:
+                    WARNING_TESTS_COUNT += 1
+            else:
+                self.is_successful = False
+                if should_increase:
+                    FAILED_TESTS_COUNT += 1
+
+            return False
+
+    """
+    This class is running all the necessary verifications for the running test.
+    """
+    def calc_is_command_successful(self, exclude=False, should_fail=False):
+        """
+        Verifying the command output indicates success. It's done by searching for key words in the result
+        :param exclude: If true, will verify the key words do not exist in the command result
+        :param should_fail: If true, will just return false and not run any further verification
+        :return: True if successful otherwise False.
+        """
         if self.command_result_err is None and self.command_result is not None and should_fail is not True:
             self.command_result = str(self.command_result)
             for key_word in self.result_keywords_array:
@@ -143,21 +174,11 @@ class FullVerification(ShellExecute):
                 if exclude:
                     if key_word in self.command_result:
                         self.fault_keyword = key_word
-                        self.is_successful = False
-                        if should_increase:
-                            FAILED_TESTS_COUNT += 1
                         return False
                 elif key_word not in self.command_result:
                     self.fault_keyword = key_word
-                    self.is_successful = False
-                    if should_increase:
-                        FAILED_TESTS_COUNT += 1
                     return False
-            self.is_successful = True
             return True
-        self.is_successful = False
-        if should_increase:
-            FAILED_TESTS_COUNT += 1
         return False
 
     def run_full_verification(self, exclude=False, should_fail=False):
@@ -396,9 +417,9 @@ class SyslogDaemonVerifications(ColorfulPrint):
         self.syslog_daemon_forwarding_path = {"rsyslog": "/etc/rsyslog.d/10-azuremonitoragent.conf",
                                          "syslog-ng": "/etc/syslog-ng/conf.d/azuremonitoragent.conf"}
         self.No_Syslog_daemon_error_message = "Could not detect any running Syslog daemon on the machine. The supported Syslog daemons are Rsyslog and Syslog-ng. Please install one of them and run this script again."
-        self.Syslog_daemon_not_listening_warning = (lambda x: "Warning: the Syslog daemon- {} is running but not listening on the machine or is listening to a non-default port".format(x))
-        self.Syslog_daemon_not_forwarding_error = (lambda x: "{} configuration was found invalid in this file {}. The forwarding of the syslog daemon to the agent might not work. Please install the agent in order to get the updated Syslog daemon forwarding configuration file, and try again.".format(
-            x, self.syslog_daemon_forwarding_path[x]))
+        self.Syslog_daemon_not_listening_warning = (lambda daemon_name: "Warning: the Syslog daemon- {} is running but not listening on the machine or is listening to a non-default port".format(daemon_name))
+        self.Syslog_daemon_not_forwarding_error = (lambda daemon_name: "{} configuration was found invalid in this file {}. The forwarding of the syslog daemon to the agent might not work. Please install the agent in order to get the updated Syslog daemon forwarding configuration file, and try again.".format(
+            daemon_name, self.syslog_daemon_forwarding_path[daemon_name]))
 
     def determine_Syslog_daemon(self):
         """
@@ -423,7 +444,6 @@ class SyslogDaemonVerifications(ColorfulPrint):
         """
         Verifying the Syslog daemon is listening on the default 514 port for incoming traffic
         """
-        global WARNING_TESTS_COUNT
         command_to_run = "sudo netstat -lnpv | grep " + self.SYSLOG_DAEMON
         result_keywords_array = [self.SYSLOG_DAEMON, ":514 "]
         command_object = BasicCommand(self.command_name, command_to_run, result_keywords_array)
@@ -437,15 +457,10 @@ class SyslogDaemonVerifications(ColorfulPrint):
             # In case we don't find any daemon on port 514 we will make sure it's not listening to TLS port: 6514
             result_keywords_array = [self.SYSLOG_DAEMON, ":6514 "]
             command_object = BasicCommand(self.command_name, command_to_run, result_keywords_array)
-            command_object.run_command()
-            command_object.is_command_successful(should_increase=False)
-            command_object.log_result_to_file()
-            if not command_object.is_successful:
-                WARNING_TESTS_COUNT += 1
+            command_object.run_full_test(should_warn=True)
+            if command_object.is_successful == "Warn":
                 command_object.print_warning(self.Syslog_daemon_not_listening_warning(self.SYSLOG_DAEMON))
-            else:
-                command_object.print_result_to_prompt()
-                
+
     def verify_Syslog_daemon_forwarding_configuration(self):
         """
         Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
@@ -767,7 +782,7 @@ def main():
     if NOT_RUN_TESTS_COUNT > 0:
         printer.print_warning("\nTotal amount of tests that failed to run: " + str(NOT_RUN_TESTS_COUNT))
     if WARNING_TESTS_COUNT > 0:
-        printer.print_warning("\nTotal amount of tests ended with warning status is: " + str(WARNING_TESTS_COUNT))
+        printer.print_warning("\nTotal amount of tests that ended with a warning status is: " + str(WARNING_TESTS_COUNT))
     if FAILED_TESTS_COUNT > 0:
         printer.print_error("\nTotal amount of failed tests is: " + str(FAILED_TESTS_COUNT))
     else:
