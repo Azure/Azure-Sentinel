@@ -36,4 +36,4 @@ In this document, you learned how to connect Darktrace to Microsoft Sentinel. To
 
 To get the most out of the Data Connector, consider installing the Darktrace Solution for Microsoft Sentinel from the Sentinel Content Hub. The solution will allow you to operationalize Darktrace data in Microsoft Sentinel by visualising alerting using Workbooks as well as turning Darktrace alerting into Microsoft Sentinel Incident and Alerts.
 
-For more information, see the [Microsoft Sentinel solution overview](https://docs.microsoft.com/azure/sentinel/sentinel-solutions) and visit the [Azure Marketplace](https://azure.microsoft.com/en-gb/marketplace/)
+For more information, see the [Microsoft Sentinel solution overview](https://docs.microsoft.com/azure/sentinel/sentinel-solutions) and visit the [Azure Marketplace](https://azure.microsoft.com/marketplace/)
