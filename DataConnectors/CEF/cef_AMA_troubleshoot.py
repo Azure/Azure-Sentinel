@@ -443,7 +443,9 @@ class SyslogDaemonVerifications(ColorfulPrint):
             if not command_object.is_successful:
                 WARNING_TESTS_COUNT += 1
                 command_object.print_warning(self.Syslog_daemon_not_listening_warning(self.SYSLOG_DAEMON))
-
+            else:
+                command_object.print_result_to_prompt()
+                
     def verify_Syslog_daemon_forwarding_configuration(self):
         """
         Verify the syslog daemon forwarding configuration file has the correct forwarding configuration to the Unix domain socket.
