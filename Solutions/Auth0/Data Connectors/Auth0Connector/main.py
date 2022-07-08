@@ -3,7 +3,6 @@ import requests
 import os
 import re
 import json
-import sys
 from typing import Tuple, List, Union
 from datetime import datetime as dt
 from datetime import timedelta
