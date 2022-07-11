@@ -1,0 +1,590 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Aruba Networks",
+    "comments": "Solution template for Aruba ClearPass"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-arubaclearpass",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "ArubaClearPass",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ArubaClearPass",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "ArubaClearPass-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "ArubaClearPass",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Aruba ClearPass data connector with template",
+        "displayName": "Aruba ClearPass template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Aruba ClearPass data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Aruba ClearPass",
+                  "publisher": "Aruba Networks",
+                  "descriptionMarkdown": "The [Aruba ClearPass](https://www.arubanetworks.com/products/security/network-access-control/secure-access/) connector allows you to easily connect your Aruba ClearPass with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.",
+                  "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function to work as expected. Follow the steps to use this Kusto functions alias **ArubaClearPass** in queries and workbooks. [Follow these steps to get this Kusto functions.](https://aka.ms/sentinel-arubaclearpass-parser)",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ArubaClearPass",
+                      "baseQuery": "CommonSecurityLog\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\""
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Events by Username",
+                      "query": "ArubaClearPass \n | summarize count() by UserName \n| top 10 by count_"
+                    },
+                    {
+                      "description": "Top 10 Error Codes",
+                      "query": "ArubaClearPass \n | summarize count() by ErrorCode \n| top 10 by count_"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "CommonSecurityLog\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\"\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CommonSecurityLog (ArubaClearPass)",
+                      "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\"\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow the steps](https://aka.ms/sentinel-arubaclearpass-parser) to use the Kusto function alias, **ArubaClearPass**"
+                    },
+                    {
+                      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+                      "innerSteps": [
+                        {
+                          "title": "1.1 Select or create a Linux machine",
+                          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                        },
+                        {
+                          "title": "1.2 Install the CEF collector on the Linux machine",
+                          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                          "instructions": [
+                            {
+                              "parameters": {
+                                "fillWith": [
+                                  "WorkspaceId",
+                                  "PrimaryKey"
+                                ],
+                                "label": "Run the following command to install and apply the CEF collector:",
+                                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                              },
+                              "type": "CopyableLabel"
+                            }
+                          ]
+                        }
+                      ],
+                      "title": "1. Linux Syslog agent configuration"
+                    },
+                    {
+                      "description": "Configure Aruba ClearPass to forward Syslog messages in CEF format to your Microsoft Sentinel workspace via the Syslog agent.\n1. [Follow these instructions](https://www.arubanetworks.com/techdocs/ClearPass/6.7/PolicyManager/Content/CPPM_UserGuide/Admin/syslogExportFilters_add_syslog_filter_general.htm) to configure the Aruba ClearPass to forward syslog.\n2. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+                      "title": "2. Forward Aruba ClearPass logs to a Syslog agent"
+                    },
+                    {
+                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Run the following command to validate your connectivity:",
+                            "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "3. Validate connection"
+                    },
+                    {
+                      "description": "Make sure to configure the machine's security according to your organization’s security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+                      "title": "4. Secure your machine "
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Aruba ClearPass",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Aruba Networks"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Aruba ClearPass",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Aruba Networks"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Aruba ClearPass",
+          "publisher": "Aruba Networks",
+          "descriptionMarkdown": "The [Aruba ClearPass](https://www.arubanetworks.com/products/security/network-access-control/secure-access/) connector allows you to easily connect your Aruba ClearPass with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ArubaClearPass",
+              "baseQuery": "CommonSecurityLog\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\""
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CommonSecurityLog (ArubaClearPass)",
+              "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\"\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "CommonSecurityLog\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\"\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Events by Username",
+              "query": "ArubaClearPass \n | summarize count() by UserName \n| top 10 by count_"
+            },
+            {
+              "description": "Top 10 Error Codes",
+              "query": "ArubaClearPass \n | summarize count() by ErrorCode \n| top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow the steps](https://aka.ms/sentinel-arubaclearpass-parser) to use the Kusto function alias, **ArubaClearPass**"
+            },
+            {
+              "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+              "innerSteps": [
+                {
+                  "title": "1.1 Select or create a Linux machine",
+                  "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                },
+                {
+                  "title": "1.2 Install the CEF collector on the Linux machine",
+                  "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                  "instructions": [
+                    {
+                      "parameters": {
+                        "fillWith": [
+                          "WorkspaceId",
+                          "PrimaryKey"
+                        ],
+                        "label": "Run the following command to install and apply the CEF collector:",
+                        "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                      },
+                      "type": "CopyableLabel"
+                    }
+                  ]
+                }
+              ],
+              "title": "1. Linux Syslog agent configuration"
+            },
+            {
+              "description": "Configure Aruba ClearPass to forward Syslog messages in CEF format to your Microsoft Sentinel workspace via the Syslog agent.\n1. [Follow these instructions](https://www.arubanetworks.com/techdocs/ClearPass/6.7/PolicyManager/Content/CPPM_UserGuide/Admin/syslogExportFilters_add_syslog_filter_general.htm) to configure the Aruba ClearPass to forward syslog.\n2. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+              "title": "2. Forward Aruba ClearPass logs to a Syslog agent"
+            },
+            {
+              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Run the following command to validate your connectivity:",
+                    "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "3. Validate connection"
+            },
+            {
+              "description": "Make sure to configure the machine's security according to your organization’s security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+              "title": "4. Secure your machine "
+            }
+          ],
+          "id": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_uiConfigId1'))]",
+          "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function to work as expected. Follow the steps to use this Kusto functions alias **ArubaClearPass** in queries and workbooks. [Follow these steps to get this Kusto functions.](https://aka.ms/sentinel-arubaclearpass-parser)"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "ArubaClearPass Data Parser with template",
+        "displayName": "ArubaClearPass Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ArubaClearPass Data Parser with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "ArubaClearPass",
+                "category": "Samples",
+                "functionAlias": "ArubaClearPass",
+                "query": "\nlet LogHeader =\r\nCommonSecurityLog\r\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\"\r\n| extend Category = coalesce(\r\n                            extract(@'cat=([^;]+)(\\;|$)',1, AdditionalExtensions),                            \r\n                            column_ifexists(\"DeviceEventCategory\", \"\")\r\n                        ),\r\n        Outcome = coalesce(\r\n                            extract(@'outcome=([^;]+)\\;',1, AdditionalExtensions),                            \r\n                            column_ifexists(\"EventOutcome\", \"\")\r\n                        )\r\n| project-rename DvcIpAddr = DeviceAddress,\r\n                 DvcVersion = DeviceVersion,\r\n                 SrcIpAddr = SourceIP;\r\nlet InsightLogs = LogHeader\r\n| where Activity == \"Insight Logs\" or Category == \"Insight Logs\"\r\n| extend UserName = extract(@'Auth.Username=([^;]+)\\;',1, AdditionalExtensions),\r\n        AuthorizationSources = extract(@'Auth.Authorization-Sources=([^;]+)\\;',1, AdditionalExtensions),\r\n        NetworkProtocol = extract(@'Auth.Protocol=([^;]+)\\;',1, AdditionalExtensions),\r\n        RequestTimestamp = extract(@'Auth.Request-Timestamp=([^;]+)\\;',1, AdditionalExtensions),\r\n        LoginStatus = extract(@'Auth.Login-Status=([^;]+)\\;',1, AdditionalExtensions),\r\n        Source = extract(@'Auth.Source=([^;]+)\\;',1, AdditionalExtensions),\r\n        EnforcementProfiles = extract(@'Auth.Enforcement-Profiles=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPort = extract(@'Auth.NAS-Port=([^;]+)\\;',1, AdditionalExtensions),\r\n        TimestampFormat = extract(@'TimestampFormat=([^;]+)\\;',1, AdditionalExtensions),\r\n        Ssid = extract(@'Auth.SSID=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPortType = extract(@'Auth.NAS-Port-Type=([^;]+)\\;',1, AdditionalExtensions),\r\n        ErrorCode = extract(@'Auth.Error-Code=([^;]+)\\;',1, AdditionalExtensions),\r\n        Roles = extract(@'Auth.Roles=([^;]+)\\;',1, AdditionalExtensions),\r\n        Service = extract(@'Auth.Service=([^;]+)\\;',1, AdditionalExtensions),\r\n        SrcMacAddr = extract(@'Auth.Host-MAC-Address=([^;]+)\\;',1, AdditionalExtensions),\r\n        Unhealthy = extract(@'Auth.Unhealthy=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasIpAddr = extract(@'Auth.NAS-IP-Address=([^;]+)\\;',1, AdditionalExtensions),\r\n        CalledStationId = extract(@'Auth.CalledStationId=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasIdentifier = extract(@'Auth.NAS-Identifier=([^;]+)\\;',1, AdditionalExtensions)\r\n| extend EndpointStatus = extract(@'ArubaClearpassEndpointStatus=([^;]+)\\;',1, AdditionalExtensions),\r\n         EndpointConflict = extract(@'ArubaClearpassEndpointConflict=([^;]+)\\;',1, AdditionalExtensions),\r\n         EndpointDvcCategory = iif(DeviceCustomString3Label == \"Endpoint.Device-Category\", DeviceCustomString3, \"\"),\r\n         EndpointDvcFamily = iif(DeviceCustomString4Label == \"Endpoint.Device-Family\", DeviceCustomString4, \"\"),\r\n         EndpointDvcName = iif(DeviceCustomString5Label == \"Endpoint.Device-Name\", DeviceCustomString5, \"\"),\r\n         EndpointMacVendor = iif(DeviceCustomString6Label == \"Endpoint.MAC-Vendor\", DeviceCustomString6, \"\"),        \r\n         EndpointAddedDate= iif(DeviceCustomDate1Label == \"Endpoint.Added-At\", todatetime(DeviceCustomDate1), todatetime(\"\"))\r\n| extend Category = iif(isempty(Category), \"Insight Logs\", Category); \r\nlet AuditRecords = LogHeader\r\n| where Activity == \"Audit Records\" or Category == \"Audit Records\"\r\n| extend TimestampFormat = extract(@'timeFormat=([^;]+)\\;',1, AdditionalExtensions),\r\n        UserName = extract(@'usrName=([^;]+)(\\;|$)',1, AdditionalExtensions)\r\n| extend Category = iif(isempty(Category), \"Audit Records\", Category);\r\nlet SessionLogs = LogHeader\r\n| where Activity == \"Session Logs\" or Category == \"Session Logs\"\r\n| extend Timestamp = extract(@'RADIUS.Acct-Timestamp=([^;]+)\\;',1, AdditionalExtensions),\r\n        CallingStationId = extract(@'RADIUS.Acct-Calling-Station-Id=([^;]+)\\;',1, AdditionalExtensions),\r\n        InputOctets = extract(@'RADIUS.Acct-Input-Octets=([^;]+)\\;',1, AdditionalExtensions),\r\n        TimestampFormat = extract(@'TimestampFormat=([^;]+)\\;',1, AdditionalExtensions),\r\n        SessionTime = extract(@'RADIUS.Acct-Session-Time=([^;]+)\\;',1, AdditionalExtensions),\r\n        FramedIpAddr = extract(@'RADIUS.Acct-Framed-IP-Address=([^;]+)\\;',1, AdditionalExtensions),\r\n        Source = extract(@'RADIUS.Auth-Source=([^;]+)\\;',1, AdditionalExtensions),\r\n        Method = extract(@'RADIUS.Auth-Method=([^;]+)\\;',1, AdditionalExtensions),\r\n        SessionId = extract(@'RADIUS.Acct-Session-Id=([^;]+)\\;',1, AdditionalExtensions),\r\n        ServiceName = extract(@'RADIUS.Acct-Service-Name=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPortNumber = extract(@'RADIUS.Acct-NAS-Port=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPortType = extract(@'RADIUS.Acct-NAS-Port-Type=([^;]+)\\;',1, AdditionalExtensions),\r\n        OutputOctets = extract(@'RADIUS.Acct-Output-Octets=([^;]+)\\;',1, AdditionalExtensions),\r\n        UserName = extract(@'RADIUS.Acct-Username=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasIpAddr = extract(@'RADIUS.Acct-NAS-IP-Address=([^;]+)\\;',1, AdditionalExtensions)\r\n| project-rename DstServiceName = DestinationServiceName,\r\n                 DstUserPriviledges = DestinationUserPrivileges,\r\n                 DstUserName = DestinationUserName,\r\n                 DstMacAddr = DestinationMACAddress\r\n| extend Category = iif(isempty(Category), \"Sessions Logs\", Category);\r\nlet SystemLogs = LogHeader\r\n| where Activity == \"System Logs\" or Category == \"ClearPass System Events\"\r\n| extend Description = extract(@'description=([^;]+)\\;',1, AdditionalExtensions),\r\n         Action = extract(@'daction=([^;]+)\\;',1, AdditionalExtensions),\r\n         InputOctets = extract(@'RADIUS.Acct-Input-Octets=([^;]+)\\;',1, AdditionalExtensions),\r\n         TimeFormat = extract(@'devTimeFormat=([^;]+)\\;',1, AdditionalExtensions)\r\n| extend Category = iif(isempty(Category), \"System Logs\", \"System Logs\");\r\nunion SessionLogs, InsightLogs, AuditRecords, SystemLogs",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "ArubaClearPass"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Aruba ClearPass",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Aruba Networks"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "ArubaClearPass",
+        "category": "Samples",
+        "functionAlias": "ArubaClearPass",
+        "query": "\nlet LogHeader =\r\nCommonSecurityLog\r\n| where DeviceVendor == \"Aruba Networks\" and DeviceProduct == \"ClearPass\"\r\n| extend Category = coalesce(\r\n                            extract(@'cat=([^;]+)(\\;|$)',1, AdditionalExtensions),                            \r\n                            column_ifexists(\"DeviceEventCategory\", \"\")\r\n                        ),\r\n        Outcome = coalesce(\r\n                            extract(@'outcome=([^;]+)\\;',1, AdditionalExtensions),                            \r\n                            column_ifexists(\"EventOutcome\", \"\")\r\n                        )\r\n| project-rename DvcIpAddr = DeviceAddress,\r\n                 DvcVersion = DeviceVersion,\r\n                 SrcIpAddr = SourceIP;\r\nlet InsightLogs = LogHeader\r\n| where Activity == \"Insight Logs\" or Category == \"Insight Logs\"\r\n| extend UserName = extract(@'Auth.Username=([^;]+)\\;',1, AdditionalExtensions),\r\n        AuthorizationSources = extract(@'Auth.Authorization-Sources=([^;]+)\\;',1, AdditionalExtensions),\r\n        NetworkProtocol = extract(@'Auth.Protocol=([^;]+)\\;',1, AdditionalExtensions),\r\n        RequestTimestamp = extract(@'Auth.Request-Timestamp=([^;]+)\\;',1, AdditionalExtensions),\r\n        LoginStatus = extract(@'Auth.Login-Status=([^;]+)\\;',1, AdditionalExtensions),\r\n        Source = extract(@'Auth.Source=([^;]+)\\;',1, AdditionalExtensions),\r\n        EnforcementProfiles = extract(@'Auth.Enforcement-Profiles=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPort = extract(@'Auth.NAS-Port=([^;]+)\\;',1, AdditionalExtensions),\r\n        TimestampFormat = extract(@'TimestampFormat=([^;]+)\\;',1, AdditionalExtensions),\r\n        Ssid = extract(@'Auth.SSID=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPortType = extract(@'Auth.NAS-Port-Type=([^;]+)\\;',1, AdditionalExtensions),\r\n        ErrorCode = extract(@'Auth.Error-Code=([^;]+)\\;',1, AdditionalExtensions),\r\n        Roles = extract(@'Auth.Roles=([^;]+)\\;',1, AdditionalExtensions),\r\n        Service = extract(@'Auth.Service=([^;]+)\\;',1, AdditionalExtensions),\r\n        SrcMacAddr = extract(@'Auth.Host-MAC-Address=([^;]+)\\;',1, AdditionalExtensions),\r\n        Unhealthy = extract(@'Auth.Unhealthy=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasIpAddr = extract(@'Auth.NAS-IP-Address=([^;]+)\\;',1, AdditionalExtensions),\r\n        CalledStationId = extract(@'Auth.CalledStationId=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasIdentifier = extract(@'Auth.NAS-Identifier=([^;]+)\\;',1, AdditionalExtensions)\r\n| extend EndpointStatus = extract(@'ArubaClearpassEndpointStatus=([^;]+)\\;',1, AdditionalExtensions),\r\n         EndpointConflict = extract(@'ArubaClearpassEndpointConflict=([^;]+)\\;',1, AdditionalExtensions),\r\n         EndpointDvcCategory = iif(DeviceCustomString3Label == \"Endpoint.Device-Category\", DeviceCustomString3, \"\"),\r\n         EndpointDvcFamily = iif(DeviceCustomString4Label == \"Endpoint.Device-Family\", DeviceCustomString4, \"\"),\r\n         EndpointDvcName = iif(DeviceCustomString5Label == \"Endpoint.Device-Name\", DeviceCustomString5, \"\"),\r\n         EndpointMacVendor = iif(DeviceCustomString6Label == \"Endpoint.MAC-Vendor\", DeviceCustomString6, \"\"),        \r\n         EndpointAddedDate= iif(DeviceCustomDate1Label == \"Endpoint.Added-At\", todatetime(DeviceCustomDate1), todatetime(\"\"))\r\n| extend Category = iif(isempty(Category), \"Insight Logs\", Category); \r\nlet AuditRecords = LogHeader\r\n| where Activity == \"Audit Records\" or Category == \"Audit Records\"\r\n| extend TimestampFormat = extract(@'timeFormat=([^;]+)\\;',1, AdditionalExtensions),\r\n        UserName = extract(@'usrName=([^;]+)(\\;|$)',1, AdditionalExtensions)\r\n| extend Category = iif(isempty(Category), \"Audit Records\", Category);\r\nlet SessionLogs = LogHeader\r\n| where Activity == \"Session Logs\" or Category == \"Session Logs\"\r\n| extend Timestamp = extract(@'RADIUS.Acct-Timestamp=([^;]+)\\;',1, AdditionalExtensions),\r\n        CallingStationId = extract(@'RADIUS.Acct-Calling-Station-Id=([^;]+)\\;',1, AdditionalExtensions),\r\n        InputOctets = extract(@'RADIUS.Acct-Input-Octets=([^;]+)\\;',1, AdditionalExtensions),\r\n        TimestampFormat = extract(@'TimestampFormat=([^;]+)\\;',1, AdditionalExtensions),\r\n        SessionTime = extract(@'RADIUS.Acct-Session-Time=([^;]+)\\;',1, AdditionalExtensions),\r\n        FramedIpAddr = extract(@'RADIUS.Acct-Framed-IP-Address=([^;]+)\\;',1, AdditionalExtensions),\r\n        Source = extract(@'RADIUS.Auth-Source=([^;]+)\\;',1, AdditionalExtensions),\r\n        Method = extract(@'RADIUS.Auth-Method=([^;]+)\\;',1, AdditionalExtensions),\r\n        SessionId = extract(@'RADIUS.Acct-Session-Id=([^;]+)\\;',1, AdditionalExtensions),\r\n        ServiceName = extract(@'RADIUS.Acct-Service-Name=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPortNumber = extract(@'RADIUS.Acct-NAS-Port=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasPortType = extract(@'RADIUS.Acct-NAS-Port-Type=([^;]+)\\;',1, AdditionalExtensions),\r\n        OutputOctets = extract(@'RADIUS.Acct-Output-Octets=([^;]+)\\;',1, AdditionalExtensions),\r\n        UserName = extract(@'RADIUS.Acct-Username=([^;]+)\\;',1, AdditionalExtensions),\r\n        NasIpAddr = extract(@'RADIUS.Acct-NAS-IP-Address=([^;]+)\\;',1, AdditionalExtensions)\r\n| project-rename DstServiceName = DestinationServiceName,\r\n                 DstUserPriviledges = DestinationUserPrivileges,\r\n                 DstUserName = DestinationUserName,\r\n                 DstMacAddr = DestinationMACAddress\r\n| extend Category = iif(isempty(Category), \"Sessions Logs\", Category);\r\nlet SystemLogs = LogHeader\r\n| where Activity == \"System Logs\" or Category == \"ClearPass System Events\"\r\n| extend Description = extract(@'description=([^;]+)\\;',1, AdditionalExtensions),\r\n         Action = extract(@'daction=([^;]+)\\;',1, AdditionalExtensions),\r\n         InputOctets = extract(@'RADIUS.Acct-Input-Octets=([^;]+)\\;',1, AdditionalExtensions),\r\n         TimeFormat = extract(@'devTimeFormat=([^;]+)\\;',1, AdditionalExtensions)\r\n| extend Category = iif(isempty(Category), \"System Logs\", \"System Logs\");\r\nunion SessionLogs, InsightLogs, AuditRecords, SystemLogs",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Aruba ClearPass",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Aruba Networks"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Aruba ClearPass",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Aruba Networks"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-23",
+        "providers": [
+          "Aruba"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

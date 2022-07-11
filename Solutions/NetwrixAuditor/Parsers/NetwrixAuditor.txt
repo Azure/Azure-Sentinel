@@ -1,0 +1,30 @@
+// Usage Instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as NetwrixAuditor and specifying Legacy Category.
+// This function maps Netwrix Auditor events to Azure Sentinel Information Model (ASIM) (https://docs.microsoft.com/azure/sentinel/normalization).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. NetwrixAuditor | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+CommonSecurityLog
+| where DeviceVendor == 'Netwrix'
+| extend EventVendor = 'Netwrix'
+| extend EventProduct = 'Netwrix Auditor'
+| extend EventSchemaVersion = 0.2
+| extend EventCount = 1
+| project-rename EventProductVersion=DeviceVersion
+                , EventSubType=DeviceProduct
+                , EventOriginalType=DeviceEventClassID
+                , EventSeverity=LogSeverity
+                , EventMessage=Message
+                , SrcHostname=SourceHostName
+                , EventResult= Activity
+                , Object = FilePath
+                , ActorUsername = SourceUserName
+| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><" ]+)', dynamic(["key","value"]), AdditionalExtensions) on (
+    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))
+    | summarize bag = make_bag(packed1)
+)
+| evaluate bag_unpack(bag)
+| extend EventStartTime = coalesce(column_ifexists("StartTime",datetime(null)),todatetime(start))
+| extend EventOriginalResultDetails = coalesce(column_ifexists("DeviceEventCategory",""),cat)
+| project-away start,
+               cat,
+               AdditionalExtensions 
