@@ -1,7 +1,7 @@
 Parser:
   Title:  Network Session ASIM parser for Sysmon for Linux
-  Version: '0.2'
-  LastUpdated: Jan 17, 2022
+  Version: '0.3'
+  LastUpdated: Jun 16, 2022
 Product:
   Name: Sysmon for Linux
 Normalization:
@@ -70,43 +70,44 @@ ParserQuery: |
         SrcAppType = 'Process'
       | project-away SyslogMessage
     ;
-      let InboundNetworkEvents = 
-          DirectionNetworkEvents
-          | where not(outbound)
-          | invoke parser ()
-          | extend
-          DstUsernameType = 'Simple',
-          DstUsername = User,
-          DstProcessId = ProcessId, 
-          DstProcessGuid = ProcessGuid,
-          DstProcessName = Process,
-          DstAppName = Process,
-          DstAppType = 'Process' 
-          | project-away SyslogMessage
-      ; 
-      let SysmonForLinuxNetwork=
-          union OutboundNetworkEvents, InboundNetworkEvents
-          | extend 
-              EventType = 'NetworkSession',
-              EventStartTime = EventEndTime,
-              EventCount = int(1),
-              EventVendor = 'Microsoft',
-              EventSchemaVersion = '0.2.0',
-              EventSchema = 'NetworkSession', 
-              EventProduct = 'Sysmon for Linux',
-              EventResult = 'Success',
-              EventSeverity = 'Informational',
-              DvcOs = 'Linux',
-              Protocol = toupper(Protocol),
-              EventOriginalType = '3' // Set with a constant value to avoid parsing
-          | project-rename 
-              DvcIpAddr = HostIP,
-              DvcHostname = SysmonComputer
-          | extend // aliases
-              Dvc = DvcHostname,
-              Hostname = DstHostname,
-              IpAddr = SrcIpAddr,
-              Src = SrcIpAddr,
-              Dst = DstIpAddr
-      ;
-      SysmonForLinuxNetwork
+    let InboundNetworkEvents = 
+        DirectionNetworkEvents
+        | where not(outbound)
+        | invoke parser ()
+        | extend
+        DstUsernameType = 'Simple',
+        DstUsername = User,
+        DstProcessId = ProcessId, 
+        DstProcessGuid = ProcessGuid,
+        DstProcessName = Process,
+        DstAppName = Process,
+        DstAppType = 'Process' 
+        | project-away SyslogMessage
+    ; 
+    let SysmonForLinuxNetwork=
+        union OutboundNetworkEvents, InboundNetworkEvents
+        | extend 
+            EventType = 'NetworkSession',
+            EventStartTime = EventEndTime,
+            EventCount = int(1),
+            EventVendor = 'Microsoft',
+            EventSchemaVersion = '0.2.0',
+            EventSchema = 'NetworkSession', 
+            EventProduct = 'Sysmon for Linux',
+            EventResult = 'Success',
+            EventSeverity = 'Informational',
+            DvcOs = 'Linux',
+            Protocol = toupper(Protocol),
+            NetworkDirection = iff(outbound, "Outbound", "Inbound"),
+            EventOriginalType = '3' // Set with a constant value to avoid parsing
+        | project-rename 
+            DvcIpAddr = HostIP,
+            DvcHostname = SysmonComputer
+        | extend // aliases
+            Dvc = DvcHostname,
+            Hostname = DstHostname,
+            IpAddr = SrcIpAddr,
+            Src = SrcIpAddr,
+            Dst = DstIpAddr
+    ;
+    SysmonForLinuxNetwork
