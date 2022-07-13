@@ -525,7 +525,7 @@ else
 	fi
 	
 	if [ $PREVIEW ]; then
-		tagver=tagver+"-preview"
+		tagver="$tagver-preview"
 	fi
 
 fi
