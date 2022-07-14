@@ -63,11 +63,15 @@ class Armorblox(Client):
 
 
     def _process_incidents(self, params):
-        response_json,_ = self.incidents.list_resource(ARMORBLOX_INCIDENT_API_PATH, params=params)
+        response_json,_ = self.incidents.list_resource('incidents', params=params)
+        self.incidents_list.extend(response_json['incidents'])
         if response_json is None:
             pass
         else:
-            self.incidents_list.extend(response_json.get("incidents", []))
+            if "next_page_token" in response_json.keys():
+                params["page_token"] = response_json['next_page_token']
+                self._process_incidents(params)
+
 
     def get_incidents(self):
 
