@@ -1300,7 +1300,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             if($contentToImport.TemplateSpec){
-                                $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_uiConfigId$connectorCounter'))]"
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
 
                             }
 
