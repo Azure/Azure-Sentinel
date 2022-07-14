@@ -31,12 +31,13 @@ query: |
   | where TimeGenerated > ago(queryperiod)
   | where OperationName in ("Invite external user", "Bulk invite users - started (bulk)", "Invite external user with reset invitation status")
   | extend InitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
+  // Uncomment the following line to filter events where the inviting user was a guest user
   //| where InitiatedBy has_any ("live.com#", "#EXT#")
   | extend InvitedUser = TargetResources[0].userPrincipalName
-  | mv-expand UserToCompare = pack_array(InitiatedBy, InvitedUser)
+  | mv-expand UserToCompare = pack_array(InitiatedBy, InvitedUser) to typeof(string)
   | where UserToCompare has_any ("live.com#", "#EXT#")
   | extend
-      parsedUser = replace_string((iff(UserToCompare has "live.com#", tostring(split(UserToCompare, "#")[1]), tostring(split(UserToCompare, "#EXT#")[0]))), "@", "_"),
+      parsedUser = replace_string(tolower(iff(UserToCompare startswith "live.com#", tostring(split(UserToCompare, "#")[1]), tostring(split(UserToCompare, "#EXT#")[0]))), "@", "_"),
       InvitationTime = TimeGenerated
   | join (
       (union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs)
@@ -75,5 +76,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.4
+version: 1.0.5
 kind: Scheduled

@@ -1,25 +1,23 @@
-# Jira-CreateAndUpdateIssue
+# SNOW-CreateAndUpdateIncident
 author: Benjamin Kovacevic
 
-This playbook will create or update incident in Jira. When incident is created, playbook will run and create issue in Jira. When incident is updated, playbook will run and add update to comment section.
+This playbook will create or update incident in SNOW. When incident is created, playbook will run and create incident in SNOW. When incident is updated, playbook will run and add update to comment section. When incident is closed, playbook will run and close incident in SNOW.
 
 # Prerequisites
 
 We will need following data to make Jira connector:<br>
-1. Jira instance (ex. xyz.atlassian.net)<br>
-2. Jira API (create API token on https://id.atlassian.com/manage-profile/security/api-tokens)<br>
-3. User email<br>
-![Jira connector requirements](./images/jira-connector-requirementsDark.png)<br>
+1. SNOW instance (ex. xyz.service-now.com)
+2. Username
+3. Password
+![SNOW connector requirements](./images/SNOW-connector-requirementsDark.png)<br>
 
 # Quick Deployment
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FJira-CreateAndUpdateIssue%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FJira-CreateAndUpdateIssue%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSNOW-CreateAndUpdateIssue%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSNOW-CreateAndUpdateIssue%2Fazuredeploy.json)
 <br><br>
 
 # Post-deployment
-1. Authorize Jira connector and choose:
-- Jira Project (where you want to sync Microsoft Sentinel incidents to) and
-- Issue Type Id (Microsoft Sentinel incident issue type in Jira - Task, Story, Bug,...).<br>
+1. Authorize SNOW connector
 2. Assign Microsoft Sentinel Responder role to playbook's managed identity. To do so, choose Identity blade under Settings of the Logic App.
 3. Add playbook as an action to the automation rule, ex.:
 - Trigger = When incident is updated;  
@@ -30,11 +28,14 @@ We will need following data to make Jira connector:<br>
 # Screenshots
 
 **Playbook** <br>
-![playbook screenshot](./images/JiraPlaybookDark.jpg)<br>
-![playbook screenshot](./images/JiraPlaybookLight.jpg)<br><br>
+![playbook screenshot](./images/SnowPlaybookDark.jpg)<br>
+![playbook screenshot](./images/SnowPlaybookLight.jpg)<br><br>
 
-**Jira New Issue** <br>
-![jira screenshot new](./images/JiraNewIssue.jpg)<br><br>
+**SNOW New Incident** <br>
+![snow screenshot new](./images/SNOWNewIncident.jpg)<br><br>
 
-**Jira Update Issue** <br>
-![jira screenshot update](./images/JiraUpdateIssue.jpg)<br>
+**SNOW Update Incident** <br>
+![snow screenshot update](./images/SNOWTagAdded.jpg)<br>
+
+**SNOW Incident closed** <br>
+![snow screenshot closed](./images/SNOWIncidentClosed.jpg)<br><br>
