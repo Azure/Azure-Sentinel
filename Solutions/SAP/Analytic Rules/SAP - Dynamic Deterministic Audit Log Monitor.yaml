@@ -1,0 +1,147 @@
+alertDetailsOverride:
+    alertDescriptionFormat: '#### Detailed information
+
+        {{DetailedDescription}}
+
+        #### Additional information
+
+        {{BagOfDetails}}<br/>
+
+        Alerts of this type can be configured using watch list SAPAuditLogConfigurator
+        . <br/>
+
+        See  [Sentinel4SAP Dcoumentation](https://aka.ms/sapsecdocs) for further information'
+    alertDisplayNameFormat: SAP - {{Severity}} - {{MessageText}} in system {{SystemID}}
+    alertSeverityColumnName: Severity
+    alertTacticsColumnName: Tactics
+customDetails:
+    AuditClassID: AuditClassID
+    BagOfDetails: BagOfDetails
+    DestinationEmail: DestinationEmail
+    IsProductionEnv: IsProd
+    SAPAuditLogMessageID: MessageID
+    SAPProcessType: SAPProcesType
+    SAPUser: User
+    SystemRole: SystemRole
+    SystemUsage: SystemUsage
+    TeamsChannelID: TeamsChannelID
+description: 'SAP Audit log events with message IDs preconfigured in Watchlist SAP_Dynamic_Audit_Log_Monitor_Configuration
+
+    will be shown here.
+
+    <br/>
+
+    See  [Sentinel4SAP Dcoumentation](https://aka.ms/sapsecdocs) for further information'
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Process
+    fieldMappings:
+    -   columnName: TransactionCode
+        identifier: ProcessId
+    -   columnName: ABAPProgramName
+        identifier: CommandLine
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+id: 68a03140-24bc-4985-8b77-ca5cc8aadeda
+kind: Scheduled
+name: SAP - Dynamic Deterministic Audit Log Monitor
+query: "// Sentinel4SAP solution version 1.2.98 \r\n// populate static selections\
+    \ for workspace level configuration\r\n// time span for audit events\r\nlet AuditTimeAgo=\
+    \ 15m;\r\nlet SelectedSystems =  dynamic([\"All Systems\"]);//can also do// let\
+    \ SelectedSystems =  dynamic([\"S4P\", \"B4X\", \"ODT\"]);\r\nlet SelectedSystemRoles\
+    \ =  dynamic([\"All System Roles\"]); //can also do// let SelectedSystemRoles\
+    \ =  dynamic([\"Production\", \"UAT\"]);\r\nlet SelectedSeverities=  dynamic([\"\
+    High\", \"Medium\"]);//can also do//let SelectedSeverities =  dynamic([\"All Severities\"\
+    ])\r\nlet SelectedRuleTypes= dynamic([ \"Deterministic\"]); // Rule only goes\
+    \ for deterministic alerting\r\n// get special users for exclusion and in-focus\
+    \ analysis\r\nlet SAPUsersGottenVIP = (SAPUsersGetVIP | project-rename User =\
+    \ SAPUser);\r\nlet SAPUserRolesAndProfiles = (SAPUsersAssignments | project-keep\
+    \ User, SystemID, DirectRoles, ChildRoles, Profiles | summarize RolesAndProfiles\
+    \ = make_set(array_concat(DirectRoles, ChildRoles, Profiles), 120) by User, SystemID);\r\
+    \nlet AuditEvents = (SAPAuditLog \r\n| where TimeGenerated > ago(AuditTimeAgo)\r\
+    \n// Alerts coming from SAP as \"Low\" aren't very intersting\r\n| where AlertSeverityText\
+    \ != \"Low\"\r\n// get the configuration from the \"SAPAuditLogConfiguration\"\
+    \ watchlist which allows\r\n// assigning severity levels per system Role (Production/\
+    \ non-production), automatic team assignments and other configuration options\r\
+    \n// we'll fetch all severities to allow for alerting on \"Special Focus\" users\
+    \ regardless of severity\r\n| lookup kind=inner SAPAuditLogConfiguration(SelectedSystems,\
+    \ SelectedSystemRoles, SelectedSeverities= dynamic([\"All Severities\"]), SelectedRuleTypes=\
+    \ SelectedRuleTypes) on \r\n$left.MessageID == $right.MessageID\r\n,$left.SystemID\
+    \ == $right.SystemID);\r\n// Query\r\nAuditEvents \r\n// get the user privleged\
+    \ status\r\n| lookup kind= leftouter (SAPUsersGetPrivileged() | extend IsPrivilegedUser\
+    \ = true) on\r\n$left.SystemID == $right.SystemID\r\n,$left.User == $right.User\r\
+    \n,$left.ClientID == $right.Client\r\n| extend DetailedDescription = iff(IsPrivilegedUser,\
+    \ strcat('User ', User,  ' is a privileged user! <br/>', DetailedDescription),\
+    \ DetailedDescription)\r\n| extend BagOfDetails = tostring(BagOfDetails)\r\n//\
+    \ handle threshold per system (configurable via the SAPAuditLogConfigurator watchlist)\r\
+    \n// calculate the timespan for analysis for thresholding\r\n| summarize EventCount=\
+    \ count(),  Threshold = max( Threshold), MinTime= min(TimeGenerated), MaxTime\
+    \ = max(TimeGenerated) \r\nby AuditClassID, AlertSeverityText, SystemID, Instance,\
+    \ MonitoringObjectName, MonitorShortName, MessageText, MessageClass, MessageID,\
+    \ AlertValue, AlertSeverity, ClientID, User, Variable1, Variable2, Variable3,\
+    \ Variable4, TerminalIPv6, TransactionCode, ABAPProgramName, SAPProcesType, SAPWPName,\
+    \ Email, SystemNumber, Host, Type, CategoryName, DestinationEmail, DetailedDescription,\
+    \ Tactics, TeamsChannelID, SystemRole, SystemUsage, IsProd, Severity, BagOfDetails,\
+    \ IsPrivilegedUser, RolesTagsToExclude\r\n| extend  TimeGenerated = MaxTime\r\n\
+    | extend MessageText = iff(MessageText endswith_cs \".\", substring(MessageText,\
+    \ 0, strlen(MessageText)-1), MessageText)\r\n// To reduce false positives, exclude\
+    \ users whos tags in the SAP_User_Config watchlist \r\n// match tags in the RolesTagsToExclude\
+    \ column in the SAP_Dynamic_Audit_Log_Monitor_Configuration\r\n// tags can be\
+    \ either strings representing a group such as Batch; Sensitive; Super; MassiveLogonsOK;\
+    \ MassiveRFCOK; GenericTablebyRFCOK\r\n// or SAP roles such as SAP_BC_TRANSPORT_ADMINISTRATOR,\
+    \ or SAP profiles like SAP_ALL\r\n| lookup SAPUsersGottenVIP on User\r\n| lookup\
+    \ SAPUserRolesAndProfiles on User, SystemID\r\n| extend RolesProfilesAndTags =\
+    \ array_concat(RolesAndProfiles, TagsList)\r\n| extend TagsIntersect = set_intersect(split(RolesTagsToExclude,\"\
+    ;\"), RolesProfilesAndTags)\r\n| extend IntersectionSize = array_length(TagsIntersect)\r\
+    \n// keep only non-excluded users that are not under \"Special Focus\"\r\n| where\
+    \ IntersectionSize == 0 or isempty(IntersectionSize) or SpecialFocusTagged ==\
+    \ true\r\n| extend DetailedDescription = iff(SpecialFocusTagged, strcat('User\
+    \ ', User,  ' is a specially tagged User with tags ', TagsList ,'<br/>', DetailedDescription),\
+    \ DetailedDescription)\r\n// Special Focus users production alerts are considered\
+    \ as high\r\n| extend Severity = iff(SpecialFocusTagged and IsProd,'High',Severity)\r\
+    \n| where SelectedSeverities contains Severity\r\n//  apply the threshold criteria,\
+    \ consider that the watchlist describes hourly thresholds\r\n| extend MinutesSpan\
+    \ = datetime_diff('Minute', MaxTime, MinTime )\r\n| where EventCount > (Threshold\
+    \ * max_of(MinutesSpan, 10) / 60) or SpecialFocusTagged == true\r\n| extend DetailedDescription\
+    \ = iff(EventCount > 1, strcat(' Event occured ', EventCount, ' times within ',\
+    \ MinutesSpan + 1, ' minutes.<br/> ', 'The predefined threshold of ', Threshold,\
+    \  ' Events per hour was exceeded! <br/>', DetailedDescription), DetailedDescription)\r\
+    \n| extend MessageText = iff(MessageText endswith_cs \".\", substring(MessageText,\
+    \ 0, strlen(MessageText)-1), MessageText)\r\n| project-keep AuditClassID, AlertSeverityText,\
+    \ SystemID, Instance, MessageText, MessageClass, MessageID, AlertValue, AlertSeverity,\
+    \ ClientID, User, Variable1, Variable2, Variable3, Variable4, TerminalIPv6, TransactionCode,\
+    \ ABAPProgramName, SAPProcesType, SAPWPName, Email, SystemNumber, Host, CategoryName,\
+    \ DestinationEmail, DetailedDescription, Tactics, TeamsChannelID, SystemRole,\
+    \ SystemUsage, IsProd, Severity, BagOfDetails, IsPrivilegedUser, EventCount, Threshold,\
+    \ TimeGenerated"
+queryFrequency: 10m
+queryPeriod: 22h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLogConfiguration
+    - SAPUsersGetVIP
+    - SAPAuditLog
+    - SAPUsersAssignments
+    - SAPUsersGetPrivileged
+severity: High
+tactics: []
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

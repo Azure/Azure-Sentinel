@@ -1,0 +1,74 @@
+alertDetailsOverride: null
+customDetails:
+    ChangedUser: ChangedUser
+    SAP_User: User
+description: "Identifies changes  of sensitive privileged users in other users.\n\n\
+    Source Action: Change user details / authorizations using SU01.\n\nPriveleged\
+    \ users should be maintained in \"SAP - Privileged Users\" Watchlist\n\nThis rule\
+    \ requires a fresh full reload of SAP user master data to be performed daily.\
+    \ \n*Data Sources: SAPcon -  Audit Log*\n*Data Sources: SAPcon -  User MD*"
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+-   entityType: Account
+    fieldMappings:
+    -   columnName: ChangedEmail
+        identifier: FullName
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+id: 47848010-7a36-44f7-96be-d988f3de9421
+kind: Scheduled
+name: SAP - Sensitive privileged user makes a change in another user
+query: "// SAP - High - Sensitive privileged user makes a change in another user\r\
+    \n// time span for audit events\r\nlet AuditTimeAgo= 75m;\r\n// Audit Log Classes\
+    \ - User Master Changes\r\nlet AuditClasses = dynamic(['AU7', 'BUV', 'BUW', 'AU8',\
+    \ 'AU9', 'AUA', 'AUB', 'AUD', 'DUH', 'BU2']);\r\n// here you can exclude system\
+    \ users which are OK to modify other users' master data\r\n// by adding those\
+    \ users in the SAP_User_Config watchlist with a tag of 'ChangeUserMasterDataOK'\r\
+    \nlet excludeUsersTags= dynamic(['ChangeUserMasterDataOK']);\r\nlet excludedUsers=\
+    \ _GetWatchlist('SAP_User_Config')| where Tags has_any (excludeUsersTags)| summarize\
+    \ by User2Exclude=SAPUser;\r\n// Query Logic\r\nSAPAuditLog \r\n| where TimeGenerated\
+    \ > ago(AuditTimeAgo)\r\n| where MessageID in (AuditClasses)\r\n| join kind=leftantisemi\
+    \ excludedUsers on $left.User == $right.User2Exclude\r\n| join kind= leftsemi\
+    \  SAPUsersGetPrivileged on // The user that makes a change is a sensitive privileged\
+    \ user\r\n$left.User == $right.User\r\n,$left.SystemID == $right.SystemID\r\n\
+    ,$left.ClientID == $right.Client\r\n| project-rename ChangedUser= Variable1\r\n\
+    | lookup  (SAPUsersEmail()| project ChangedEmail= Email, ChangedUser= User, SystemID,\
+    \ ClientID)\r\n on SystemID, ClientID, ChangedUser\r\n| project TimeGenerated,\
+    \ Instance ,SystemID, ClientID, User, MessageText, MessageID,\r\n     Email= iff(isempty(Email),User,\
+    \ Email), TerminalIPv6, Host= iff(isempty(Host), TerminalIPv6, Host), ChangedUser,\
+    \ ChangedEmail\r\n"
+queryFrequency: 1h
+queryPeriod: 2d
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersEmail
+    - SAPAuditLog
+    - SAPUsersGetPrivileged
+severity: High
+tactics:
+- PrivilegeEscalation
+- CredentialAccess
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

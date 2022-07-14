@@ -1,0 +1,62 @@
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+description: "Identifies Dialog logon of a sensitive privileged user. \n\nSource Action:\
+    \ Logon to the backend system using SAP* or anoter privileged user.\n\nPriveleged\
+    \ users should be maintained in \"SAP - Privileged Users\" Watchlist\n\nThis rule\
+    \ requires a fresh full reload of the SAP user master data to be performed daily.\
+    \ \n*Data Sources: SAPcon -  Audit Log*\n*Data Sources: SAPcon -  User MD*"
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: 97d13311-748b-4016-b095-9100ab00e4db
+kind: Scheduled
+name: SAP - Sensitive Privileged User Logged in
+query: "// Define Variables\r\n// time span for audit events\r\nlet AuditTimeAgo=\
+    \ 75m;\r\n// Audit Log Classes - Dialog Logon Successful\r\nlet AuditClassesSuccess\
+    \ = dynamic(['AU1']);\r\nlet AuditClassesFail = dynamic(['BU1']);\r\nlet AuditRFCSuccess\
+    \ = dynamic(['AU5']);\r\nlet AuditRFCFail = dynamic(['AU6']);\r\nlet LogonTypes\
+    \ = dynamic(['A','H', 'R', 'S']); // Dialog / HTTP\r\n// Query logic\r\nSAPAuditLog\
+    \ \r\n| where TimeGenerated > ago(AuditTimeAgo)\r\n| where (MessageID in (AuditClassesSuccess)\
+    \ and Variable1 in (LogonTypes)) or // Success login\r\nMessageID in (AuditClassesFail)\
+    \ or // Failed login\r\n(MessageID in (AuditRFCSuccess) and Variable1 in (LogonTypes))\
+    \ or // Success RFC login\r\nMessageID in (AuditRFCFail) // Failed RFC login\r\
+    \n|join (SAPUsersGetPrivileged())\r\non $left.ClientID == $right.Client\r\n, $left.SystemID\
+    \ == $right.SystemID\r\n, $left.User == $right.User\r\n| project-rename LogonType\
+    \ = Variable1\r\n| project TimeGenerated, Instance ,SystemID, ClientID, LogonType,\
+    \ User, MessageText, \r\nEmail, TerminalIPv6, Host\r\n"
+queryFrequency: 1h
+queryPeriod: 2d
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+    - SAPUsersGetPrivileged
+severity: High
+tactics:
+- InitialAccess
+- CredentialAccess
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

@@ -1,0 +1,78 @@
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+description: 'Identifies generic table access by RFC logon
+
+
+    Source Action: Open table contents using SE11/SE16/SE16N.
+
+
+    **Recommended for Production only**
+
+
+    Tables should be maintained in "SAP - Sensitive Tables" Watchlist.
+
+
+    *Data Sources: SAPcon -  Audit Log*'
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: 2521fd74-79f3-4adc-8350-edf4036913b3
+kind: Scheduled
+name: SAP - Sensitive Tables Direct Access By RFC Logon
+query: "// Define variables\r\nlet Role = \"Production\";\r\nlet AuditClasses = dynamic(['CUZ']);\
+    \ // RFC, Audit Log Classes - Generic Table Access \r\nlet allSystemRoles = dynamic(['Sandbox','Developement','QualityAssurance','Training','Production']);\
+    \ // Available System Roles\r\nlet allSystemUsage = dynamic (['ERP','CRM','BW','Solman','Gateway','Enterprise\
+    \ Portal']); // Available System Usages\r\n// Get Relevant Systems from WatchList\r\
+    \nlet systemID = _GetWatchlist('SAP - Systems');\r\nlet fixedSID = datatable(SystemID:string,\
+    \ SystemRole:string, SystemUsage:string)\r\n// Maintain these if WatchList is\
+    \ not available    \r\n    [\"S4H\",\"Production\",\"ERP\",\r\n    \"XXX\",\"\
+    Sandbox\",\"BW\"]\r\n; \r\n// Get Relevant Tables\r\nlet SensitiveTables = _GetWatchlist('SAP\
+    \ - Sensitive Tables');\r\nlet fixedTables = datatable(Table:string)\r\n// Maintain\
+    \ these if WatchList is not available    \r\n    [\"USR02\"]\r\n; \r\nlet RelSystemID\
+    \ = union systemID, fixedSID // Create a variable that stores relevent Systems\r\
+    \n| where SystemRole == Role // Recommended is Production only\r\n//| where SystemRole\
+    \ in (allSystemRoles); // Use this for all system roles\r\n| summarize by SystemID;\r\
+    \nlet SensitiveUnionTables = union SensitiveTables, fixedTables // Create a variable\
+    \ that stores relevent sensitive tables\r\n    | summarize by Table;\r\n// Query\
+    \ logic\r\nSAPAuditLog \r\n    | project-rename Table = Variable1, Activity =\
+    \ Variable2\r\n    | where MessageID in (AuditClasses)\r\n    | where SystemID\
+    \ in (RelSystemID)\r\n    | where Table in (SensitiveUnionTables)\r\n    | order\
+    \ by TimeGenerated asc\r\n    | project TimeGenerated,Instance, SystemID, ClientID,\
+    \ User, TransactionCode, ABAPProgramName, Table,   Activity, MessageText, MessageID,\r\
+    \nEmail, TerminalIPv6, Host"
+queryFrequency: 12h
+queryPeriod: 12h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+severity: Medium
+tactics:
+- Collection
+- Exfiltration
+- CredentialAccess
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

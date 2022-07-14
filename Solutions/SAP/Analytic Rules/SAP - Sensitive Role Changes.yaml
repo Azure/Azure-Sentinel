@@ -1,0 +1,90 @@
+alertDetailsOverride:
+    alertDescriptionFormat: "Identifies changes in sensitive roles. \nSource Action:\
+        \ Change a role using PFCG.\nSensitive roles should be maintained in \"SAP\
+        \ - Sensitive Roles\" Watchlist\n\n*Data Sources: SAPcon - Change Documents\
+        \ Log*\n{{PackedDetails}}"
+    alertDisplayNameFormat: '{{AlertDescription}}'
+    alertSeverityColumnName: Dummy
+    alertTacticsColumnName: Dummy
+customDetails:
+    SAP_User: User
+description: "Identifies changes in sensitive roles. \nSource Action: Change a role\
+    \ using PFCG.\nSensitive roles should be maintained in \"SAP - Sensitive Roles\"\
+    \ Watchlist\n\n*Data Sources: SAPcon - Change Documents Log*"
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+-   entityType: SecurityGroup
+    fieldMappings:
+    -   columnName: Role
+        identifier: DistinguishedName
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+id: 9fadb366-a7ec-474c-90e1-d1a823176a1e
+kind: Scheduled
+name: SAP - Sensitive Role Changes
+query: "// Sensitive Roles Changes\r\n// Define variables\r\nlet RoleObjectClass =\
+    \ \"PFCG\";\r\nlet ChangeType = \"U\";\r\nlet AuditLogIn = dynamic(['AU1', 'AU5']);\
+    \ // Messages of connect with user\r\nlet SensitiveRoles = _GetWatchlist(\"SAP\
+    \ - Sensitive Roles\");\r\n// Maintain if watchlist is not available\r\nlet fixedRoles\
+    \ = datatable(Role: string)['SAP_BC_BASIS_ADMIN', 'SAP_BC_AUTH_PROFILE_ADMIN'];\r\
+    \nlet UnitedRoles =\r\ntoscalar(union fixedRoles, SensitiveRoles\r\n| summarize\
+    \ Roles = make_list(Role));\r\nlet SelectedSystemRoles =  dynamic([\"Production\"\
+    ]); //can also do// let SelectedSystemRoles =  dynamic([\"Production\", \"UAT\"\
+    ]); dynamic([\"All System Roles\"])\r\nlet SelectedSystems = SAPSystems(SelectedSystemRoles=SelectedSystemRoles)\
+    \ | project SystemID= SearchKey;\r\n// here you can exclude system users which\
+    \ are OK to run sensitive role updates\r\n// by adding those users in the SAP_User_Config\
+    \ watchlist with a tag of 'UpdateSensitiveAuthOK'\r\nlet excludeUsersTags= dynamic(['UpdateSensitiveAuthOK']);\r\
+    \nlet excludedUsers= _GetWatchlist('SAP_User_Config')| where Tags has_any (excludeUsersTags)|\
+    \ summarize by User2Exclude=SAPUser;\r\n// Query logic\r\nlet LastLogin = \r\n\
+    SAPAuditLog\r\n| where MessageID in (AuditLogIn)\r\n| summarize TimeGenerated\
+    \ = arg_max(TimeGenerated, *) by SystemID, ClientID, User; // Get last connection\
+    \ date for user\r\nSAPChangeDocsLog\r\n| where ObjectClass == RoleObjectClass\
+    \ // Relevant role object class\r\n| where ObjectID in (UnitedRoles) // Role is\
+    \ sensitive\r\n| where TypeofChange_Header == ChangeType\r\n| join kind= inner\
+    \  SelectedSystems on SystemID\r\n| join kind=leftantisemi excludedUsers on $left.User\
+    \ == $right.User2Exclude\r\n| extend AuthorizationObj = extract(@\"\\S+\\s+(\\\
+    S+)\\s+\", 1, ChangedTableKey, typeof(string)) // Extract Authorization Object\r\
+    \n| extend Authorization = extract(@\"\\S+\\s+\\S+\\s+(\\S+\\d+)\", 1, ChangedTableKey,\
+    \ typeof(string)) // Extract Authorization\r\n| lookup kind=inner LastLogin on\
+    \ User // Get IP\r\n| project TimeGenerated, Instance, SystemID, ClientID, Email,\
+    \ User, TerminalIPv6, Host, Role = ObjectID, FieldName , AuthorizationObj, Authorization,\
+    \ OldValue = ValueOld, NewValue = ValueNew\r\n| extend Email= iff(isempty(Email),User,\
+    \ Email), Host= iff(isempty(Host), TerminalIPv6, Host)\r\n| extend AlertDescription=\
+    \ strcat('Sensitive Role ' , Role, ' was updated by ', User), Dummy=' '\r\n| extend\
+    \ PackedDetails= pack_all()"
+queryFrequency: 12h
+queryPeriod: 12h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPSystems
+    - SAPAuditLog
+    - SAPChangeDocsLog
+severity: Medium
+tactics:
+- Impact
+- PrivilegeEscalation
+- Persistence
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

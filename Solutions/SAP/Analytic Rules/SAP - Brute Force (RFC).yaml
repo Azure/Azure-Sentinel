@@ -1,0 +1,57 @@
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+description: 'Identifies brute force attacks on the SAP system using RFC logons
+
+
+    Source Action: Attempt to login from the same IP to several systems/clients within
+    the scheduled time interval using RFC
+
+
+    *Data Sources: SAPcon -  Audit Log*'
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SysetmID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: c2cc3901-d6bd-4189-bb5f-ab464dcfd079
+kind: Scheduled
+name: SAP - Brute Force (RFC)
+query: "// Define variables\r\n// Audit Log Classes - Failed Logons / Password Check\r\
+    \n// let AuditClasses = dynamic(['AUO', 'AU2', 'AU6', 'BU1']);\r\nlet AuditClasses\
+    \ = dynamic(['AU6']);//RFC only\r\nlet perIPLimit = 3;\r\n// Query logic\r\nSAPAuditLog\
+    \ \r\n| where MessageID in (AuditClasses)\r\n| extend DetailsBy = pack(\"User\"\
+    , User, \"Email\", Email, \"SystemID\", SystemID, \"ClientID\", ClientID)\r\n\
+    | summarize LoginbyIPAttempts = count(), Details = make_set(DetailsBy), StartTime\
+    \ = min(TimeGenerated), EndTime = max(TimeGenerated) \r\n    by TerminalIPv6\r\
+    \n// Check if number of login attempts per IP is higher than limit\r\n| where\
+    \ LoginbyIPAttempts > perIPLimit \r\n| mv-expand Details\r\n| evaluate bag_unpack(Details,\
+    \ \"Details_\")\r\n| project \r\n    StartTime, EndTime,  TerminalIPv6,\r\n  \
+    \  Email = column_ifexists(\"Details_Email\", \"\"), User = column_ifexists(\"\
+    Details_User\", \"\"),\r\n    SysetmID = column_ifexists(\"Details_SystemID\"\
+    , \"\"),\r\n   ClientID = column_ifexists(\"Details_ClientID\", \"\")"
+queryFrequency: 6h
+queryPeriod: 6h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+severity: Medium
+tactics:
+- CredentialAccess
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

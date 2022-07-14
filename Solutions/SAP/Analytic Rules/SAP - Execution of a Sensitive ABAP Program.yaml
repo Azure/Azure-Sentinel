@@ -1,0 +1,69 @@
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+description: "Identifies direct execution of a sensitive ABAP program. \n\nSource\
+    \ Action: Execute a program directly using SE38/SA38/SE80.\n\n**Recommended for\
+    \ Production only**\n\nABAP Programs should be maintained in watchlist \"SAP -\
+    \ Sensitive ABAP Programs\"\n\n*Data Sources: SAPcon -  Audit Log*"
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: e0e53cb9-d3f4-47c3-b953-ad62a8414f4f
+kind: Scheduled
+name: SAP - Execution of a Sensitive ABAP Program
+query: "// Define Variables\r\nlet Role = \"Production\";\r\nlet AuditClasses = dynamic(['AUW']);\
+    \ // Audit Log Classes - Report Started\r\nlet allSystemRoles = dynamic(['Sandbox','Developement','QualityAssurance','Training','Production']);\
+    \ // Available System Roles\r\nlet allSystemUsage = dynamic (['ERP','CRM','BW','Solman','Gateway','Enterprise\
+    \ Portal']); // Available System Usages\r\n// Get Relevant Systems from WatchList\r\
+    \nlet systemID = _GetWatchlist('SAP - Systems');\r\nlet fixedSID = datatable(SystemID:string,\
+    \ SystemRole:string, SystemUsage:string)\r\n// Maintain these if WatchList is\
+    \ not available    \r\n    [\"S4H\",\"Production\",\"ERP\",\r\n    \"XXX\",\"\
+    Sandbox\",\"BW\"]\r\n; \r\n// Get Relevant ABAP Programs\r\nlet SensitiveABAPReports\
+    \ = _GetWatchlist('SAP - Sensitive ABAP Programs');\r\nlet fixedABAPReports =\
+    \ datatable(ABAPProgram:string)\r\n// Maintain these if WatchList is not available\
+    \    \r\n    [\"RSPFLDOC\"]\r\n; \r\nlet UnionAbap = \r\n    union SensitiveABAPReports,\
+    \ fixedABAPReports\r\n    | summarize by ABAPProgram;\r\nlet UnitedSystem =\r\n\
+    union systemID, fixedSID\r\n| summarize by SystemID, SystemRole, SystemUsage\r\
+    \n| where SystemRole == Role; // Reccommended is Production only\r\n//| where\
+    \ SystemRole in (allSystemRoles); // Use this for all system roles\r\n// Query\
+    \ logic\r\nSAPAuditLog \r\n| where MessageID in (AuditClasses)\r\n| where ABAPProgramName\
+    \ in (UnionAbap)\r\n| project-rename SystemIDTemp = SystemID \n| project-rename\
+    \ SystemID= SystemIDTemp \n| project-rename SystemID= SystemID\r\n| lookup kind\
+    \ = inner (UnitedSystem) on SystemID\r\n| order by TimeGenerated asc\r\n| project\
+    \ TimeGenerated, Instance , SystemID, ClientID, User, ABAPProgramName, MessageText,\
+    \ TransactionCode, MessageID, Email, TerminalIPv6, Host"
+queryFrequency: 1h
+queryPeriod: 1h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+severity: High
+tactics:
+- Exfiltration
+- LateralMovement
+- Execution
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

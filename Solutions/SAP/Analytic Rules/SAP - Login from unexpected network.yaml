@@ -1,0 +1,65 @@
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+description: 'Identifies logons from an unexpected network.
+
+
+    Source Action: Logon to the backend system from an IP address which is not assigned
+    to one of the netwroks.
+
+
+    Networks should be maintained in watchlist "SAP - Networks"
+
+
+    *Data Sources: SAPcon -  Audit Log*'
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: 978e1cc8-f891-41c7-83b8-b21762a2ebb7
+kind: Scheduled
+name: SAP - Login from unexpected network
+query: "let AuditClasses = dynamic(['AU1','AU5']); // Audit Log Classes - Dialog Logon\
+    \ Successful, RFC Logon Successful\r\n// Dialog / CPIC / RFC Int / RFC Ext / SRFC\
+    \ / User Switch / HTTP / Restore Session / API Call\r\nlet DialogLogonTypes =\
+    \ dynamic(['A', 'C', 'F', 'R', 'S', 'U', 'H', 'u', ' ']);\r\nlet Networks = _GetWatchlist('SAP\
+    \ - Networks'); \r\nlet fixedNetworks = datatable(Network: string)['111.68.128.0/17'];\
+    \ // Maintain these if watchlist is not available\r\nlet allNetworks = union Networks,\
+    \ fixedNetworks\r\n    | summarize by Network;\r\nSAPAuditLog\r\n// Add audit\
+    \ classes\r\n| where MessageID in (AuditClasses)\r\n| where Variable1 in (DialogLogonTypes)\
+    \ // Is a dialog logon type from the list\r\n| where isnotempty(TerminalIPv6)\
+    \ // There is a Ipv6 address\r\n| evaluate ipv4_lookup(allNetworks, TerminalIPv6,\
+    \ Network, return_unmatched = true)\r\n// Similar to regular lookup, by ipv4 address,\
+    \ unmatched is like left join\r\n| where isempty(Network) // Network is not familiar\r\
+    \n// Details\r\n| project TimeGenerated, SystemID, ClientID, User, TransactionCode,\
+    \ MessageText, Email , TerminalIPv6, Host"
+queryFrequency: 1h
+queryPeriod: 1h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+severity: High
+tactics:
+- InitialAccess
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

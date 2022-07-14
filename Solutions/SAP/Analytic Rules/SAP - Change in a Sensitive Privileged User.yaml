@@ -1,0 +1,88 @@
+alertDetailsOverride:
+    alertDescriptionFormat: "Identifies changes of sensitive privileged users. \n\
+        Source Action: Change user details / authorizations using SU01.\n<p>Users\
+        \ are considered as Privileged when one of these conditions apply: </p>\n\
+        <li>If they are named in the \"SAP - Privileged Users\" Watchlist\n<li>If\
+        \ they have a profile which is included in the “SAP - Sensitive Profiles”\
+        \ watchlist\n<li>If they have a role which is included in the “SAP - Sensitive\
+        \ Roles” watchlist\nPacked Details - {{PackedDetails}}\n*Data Sources: SAPcon\
+        \ -  User MD*"
+    alertDisplayNameFormat: SAP - High -{{MessageTextDyna}} in system {{SystemID}}
+    alertSeverityColumnName: Dummy
+    alertTacticsColumnName: Dummy
+customDetails:
+    SAPChangedUser: ChangedUser
+    SAP_User: User
+description: "Identifies changes of sensitive privileged users. \nSource Action: Change\
+    \ user details / authorizations using SU01.\n<p>Users are considered as Privileged\
+    \ when one of these conditions apply: </p>\n<li>If they are named in the SAP -\
+    \ Privileged Users Watchlist\n<li>If they have a profile which is included in\
+    \ the SAP - Sensitive Profiles watchlist\n<li>If they have a role which is included\
+    \ in the “SAP - Sensitive Roles” watchlist\nThis Rule requires a fresh full reload\
+    \ of SAP user master data to be performed daily. \n*Data Sources: SAPcon -  Audit\
+    \ Log*\n*Data Sources: SAPcon -  User MD*"
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+-   entityType: Account
+    fieldMappings:
+    -   columnName: ChangedEmail
+        identifier: FullName
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: 3eab4a41-1d7b-453d-8631-a7d74936973b
+kind: Scheduled
+name: SAP - Change in a Sensitive Privileged User
+query: "// Change in a Sensitive Privileged User\r\n// time span for audit events\r\
+    \nlet AuditTimeAgo= 75m;\r\n// Audit Log Classes - User Master Changes\r\nlet\
+    \ AuditClasses = dynamic(['AU7', 'BUV', 'BUW', 'AU8', 'AU9', 'AUA', 'AUB', 'AUD',\
+    \ 'DUH', 'BU2']);\r\nlet UsersEmails = SAPUsersHeader()\r\n| project-keep User,\
+    \ SystemID, Client, Email\r\n| project-rename ClientID= Client, ChangedEmail=Email,\
+    \ ChangedUser=User;\r\nSAPAuditLog \r\n| where TimeGenerated > ago(AuditTimeAgo)\r\
+    \n| where MessageID in (AuditClasses)\r\n// The user that we are making change\
+    \ in is a sensitive privileged user\r\n| extend ChangedUser = Variable1\r\n| join\
+    \ kind= inner (SAPUsersGetPrivileged())\r\non $left.ClientID == $right.Client\r\
+    \n, $left.SystemID == $right.SystemID\r\n, $left.ChangedUser == $right.User\r\n\
+    | extend MessageText = iff(MessageText endswith_cs \".\", substring(MessageText,\
+    \ 0, strlen(MessageText)-1), MessageText)\r\n| extend MessageTextDyna = replace_string(MessageText,\
+    \ \"User\", \"Privileged User\")\r\n| extend MessageTextDyna = replace_string(MessageTextDyna,\
+    \ \"user\", \"Privileged User\")\r\n| lookup UsersEmails \r\non SystemID, ClientID,\
+    \ ChangedUser\r\n| project-keep TimeGenerated, Instance,  SystemID, ClientID,\
+    \ User, MessageText, MessageID, Email,  TerminalIPv6, Host, ChangedUser, ChangedEmail,\
+    \ MessageTextDyna\r\n| extend Email= iff(isempty(Email),User, Email), Host= iff(isempty(Host),\
+    \ TerminalIPv6, Host), Dummy= ''\r\n| extend ChangedEmail= iff(isempty(ChangedEmail),ChangedUser,\
+    \ ChangedEmail)\r\n| extend PackedDetails= pack_all()"
+queryFrequency: 1h
+queryPeriod: 2d
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersHeader
+    - SAPAuditLog
+    - SAPUsersGetPrivileged
+severity: High
+tactics:
+- PrivilegeEscalation
+- CredentialAccess
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

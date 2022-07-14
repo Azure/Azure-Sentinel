@@ -1,0 +1,77 @@
+alertDetailsOverride: null
+customDetails:
+    SAP_User: UserName
+description: 'Identifies execution of a sensitive ABAP Function Module.
+
+
+    Source Action: Execute a sensitive function module directly using SE37.
+
+
+    **Recommended for Production only**
+
+
+    Sensitive functions should be maintained in "SAP - Sensitive Function Modules"
+    Watchlist.
+
+    Table logging changes should be activated for table "EUFUNC" in backend. (SE13)
+
+
+    *Data Sources: SAPcon -  Table Data Log*'
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: d940bee2-46ff-4bb5-869a-1a54a967977d
+kind: Scheduled
+name: SAP - Execution of Sensitive Function Module
+query: "// Define variables\r\nlet RelTable = \"EUFUNC\"; // Relevant table\r\nlet\
+    \ AuditLogIn = dynamic(['AU1', 'AU5']); // Messages of connect with user\r\nlet\
+    \ SenseModules =  _GetWatchlist('SAP - Sensitive Function Modules');\r\nlet fixedModules\
+    \ = datatable(FunctionModule:string)['RSAU_CLEAR_AUDIT_LOG','BAPI_USER_CREATE',\
+    \ 'RFC_GET_TABLE_ENTRIES']; \r\nlet UnitedModules =\r\ntoscalar(union fixedModules,\
+    \ SenseModules\r\n| summarize FunctionModules =  make_set(FunctionModule));\r\n\
+    // Query logic\r\nlet LastLogin = \r\nSAPAuditLog\r\n| where MessageID in (AuditLogIn)\r\
+    \n| summarize TimeGenerated = arg_max(TimeGenerated, *) by SystemID, ClientID,\
+    \ User; // Get last connection date for user\r\nSAPTableDataLog\r\n| where TableName\
+    \ == RelTable \r\n| extend Module = extract(@\"\\s+(.{1,}\\b)\\s+\", 1, LogKey,\
+    \ typeof(string)) // Extract Function Module\r\n| extend FunctionGroup = extract(@\"\
+    ^FL([^\\s]*)\\s\", 1, LogKey, typeof(string)) // Extract Function Group\r\n| extend\
+    \ ExecutionVariant = extract(@\"\\b(\\w+)$\", 1, LogKey, typeof(string)) // Extract\
+    \ Execution Varient\r\n| where Module in (UnitedModules) // Module is sensitive\r\
+    \n| lookup kind=inner LastLogin on $left.UserName == $right.User\r\n| project\
+    \ TimeGenerated, Instance ,SystemID, UserName, ClientID, Email, TerminalIPv6,\
+    \ Host, Module, FunctionGroup, ExecutionVariant"
+queryFrequency: 2h
+queryPeriod: 2h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+    - SAPTableDataLog
+severity: High
+tactics:
+- Discovery
+- CommandAndControl
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15

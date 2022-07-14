@@ -1,0 +1,81 @@
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+description: 'Identifies all debugging related activities.
+
+
+    Source Action: Activate Debug ("/h") in system, debug an active process, add breakpoint
+    to source code etc.
+
+
+    **Recommended for Production only**
+
+
+    *Data Sources: SAPcon -  Audit Log*'
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   columnName: Email
+        identifier: FullName
+-   entityType: IP
+    fieldMappings:
+    -   columnName: TerminalIPv6
+        identifier: Address
+-   entityType: Host
+    fieldMappings:
+    -   columnName: Host
+        identifier: FullName
+-   entityType: CloudApplication
+    fieldMappings:
+    -   columnName: SystemID
+        identifier: Name
+    -   columnName: ClientID
+        identifier: AppId
+    -   columnName: Instance
+        identifier: InstanceName
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+id: a7babb63-a466-4ec7-a056-a213555f18df
+kind: Scheduled
+name: SAP - Debugging Activities
+query: "let Role = 'Production';\r\nlet DebuggerProgram = 'RSTPDAMAIN';\r\nlet AuditClasses\
+    \ = dynamic(['CUK','CUL','CUM','CUN','CUO','CUP']); // Audit Log Classes - Debug\
+    \ Activities\r\nlet allSystemRoles = dynamic(['Sandbox','Developement','QualityAssurance','Training','Production']);\
+    \ // Available System Roles\r\nlet allSystemUsage = dynamic (['ERP','CRM','BW','Solman','Gateway','Enterprise\
+    \ Portal']); // Available System Usages\r\n// Get Relevant Systems from WatchList\r\
+    \nlet systemID = _GetWatchlist('SAP - Systems')\r\n| where SystemRole == Role;\
+    \ // Reccommended is Production only\r\nlet fixedSID = datatable(SystemID:string,\
+    \ SystemRole:string, SystemUsage:string)\r\n// Maintain these if WatchList is\
+    \ not available    \r\n    [\"S4H\",\"Production\",\"ERP\",\r\n    \"XXX\",\"\
+    Sandbox\",\"BW\"]\r\n    | where SystemRole == Role // Reccommended is Production\
+    \ only\r\n; \r\nlet SystemUnited = union systemID, fixedSID\r\n| summarize by\
+    \ SystemID, SystemRole, SystemUsage;\r\n//| where SystemRole in (allSystemRoles);\
+    \ // Use this for all system roles\r\nSAPAuditLog \r\n    | where MessageID in\
+    \ (AuditClasses) or ABAPProgramName == DebuggerProgram // Get logs by messege\
+    \ ID or program name\r\n    | extend Object = extract(@\":\\s\\(?(\\w{1,}\\s?-?\\\
+    w{1,})\", 1, MessageText, typeof(string)) // Extract Object\r\n    | extend Action\
+    \ = extract(@\":\\s\\(?(\\w{1,}\\s?-?\\w{1,}.{1,}?)\\)?\\(\", 1, MessageText,\
+    \ typeof(string)) // Extract Action\r\n    | extend Program = extract(@\"Prgm:(\\\
+    w{1,})\", 1, MessageText, typeof(string)) // Extract Program\r\n    | extend Function\
+    \ = extract(@\"Funct:(\\w{1,})\", 1, MessageText, typeof(string)) // Extract Function\r\
+    \n    | extend Include = extract(@\"Incl:(\\w{1,})\", 1, MessageText, typeof(string))\
+    \ // Extract Include\r\n    | extend Line = extract(@\"Line:(\\w{1,})\", 1, MessageText,\
+    \ typeof(string)) // Extract Line\r\n    | project-rename SystemIDTemp = SystemID\
+    \ \n| project-rename SystemID= SystemIDTemp \n| project-rename SystemID= SystemID\r\
+    \n    | lookup kind=inner (SystemUnited) on SystemID\r\n    | order by TimeGenerated\
+    \ asc\r\n    | project TimeGenerated, Instance, ClientID ,User, MessageText, ABAPProgramName,\
+    \ TransactionCode, SystemID, SystemRole, SystemUsage,MessageID, Email, TerminalIPv6,\
+    \ Host, Object , Action, Program, Function, Include, Line"
+queryFrequency: 3h
+queryPeriod: 3h
+relevantTechniques: ''
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+severity: Medium
+tactics:
+- Discovery
+triggerOperator: gt
+triggerThreshold: 0
+version: 2.0.15
