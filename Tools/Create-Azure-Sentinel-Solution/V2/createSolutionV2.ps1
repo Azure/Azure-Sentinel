@@ -97,7 +97,7 @@ function getParserDetails($solutionName)
             $parserTemplate = $templateContent.resources | Where-Object { $_.type -eq $parserResourceType.templateSpecParserType -or $_.type -eq $parserResourceType.workspaceType }
 
             if ($parserTemplate) {
-                if($parserTemplate.resources)
+                if($parserTemplate.PSobject.Properties.Name -contains "resources")
                 {
                     $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
                 }
