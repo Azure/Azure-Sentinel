@@ -74,6 +74,7 @@ function getQueryResourceLocation () {
 
 function getParserDetails($solutionName)
 {
+    $parserDisplayDetails = [PSCustomObject]@{}
     $API = 'https://catalogapi.azure.com/offers?api-version=2018-08-01-beta&$filter=categoryIds%2Fany(cat%3A%20cat%20eq%20%27AzureSentinelSolution%27)%20or%20keywords%2Fany(key%3A%20contains(key%2C%27f1de974b-f438-4719-b423-8bf704ba2aef%27))'
     $SolutionDataItems = $(Invoke-WebRequest -URI $API | ConvertFrom-Json).items
     $parserResourceType = [PSObject]@{
@@ -101,6 +102,12 @@ function getParserDetails($solutionName)
                 {
                     $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
                 }
+
+                if($parserTemplate.Count -gt 1)
+                {
+                    $parserTemplate = $parserTemplate | Where-Object {$_.properties.functionAlias -eq $(getFileNameFromPath $file)}
+                }
+
                 $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
                 $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
                 $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
