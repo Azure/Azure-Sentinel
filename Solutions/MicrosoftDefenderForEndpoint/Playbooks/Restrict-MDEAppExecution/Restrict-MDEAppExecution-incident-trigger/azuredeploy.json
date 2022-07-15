@@ -2,23 +2,35 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Isolate endpoint - MDE",
-        "description": "This playbook will isolate (full) the machine in Microsoft Defender for Endpoint.",
-        "prerequisites": "You will need to grant Machine.Isolate permissions to the managed identity.",
-        "lastUpdateTime": "2022-07-12T00:00:00.000Z",
+        "title": "Restrict MDE App Execution",
+        "description": "This playbook will restrict app execution on the machine in Microsoft Defender for Endpoint.",
+        "prerequisites": [
+            "- You will need to grant Machine.RestrictExecution permissions to the managed identity. Run the following code replacing the managed identity object id. You find the managed identity object id on the Identity blade under Settings for the Logic App.
+            ```powershell
+            $MIGuid = '<Enter your managed identity guid here>'
+            $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
+            
+            $MDEAppId = 'fc780465-2017-40d4-a0c5-307022471b92'
+            $PermissionName = 'Machine.RestrictExecution'
+            
+            $MDEServicePrincipal = Get-AzureADServicePrincipal -Filter 'appId eq '$MDEAppId''
+            $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains 'Application'}
+            New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
+            -ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id```"
+        ],
+        "lastUpdateTime": "2022-07-14T00:00:00.000Z",
         "entities": [ "Host" ],
         "tags": [ "Remediation" ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Isolate-MDEMachine",
+            "defaultValue": "Restrict-MDEAppExecution",
             "type": "string"
         }
     },
     "variables": {
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "MDATPConnectionName": "[concat('wdatp-', parameters('PlaybookName'))]"
-
     },
     "resources": [
         {
@@ -28,7 +40,7 @@
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "displayName": "[parameters('PlaybookName')]",
                 "customParameterValues": {},
                 "parameterValueType": "Alternative",
                 "api": {
@@ -43,7 +55,7 @@
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[variables('MDATPConnectionName')]",
+                "displayName": "[parameters('PlaybookName')]",
                 "customParameterValues": {},
                 "parameterValueType": "Alternative",
                 "api": {
@@ -58,7 +70,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Isolate-MDEMachine",
+                "hidden-SentinelTemplateName": "Restrict-MDEAppExecution",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -91,11 +103,10 @@
                             "actions": {
                                 "Condition": {
                                     "actions": {
-                                        "Actions_-_Isolate_machine": {
+                                        "Actions_-_Restrict_app_execution": {
                                             "inputs": {
                                                 "body": {
-                                                    "Comment": "Isolated from playbook for Microsoft Sentinel Incident:  @{triggerBody()?['object']?['properties']?['incidentNumber']} - @{triggerBody()?['object']?['properties']?['title']}",
-                                                    "IsolationType": "Full"
+                                                    "Comment": "Isolated from playbook for Microsoft Sentinel Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']} - @{triggerBody()?['object']?['properties']?['title']}"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -103,7 +114,7 @@
                                                     }
                                                 },
                                                 "method": "post",
-                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['additionalData']?['MdatpDeviceId'])}/isolate"
+                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['MdatpDeviceId'])}/restrictCodeExecution"
                                             },
                                             "runAfter": {},
                                             "type": "ApiConnection"
@@ -112,7 +123,7 @@
                                             "inputs": {
                                                 "body": {
                                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>@{items('For_each')?['HostName']} was isolated in MDE and the status was @{body('Actions_-_Isolate_machine')?['status']}</p>"
+                                                    "message": "<p>@{items('For_each')?['HostName']} was triggered for restrict app execution, the status is @{body('Actions_-_Restrict_app_execution')?['status']}</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -123,7 +134,7 @@
                                                 "path": "/Incidents/Comment"
                                             },
                                             "runAfter": {
-                                                "Actions_-_Isolate_machine": [
+                                                "Actions_-_Restrict_app_execution": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -136,7 +147,7 @@
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>@{items('For_each')?['HostName']} does not have MDEDeviceID in the Entities list. &nbsp;It was not isolated.&nbsp;</p>"
+                                                        "message": "<p>@{items('For_each')?['HostName']} was triggered for restrict app execution, but the host does not have a MDEDeviceID.</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -156,7 +167,7 @@
                                             {
                                                 "not": {
                                                     "equals": [
-                                                        "@items('For_each')?['additionalData']?['MdatpDeviceId']",
+                                                        "@items('For_each')?['MdatpDeviceId']",
                                                         "@null"
                                                     ]
                                                 }
