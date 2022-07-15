@@ -15,4 +15,4 @@ After deploying the playbook, you must authorize the connections leveraged.
 
 ## Note
 With the default deployment and configuration settings of the playbooks, your API-Key is exposed in plain text. All the users who have read access to the playbooks (logic apps) can view your API-Key.
-If you do not want to expose the API-Key in plain text, then it is advised to store API-Key with the azure key-vault and playbook integration. Please refer following links for more details [Secure access and data - Azure Logic Apps | Microsoft Docs](https://docs.microsoft.com/en-us/azure/logic-apps/logic-apps-securing-a-logic-app?tabs=azure-portal#secure-inputs-and-outputs-in-the-designer).
+If you do not want to expose the API-Key in plain text, then it is advised to store API-Key with the azure key-vault and playbook integration. Please refer following links for more details [Secure access and data - Azure Logic Apps | Microsoft Docs](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app?tabs=azure-portal#secure-inputs-and-outputs-in-the-designer).
