@@ -32,7 +32,8 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private Dictionary<string, List<Column>> GetSchemaToResultColumnsMapping(IEnumerable<FunctionSchema> sampleFunctions)
         {
             Dictionary<string, string> sampleFunctionToSchemaMapping = ParsersDatabase.Parsers.ToDictionary(keySelector: parser => parser.SampleFunctionName, elementSelector: parser => parser.Schema);
-            return sampleFunctions.ToDictionary(keySelector: sampleFunction => sampleFunctionToSchemaMapping[sampleFunction.FunctionName], elementSelector: sampleFunction => sampleFunction.FunctionResultColumns);
+            var sampleSchemaFunctions = sampleFunctions.Where(function => sampleFunctionToSchemaMapping.ContainsKey(function.FunctionName));
+            return sampleSchemaFunctions.ToDictionary(keySelector: sampleFunction => sampleFunctionToSchemaMapping[sampleFunction.FunctionName], elementSelector: sampleFunction => sampleFunction.FunctionResultColumns);
         }
 
         /// <summary>
