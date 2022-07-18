@@ -1,0 +1,677 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for ElasticAgent"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-elasticagent",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "ElasticAgent",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ElasticAgent",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "ElasticAgentEvent-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "ElasticAgent Data Parser",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "ElasticAgent data connector with template",
+        "displayName": "ElasticAgent template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ElasticAgent data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Elastic Agent (Standalone)",
+                  "publisher": "Elastic",
+                  "descriptionMarkdown": "The [Elastic Agent](https://www.elastic.co/security) data connector provides the capability to ingest Elastic Agent logs, metrics, and security data into Microsoft Sentinel.",
+                  "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**ElasticAgentEvent**](https://aka.ms/sentinel-ElasticAgent-parser) which is deployed with the Microsoft Sentinel Solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Elastic Agent Events",
+                      "baseQuery": "ElasticAgentEvent"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Devices",
+                      "query": "ElasticAgentEvent\n | summarize count() by DvcIpAddr\n | top 10 by count_"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ElasticAgentLogs_CL",
+                      "lastDataReceivedQuery": "ElasticAgentEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ElasticAgentEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "write permission is required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+						  "read": true,
+                          "delete": true
+                        }
+                      },
+			{
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Include custom pre-requisites if the connectivity requires - else delete customs",
+                "description": "Description for any custom pre-requisite"
+            }
+        ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**ElasticAgentEvent**](https://aka.ms/sentinel-ElasticAgent-parser) which is deployed with the Microsoft Sentinel Solution."
+                    },
+                    {
+                      "description": ">**NOTE:** This data connector has been developed using **Elastic Agent 7.14**."
+                    },
+                    {
+                      "description": "Install the agent on the Server where the Elastic Agent logs are forwarded.\n\n> Logs from Elastic Agents deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Linux agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux or Windows"
+                    },
+                    {
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Windows agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Windows Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Windows Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "[Follow the instructions](https://www.elastic.co/guide/en/fleet/current/elastic-agent-configuration.html) to configure Elastic Agent to output to Logstash",
+                      "title": "2. Configure Elastic Agent (Standalone)"
+                    },
+                    {
+                      "description": "Follow the steps to configure Logstash to use microsoft-logstash-output-azure-loganalytics plugin:\n\n3.1) Check if the plugin is already installed:\n> ./logstash-plugin list | grep 'azure-loganalytics'\n**(if the plugin is installed go to step 3.3)**\n\n3.2) Install plugin:\n> ./logstash-plugin install microsoft-logstash-output-azure-loganalytics\n\n3.3) [Configure Logstash](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/microsoft-logstash-output-azure-loganalytics) to use the plugin",
+                      "title": "3. Configure Logstash to use Microsoft Logstash Output Plugin"
+                    },
+                    {
+                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using custom table specified in step 3.3 (e.g. ElasticAgentLogs_CL).\n\n>It may take about 30 minutes until the connection streams data to your workspace.",
+                      "title": "4. Validate log ingestion"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ElasticAgent",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ElasticAgent",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Elastic Agent (Standalone)",
+          "publisher": "Elastic",
+          "descriptionMarkdown": "The [Elastic Agent](https://www.elastic.co/security) data connector provides the capability to ingest Elastic Agent logs, metrics, and security data into Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Elastic Agent Events",
+              "baseQuery": "ElasticAgentEvent"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ElasticAgentLogs_CL",
+              "lastDataReceivedQuery": "ElasticAgentEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ElasticAgentEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Devices",
+              "query": "ElasticAgentEvent\n | summarize count() by DvcIpAddr\n | top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+				  	"read": true,
+                  "delete": true
+                }
+              },
+			{
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+       ],
+        "customs": [
+            {
+                "name": "Include custom pre-requisites if the connectivity requires - else delete customs",
+                "description": "Description for any custom pre-requisite"
+            }
+        ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**ElasticAgentEvent**](https://aka.ms/sentinel-ElasticAgent-parser) which is deployed with the Microsoft Sentinel Solution."
+            },
+            {
+              "description": ">**NOTE:** This data connector has been developed using **Elastic Agent 7.14**."
+            },
+            {
+              "description": "Install the agent on the Server where the Elastic Agent logs are forwarded.\n\n> Logs from Elastic Agents deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Linux agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux or Windows"
+            },
+            {
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Windows agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Windows Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Windows Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ]
+            },
+            {
+              "description": "[Follow the instructions](https://www.elastic.co/guide/en/fleet/current/elastic-agent-configuration.html) to configure Elastic Agent to output to Logstash",
+              "title": "2. Configure Elastic Agent (Standalone)"
+            },
+            {
+              "description": "Follow the steps to configure Logstash to use microsoft-logstash-output-azure-loganalytics plugin:\n\n3.1) Check if the plugin is already installed:\n> ./logstash-plugin list | grep 'azure-loganalytics'\n**(if the plugin is installed go to step 3.3)**\n\n3.2) Install plugin:\n> ./logstash-plugin install microsoft-logstash-output-azure-loganalytics\n\n3.3) [Configure Logstash](https://github.com/Azure/Azure-Sentinel/tree/master/DataConnectors/microsoft-logstash-output-azure-loganalytics) to use the plugin",
+              "title": "3. Configure Logstash to use Microsoft Logstash Output Plugin"
+            },
+            {
+              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using custom table specified in step 3.3 (e.g. ElasticAgentLogs_CL).\n\n>It may take about 30 minutes until the connection streams data to your workspace.",
+              "title": "4. Validate log ingestion"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**ElasticAgentEvent**](https://aka.ms/sentinel-ElasticAgent-parser) which is deployed with the Microsoft Sentinel Solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "ElasticAgentEvent Data Parser with template",
+        "displayName": "ElasticAgentEvent Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ElasticAgentEvent Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "ElasticAgent Data Parser",
+                "category": "Samples",
+                "functionAlias": "ElasticAgentEvent",
+                "query": "\nElasticAgentLogs_CL\r\n| extend EventVendor = 'Elastic'\r\n| extend EventProduct = 'Elastic Agent'\r\n| extend EventSchemaVersion = 0.2\r\n| extend EventCount = 1\r\n| project-rename MonitoringMetricsBeatMemstatsMemorySys = monitoring_metrics_beat_memstats_memory_sys_d\r\n, MonitoringMetricsSystemLoadNorm = monitoring_metrics_system_load_norm_s\r\n, MonitoringMetricsSystemLoad1 = monitoring_metrics_system_load_1_d\r\n, MonitoringMetricsSystemLoad5 = monitoring_metrics_system_load_5_d\r\n, MonitoringMetricsSystemLoad15 = monitoring_metrics_system_load_15_d\r\n, MonitoringMetricsLibbeatConfigModule = monitoring_metrics_libbeat_config_module_s\r\n, MonitoringMetricsLibbeatOutputWrite = monitoring_metrics_libbeat_output_write_s\r\n, MonitoringMetricsLibbeatOutputRead = monitoring_metrics_libbeat_output_read_s\r\n, MonitoringMetricsLibbeatOutputEvents = monitoring_metrics_libbeat_output_events_s\r\n, MonitoringMetricsLibbeatPipelineClients = monitoring_metrics_libbeat_pipeline_clients_d\r\n, MonitoringMetricsLibbeatPipelineEvents = monitoring_metrics_libbeat_pipeline_events_s\r\n, MonitoringMetricsLibbeatPipelineQueue = monitoring_metrics_libbeat_pipeline_queue_s\r\n, MonitoringMetricsMetricbeatSystemFilesystem = monitoring_metrics_metricbeat_system_filesystem_s\r\n, MonitoringMetricsMetricbeatSystemCpu = monitoring_metrics_metricbeat_system_cpu_s\r\n, MonitoringMetricsMetricbeatSystemMemory = monitoring_metrics_metricbeat_system_memory_s\r\n, MonitoringMetricsMetricbeatSystemNetwork = monitoring_metrics_metricbeat_system_network_s\r\n, MonitoringMetricsBeatRuntimeGoroutines = monitoring_metrics_beat_runtime_goroutines_d\r\n, MonitoringMetricsBeatCpuSystem = monitoring_metrics_beat_cpu_system_s\r\n, MonitoringMetricsBeatCpuUser = monitoring_metrics_beat_cpu_user_s\r\n, MonitoringMetricsBeatCpuTotal = monitoring_metrics_beat_cpu_total_s\r\n, MonitoringMetricsBeatHandlesLimit = monitoring_metrics_beat_handles_limit_s\r\n, MonitoringMetricsBeatHandlesOpen = monitoring_metrics_beat_handles_open_d\r\n, MonitoringMetricsBeatMemstatsGcNext = monitoring_metrics_beat_memstats_gc_next_d\r\n, MonitoringMetricsBeatMemstatsMemoryAlloc = monitoring_metrics_beat_memstats_memory_alloc_d\r\n, MonitoringMetricsBeatMemstatsMemoryTotal = monitoring_metrics_beat_memstats_memory_total_d\r\n, MonitoringMetricsBeatMemstatsRss = monitoring_metrics_beat_memstats_rss_d\r\n, MonitoringMetricsBeatInfoUptime = monitoring_metrics_beat_info_uptime_s\r\n, MonitoringMetricsBeatInfoEphemeralId = monitoring_metrics_beat_info_ephemeral_id_g\r\n, MonitoringMetricsBeatInfoVersion = monitoring_metrics_beat_info_version_s\r\n, MonitoringEcsVersion = monitoring_ecs_version_s\r\n, LogLogger = log_logger_s\r\n, BeatStateManagementEnabled = beat_state_management_enabled_b\r\n, BeatStateOutputName = beat_state_output_name_s\r\n, BeatStateModuleCount = beat_state_module_count_d\r\n, BeatStateQueueName = beat_state_queue_name_s\r\n, ServiceId = service_id_g\r\n, ServiceName = service_name_s\r\n, ServiceAddress = service_address_s\r\n, ElasticAgentProcess = elastic_agent_process_s\r\n, SystemProcessCpuSystemTicks = system_process_cpu_system_ticks_d\r\n, SystemProcessCpuSystemTime = system_process_cpu_system_time_s\r\n, SystemProcessCpuTotalTime = system_process_cpu_total_time_s\r\n, SystemProcessCpuTotalValue = system_process_cpu_total_value_d\r\n, SystemProcessCpuTotalTicks = system_process_cpu_total_ticks_d\r\n, SystemProcessCpuUserTicks = system_process_cpu_user_ticks_d\r\n, SystemProcessCpuUserTime = system_process_cpu_user_time_s\r\n, SystemProcessFdLimitHard = system_process_fd_limit_hard_d\r\n, SystemProcessFdLimitSoft = system_process_fd_limit_soft_d\r\n, SystemProcessFdOpen = system_process_fd_open_d\r\n, SystemProcessMemorySize = system_process_memory_size_d\r\n, BeatType = beat_type_s\r\n, BeatStatsRuntimeGoroutines = beat_stats_runtime_goroutines_d\r\n, BeatStatsLibbeatOutputType = beat_stats_libbeat_output_type_s\r\n, BeatStatsLibbeatOutputWrite = beat_stats_libbeat_output_write_s\r\n, BeatStatsLibbeatOutputRead = beat_stats_libbeat_output_read_s\r\n, BeatStatsLibbeatOutputEvents = beat_stats_libbeat_output_events_s\r\n, BeatStatsUptimeMs = beat_stats_uptime_ms_d\r\n, BeatId = beat_id_g\r\n, SystemFilesystemFree = system_filesystem_free_d\r\n, SystemFilesystemDeviceName = system_filesystem_device_name_s\r\n, SystemFilesystemUsedPct = system_filesystem_used_pct_d\r\n, SystemFilesystemUsedBytes = system_filesystem_used_bytes_d\r\n, SystemFilesystemType = system_filesystem_type_s\r\n, SystemFilesystemFreeFiles = system_filesystem_free_files_d\r\n, SystemFilesystemMountPoint = system_filesystem_mount_point_s\r\n, SystemFilesystemFiles = system_filesystem_files_d\r\n, SystemFilesystemAvailable = system_filesystem_available_d\r\n, SystemFilesystemTotal = system_filesystem_total_d\r\n, InputType = input_type_s\r\n, LogOffset = log_offset_d\r\n, LogPath = log_path_s\r\n, LogLevel = log_level_s\r\n, LogOriginFileLine = log_origin_file_line_d\r\n, LogOriginFileName = log_origin_file_name_s\r\n, EcsVersion = ecs_version_s\r\n, Timestamp = _timestamp_t\r\n, MetricsetName = metricset_name_s\r\n, MetricsetPeriod = metricset_period_d\r\n, EventDataset = event_dataset_s\r\n, EventModule = event_module_s\r\n, EventDuration = event_duration_d\r\n, DataStreamType = data_stream_type_s\r\n, DataStreamNamespace = data_stream_namespace_s\r\n, DataStreamDataset = data_stream_dataset_s\r\n, Tags = tags_s\r\n, ElasticAgentSnapshot = elastic_agent_snapshot_b\r\n, ElasticAgentVersion = elastic_agent_version_s\r\n, ElasticAgentId = elastic_agent_id_g\r\n, DvcHostname = host_name_s\r\n, DvcIpAddr = host_ip_s\r\n, DvcId = host_id_g\r\n, HostContainerized = host_containerized_b\r\n, DvcOs = host_os_name_s\r\n, HostOsType = host_os_type_s\r\n, HostOsCodename = host_os_codename_s\r\n, HostOsPlatform = host_os_platform_s\r\n, HostOsFamily = host_os_family_s\r\n, DvcOsVersion = host_os_version_s\r\n, HostOsKernel = host_os_kernel_s\r\n, SrcMacAddr = host_mac_s\r\n, HostHostname = host_hostname_s\r\n, HostArchitecture = host_architecture_s\r\n, SystemNetworkName = system_network_name_s\r\n, SystemNetworkInErrors = system_network_in_errors_d\r\n, SystemNetworkInDropped = system_network_in_dropped_d\r\n, SystemNetworkInBytes = system_network_in_bytes_d\r\n, SystemNetworkInPackets = system_network_in_packets_d\r\n, SystemNetworkOutDropped = system_network_out_dropped_d\r\n, SystemNetworkOutErrors = system_network_out_errors_d\r\n, SystemNetworkOutBytes = system_network_out_bytes_d\r\n, SystemNetworkOutPackets = system_network_out_packets_d\r\n, ServiceType = service_type_s\r\n, EventProductVersion = _version_s\r\n, AgentName = agent_name_s\r\n, AgentEphemeralId = agent_ephemeral_id_g\r\n, AgentType = agent_type_s\r\n, AgentVersion = agent_version_s\r\n, AgentHostname = agent_hostname_s\r\n, AgentId = agent_id_g\r\n, HostCpuUsage = host_cpu_usage_d\r\n, SystemCpuNicePct = system_cpu_nice_pct_d\r\n, SystemCpuNiceNormPct = system_cpu_nice_norm_pct_d\r\n, SystemCpuIowaitPct = system_cpu_iowait_pct_d\r\n, SystemCpuIowaitNormPct = system_cpu_iowait_norm_pct_d\r\n, SystemCpuSoftirqPct = system_cpu_softirq_pct_d\r\n, SystemCpuSoftirqNormPct = system_cpu_softirq_norm_pct_d\r\n, SystemCpuSystemPct = system_cpu_system_pct_d\r\n, SystemCpuSystemNormPct = system_cpu_system_norm_pct_d\r\n, SystemCpuUserPct = system_cpu_user_pct_d\r\n, SystemCpuUserNormPct = system_cpu_user_norm_pct_d\r\n, SystemCpuStealNormPct = system_cpu_steal_norm_pct_d\r\n, SystemCpuStealPct = system_cpu_steal_pct_d\r\n, SystemCpuIrqPct = system_cpu_irq_pct_d\r\n, SystemCpuIrqNormPct = system_cpu_irq_norm_pct_d\r\n, SystemCpuCores = system_cpu_cores_d\r\n, SystemCpuIdleNormPct = system_cpu_idle_norm_pct_d\r\n, SystemCpuIdlePct = system_cpu_idle_pct_d\r\n, SystemCpuTotalPct = system_cpu_total_pct_d\r\n, SystemCpuTotalNormPct = system_cpu_total_norm_pct_d\r\n, SystemMemoryFree = system_memory_free_d\r\n, SystemMemoryUsedPct = system_memory_used_pct_d\r\n, SystemMemoryUsedBytes = system_memory_used_bytes_d\r\n, SystemMemorySwapFree = system_memory_swap_free_d\r\n, SystemMemorySwapUsedBytes = system_memory_swap_used_bytes_d\r\n, SystemMemorySwapTotal = system_memory_swap_total_d\r\n, SystemMemoryTotal = system_memory_total_d\r\n, SystemMemoryActualFree = system_memory_actual_free_d\r\n, SystemMemoryActualUsedPct = system_memory_actual_used_pct_d\r\n, SystemMemoryActualUsedBytes = system_memory_actual_used_bytes_d\r\n, SystemMemoryCached = system_memory_cached_d\r\n, SrcBytes = host_network_egress_bytes_d\r\n, SrcPackets = host_network_egress_packets_d\r\n, DstBytes = host_network_ingress_bytes_d\r\n, DstPackets = host_network_ingress_packets_d\r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "ElasticAgent Data Parser"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "ElasticAgent",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "ElasticAgent Data Parser",
+        "category": "Samples",
+        "functionAlias": "ElasticAgentEvent",
+        "query": "\nElasticAgentLogs_CL\r\n| extend EventVendor = 'Elastic'\r\n| extend EventProduct = 'Elastic Agent'\r\n| extend EventSchemaVersion = 0.2\r\n| extend EventCount = 1\r\n| project-rename MonitoringMetricsBeatMemstatsMemorySys = monitoring_metrics_beat_memstats_memory_sys_d\r\n, MonitoringMetricsSystemLoadNorm = monitoring_metrics_system_load_norm_s\r\n, MonitoringMetricsSystemLoad1 = monitoring_metrics_system_load_1_d\r\n, MonitoringMetricsSystemLoad5 = monitoring_metrics_system_load_5_d\r\n, MonitoringMetricsSystemLoad15 = monitoring_metrics_system_load_15_d\r\n, MonitoringMetricsLibbeatConfigModule = monitoring_metrics_libbeat_config_module_s\r\n, MonitoringMetricsLibbeatOutputWrite = monitoring_metrics_libbeat_output_write_s\r\n, MonitoringMetricsLibbeatOutputRead = monitoring_metrics_libbeat_output_read_s\r\n, MonitoringMetricsLibbeatOutputEvents = monitoring_metrics_libbeat_output_events_s\r\n, MonitoringMetricsLibbeatPipelineClients = monitoring_metrics_libbeat_pipeline_clients_d\r\n, MonitoringMetricsLibbeatPipelineEvents = monitoring_metrics_libbeat_pipeline_events_s\r\n, MonitoringMetricsLibbeatPipelineQueue = monitoring_metrics_libbeat_pipeline_queue_s\r\n, MonitoringMetricsMetricbeatSystemFilesystem = monitoring_metrics_metricbeat_system_filesystem_s\r\n, MonitoringMetricsMetricbeatSystemCpu = monitoring_metrics_metricbeat_system_cpu_s\r\n, MonitoringMetricsMetricbeatSystemMemory = monitoring_metrics_metricbeat_system_memory_s\r\n, MonitoringMetricsMetricbeatSystemNetwork = monitoring_metrics_metricbeat_system_network_s\r\n, MonitoringMetricsBeatRuntimeGoroutines = monitoring_metrics_beat_runtime_goroutines_d\r\n, MonitoringMetricsBeatCpuSystem = monitoring_metrics_beat_cpu_system_s\r\n, MonitoringMetricsBeatCpuUser = monitoring_metrics_beat_cpu_user_s\r\n, MonitoringMetricsBeatCpuTotal = monitoring_metrics_beat_cpu_total_s\r\n, MonitoringMetricsBeatHandlesLimit = monitoring_metrics_beat_handles_limit_s\r\n, MonitoringMetricsBeatHandlesOpen = monitoring_metrics_beat_handles_open_d\r\n, MonitoringMetricsBeatMemstatsGcNext = monitoring_metrics_beat_memstats_gc_next_d\r\n, MonitoringMetricsBeatMemstatsMemoryAlloc = monitoring_metrics_beat_memstats_memory_alloc_d\r\n, MonitoringMetricsBeatMemstatsMemoryTotal = monitoring_metrics_beat_memstats_memory_total_d\r\n, MonitoringMetricsBeatMemstatsRss = monitoring_metrics_beat_memstats_rss_d\r\n, MonitoringMetricsBeatInfoUptime = monitoring_metrics_beat_info_uptime_s\r\n, MonitoringMetricsBeatInfoEphemeralId = monitoring_metrics_beat_info_ephemeral_id_g\r\n, MonitoringMetricsBeatInfoVersion = monitoring_metrics_beat_info_version_s\r\n, MonitoringEcsVersion = monitoring_ecs_version_s\r\n, LogLogger = log_logger_s\r\n, BeatStateManagementEnabled = beat_state_management_enabled_b\r\n, BeatStateOutputName = beat_state_output_name_s\r\n, BeatStateModuleCount = beat_state_module_count_d\r\n, BeatStateQueueName = beat_state_queue_name_s\r\n, ServiceId = service_id_g\r\n, ServiceName = service_name_s\r\n, ServiceAddress = service_address_s\r\n, ElasticAgentProcess = elastic_agent_process_s\r\n, SystemProcessCpuSystemTicks = system_process_cpu_system_ticks_d\r\n, SystemProcessCpuSystemTime = system_process_cpu_system_time_s\r\n, SystemProcessCpuTotalTime = system_process_cpu_total_time_s\r\n, SystemProcessCpuTotalValue = system_process_cpu_total_value_d\r\n, SystemProcessCpuTotalTicks = system_process_cpu_total_ticks_d\r\n, SystemProcessCpuUserTicks = system_process_cpu_user_ticks_d\r\n, SystemProcessCpuUserTime = system_process_cpu_user_time_s\r\n, SystemProcessFdLimitHard = system_process_fd_limit_hard_d\r\n, SystemProcessFdLimitSoft = system_process_fd_limit_soft_d\r\n, SystemProcessFdOpen = system_process_fd_open_d\r\n, SystemProcessMemorySize = system_process_memory_size_d\r\n, BeatType = beat_type_s\r\n, BeatStatsRuntimeGoroutines = beat_stats_runtime_goroutines_d\r\n, BeatStatsLibbeatOutputType = beat_stats_libbeat_output_type_s\r\n, BeatStatsLibbeatOutputWrite = beat_stats_libbeat_output_write_s\r\n, BeatStatsLibbeatOutputRead = beat_stats_libbeat_output_read_s\r\n, BeatStatsLibbeatOutputEvents = beat_stats_libbeat_output_events_s\r\n, BeatStatsUptimeMs = beat_stats_uptime_ms_d\r\n, BeatId = beat_id_g\r\n, SystemFilesystemFree = system_filesystem_free_d\r\n, SystemFilesystemDeviceName = system_filesystem_device_name_s\r\n, SystemFilesystemUsedPct = system_filesystem_used_pct_d\r\n, SystemFilesystemUsedBytes = system_filesystem_used_bytes_d\r\n, SystemFilesystemType = system_filesystem_type_s\r\n, SystemFilesystemFreeFiles = system_filesystem_free_files_d\r\n, SystemFilesystemMountPoint = system_filesystem_mount_point_s\r\n, SystemFilesystemFiles = system_filesystem_files_d\r\n, SystemFilesystemAvailable = system_filesystem_available_d\r\n, SystemFilesystemTotal = system_filesystem_total_d\r\n, InputType = input_type_s\r\n, LogOffset = log_offset_d\r\n, LogPath = log_path_s\r\n, LogLevel = log_level_s\r\n, LogOriginFileLine = log_origin_file_line_d\r\n, LogOriginFileName = log_origin_file_name_s\r\n, EcsVersion = ecs_version_s\r\n, Timestamp = _timestamp_t\r\n, MetricsetName = metricset_name_s\r\n, MetricsetPeriod = metricset_period_d\r\n, EventDataset = event_dataset_s\r\n, EventModule = event_module_s\r\n, EventDuration = event_duration_d\r\n, DataStreamType = data_stream_type_s\r\n, DataStreamNamespace = data_stream_namespace_s\r\n, DataStreamDataset = data_stream_dataset_s\r\n, Tags = tags_s\r\n, ElasticAgentSnapshot = elastic_agent_snapshot_b\r\n, ElasticAgentVersion = elastic_agent_version_s\r\n, ElasticAgentId = elastic_agent_id_g\r\n, DvcHostname = host_name_s\r\n, DvcIpAddr = host_ip_s\r\n, DvcId = host_id_g\r\n, HostContainerized = host_containerized_b\r\n, DvcOs = host_os_name_s\r\n, HostOsType = host_os_type_s\r\n, HostOsCodename = host_os_codename_s\r\n, HostOsPlatform = host_os_platform_s\r\n, HostOsFamily = host_os_family_s\r\n, DvcOsVersion = host_os_version_s\r\n, HostOsKernel = host_os_kernel_s\r\n, SrcMacAddr = host_mac_s\r\n, HostHostname = host_hostname_s\r\n, HostArchitecture = host_architecture_s\r\n, SystemNetworkName = system_network_name_s\r\n, SystemNetworkInErrors = system_network_in_errors_d\r\n, SystemNetworkInDropped = system_network_in_dropped_d\r\n, SystemNetworkInBytes = system_network_in_bytes_d\r\n, SystemNetworkInPackets = system_network_in_packets_d\r\n, SystemNetworkOutDropped = system_network_out_dropped_d\r\n, SystemNetworkOutErrors = system_network_out_errors_d\r\n, SystemNetworkOutBytes = system_network_out_bytes_d\r\n, SystemNetworkOutPackets = system_network_out_packets_d\r\n, ServiceType = service_type_s\r\n, EventProductVersion = _version_s\r\n, AgentName = agent_name_s\r\n, AgentEphemeralId = agent_ephemeral_id_g\r\n, AgentType = agent_type_s\r\n, AgentVersion = agent_version_s\r\n, AgentHostname = agent_hostname_s\r\n, AgentId = agent_id_g\r\n, HostCpuUsage = host_cpu_usage_d\r\n, SystemCpuNicePct = system_cpu_nice_pct_d\r\n, SystemCpuNiceNormPct = system_cpu_nice_norm_pct_d\r\n, SystemCpuIowaitPct = system_cpu_iowait_pct_d\r\n, SystemCpuIowaitNormPct = system_cpu_iowait_norm_pct_d\r\n, SystemCpuSoftirqPct = system_cpu_softirq_pct_d\r\n, SystemCpuSoftirqNormPct = system_cpu_softirq_norm_pct_d\r\n, SystemCpuSystemPct = system_cpu_system_pct_d\r\n, SystemCpuSystemNormPct = system_cpu_system_norm_pct_d\r\n, SystemCpuUserPct = system_cpu_user_pct_d\r\n, SystemCpuUserNormPct = system_cpu_user_norm_pct_d\r\n, SystemCpuStealNormPct = system_cpu_steal_norm_pct_d\r\n, SystemCpuStealPct = system_cpu_steal_pct_d\r\n, SystemCpuIrqPct = system_cpu_irq_pct_d\r\n, SystemCpuIrqNormPct = system_cpu_irq_norm_pct_d\r\n, SystemCpuCores = system_cpu_cores_d\r\n, SystemCpuIdleNormPct = system_cpu_idle_norm_pct_d\r\n, SystemCpuIdlePct = system_cpu_idle_pct_d\r\n, SystemCpuTotalPct = system_cpu_total_pct_d\r\n, SystemCpuTotalNormPct = system_cpu_total_norm_pct_d\r\n, SystemMemoryFree = system_memory_free_d\r\n, SystemMemoryUsedPct = system_memory_used_pct_d\r\n, SystemMemoryUsedBytes = system_memory_used_bytes_d\r\n, SystemMemorySwapFree = system_memory_swap_free_d\r\n, SystemMemorySwapUsedBytes = system_memory_swap_used_bytes_d\r\n, SystemMemorySwapTotal = system_memory_swap_total_d\r\n, SystemMemoryTotal = system_memory_total_d\r\n, SystemMemoryActualFree = system_memory_actual_free_d\r\n, SystemMemoryActualUsedPct = system_memory_actual_used_pct_d\r\n, SystemMemoryActualUsedBytes = system_memory_actual_used_bytes_d\r\n, SystemMemoryCached = system_memory_cached_d\r\n, SrcBytes = host_network_egress_bytes_d\r\n, SrcPackets = host_network_egress_packets_d\r\n, DstBytes = host_network_ingress_bytes_d\r\n, DstPackets = host_network_ingress_packets_d\r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ElasticAgent",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ElasticAgent",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-11-12",
+        "providers": [
+          "Elastic"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
