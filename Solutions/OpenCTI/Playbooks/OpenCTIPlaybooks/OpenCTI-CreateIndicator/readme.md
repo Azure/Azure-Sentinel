@@ -3,10 +3,11 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the matching indicator info of Entities (Accounts, Host, IP Address, FileHash, URL) from OpenCTI 
  2. Adds a rich comment to the incident with all the collected information
-    ![Comment example](./images/Incident_Comment.png)
+    ![Comment example](./images/IncidentCommentCreateindicator.png)
 
 
-![Playbook Designer view](./Okta-EnrichIncidentwithuserdetails.PNG)<br>
+
+![Playbook Designer view](./images/CreateIndicatorOpenCTIworkflow.png)<br>
 
 ### Prerequisites 
 1. OpenCTI Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
