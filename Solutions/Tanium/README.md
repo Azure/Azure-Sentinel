@@ -1,6 +1,6 @@
 # Tanium Sentinel package
 
-<img src="./images/tanium-light.png" alt="Tanium" width="20%"/><br>
+<img src="./images/Tanium.svg" alt="Tanium" width="20%"/><br>
 
 ## Overview
 Tanium Sentinel integration packages help you import / visualize Tanium data and act on these findings from within Sentinel.
