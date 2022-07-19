@@ -1,0 +1,556 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Azure Sentinel integration. Stack creates an Assume Role with minimal permissions to grant 
+  Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, 
+  enable VPC Flow logs to VPCs of your choice, S3 bucket, SQS Queue, and S3 notifications, 
+  in addition to some mandatory IAM policies.
+Parameters:
+  CloudTrailConnector:
+    Default: "true"
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable CloudTrail Data Connector for Sentinel
+  GuardDutyConnector:
+    Default: "true"
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable GuardDuty Data Connector for Sentinel
+  VpcFlowConnector:
+    Default: "true"
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable VpcFlow Data Connector for Sentinel
+  SentinelWorkspaceId:
+    Type: String
+    Description: Azure Sentinel Workspace ID
+  VpcId:
+    Type: String
+    Description: The ResourceId of the VPC for which you want to create a flow log.
+Conditions:
+  EnableCloudTrailConnector: !Equals
+    - !Ref CloudTrailConnector
+    - "true"
+  EnableGuardDutyConnector: !Equals
+    - !Ref GuardDutyConnector
+    - "true"
+  EnableVpcFlowConnector: !Equals
+    - !Ref VpcFlowConnector
+    - "true"
+  VpcId: !Not [!Equals [!Ref VpcId, ""]]
+Resources:
+  SentinelIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::197857026523:root"
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref SentinelWorkspaceId
+  CloudTrailQueue:
+    Condition: EnableCloudTrailConnector
+    Type: AWS::SQS::Queue
+  CloudTrailQueuePolicy:
+    DependsOn: CloudTrailQueue
+    Condition: EnableCloudTrailConnector
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: '2008-10-17'
+        Statement:
+          - Sid: 'allow s3 to send notification messages to SQS queue'
+            Action: "SQS:SendMessage"
+            Effect: "Allow"
+            Resource: !GetAtt CloudTrailQueue.Arn
+            Principal:
+              Service: "s3.amazonaws.com"
+          - Sid: 'allow specific role to read/delete/change visibility of SQS messages and get queue url'
+            Action:
+              - "SQS:ChangeMessageVisibility"
+              - "SQS:DeleteMessage"
+              - "SQS:ReceiveMessage"
+              - "SQS:GetQueueUrl"
+            Effect: "Allow"
+            Resource: !GetAtt CloudTrailQueue.Arn
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+      Queues:
+        - !Ref CloudTrailQueue
+  CloudTrailS3Bucket:
+    DependsOn: CloudTrailQueuePolicy
+    Condition: EnableCloudTrailConnector
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: 'BucketOwnerFullControl'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: "ObjectWriter"
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Queue: !GetAtt CloudTrailQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: !Sub AWSLogs/${AWS::AccountId}/CloudTrail/
+                  - Name: suffix
+                    Value: ".gz"
+  CloudTrailS3Policy:
+    Condition: EnableCloudTrailConnector
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailS3Bucket
+      PolicyDocument:
+        Version: "2008-10-17"
+        Statement:
+          - Sid: Allow Arn read access S3 bucket
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+            Action: "s3:GetObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${CloudTrailS3Bucket}/*
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: "s3:GetBucketAcl"
+            Resource: !GetAtt CloudTrailS3Bucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: "s3:PutObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${CloudTrailS3Bucket}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+  CloudTrail:
+    DependsOn: CloudTrailS3Policy
+    Condition: EnableCloudTrailConnector
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      S3BucketName: !Ref CloudTrailS3Bucket
+      EnableLogFileValidation: true
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      KMSKeyId: !GetAtt CloudtrailKey.Arn
+  CloudtrailKey:
+    Condition: EnableCloudTrailConnector
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-cloudtrail
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudTrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'kms:GenerateDataKey*'
+            Resource: '*'
+          - Sid: Allow CloudTrail to describe key
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+            Action: 'kms:Decrypt'
+            Resource: '*'
+  CloudTrailKeyAlias:
+    Condition: EnableCloudTrailConnector
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/cloudtrail
+      TargetKeyId: !Ref CloudtrailKey
+  GuardDutyQueue:
+    Condition: EnableGuardDutyConnector
+    Type: AWS::SQS::Queue
+  GuardDutyQueuePolicy:
+    DependsOn: GuardDutyQueue
+    Condition: EnableGuardDutyConnector
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: '2008-10-17'
+        Statement:
+          - Sid: 'allow s3 to send notification messages to SQS queue'
+            Action: "SQS:SendMessage"
+            Effect: "Allow"
+            Resource: !GetAtt GuardDutyQueue.Arn
+            Principal:
+              Service: "s3.amazonaws.com"
+          - Sid: 'allow specific role to read/delete/change visibility of SQS messages and get queue url'
+            Action:
+              - "SQS:ChangeMessageVisibility"
+              - "SQS:DeleteMessage"
+              - "SQS:ReceiveMessage"
+              - "SQS:GetQueueUrl"
+            Effect: "Allow"
+            Resource: !GetAtt GuardDutyQueue.Arn
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+      Queues:
+        - !Ref GuardDutyQueue
+  GuardDutyS3Bucket:
+    DependsOn: GuardDutyQueuePolicy
+    Condition: EnableGuardDutyConnector
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: 'BucketOwnerFullControl'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: "ObjectWriter"
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Queue: !GetAtt GuardDutyQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: !Sub AWSLogs/${AWS::AccountId}/GuardDuty/
+                  - Name: suffix
+                    Value: ".gz"
+  GuardDutyS3Policy:
+    Condition: EnableGuardDutyConnector
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref GuardDutyS3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Allow Arn read access S3 bucket
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+            Action: "s3:GetObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${GuardDutyS3Bucket}/*
+          - Sid: Allow GuardDuty to use the getBucketLocation operation
+            Effect: Allow
+            Principal:
+              Service: guardduty.amazonaws.com
+            Action: "s3:GetBucketLocation"
+            Resource: !GetAtt GuardDutyS3Bucket.Arn
+          - Sid: Allow GuardDuty to upload objects to the bucket
+            Effect: Allow
+            Principal:
+              Service: guardduty.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${GuardDutyS3Bucket}/*
+          - Sid: Deny unencrypted object uploads.
+            Effect: Deny
+            Principal:
+              Service: guardduty.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${GuardDutyS3Bucket}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+          - Sid: Deny incorrect encryption header.
+            Effect: Deny
+            Principal:
+              Service: guardduty.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${GuardDutyS3Bucket}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt GuardDutyKey.Arn
+          - Sid: Deny non-HTTPS access
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource: !Sub arn:${AWS::Partition}:s3:::${GuardDutyS3Bucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  GuardDutyKey:
+    Condition: EnableGuardDutyConnector
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-guardduty
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow GuardDuty to use the key
+            Effect: Allow
+            Principal:
+              Service: guardduty.amazonaws.com
+            Action: 'kms:GenerateDataKey'
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+            Action: 'kms:Decrypt'
+            Resource: '*'
+  GuardDutyKeyAlias:
+    Condition: EnableGuardDutyConnector
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/guardduty
+      TargetKeyId: !Ref GuardDutyKey
+  #  GuardDuty:
+  #    Condition: EnableGuardDutyConnector
+  #    Type: AWS::GuardDuty::Detector
+  #    Properties:
+  #      Enable: True
+  #      FindingPublishingFrequency: FIFTEEN_MINUTES
+  GuardDutyLambdaLogGroup:
+    Condition: EnableGuardDutyConnector
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      RetentionInDays: 7
+      LogGroupName: /aws/lambda/guardduty-custom
+  GuardDutyLambdaRole:
+    Condition: EnableGuardDutyConnector
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: !Sub 'guardduty-lambda-policy-${AWS::Region}'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: CreateLogGroup
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'guardduty:ListDetectors'
+                  - 'guardduty:UpdateDetector'
+                  - 'guardduty:UpdatePublishingDestination'
+                  - 'guardduty:CreateDetector'
+                  - 'guardduty:DeleteDetector'
+                  - 'guardduty:CreatePublishingDestination'
+                  - 'guardduty:ListPublishingDestinations'
+                Resource: '*'
+  GuardDutyLambda:
+    Condition: EnableGuardDutyConnector
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Description: Checks for resource type enabled and possibly name to exist
+      Handler: index.lambda_handler
+      Role: !GetAtt GuardDutyLambdaRole.Arn
+      Runtime: python3.8
+      MemorySize: 128
+      Timeout: 180
+      Environment:
+        Variables:
+          DestinationArn: !GetAtt GuardDutyS3Bucket.Arn
+          KmsKeyArn: !GetAtt GuardDutyKey.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import json
+          from botocore.exceptions import ClientError
+          import cfnresponse
+          
+          guardduty=boto3.client('guardduty')
+          
+          def lambda_handler(event, context):
+              print('Event: ', event)
+              if 'RequestType' in event:    
+                if event['RequestType'] in ["Create","Update"]:
+                    enabled=False
+                    try:  
+                      response=guardduty.list_detectors()
+                      print(response)
+                      if "DetectorIds" in response and len(response["DetectorIds"])>0:
+                        destination=guardduty.list_publishing_destinations(DetectorId=response["DetectorIds"][0])
+                        if len(destination["Destinations"])==0:
+                          res=guardduty.create_publishing_destination(
+                          DetectorId=response["DetectorIds"][0],
+                          DestinationType='S3',
+                          DestinationProperties={
+                            'DestinationArn': os.getenv("DestinationArn"),
+                            'KmsKeyArn': os.getenv("KmsKeyArn")
+                          }
+                          )
+                        elif len(destination["Destinations"])>0:
+                          res=guardduty.update_publishing_destination(
+                          DetectorId=response["DetectorIds"][0],
+                          DestinationId=destination["Destinations"][0]["DestinationId"],
+                          DestinationProperties={
+                            'DestinationArn': os.getenv("DestinationArn"),
+                            'KmsKeyArn': os.getenv("KmsKeyArn")
+                          }
+                          )
+                        enabled="AlreadyEnabled"
+                      elif "DetectorIds" in response and len(response["DetectorIds"])==0:
+                        resp=guardduty.create_detector(Enable=True, FindingPublishingFrequency='FIFTEEN_MINUTES')
+                        res=guardduty.create_publishing_destination(
+                          DetectorId=resp["DetectorId"],
+                          DestinationType='S3',
+                          DestinationProperties={
+                            'DestinationArn': os.getenv("DestinationArn"),
+                            'KmsKeyArn': os.getenv("KmsKeyArn")
+                          }
+                        )
+                        enabled="True"
+                    except Exception as e:
+                        print("Exception: ",e)
+                    responseData = {}
+                    responseData['status'] = enabled
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourcePhysicalID" )
+                elif event['RequestType'] == "Delete":
+                    response=guardduty.list_detectors()
+                    detector=guardduty.delete_detector(DetectorId=response["DetectorIds"][0])
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+  CheckResourceExist:
+    Condition: EnableGuardDutyConnector
+    Type: 'Custom::LambdaCustomResource'
+    Properties:
+      ServiceToken: !GetAtt GuardDutyLambda.Arn
+  VpcFlowS3Bucket:
+    DependsOn: VpcFlowQueuePolicy
+    Condition: EnableVpcFlowConnector
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: 'BucketOwnerFullControl'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: "ObjectWriter"
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Queue: !GetAtt VpcFlowQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: !Sub AWSLogs/${AWS::AccountId}/vpcflowlogs/
+                  - Name: suffix
+                    Value: ".gz"
+  VpcFlowS3Policy:
+    DependsOn: VpcFlowS3Bucket
+    Condition: EnableVpcFlowConnector
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref VpcFlowS3Bucket
+      PolicyDocument:
+        Version: "2008-10-17"
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: "delivery.logs.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${VpcFlowS3Bucket}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref "AWS::AccountId"
+                s3:x-amz-acl: bucket-owner-full-control
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: "delivery.logs.amazonaws.com"
+            Action: "s3:GetBucketAcl"
+            Resource: !GetAtt VpcFlowS3Bucket.Arn
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref "AWS::AccountId"
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*
+          - Sid: Allow Arn read access S3 bucket
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+            Action: "s3:GetObject"
+            Resource: !Sub arn:${AWS::Partition}:s3:::${VpcFlowS3Bucket}/*
+  VpcFlow:
+    DependsOn: VpcFlowS3Policy
+    Condition: EnableVpcFlowConnector
+    Type: AWS::EC2::FlowLog
+    Properties:
+      LogDestination: !GetAtt VpcFlowS3Bucket.Arn
+      LogDestinationType: s3
+      ResourceId:
+        Fn::If:
+          - VpcId
+          - Ref: VpcId
+          - Ref: AWS::NoValue
+      ResourceType: VPC
+      TrafficType: ALL
+  VpcFlowQueue:
+    Condition: EnableVpcFlowConnector
+    Type: AWS::SQS::Queue
+  VpcFlowQueuePolicy:
+    DependsOn: VpcFlowQueue
+    Condition: EnableVpcFlowConnector
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: '2008-10-17'
+        Statement:
+          - Sid: 'allow s3 to send notification messages to SQS queue'
+            Action: "SQS:SendMessage"
+            Effect: "Allow"
+            Resource: !GetAtt VpcFlowQueue.Arn
+            Principal:
+              Service: "s3.amazonaws.com"
+          - Sid: 'allow specific role to read/delete/change visibility of SQS messages and get queue url'
+            Action:
+              - "SQS:ChangeMessageVisibility"
+              - "SQS:DeleteMessage"
+              - "SQS:ReceiveMessage"
+              - "SQS:GetQueueUrl"
+            Effect: "Allow"
+            Resource: !GetAtt VpcFlowQueue.Arn
+            Principal:
+              AWS: !GetAtt SentinelIAMRole.Arn
+      Queues:
+        - !Ref VpcFlowQueue
+Outputs:
+  SentinelIAMRoleArn:
+    Description: IAM Role ARN that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.
+    Value: !GetAtt SentinelIAMRole.Arn
+  CloudTrailQueueURL:
+    Description: AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.
+    Value: !Ref CloudTrailQueue
+  GuardDutyQueueURL:
+    Description: AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.
+    Value: !Ref GuardDutyQueue
+  VpcFlowQueueURL:
+    Description: AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.
+    Value: !Ref VpcFlowQueue
