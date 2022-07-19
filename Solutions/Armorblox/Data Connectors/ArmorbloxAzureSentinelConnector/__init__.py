@@ -41,8 +41,8 @@ if (ARMORBLOX_INSTANCE_NAME == "") and (ARMORBLOX_INSTANCE_URL == ""):
 
 class Armorblox(Client):
 
-    def __init__(self,api_key,instance_name=None,instance_url=None):
-        super().__init__(api_key=api_key,instance_name=instance_name,instance_url=instance_url)
+    def __init__(self, api_key, instance_name=None, instance_url=None):
+        super().__init__(api_key=api_key, instance_name=instance_name, instance_url=instance_url)
         self.incidents_list = []
         self.from_date, self.to_date = self.generate_date()
 
@@ -63,11 +63,11 @@ class Armorblox(Client):
 
 
     def _process_incidents(self, params):
-        response_json,_ = self.incidents.list_resource('incidents', params=params)
-        self.incidents_list.extend(response_json['incidents'])
+        response_json,_ = self.incidents.list_resource(ARMORBLOX_INCIDENT_API_PATH, params=params)
         if response_json is None:
             pass
         else:
+            self.incidents_list.extend(response_json.get('incidents',[]))
             if "next_page_token" in response_json.keys():
                 params["page_token"] = response_json['next_page_token']
                 self._process_incidents(params)
@@ -142,7 +142,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
     logging.info("Python timer trigger function ran at %s", utc_timestamp)
 
-    armorblox = Armorblox(ARMORBLOX_API_TOKEN,ARMORBLOX_INSTANCE_NAME,ARMORBLOX_INSTANCE_URL)
+    armorblox = Armorblox(ARMORBLOX_API_TOKEN, ARMORBLOX_INSTANCE_NAME, ARMORBLOX_INSTANCE_URL)
     sentinel = Sentinel()
     incidents_list = armorblox.get_incidents()
     sentinel.gen_chunks(incidents_list)
