@@ -1,0 +1,43 @@
+
+id: 02BE358B-8733-46B7-8E3D-624B1F918237
+name: Microsoft Defender AV Engine up to date info
+description: |
+  // Author: Sonali Meshram
+  // @someshram
+  // ------------------------
+  // 1.	Provides the Engine version and total count of up to date devices, not up to date devices and count of devices whose status is not available  A list of all devices with below AV information. 
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceTvmInfoGathering
+query: |
+let expiringPublishdate = ago(8d);
+DeviceTvmInfoGathering
+| extend DataRefreshTimestamp = Timestamp, 
+    AvIsSignatureUpToDateTemp = tostring(AdditionalFields.AvIsSignatureUptoDate),
+    AvIsEngineUpToDateTemp = tostring(AdditionalFields.AvIsEngineUptodate), 
+    AvIsPlatformUpToDateTemp=tostring(AdditionalFields.AvIsPlatformUptodate),
+    AvSignatureDataRefreshTime = todatetime(AdditionalFields.AvSignatureDataRefreshTime), 
+    AvSignaturePublishTime = todatetime(AdditionalFields.AvSignaturePublishTime),
+    AvSignatureVersion =  tostring(AdditionalFields.AvSignatureVersion),
+    AvEngineVersion =  tostring(AdditionalFields.AvEngineVersion),
+    AvPlatformVersion =  tostring(AdditionalFields.AvPlatformVersion)
+| extend AvIsSignatureUpToDate = iif(((((isempty(AvIsSignatureUpToDateTemp)
+or (isnull(AvSignatureDataRefreshTime)))
+or (isnull(AvSignaturePublishTime)))
+or (AvSignaturePublishTime < expiringPublishdate))
+or (AvIsSignatureUpToDateTemp == True
+and AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsSignatureUpToDateTemp))
+| extend AvIsEngineUpToDate = iif(((((isempty(AvIsEngineUpToDateTemp)
+or (isnull(AvSignatureDataRefreshTime)))
+or (isnull(AvSignaturePublishTime)))
+or (AvSignatureDataRefreshTime < expiringPublishdate))
+or (AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsEngineUpToDateTemp))
+| extend AvIsPlatformUpToDate = iif(((((isempty(AvIsPlatformUpToDateTemp)
+or (isnull(AvSignatureDataRefreshTime)))
+or (isnull(AvSignaturePublishTime)))
+or (AvSignatureDataRefreshTime < expiringPublishdate))
+or (AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsPlatformUpToDateTemp))
+| project DeviceId, DeviceName,  OSPlatform, AvSignatureVersion, AvEngineVersion, AvPlatformVersion, DataRefreshTimestamp, AvIsSignatureUpToDate, AvIsEngineUpToDate, AvIsPlatformUpToDate, AvSignaturePublishTime, AvSignatureDataRefreshTime
+| summarize DeviceCount = count(), DataRefreshTimestamp = max(DataRefreshTimestamp), EngineUpToDateDeviceCount = countif(AvIsEngineUpToDate == "true"), EngineNotUpToDateDeviceCount = countif(AvIsEngineUpToDate == "false"), EngineNotAvailableDeviceCount = countif(AvIsEngineUpToDate == "Unknown") by OSPlatform,AvEngineVersion
+| extend AvEngineVersion = iif(AvEngineVersion == "", "Unknown", AvEngineVersion)
