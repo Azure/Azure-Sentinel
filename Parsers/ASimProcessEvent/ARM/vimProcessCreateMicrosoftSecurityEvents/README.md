@@ -2,7 +2,7 @@
 
 ARM template for ASIM ProcessEvent schema parser for Security Events.
 
-This ASIM parser supports filtering and normalizing Windows process create events (event 4688) collected using the Security Events connectors, utilizing either the Log Analytics agent or the Azure Monitor Agent (AMA) and stored in the SecurityEvent table to the ASIM Process Event normalized schema. 
+This ASIM parser supports filtering and normalizing Windows process create events (event 4688) collected using the Security Events connectors, utilizing either the Log Analytics agent or the Azure Monitor Agent (AMA) and stored in the SecurityEvent table to the ASIM Process Event normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
