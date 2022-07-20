@@ -76,6 +76,14 @@ describe("dataConnectorValidator", () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/Agari/invalidAzureFunctionConnectorPermissions.json","DataConnectorValidationError");
   });
 
+  it("should pass when validSyslogDataConnector.json is valid", async () => {
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validAzureDiagnosticsDataConnector.json");
+  });
+
+  it("should throw an exception when Syslog data connector have Invalid set of permissions", async () => {
+    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/invalidAzureDiagnosticsDataConnector.json","DataConnectorValidationError");
+  });
+
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
     let result = await IsValidDataConnectorSchema(filePath);
     expect(result).to.equal(ExitCode.SUCCESS);

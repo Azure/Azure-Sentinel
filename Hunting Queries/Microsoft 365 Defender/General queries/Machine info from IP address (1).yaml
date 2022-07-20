@@ -1,0 +1,32 @@
+id: 49cf658e-f446-476e-a7da-30909caaa3e3
+name: Machine info from IP address (1)
+description: |
+  The following queries pivot from an IP address assigned to a machine to the relevant machine or logged-on users.
+  To read more about it, check out this post: https://techcommunity.microsoft.com/t5/What-s-New/Advanced-hunting-now-includes-network-adapters-information/m-p/224402#M74.
+  Query #1: get machines that have used a given local IP address at a given time - as configured on their network adapters.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkInfo
+  - DeviceInfo
+query: |
+  // Query #2:
+  // same as query #1 (get machines that have used a given local IP address at a given time), but also query for the logged on user
+  let pivotTimeParam = datetime(2018-07-15 19:51:00);
+  let ipAddressParam = "192.168.1.5";
+  let matchingMachines = 
+      DeviceNetworkInfo
+      | where Timestamp between ((pivotTimeParam-15m) ..30m) and IPAddresses contains strcat("\"", ipAddressParam, "\"") and NetworkAdapterStatus == "Up"
+      //// Optional - add filters to make sure machine is part of the relevant network (and not using that IP address as part of another private network).
+      //// For example:
+      // and ConnectedNetworks contains "corp.contoso.com"
+      // and IPv4Dhcp == "10.164.3.12"
+      // and DefaultGateways contains "\"10.164.3.1\""
+      | project DeviceName, Timestamp, IPAddresses, TimeDifference=abs(Timestamp-pivotTimeParam);
+  DeviceInfo
+  | where Timestamp between ((pivotTimeParam-15m) ..30m)
+  | project DeviceName, Timestamp, LoggedOnUsers 
+  | join kind=inner (matchingMachines) on DeviceName, Timestamp
+  | project Timestamp, DeviceName, LoggedOnUsers, TimeDifference, IPAddresses
+  // In case multiple machines have reported from that IP address arround that time, start with the ones reporting closest to pivotTimeParam
+  | sort by TimeDifference asc

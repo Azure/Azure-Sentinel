@@ -1,0 +1,107 @@
+Parser:
+  Title: Process Create Event ASIM parser for Sysmon for Linux
+  Version: '0.2.1'
+  LastUpdated: Feb 23, 2022
+Product:
+  Name: Sysmon for Linux
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: | 
+  This ASIM parser supports normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema. 
+ParserName: ASimProcessCreateLinuxSysmon
+EquivalentBuiltInParser: _ASim_ProcessEvent_CreateLinuxSysmon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: | 
+    let ParsedProcessEvent=(){
+        Syslog
+        | where not(disabled)
+        | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>1</EventID>')
+        | parse SyslogMessage with 
+                *
+                '<EventRecordID>' EventRecordId:int '</EventRecordID>'
+                *
+                '<Computer>' SysmonComputer:string '</Computer>'
+                *
+                '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readability 
+                '</Data><Data Name="UtcTime">'UtcTime
+                '</Data><Data Name="ProcessGuid">{'ProcessGuid
+                '}</Data><Data Name="ProcessId">'ProcessId:string
+                '</Data><Data Name="Image">'Image
+                '</Data><Data Name="FileVersion">'FileVersion
+                '</Data><Data Name="Description">'Description
+                '</Data><Data Name="Product">'Product
+                '</Data><Data Name="Company">'Company'</Data>' *
+        | extend  OriginalFileName = extract (@'"OriginalFileName">([^<]+)<',1,SyslogMessage) // this field exists in sysmon version 10.42 and above - using extact to avoid parsing failure
+        | parse SyslogMessage with *
+                '<Data Name="CommandLine">'CommandLine'</Data>'
+                '<Data Name="CurrentDirectory">'CurrentDirectory
+                '</Data><Data Name="User">'User
+                '</Data><Data Name="LogonGuid">{'LogonGuid
+                '}</Data><Data Name="LogonId">'LogonId
+                '</Data><Data Name="TerminalSessionId">'TerminalSessionId
+                '</Data><Data Name="IntegrityLevel">'IntegrityLevel
+                '</Data><Data Name="Hashes">'Hashes
+                '</Data><Data Name="ParentProcessGuid">{'ParentProcessGuid
+                '}</Data><Data Name="ParentProcessId">'ParentProcessId:string
+                '</Data><Data Name="ParentImage">'ParentImage
+                '</Data><Data Name="ParentCommandLine">'ParentCommandLine '</Data>'*
+        | parse SyslogMessage with *'<Data Name="ParentUser">'ActorUsername '</Data>' *// this field appears in newer versions of Sysmon 
+        | extend    TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
+                    TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
+                    TargetProcessIMPHASH=extract(@'IMPHASH=(\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file
+                    TargetProcessMD5=extract(@'MD5=(\w+)',1, tostring(Hashes))
+        // End of XML parse
+        | project-away SyslogMessage, Hashes
+        | extend 
+                    EventType = "ProcessCreated",
+                    EventStartTime = TimeGenerated,
+                    EventEndTime = TimeGenerated,
+                    EventCount = int(1),
+                    EventVendor = "Microsoft",
+                    EventSchemaVersion = "0.1.0",
+                    EventSchema = 'ProcessEvent',
+                    EventProduct = "Sysmon for Linux",
+                    EventResult = 'Success',
+                    EventOriginalUid = tostring(EventRecordId),
+                    DvcOs = "Linux",
+                    TargetUserSessionId = tostring(LogonId)  ,           
+                    TargetUsernameType = "Simple",
+                    TargetUsername = User,
+                    TargetProcessCommandLine = CommandLine,
+                    TargetProcessCurrentDirectory = CurrentDirectory,
+                    ActorUsernameType = "Simple",
+                    EventOriginalType = '1' // Set with a constant value to avoid parsing
+        | project-rename 
+                    // EventMessage = RenderedDescription, // field not available in Linux
+                    DvcHostName = SysmonComputer, // Computer may be different than HostName, in which case HostIP may be incorrect. 
+                    DvcIpAddr = HostIP, 
+                    TargetUserSessionGuid = LogonGuid, 
+                    TargetProcessId = ProcessId,
+                    TargetProcessGuid = ProcessGuid,
+                    TargetProcessName = Image,
+                    TargetProcessIntegrityLevel = IntegrityLevel,
+                    TargetProcessCompany = Company,
+                    TargetProcessFileDescription = Description,
+                    TargetProcessFileVersion = FileVersion,
+                    TargetProcessFileProduct = Product,
+                    ActingProcessId = ParentProcessId,
+                    ActingProcessGuid = ParentProcessGuid,                          
+                    ActingProcessCommandLine = ParentCommandLine,
+                    ActingProcessName = ParentImage
+        | extend // aliases
+                    User = ActorUsername,
+                    Process = TargetProcessName,
+                    Dvc = DvcHostName,
+                    Hash = coalesce(TargetProcessSHA256, TargetProcessSHA1, TargetProcessMD5) // which appears first - will be aliases to "Hash"
+        | project-away
+                    ProcessName, ProcessID
+    }; ParsedProcessEvent

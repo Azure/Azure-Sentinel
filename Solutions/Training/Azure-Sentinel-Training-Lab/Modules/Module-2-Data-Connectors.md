@@ -5,21 +5,21 @@
 
 ## Objectives
 
-In this module you will learn how to enable Data Connectors in Azure Sentinel to bring alerts and/or telemtry from different sources.
+In this module you will learn how to enable Data Connectors in Microsoft Sentinel to bring alerts and/or telemtry from different sources.
 
 #### Prerequisites
 
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need an Azure Sentinel workspace provisioned.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as you will need an Microsoft Sentinel workspace provisioned.
 
 Some of the data connectors that will be used in this lab, require some specific permissions on the workspace or your azure subscription. If you don't have the appropriate permissions, you can still continue doing the rest of the labs.
 
 ### Exercise 1: Enable Azure Activity data connector
 
-This exercise shows you how to enable the Azure Activity data connector. This connector will bring into your Azure Sentinel workspace all the audit events for actions performed in your Azure subscription.
+This exercise shows you how to enable the Azure Activity data connector. This connector will bring into your Microsoft Sentinel workspace all the audit events for actions performed in your Azure subscription.
 
-**NOTE**: To do this exercise, your user must have Reader permissions to any subscription which logs you want to stream into Azure Sentinel. 
+**NOTE**: To do this exercise, your user must have Reader permissions to any subscription which logs you want to stream into Microsoft Sentinel. 
 
-1. Go to you Azure Sentinel workspace and select **Data Connectors** under **Configuration** section.
+1. Go to you Microsoft Sentinel workspace and select **Data Connectors** under **Configuration** section.
 
 ![azactivity1](../Images/azactivity1.png)
 
@@ -27,7 +27,7 @@ This exercise shows you how to enable the Azure Activity data connector. This co
 
 ![azactivity2](../Images/azactivity2.png)
 
-3. In the Azure Activity connector page, go to option number 2 **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compred to the old method (more details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
+3. In the Azure Activity connector page, go to option number 2 **Connect your subscriptions through diagnostic settings new pipeline**. This method leverages Azure Policy and it brings many improvements compared to the old method (more details about these improvements can be found [here](https://techcommunity.microsoft.com/t5/azure-sentinel/moving-azure-activity-connector-to-an-improved-method/ba-p/2479552)).
 
 
 4. Click on the **Launch Azure Policy Assignment wizard**, this will redirect you to the policy creation page.
@@ -41,7 +41,7 @@ On the Scope selection select your relevant subscription.
 
 ![azactivity4](../Images/m2-activity-scope.png)
 
-5. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Azure Sentinel workspace:
+5. Go to the **Parameters** tab. On the **Primary Log Analytics workspace** select the Microsoft Sentinel workspace:
 
 ![azactivity8](../Images/m2-ws-target-foractivitylogs1.png)
 
@@ -52,19 +52,19 @@ On the Scope selection select your relevant subscription.
 
 ![azactivity7](../Images/azactivity7.png)
 
-8. It is normal if you don't immediately see the connector showing as connected and in green. Also, each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Azure Sentinel workspace.
+8. It is normal if you don't immediately see the connector showing as connected and in green. Also, each subscription has a maximum of 5 destinations for its activity logs. If this limit is already reached, the policy created as part of this exercise won't be able to add an additional destination to your Microsoft Sentinel workspace.
 
-### Exercise 2: Enable Azure Defender data connector
+### Exercise 2: Enable Microsoft Defender for Cloud data connector
 
-This exercise shows you how to enable the Azure Defender data connector. This connector allows you to stream your security alerts from Azure Defender into Azure Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
+This exercise shows you how to enable the Microsoft Defender for Cloud data connector. This connector allows you to stream your security alerts from Microsoft Defender for Cloud into Microsoft Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
 
-**NOTE**: To do this exercise, your user must have the Security Reader role in the subscription of the logs you stream. If not done already, you will need to enable Azure Defender within Azure Security Center.
+**NOTE**: To do this exercise, your user must have the Security Reader role in the subscription of the logs you stream. If not done already, you will need to enable any of the Defender plans in Microsoft Defender for Cloud.
 
-1. Go to you Azure Sentinel workspace and select **Data Connectors** under *Configuration* section.
+1. Go to you Microsoft Sentinel workspace and select **Data Connectors** under *Configuration* section.
 
-2. In the data connectors screen, type *defender* in the search bar, select the *Azure Defender* connector and click on *Open connector page*.
+2. In the data connectors screen, type *defender* in the search bar, select the *Microsoft Defender for Cloud* connector and click on *Open connector page*.
 
-3. In the Azure Defender connector page, check that your permissions are enough at the top. If you don't have the required permissions, you can continue to the next exercise.
+3. In the Microsoft Defender for Cloud connector page, check that your permissions are enough at the top. If you don't have the required permissions, you can continue to the next exercise.
 
 4. From the list of subscriptions at the bottom of the page, select the desired subscription an click on *Connect*. Wait for the operation to complete.
 
@@ -74,13 +74,13 @@ This exercise shows you how to enable the Azure Defender data connector. This co
 
 ### Exercise 3: Enable Threat Intelligence TAXII data connector
 
-This exercise shows you how to enable the Threat Intelligence - TAXII data connector. This connector allows you to send threat indicators from TAXII servers to Azure Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes.
+This exercise shows you how to enable the Threat Intelligence - TAXII data connector. This connector allows you to send threat indicators from TAXII servers to Microsoft Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes.
 
 **NOTE**: To do this exercise, your user must have the Security Reader role in the subscription of the logs you stream. If not done already, you will need to enable Azure Defender within Azure Security Center.
 
-1. Go to you Azure Sentinel workspace and select *Data Connectors* under *Configuration* section.
+1. Go to you Microsoft Sentinel workspace and select *Data Connectors* under *Configuration* section.
 
-2. In the data connectors screen, type *taxii* in the search bar, select the *Threat intelligence - TAXII (Preview)* connector and click on *Open connector page*.
+2. In the data connectors screen, type *taxii* in the search bar, select the *Threat intelligence - TAXII* connector and click on *Open connector page*.
 
 3. In the Threat Intelligence - TAXII connector page, add the following information under *Configuration* menu:
 
@@ -89,7 +89,7 @@ This exercise shows you how to enable the Threat Intelligence - TAXII data conne
     - **Collection ID**: 135
     - **Username**: guest
     - **Password**: guest
-    - **Import Indicators**: At most one month old (review all available options)
+    - **Import Indicators**: All available (review all available options)
     - **Polling frequency**: Once an minute (review all available options)
 
 ![taxii1](../Images/taxii11.png)

@@ -1,0 +1,202 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Manish Kumar - maniskumar@microsoft.com",
+    "comments": "Solution template for MicrosoftDefenderForEndpoint"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "MDE_Usage_HuntingQueries": "MDE_Usage_HuntingQueries",
+    "_MDE_Usage_HuntingQueries": "[variables('MDE_Usage_HuntingQueries')]",
+    "workspace-dependency": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
+    "MDE_Process-IOCs_HuntingQueries": "MDE_Process-IOCs_HuntingQueries",
+    "_MDE_Process-IOCs_HuntingQueries": "[variables('MDE_Process-IOCs_HuntingQueries')]",
+    "AssignedIPAddress_Parser": "AssignedIPAddress_Parser",
+    "_AssignedIPAddress_Parser": "[variables('AssignedIPAddress_Parser')]",
+    "Devicefromip_Parser": "Devicefromip_Parser",
+    "_Devicefromip_Parser": "[variables('Devicefromip_Parser')]",
+    "sourceId": "azuresentinel.azure-sentinel-solution-MicrosoftDefenderForEndpoint",
+    "_sourceId": "[variables('sourceId')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2021-06-01",
+      "name": "[parameters('workspace')]",
+      "location": "[parameters('workspace-location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "MicrosoftDefenderForEndpoint Hunting Query 1",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Probable AdFind Recon Tool Usage",
+            "category": "Hunting Queries",
+            "query": "\nlet args = dynamic([\"objectcategory\",\"domainlist\",\"dcmodes\",\"adinfo\",\"trustdmp\",\"computers_pwdnotreqd\",\"Domain Admins\", \"objectcategory=person\", \"objectcategory=computer\", \"objectcategory=*\",\"dclist\"]);\nlet parentProcesses = dynamic([\"pwsh.exe\",\"powershell.exe\",\"cmd.exe\"]);\nDeviceProcessEvents\n//looks for execution from a shell\n| where InitiatingProcessFileName in (parentProcesses)\n// main filter\n| where FileName =~ \"AdFind.exe\" or SHA256 == \"c92c158d7c37fea795114fa6491fe5f145ad2f8c08776b18ae79db811e8e36a3\"\n   // AdFind common Flags to check for from various threat actor TTPs\n    or ProcessCommandLine has_any (args)\n| extend AccountCustomEntity = AccountName, HostCustomEntity = DeviceName, ProcessCustomEntity = InitiatingProcessFileName, CommandLineCustomEntity = ProcessCommandLine, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = SHA256\n",
+            "version": 1,
+            "tags": [
+              {
+                "name": "description",
+                "value": "Identifies the host and account that executed AdFind by hash and filename in addition to common and unique flags that are used by many threat actors in discovery."
+              },
+              {
+                "name": "tactics",
+                "value": "Discovery"
+              }
+            ]
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "MicrosoftDefenderForEndpoint Hunting Query 2",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "SUNBURST suspicious SolarWinds child processes",
+            "category": "Hunting Queries",
+            "query": "\nlet excludeProcs = dynamic([@\"\\SolarWinds\\Orion\\APM\\APMServiceControl.exe\", @\"\\SolarWinds\\Orion\\ExportToPDFCmd.Exe\", @\"\\SolarWinds.Credentials\\SolarWinds.Credentials.Orion.WebApi.exe\", @\"\\SolarWinds\\Orion\\Topology\\SolarWinds.Orion.Topology.Calculator.exe\", @\"\\SolarWinds\\Orion\\Database-Maint.exe\", @\"\\SolarWinds.Orion.ApiPoller.Service\\SolarWinds.Orion.ApiPoller.Service.exe\", @\"\\Windows\\SysWOW64\\WerFault.exe\"]);\nDeviceProcessEvents\n| where InitiatingProcessFileName =~ \"solarwinds.businesslayerhost.exe\"\n| where not(FolderPath has_any (excludeProcs))\n| extend\n    timestamp = TimeGenerated,\n    AccountCustomEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),\n    HostCustomEntity = DeviceName,\n    FileHashCustomEntity = MD5\n",
+            "version": 1,
+            "tags": [
+              {
+                "name": "description",
+                "value": "Identifies suspicious child processes of SolarWinds.Orion.Core.BusinessLayer.dll that may be evidence of the SUNBURST backdoor"
+              },
+              {
+                "name": "tactics",
+                "value": "Execution,Persistence"
+              }
+            ]
+          }
+        },
+        {
+          "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "[concat(parameters('workspace'),'/',variables('AssignedIPAddress_Parser'))]",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+		  "location": "[parameters('workspace-location')]",
+          "properties": {
+            "eTag": "*",
+            "category": "Function",
+			"displayName": "AssignedIPAddress",
+			"functionAlias" : "AssignedIPAddress",
+			"functionParameters" : "Device:string, Timestamp:datetime = datetime(null)",
+            "query": "\nlet AssignedIPAddresses = (Device:string, Timestamp:datetime = datetime(null))\r\n{\r\nlet t = coalesce(Timestamp, now());\r\nlet adapters = materialize(\r\n    DeviceNetworkInfo \r\n    | where Timestamp between(max_of(t - 1d, ago(30d)) .. t)\r\n    | where DeviceId == Device or DeviceName == Device\r\n    | top 500 by Timestamp);\r\nlet lastReportId = tolong(toscalar(adapters | summarize arg_max(Timestamp, ReportId) | project ReportId));\r\nadapters | where ReportId == lastReportId\r\n| project Timestamp, NetworkAdapterType, IpAddresses = todynamic(tostring(IPAddresses)), ConnectedNetworks\r\n| mv-expand IpAddresses\r\n| project Timestamp, IPAddress = tostring(IpAddresses.IPAddress), IPType = tostring(IpAddresses.AddressType), NetworkAdapterType, ConnectedNetworks\r\n};",
+            "version": 1
+          }
+        },
+        {
+        "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+		"apiVersion": "2020-08-01",
+      	"name": "[concat(parameters('workspace'),'/',variables('Devicefromip_Parser'))]",
+		"dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+      	"location": "[parameters('workspace-location')]",
+		"properties": {
+			"eTag": "*",
+			"category": "Function",
+			"displayName": "DeviceFromIP",
+			"functionAlias" : "DeviceFromIP",
+			"functionParameters" : "T:(IP:string), Timestamp:datetime = datetime(null)",
+			"query": "\nlet DeviceFromIP = coalesce(Timestamp, now());\r\nlet lastReportIds = DeviceNetworkInfo\r\n| where Timestamp between(max_of(t - 1d, ago(30d)) .. t)\r\n| summarize arg_max(Timestamp, ReportId) by DeviceId;\r\nlet adapters = DeviceNetworkInfo\r\n| where Timestamp between(max_of(t - 1d, ago(30d)) .. t)\r\n| lookup kind = inner lastReportIds on ReportId, DeviceId\r\n| mv-expand todynamic(IPAddresses)\r\n| project DeviceId, IP = tostring(IPAddresses.IPAddress);\r\nT | join adapters on IP | project-away IP1\r\n",		
+			"version": 1
+			}
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "properties": {
+        "version": "1.0.5",
+        "kind": "Solution",
+        "contentId": "[variables('_sourceId')]",
+        "parentId": "[variables('_sourceId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "MicrosoftDefenderForEndpoint",
+          "sourceId": "[variables('_sourceId')]"
+        },
+        "author": {
+          "name": "Manish Kumar",
+          "email": "maniskumar@microsoft.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('_MDE_Usage_HuntingQueries')]",
+              "version": "1.0.5"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('_MDE_Process-IOCs_HuntingQueries')]",
+              "version": "1.0.5"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_AssignedIPAddress_Parser')]",
+              "version": "1.0.5"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Devicefromip_Parser')]",
+              "version": "1.0.5"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-01-31",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+    }
+  ],
+  "outputs": {}
+}

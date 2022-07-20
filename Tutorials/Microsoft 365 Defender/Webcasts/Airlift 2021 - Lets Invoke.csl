@@ -1,0 +1,464 @@
+
+
+//   (     (  (   (   ((    (( ((     )  
+//   )\    )\ )\  )\  ))\   ))\))\   ()) 
+//  ((_)  ((()_()((_)((_)))((_)(_)))(()))
+//  \ \    / /   \ _ \ \| |_ _| \| |/ __|
+//   \ \/\/ /| - |   / .  || || .  | (_ |
+//    \_/\_/ |_|_|_|_\_|\_|___|_|\_|\___|
+
+//   (    ) )     ) )          (       (      (    
+//  )\  (\(  (  (\( (        (()      )\     )\   
+//  ((_)  )(| )\: )(|)\      (((_)    ((_)   ((_)  
+//  | |   ()\((_)_()\| |     | | |   (/  \  (/  \  
+//  | |__/ -_) V / -_) |     |_  _|  | () | | () | 
+//  |____|___|\_/\___|_|       |_|    \__/   \__/  
+
+/////////////////////
+// Kusto Functions //
+/////////////////////
+
+// Sometimes you write something cool and want to reuse it a bunch of times.
+// In this webcast we are going to cover some cool ways to use the let statement
+// to enable query reuse.
+
+// let - not just for variables :)
+// https://docs.microsoft.com/azure/data-explorer/kusto/query/letstatement
+
+let MyFunction = (MyParameter:string)
+{
+    print MyParameter
+};
+MyFunction('foo')
+
+// ...but that's just getting started. You can also pass in tabular data!
+// To accomplish this we will use the invoke tabluar operator
+// https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator
+
+let MyOtherFunction = (MyParameter:(Value:int))
+{
+    MyParameter
+    | extend Sine = sin(Value), Cosine = cos(Value), Tangent = tan(Value), Cotangent = cot(Value)
+};
+datatable(Value:int)
+[
+    1,2,3,4,5,6,7,8,9,10
+]
+| invoke MyOtherFunction()
+
+// The column name must match between the parameter and the source data !
+
+// You can also pass in tabular data and scalar parameters if you choose...
+let MultiplyByN = (SourceData:(Multiplicand:int), Multiplier:dynamic)
+{
+    SourceData
+    | extend Multiplier = Multiplier
+    | mv-expand Multiplier to typeof(int)
+    | extend Product = Multiplicand * Multiplier
+};
+let Multiplier = range(1,10,1);
+datatable(Multiplicand:int)
+[1,2,3,4,5,6,7,8,9,10]
+| invoke MultiplyByN(Multiplier)
+
+// range() - generates a range of numbers from the first 
+// parameter to the second parameter step the third parameter
+// https://docs.microsoft.com/azure/data-explorer/kusto/query/rangeoperator
+
+// or go all out and use multiple tablular inputs
+
+let LetsIntersect = (Dataset1:(key:int,value:string), Dataset2:(key:int,value:string))
+{
+    Dataset1
+    | join kind=inner Dataset2 on key
+};
+let LeftTable = datatable (key:int, value:string)
+[
+    0, "Foo",
+    1, "Bar",
+    2, "Baz",
+    3, "Qux",
+    4, "Quux"
+];
+let RightTable = datatable (key:int, value:string)
+[
+    0, "Wibble",
+    1, "Wobble",
+    2, "Wubble",
+];
+LeftTable
+| invoke LetsIntersect(RightTable)
+
+// OK! Enough of the contrived examples! How can I actually use this?
+
+///////////////////
+// Path Aliasing //
+///////////////////
+
+// Ever try to gather statistics on something in the \users\ directory? You 
+// end up with all kinds of one-off FolderPaths tied to a user's profile.
+// ... let's fix that.
+
+let AliasPath = (SourcePath:(FolderPath:string, FileName:string))
+{
+	SourcePath
+    | extend AliasPath = tolower(
+            case(
+                //Modern style profile
+                FolderPath startswith 'c:\\users\\', strcat('%UserProfile%', substring(FolderPath, indexof(FolderPath,'\\',11), strlen(FolderPath) - 11)),
+                //Legacy style profile
+                FolderPath startswith 'c:\\documents and settings\\', strcat('%UserProfile%', substring(FolderPath, indexof(FolderPath,'\\',27), strlen(FolderPath) - 27)),
+                //Windir
+                FolderPath contains @':\Windows\', strcat('%windir%', substring(FolderPath, 10)),
+                //ProgramData
+                FolderPath contains @':\programdata\', strcat('%programdata%', substring(FolderPath, 14)),
+                // ProgramFiles
+                FolderPath contains @':\Program Files\', strcat('%ProgramFiles%', substring(FolderPath, 16)),
+                // Program Files (x86)
+                FolderPath contains @':\Program Files (x86)\', strcat('%ProgramFilesx86%', substring(FolderPath, 22)),
+                //Other
+               FolderPath)
+        )
+};
+DeviceProcessEvents
+| take 100
+| invoke AliasPath()
+| project-reorder AliasPath
+
+// So lets use this to help determine the impact of a firewall rule...
+
+let EphemeralRangeStart = 49152;
+let IncludeInboundRemoteIPs = false;
+let AliasPath = (SourcePath:(FolderPath:string, FileName:string))
+{
+SourcePath
+    | extend AliasPath = tolower(
+            case(
+                //Modern style profile
+                FolderPath startswith 'c:\\users\\', strcat('%UserProfile%', substring(FolderPath, indexof(FolderPath,'\\',11), strlen(FolderPath) - 11)),
+                //Legacy style profile
+                FolderPath startswith 'c:\\documents and settings\\', strcat('%UserProfile%', substring(FolderPath, indexof(FolderPath,'\\',27), strlen(FolderPath) - 27)),
+                //Windir
+                FolderPath contains @':\Windows\', strcat('%windir%', substring(FolderPath, 10)),
+                //ProgramData
+                FolderPath contains @':\programdata\', strcat('%programdata%', substring(FolderPath, 14)),
+                // ProgramFiles
+                FolderPath contains @':\Program Files\', strcat('%ProgramFiles%', substring(FolderPath, 16)),
+                // Program Files (x86)
+                FolderPath contains @':\Program Files (x86)\', strcat('%ProgramFilesx86%', substring(FolderPath, 22)),
+                //Other
+               FolderPath)
+        )
+};
+let ServerConnections =
+    DeviceNetworkEvents
+    | where ActionType in ('InboundConnectionAccepted','ListeningConnectionCreated')
+        and RemoteIPType != 'Loopback' 
+        and LocalIP != RemoteIP 
+        and RemoteIP !startswith '169.254' 
+        and LocalPort < EphemeralRangeStart
+    | distinct DeviceId, InitiatingProcessFolderPath, LocalPort;
+union (
+    DeviceNetworkEvents
+    | where ActionType in ('InboundConnectionAccepted','ListeningConnectionCreated','ConnectionSuccess','ConnecitonFound','ConnectionRequest')
+        and RemoteIPType != 'Loopback' 
+        and LocalIP != RemoteIP 
+        and RemoteIP !startswith '169.254' 
+        and LocalPort < EphemeralRangeStart
+    | join kind=leftsemi ServerConnections on DeviceId, InitiatingProcessFolderPath, LocalPort
+    | project-rename FolderPath = InitiatingProcessFolderPath, FileName = InitiatingProcessFileName
+    | invoke AliasPath()
+    | extend Directionality = 'Inbound', Port = LocalPort, RemoteIP = iff(IncludeInboundRemoteIPs == true, RemoteIP,'')
+),(
+    DeviceNetworkEvents
+    | where ActionType in ('ConnectionSuccess','ConnecitonFound','ConnectionRequest') 
+        and RemoteIPType != 'Loopback' 
+        and LocalIP != RemoteIP 
+        and RemoteIP !startswith '169.254' 
+        and LocalPort >= EphemeralRangeStart
+    | join kind=leftanti ServerConnections on DeviceId, InitiatingProcessFolderPath, LocalPort
+    | project-rename FolderPath = InitiatingProcessFolderPath, FileName = InitiatingProcessFileName
+    | invoke AliasPath()
+    | extend Directionality = 'Outbound', Port = RemotePort
+)
+| summarize ConnectionCount = count(), DistinctMachines = dcount(DeviceId), Ports = makeset(Port), RemoteIPs = makeset(RemoteIP) by Directionality, AliasPath
+
+//////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////
+// Mapping out IP addresses //
+//////////////////////////////
+
+// Sometimes you have a mapping of IP addresses that you want to compare to your
+// query results. This might be a CSV of internal addresses and the associated
+// physical location, a list of IP addresses by service, or something entirely
+// different.
+
+// In this example, we will use the externaldata operator to bring in the list 
+// of Azure IP addresses and compare the RemoteIP from our results to determine
+// if the IP is in the Azure range.
+
+let AzureSubnets = toscalar (
+    externaldata (xml:string)
+    [
+        @'https://download.microsoft.com/download/0/1/8/018E208D-54F8-44CD-AA26-CD7BC9524A8C/PublicIPs_20200824.xml'
+    ]
+    with (format="txt")
+    | extend Subnet = tostring(parse_xml(xml).IpRange.['@Subnet'])
+    | where isnotempty(Subnet)
+    | summarize make_set(Subnet)
+);
+let IsItAzure = (SourceData:(RemoteIP:string)) {
+    SourceData
+    | extend AzureSubnet = AzureSubnets
+    | mv-expand AzureSubnet to typeof(string)
+    | extend IsAzure = ipv4_is_in_range(RemoteIP, AzureSubnet)
+    | summarize IsAzure = max(IsAzure) by RemoteIP
+};
+// BEGIN SAMPLE QUERY //
+DeviceNetworkEvents
+| take 10000
+// END SAMPLE QUERY
+| invoke IsItAzure()
+
+//////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////
+// Determining active users    //
+// based on process creations  //
+/////////////////////////////////
+
+// How many times have you run into the need to find out which user(s) were active
+// on to a device at a given time? Sure, we have the LoggedOnUsers column in 
+// the DeviceInfo table, but what if we wanted a very specific resolution based on
+// the identities of processes created around an event?
+
+// In our ficticious example, we'll hunt for accounts that were active in the same
+// 5 minute block as a registry event.
+
+// Notice that we are passing two parameters in this function - and the second one 
+// has a default value of 5m. This is a handy way to enable flexibility. If you 
+// later wanted to change the resolution you can just specify it as a parameter in
+// your invoke statement.
+
+let WhoWasActive = (SourceData:(DeviceId:string, Timestamp:datetime), Resolution:timespan = 5m)
+{
+    SourceData
+    | extend TimeBin = bin(Timestamp, Resolution)
+    | join kind=inner (
+        DeviceProcessEvents
+        | where AccountDomain !in~ ('nt authority','font driver host', 'window manager', 'nt service')
+        | project Timestamp, DeviceId, Account = tolower(strcat(AccountDomain,'\\',AccountName))
+        | summarize ActiveAccounts = make_set(Account) by DeviceId, TimeBin = bin(Timestamp, Resolution)
+    ) on DeviceId, TimeBin
+    | project-away TimeBin, TimeBin1
+};
+DeviceRegistryEvents
+| summarize arg_max(Timestamp, *) by DeviceId
+| take 100
+| invoke WhoWasActive()
+| project-reorder ActiveAccounts
+
+///////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////
+// Detecting anomalous key-value //
+// pair combinations in datasets //
+///////////////////////////////////
+
+// I developed this function while on the Microsoft DART team to help 
+// solve a specific problem - we needed to find files that masqueraded
+// as legitimate files, usually based on their filename. This technique
+// is commonly used by malware as a means of masquerading as a 
+// legitimate file. While most of the time the file names an attacker
+// would use could be found in the root of %windir%\System32, 
+// occasionally we would find some creativity out there using other
+// file names.
+
+// The good news is you can't hide from statistics :)
+
+// DetectMasqueradeAnomaly
+// Inputs: 
+//  - SourceData: the dataset to detect anomalies in. Must contain
+                  a column named 'Key' and another named 'Value'
+	- MaxResults: The number of results to return in descending 
+	              order of how anomalous the pairing is
+				  
+// What it does:
+// This function will look for common keys that are consistently paired
+// with the same value. The more common the key and the more commonly it
+// is paired with the same value the more 'normal' this pairing is 
+// considered.
+
+// Contrived example:
+
+let DetectMasqueradeAnomaly = (SourceData:(Key:string, Value:string), MaxResults:int = 10000) { 
+    let PairCount = materialize(
+        SourceData
+        | summarize hint.strategy=shuffle Instances = count() by Key, Value
+    );
+    PairCount
+    | summarize hint.strategy=shuffle SampleSize = count(), Average = avg(Instances), DistinctValueCount = dcount(Value) by Key
+    | where DistinctValueCount > 1 and SampleSize > 1 and DistinctValueCount < Average // Remove entries that are always have the same key, have only one instance, or are above the average instances (that would be a normal value for the key by this definition)
+    | join kind=inner hint.strategy=shuffle PairCount on Key // Join back on raw Key to Value statistics so that we can now find anomalies
+    | extend MScore = (SampleSize * (Average - Instances) / (Instances * DistinctValueCount)) // Run the masquerade detection calculation
+    | where MScore > 0  // Remove values that are more normal than the average
+    | top MaxResults by MScore desc // Strip entries beyond the defined result count threshold
+    | join kind=inner hint.strategy=shuffle ( // Join back on PairCount to deteremine most common value for the pair
+        PairCount 
+        | summarize MostCommonValueInstances = max(Instances) by Key // In this case, we need to know which key had the max number of instances
+        | join kind=inner hint.strategy=shuffle PairCount on Key // Bring it back together with the Key to Value data
+        | where Instances == MostCommonValueInstances // Select only the rows where Instances == MostCommonValueInstances to figure out which path was most common
+        | project Key, MostCommonValueInstances = Instances, MostCommonValue = Value // Clean up output
+        ) on Key 
+    | project-away Key1, Key2
+    | top MaxResults by MScore desc
+};
+datatable (Key:string, Value:string)
+[
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '1',
+    'a', '3', // Masquerade anomaly
+    'b', '2',
+    'b', '2',
+    'b', '2',
+    'b', '2',
+    'b', '2',
+    'b', '2',
+    'b', '2',
+    'b', '4', // Masquerade anomaly
+	'c', '1', // c has an even distribution of values
+	'c', '2',
+	'c', '3',
+	'c', '4',
+	'd', '4', // d is always the same
+	'd', '4',
+	'd', '4',
+	'd', '4'
+]
+| invoke DetectMasqueradeAnomaly()
+
+// Notice:
+// - All common pairings are filtered out
+// - 'a' was ranked higher from an anomaly perspective
+//   than 'b' because there are more examples of 'a' being paired with '1'
+//   than 'b' paired with '2'
+// - 'c' did not show up because it was 100% random in this dataset
+// - 'd' did not show up because it was 100% consistent in this dataset
+
+// Using this in the real world
+
+// Finding programs with common names launched from strange directories
+
+let DetectMasqueradeAnomaly = (SourceData:(Key:string, Value:string), MaxResults:int = 10000) { 
+    let PairCount = materialize(
+        SourceData
+        | summarize hint.strategy=shuffle Instances = count() by Key, Value
+    );
+    PairCount
+    | summarize hint.strategy=shuffle SampleSize = count(), Average = avg(Instances), DistinctValueCount = dcount(Value) by Key
+    | where DistinctValueCount > 1 and SampleSize > 1 and DistinctValueCount < Average // Remove entries that are always have the same key, have only one instance, or are above the average instances (that would be a normal value for the key by this definition)
+    | join kind=inner hint.strategy=shuffle PairCount on Key // Join back on raw Key to Value statistics so that we can now find anomalies
+    | extend MScore = (SampleSize * (Average - Instances) / (Instances * DistinctValueCount)) // Run the masquerade detection calculation
+    | where MScore > 0  // Remove values that are more normal than the average
+    | top MaxResults by MScore desc // Strip entries beyond the defined result count threshold
+    | join kind=inner hint.strategy=shuffle ( // Join back on PairCount to deteremine most common value for the pair
+        PairCount 
+        | summarize MostCommonValueInstances = max(Instances) by Key // In this case, we need to know which key had the max number of instances
+        | join kind=inner hint.strategy=shuffle PairCount on Key // Bring it back together with the Key to Value data
+        | where Instances == MostCommonValueInstances // Select only the rows where Instances == MostCommonValueInstances to figure out which path was most common
+        | project Key, MostCommonValueInstances = Instances, MostCommonValue = Value // Clean up output
+        ) on Key 
+    | project-away Key1, Key2
+    | top MaxResults by MScore desc
+};
+DeviceProcessEvents
+| where Timestamp > ago(1d)
+| project Key = FileName, Value = FolderPath
+| invoke DetectMasqueradeAnomaly(500)
+| join DeviceProcessEvents on $left.Key == $right.FileName, $left.Value == $right.FolderPath
+| project-away Key, Value, SampleSize, Average, Instances, DistinctValueCount, MostCommonValueInstances, MostCommonValue
+| order by MScore desc
+
+// Detecting user accounts logging on to anomalous systems
+
+let DetectMasqueradeAnomaly = (SourceData:(Key:string, Value:string), MaxResults:int = 10000) { 
+    let PairCount = materialize(
+        SourceData
+        | summarize hint.strategy=shuffle Instances = count() by Key, Value
+    );
+    PairCount
+    | summarize hint.strategy=shuffle SampleSize = count(), Average = avg(Instances), DistinctValueCount = dcount(Value) by Key
+    | where DistinctValueCount > 1 and SampleSize > 1 and DistinctValueCount < Average // Remove entries that are always have the same key, have only one instance, or are above the average instances (that would be a normal value for the key by this definition)
+    | join kind=inner hint.strategy=shuffle PairCount on Key // Join back on raw Key to Value statistics so that we can now find anomalies
+    | extend MScore = (SampleSize * (Average - Instances) / (Instances * DistinctValueCount)) // Run the masquerade detection calculation
+    | where MScore > 0  // Remove values that are more normal than the average
+    | top MaxResults by MScore desc // Strip entries beyond the defined result count threshold
+    | join kind=inner hint.strategy=shuffle ( // Join back on PairCount to deteremine most common value for the pair
+        PairCount 
+        | summarize MostCommonValueInstances = max(Instances) by Key // In this case, we need to know which key had the max number of instances
+        | join kind=inner hint.strategy=shuffle PairCount on Key // Bring it back together with the Key to Value data
+        | where Instances == MostCommonValueInstances // Select only the rows where Instances == MostCommonValueInstances to figure out which path was most common
+        | project Key, MostCommonValueInstances = Instances, MostCommonValue = Value // Clean up output
+        ) on Key 
+    | project-away Key1, Key2
+    | top MaxResults by MScore desc
+};
+DeviceLogonEvents
+| project Key = strcat(AccountDomain, @'\', AccountName), Value = DeviceId
+| invoke DetectMasqueradeAnomaly(500)
+| join (
+    DeviceLogonEvents
+    | extend UserAndDomain = strcat(AccountDomain, @'\', AccountName)
+) on $left.Key == $right.UserAndDomain, $left.Value == $right.DeviceId
+| project-away Key, Value, SampleSize, Average, Instances, DistinctValueCount, MostCommonValueInstances, MostCommonValue
+| project-reorder MScore, Timestamp, DeviceId, UserAndDomain
+| order by MScore desc
+
+// Detecting users logging on during strange hours of the day
+
+print gettype(hourofday(now()))
+
+// Note that hourofday() is a long, so we will need to change the data type for Value
+
+let DetectMasqueradeAnomaly = (SourceData:(Key:string, Value:long), MaxResults:int = 10000) { 
+    let PairCount = materialize(
+        SourceData
+        | summarize hint.strategy=shuffle Instances = count() by Key, Value
+    );
+    PairCount
+    | summarize hint.strategy=shuffle SampleSize = count(), Average = avg(Instances), DistinctValueCount = dcount(Value) by Key
+    | where DistinctValueCount > 1 and SampleSize > 1 and DistinctValueCount < Average // Remove entries that are always have the same key, have only one instance, or are above the average instances (that would be a normal value for the key by this definition)
+    | join kind=inner hint.strategy=shuffle PairCount on Key // Join back on raw Key to Value statistics so that we can now find anomalies
+    | extend MScore = (SampleSize * (Average - Instances) / (Instances * DistinctValueCount)) // Run the masquerade detection calculation
+    | where MScore > 0  // Remove values that are more normal than the average
+    | top MaxResults by MScore desc // Strip entries beyond the defined result count threshold
+    | join kind=inner hint.strategy=shuffle ( // Join back on PairCount to deteremine most common value for the pair
+        PairCount 
+        | summarize MostCommonValueInstances = max(Instances) by Key // In this case, we need to know which key had the max number of instances
+        | join kind=inner hint.strategy=shuffle PairCount on Key // Bring it back together with the Key to Value data
+        | where Instances == MostCommonValueInstances // Select only the rows where Instances == MostCommonValueInstances to figure out which path was most common
+        | project Key, MostCommonValueInstances = Instances, MostCommonValue = Value // Clean up output
+        ) on Key 
+    | project-away Key1, Key2
+    | top MaxResults by MScore desc
+};
+DeviceLogonEvents
+| project Key = strcat(AccountDomain, @'\', AccountName), Value = hourofday(Timestamp)
+| invoke DetectMasqueradeAnomaly(500)
+| join (
+    DeviceLogonEvents
+    | extend UserAndDomain = strcat(AccountDomain, @'\', AccountName), HourOfDay = hourofday(Timestamp)
+) on $left.Key == $right.UserAndDomain, $left.Value == $right.HourOfDay
+| project-away Key, Value, SampleSize, Average, Instances, DistinctValueCount, MostCommonValueInstances, MostCommonValue
+| project-reorder MScore, Timestamp, DeviceName, UserAndDomain
+| order by MScore desc

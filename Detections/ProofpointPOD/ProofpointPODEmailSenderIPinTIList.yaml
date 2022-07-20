@@ -4,6 +4,12 @@ description: |
   'Email sender IP in TI list.'
 severity: Medium
 requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
   - connectorId: ProofpointPOD
     dataTypes:
       - ProofpointPOD_maillog_CL
@@ -14,29 +20,41 @@ triggerThreshold: 0
 tactics:
   - Exfiltration
   - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1567
 query: |
-  let ioc_lookBack = 30d;
-  let timeframe = 1h;
-  let TI_IP_List =
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
-  | where TimeGenerated > ago(ioc_lookBack)
-  | where isnotempty(NetworkIP)
-  | summarize make_list(NetworkIP);
-  ProofpointPOD 
-  | where TimeGenerated > ago(timeframe)
-  | where isnotempty(SrcIpAddr)
-  | where SrcIpAddr in~ (TI_IP_List)
-  | extend Message = "Email sender IP in TI list"
-  | project Message, SrcUserUpn, DstUserUpn, SrcIpAddr
-  | extend AccountCustomEntity = SrcUserUpn, IpCustomEntity = SrcIpAddr
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+            ProofpointPOD 
+            | where TimeGenerated >= ago(dt_lookBack)
+            | where isnotempty(SrcIpAddr)
+            | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientIP = SrcIpAddr
+    )
+  on $left.TI_ipEntity == $right.ClientIP
+  | where ProofpointPOD_TimeGenerated < ExpirationDateTime
+  | summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientIP
+  | project ProofpointPOD_TimeGenerated, SrcUserUpn, DstUserUpn, SrcIpAddr, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
+  TI_ipEntity, ClientIP
+  | extend timestamp = ProofpointPOD_TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: SrcUserUpn
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+        columnName: ClientIP
+version: 1.1.1
+kind: Scheduled

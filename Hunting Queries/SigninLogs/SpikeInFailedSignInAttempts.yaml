@@ -1,0 +1,42 @@
+id: 51f4faf9-c3b1-4e9f-9c90-5d6afd191552
+name: Spike in failed sign-in events
+description: |
+  'Identifies spikes in failed sign-in events based on the volume of failed sign-in events over time. Use to identify patterns of suspicious behavior such as unusually high failed sign-in attempts from certain users.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime - 14d;
+  let ts_data = (SigninLogs
+  | where TimeGenerated between (auditLookback..endtime)
+  | where ResultType != 0
+  | make-series count() on TimeGenerated step 1h by UserPrincipalName
+  | extend series_decompose(count_)
+  | extend NoLogons = count_);
+  let TimeSeriesAlerts=ts_data
+    | extend (anomalies, score, baseline) = series_decompose_anomalies(count_, 1.5, -1, 'linefit',0, 'ctukey', 0.7)
+    | mv-expand NoLogons to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+    | where anomalies > 0
+    | project UserPrincipalName, TimeGenerated, NoLogons, baseline, anomalies, score;
+  TimeSeriesAlerts
+    | join kind=inner (
+    SigninLogs
+    | where TimeGenerated between (auditLookback..endtime)
+    | summarize ResultTypeCount=count(),ResultTypes=make_set(ResultType), Locations=make_set(Location), Apps=make_set(AppDisplayName), Ips=make_set( IPAddress) by UserPrincipalName, bin(TimeGenerated, 1h)
+    ) on UserPrincipalName, TimeGenerated
+    | summarize AnomolyTimes = make_set(TimeGenerated), Ips = make_set(Ips), Apps = make_set(Apps), sum(anomalies), Locations=make_set(Locations) by UserPrincipalName
+    | sort by sum_anomalies desc
+    | extend timestamp = tostring(AnomolyTimes[0]), AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName

@@ -16,9 +16,13 @@ interface SolutionAutomationInput {
   Workbooks?: string[];
   "Analytic Rules"?: string[];
   Playbooks?: string[];
+  PlaybookDescription?: string|string[]; //Description used in the CreateUiDefinition.json
   Parsers?: string[];
+  SavedSearches?: string[];
   "Hunting Queries"?: string[];
   "Data Connectors"?: string[];
   Watchlists?: string[];
+  WatchlistDescription?: string|string[]; //Description used in the CreateUiDefinition.json
   BasePath?: string; //Optional base path to use. Either Internet URL or File Path. Default = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/""
+  Metadata: string; //Path to the SolutionMetadata File
 }

@@ -282,6 +282,7 @@ class UmbrellaClient:
                     event = {
                         'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
                         'Identities': row[1],
+                        'Policy Identity': row[1],
                         'Internal IP': row[2],
                         'External IP': row[3],
                         'Destination IP': row[4],
@@ -300,12 +301,51 @@ class UmbrellaClient:
                         'PUAs': row[17].split(','),
                         'AMP Disposition': row[18],
                         'AMP Malware Name': row[19],
-                        'AMP Score': row[20]
+                        'AMP Score': row[20],
+                        'Policy Identity Type': row[21]
                     }
                     try:
-                        event['Blocked Categories'] = row[21].split(',')
+                        event['Blocked Categories'] = row[22].split(',')
                     except IndexError:
                         pass
+                     #Version 5 — The same as version 4, but adds three new fields: all Identities, all Identity Types, and Request Method for Proxy logs.
+                    try:
+                        event['Identities'] = row[23]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Identity Types'] = row[24]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Request Method'] = row[25]
+                    except IndexError:
+                        pass
+                    #Version 6 — The same as version 5 with these additional fields to Proxy logs: Certificate Errors, Destination Lists IDs, DLP Status, File Name, Rule ID, and Ruleset ID.
+                    try:
+                        event['DLP Status'] = row[26]
+                    except IndexError:
+                        pass                     
+                    try:
+                        event['Certificate Errors'] = row[27]
+                    except IndexError:
+                        pass
+                    try:
+                        event['File Name'] = row[28]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Ruleset ID'] = row[29]
+                    except IndexError:
+                        pass                                                         
+                    try:
+                        event['Rule ID'] = row[30]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Destination List IDs'] = row[31]
+                    except IndexError:
+                        pass                                         
 
                     int_fields = [
                         'requestSize',

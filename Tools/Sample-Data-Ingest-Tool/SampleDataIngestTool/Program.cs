@@ -15,7 +15,7 @@ namespace SampleDataIngestTool
         static string logName = "";
         // You can use an optional field to specify the timestamp from the data. If the time field is not specified, Azure Monitor assumes the time is the message ingestion time
         static string timeStampField = "";
-        static void Main()
+        static async Task Main()
         {
             // Get a list of Custom Log file names with their paths
             var files = GetFiles();
@@ -37,8 +37,8 @@ namespace SampleDataIngestTool
                 {
                     var fileName = file.Replace(dirPath, "");
 
-                    // Check if the file has been pushed to the Log Analytics
-                    bool result = laCheck.RunLAQuery(file);
+                    // Check if the file has been pushed to the Log Analytics workspace
+                    bool result = await laCheck.RunLAQuery(fileName);
                     if (result == true)
                     {
                         // Prompt user to choose to repush data

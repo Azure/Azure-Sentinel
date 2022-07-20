@@ -2,14 +2,15 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Block AAD user - Incident", 
-        "description": "For each account entity included in the incident, this playbook will disable the user in Azure Active Directoy and add a comment to the incident",
+        "title": "Block AAD user - Incident",
+        "description": "For each account entity included in the incident, this playbook will disable the user in Azure Active Directoy, add a comment to the incident that contains this alert and notify manager if available. Note: This playbook will not disable admin user!",
         "prerequisites": "",
-        "lastUpdateTime": "2021-07-14T00:00:00.000Z", 
-        "entities": ["Account"], 
-        "tags": ["Remediation"], 
+        "postDeployment": ["1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity.", "2. Grant User.Read.All, User.ReadWrite.All, Directory.Read.All, Directory.ReadWrite.All permissions to the managed identity.", "3. Authorize Azure AD and Office 365 Outlook Logic App connections."],
+        "lastUpdateTime": "2021-11-25T00:00:00.000Z",
+        "entities": [ "Account" ],
+        "tags": [ "Remediation" ],
         "support": {
-            "tier": "community" 
+            "tier": "community"
         },
         "author": {
             "name": "Nicholas DiCola"
@@ -23,7 +24,8 @@
     },
     "variables": {
         "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -42,15 +44,28 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzureSentinelConnectionName')]",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
                 "customParameterValues": {},
                 "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+                {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Office365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('Office365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
                 }
             }
         },
@@ -62,74 +77,220 @@
             "tags": {
                 "LogicAppsCategory": "security",
                 "hidden-SentinelTemplateName": "Block-AADUser",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
                 "type": "SystemAssigned"
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
                     "actions": {
                         "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
                                     }
                                 },
                                 "method": "post",
                                 "path": "/entities/account"
-                            },
-                            "runAfter": {},
-                            "type": "ApiConnection"
+                            }
                         },
                         "For_each": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "actions": {
                                 "Condition": {
                                     "actions": {
-                                        "Add_comment_to_incident_(V3)": {
-                                            "inputs": {
-                                                "body": {
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>User @{items('For_each')?['Name']} was disabled in AAD via playbook Block-AADUser.</p>"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        "Condition_-_if_user_have_manager": {
+                                            "actions": {
+                                                "Add_comment_to_incident_-_with_manager_-_no_admin": {
+                                                    "runAfter": {
+                                                        "Get_user_-_details": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>User @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUser. Manager (@{body('Parse_JSON_-_get_user_manager')?['userPrincipalName']}) is notified.</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
                                                     }
                                                 },
-                                                "method": "post",
-                                                "path": "/Incidents/Comment"
+                                                "Get_user_-_details": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuread']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/v1.0/users/@{encodeURIComponent(concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix']))}"
+                                                    }
+                                                },
+                                                "Send_an_email_-_to_manager_-_no_admin": {
+                                                    "runAfter": {
+                                                        "Add_comment_to_incident_-_with_manager_-_no_admin": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "Body": "<p>Security notification! This is automated email sent by Microsoft Sentinel Automation!<br>\n<br>\nYour direct report @{items('For_each')?['Name']} has been disabled in Azure AD due to the security incident. Can you please notify the user and work with him to reach&nbsp;our support.<br>\n<br>\nDirect report details:<br>\nFirst name: @{body('Get_user_-_details')?['displayName']}<br>\nSurname: @{body('Get_user_-_details')?['surname']}<br>\nJob title: @{body('Get_user_-_details')?['jobTitle']}<br>\nOffice location: @{body('Get_user_-_details')?['officeLocation']}<br>\nBusiness phone: @{body('Get_user_-_details')?['businessPhones']}<br>\nMobile phone: @{body('Get_user_-_details')?['mobilePhone']}<br>\nMail: @{body('Get_user_-_details')?['mail']}<br>\n<br>\nThank you!</p>",
+                                                            "Importance": "High",
+                                                            "Subject": "@{items('For_each')?['Name']}  has been disabled in Azure AD due to the security risk!",
+                                                            "To": "@body('Parse_JSON_-_get_user_manager')?['userPrincipalName']"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['office365']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/v2/Mail"
+                                                    }
+                                                }
                                             },
+                                            "runAfter": {
+                                                "Parse_JSON_-_get_user_manager": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Add_comment_to_incident_-_no_manager_-_no_admin": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                "message": "<p>User @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUser. Manager has not been notified, since it is not found for this user!</p>"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/Incidents/Comment"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_-_get_user_manager')?['userPrincipalName']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_get_user_manager": {
                                             "runAfter": {},
-                                            "type": "ApiConnection"
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://graph.microsoft.com/v1.0/users/@{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}/manager"
+                                            }
+                                        },
+                                        "Parse_JSON_-_get_user_manager": {
+                                            "runAfter": {
+                                                "HTTP_-_get_user_manager": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_-_get_user_manager')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "userPrincipalName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
                                         }
+                                    },
+                                    "runAfter": {
+                                        "Update_user_-_disable_user": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
                                     },
                                     "else": {
                                         "actions": {
-                                            "Add_comment_to_incident_(V3)_2": {
+                                            "Add_comment_to_incident_-_error_details": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>Block-AADUser playbook could not disable user @{items('For_each')?['Name']}. <br>\nError message: @{body('Update_user')['error']['message']}</p>"
+                                                        "message": "<p>Block-AADUser playbook could not disable user @{items('For_each')?['Name']}.<br>\nError message: @{body('Update_user_-_disable_user')['error']['message']}<br>\nNote: If user is admin, this playbook don't have privilages to block admin users!</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
-                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
                                                         }
                                                     },
                                                     "method": "post",
                                                     "path": "/Incidents/Comment"
-                                                },
-                                                "runAfter": {},
-                                                "type": "ApiConnection"
+                                                }
                                             }
                                         }
                                     },
@@ -137,21 +298,17 @@
                                         "and": [
                                             {
                                                 "equals": [
-                                                    "@body('Update_user')",
-                                                    null
+                                                    "@body('Update_user_-_disable_user')",
+                                                    "@null"
                                                 ]
                                             }
                                         ]
                                     },
-                                    "runAfter": {
-                                        "Update_user": [
-                                            "Succeeded",
-                                            "Failed"
-                                        ]
-                                    },
                                     "type": "If"
                                 },
-                                "Update_user": {
+                                "Update_user_-_disable_user": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
                                             "accountEnabled": false
@@ -163,12 +320,9 @@
                                         },
                                         "method": "patch",
                                         "path": "/v1.0/users/@{encodeURIComponent(concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix']))}"
-                                    },
-                                    "runAfter": {},
-                                    "type": "ApiConnection"
+                                    }
                                 }
                             },
-                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "runAfter": {
                                 "Entities_-_Get_Accounts": [
                                     "Succeeded"
@@ -177,30 +331,7 @@
                             "type": "Foreach"
                         }
                     },
-                    "contentVersion": "1.0.0.0",
-                    "outputs": {},
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
-                            },
-                            "type": "ApiConnectionWebhook"
-                        }
-                    }
+                    "outputs": {}
                 },
                 "parameters": {
                     "$connections": {
@@ -210,15 +341,20 @@
                                 "connectionName": "[variables('AzureADConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
                             },
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
                                 "connectionProperties": {
                                     "authentication": {
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName": "[variables('Office365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
                             }
                         }
                     }

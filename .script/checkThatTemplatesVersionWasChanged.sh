@@ -2,7 +2,7 @@
 
 failed=0
 
-filesThatWereChanged=$(echo $(git diff origin/master --name-only))
+filesThatWereChanged=$(echo $(git diff origin/master --diff-filter=M --name-only))
 for file in $filesThatWereChanged
     #Going over all the files that were changed in this PR
     #And making sure that in every file that its filename contains the word "Detection", the version was updated

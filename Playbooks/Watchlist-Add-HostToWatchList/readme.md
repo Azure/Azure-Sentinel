@@ -1,51 +1,47 @@
-#  Watchlist-Add-HostToWatchList
+#  Add-HostToWatchlist
 
 Author: Yaniv Shasha
-
+<br><br>
 This playbook will add a Host entity to a new or existing watchlist.
+ <br><br>
 
- 
+## Logical flow to use this playbook
 
-## logical flow to use this playbook
-
-	1. The analyst finished investigating an incident one of its findings is a suspicious Host entity.
+	1. The analyst finished investigating an incident and one of its findings is a suspicious Host entity.
 	2. The analyst wants to enter this entity into a watchlist (can be from block list type or allowed list).
-	3. This playbook will run as a manual trigger from the full incident blade or the investigation graph blade, or automatically.
+	3. This playbook will run as a manual trigger from the full incident blade or the investigation graph blade, or automatically, and will add host to the selected watchlist.
 
+# Prerequisites
 
+None.<br><br>
 
- ![Picture0](./Graphics/run1.png)
-  ![Picture0](./Graphics/run2.png)
+# Quick Deployment
+**Deploy with incident trigger** (recommended)
 
+After deployment, attach this playbook to an **automation rule** so it runs when the incident is created.
 
+[Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-Add-HostToWatchList%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-Add-HostToWatchList%2Fincident-trigger%2Fazuredeploy.json)
 
-**The playbook, available here and presented below, works as follows:**
-1.	Manually trigger on a alert with an Host entity.
-2.	In the next step the logicApp will Get the relevant host entity from the entety list.
-3.	Create an array of the host properties 
-4.	Create a CSV from the above array
-5.  Check if the watchlist exists, if it does, use watchlist API and append the data, if not, create a new watchlist and append the data. 
+**Deploy with alert trigger**
 
- ### After Deploying the logicApp you will see the above workflow.
+After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.
 
- ![Picture1](./Graphics/HIgh1.png)
-  ![Picture1](./Graphics/HIgh2.png)
-    ![Picture1](./Graphics/HIgh3.png)
-  
-**Deploying the solution**:
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-Add-HostToWatchList%2Falert-trigger%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-Add-HostToWatchList%2Falert-trigger%2Fazuredeploy.json)
+<br><br>
 
-1. Add the missing properties in the ARM template deployment 
-   The Watchlist name will be also the alias name that you will use to query the data, for example 
+# Post-deployment
+1. Assign Microsoft Sentinel Contributor role to the Playbook's Managed Identity
 
-      _GetWatchlist(**'RiskHost'**)
-	  
-2. Post-deployment authenticates the Azure Sentinel connector and the API Http action with managed identity or SPN with Azure Sentinel contributor RBAC role.
+<br><br>
 
-
- ![Picture1](./Graphics/deploy1.png)
-
-
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-Add-HostToWatchList%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]("https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FWatchlist-Add-HostToWatchList%2Fazuredeploy.json)
+## Screenshots
+**Incident Trigger**<br>
+![Incident Trigger](./incident-trigger/images/incidentTrigger-light.png)<br>
+![Incident Trigger](./incident-trigger/images/incidentTrigger-dark.png)<br><br><br>
+**Alert Trigger**<br>
+![Alert Trigger](./alert-trigger/images/alertTrigger-light.png)<br>
+![Alert Trigger](./alert-trigger/images/alertTrigger-dark.png)<br>

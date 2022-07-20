@@ -48,22 +48,36 @@ def main(mytimer: func.TimerRequest) -> None:
         queue_size=5000
     )
 
-    state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_trust_monitor_logs_last_ts.txt')
-    process_trust_monitor_events(admin_api, state_manager=state_manager, sentinel=sentinel)
+    log_types = get_log_types()
 
-    state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_auth_logs_last_ts.txt')
-    process_auth_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
+    if 'trust_monitor' in log_types:
+        state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_trust_monitor_logs_last_ts.txt')
+        process_trust_monitor_events(admin_api, state_manager=state_manager, sentinel=sentinel)
 
-    state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_admin_logs_last_ts.txt')
-    process_admin_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
+    if 'authentication' in log_types:
+        state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_auth_logs_last_ts.txt')
+        process_auth_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
 
-    state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_tele_logs_last_ts.txt')
-    process_tele_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
+    if 'administrator' in log_types:
+        state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_admin_logs_last_ts.txt')
+        process_admin_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
 
-    state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_offline_enrollment_logs_last_ts.txt')
-    process_offline_enrollment_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
+    if 'telephony' in log_types:
+        state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_tele_logs_last_ts.txt')
+        process_tele_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
+
+    if 'offline_enrollment' in log_types:
+        state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_offline_enrollment_logs_last_ts.txt')
+        process_offline_enrollment_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
 
     logging.info('Script finished. Sent events: {}'.format(sentinel.successfull_sent_events_number))
+
+
+def get_log_types():
+    res = str(os.environ.get('CISCO_DUO_LOG_TYPES', ''))
+    if not res:
+        res = 'trust_monitor,authentication,administrator,telephony,offline_enrollment'
+    return [x.lower().strip() for x in res.split(',')]
 
 
 def process_trust_monitor_events(admin_api: duo_client.Admin, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:

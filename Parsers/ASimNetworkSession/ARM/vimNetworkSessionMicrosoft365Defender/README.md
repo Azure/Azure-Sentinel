@@ -1,15 +1,18 @@
-# M365 Defender ASIM NetworkSessions Normalization Parser
+# M365 Defender for Endpoint ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSessions schema parser for M365 Defender. The parser is a part of the Azure Sentinel Information Model.
+ARM template for ASIM NetworkSession schema parser for M365 Defender for Endpoint.
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+This ASIM parser supports filtering and normalizing M365 Defender for Endpoint to the ASIM Network Session schema.
+
+
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel NetworkSessions normalization schema reference](https://aka.ms/AzSentinelNetworkSessionDoc)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Deploy all of ASIM](https://aka.ms/DeployASIM)
+- [ASIM NetworkSession normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
 
 <br>
- 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSessions%2FARM%2FvimNetworkSessionMicrosoft365Defender%2FvimNetworkSessionMicrosoft365Defender.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSession%2FARM%2FvimNetworkSessionMicrosoft365Defender%2FvimNetworkSessionMicrosoft365Defender.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimNetworkSession%2FARM%2FvimNetworkSessionMicrosoft365Defender%2FvimNetworkSessionMicrosoft365Defender.json)

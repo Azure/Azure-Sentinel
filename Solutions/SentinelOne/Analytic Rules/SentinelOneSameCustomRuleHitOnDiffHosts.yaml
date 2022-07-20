@@ -1,0 +1,31 @@
+id: 5586d378-1bce-4d9b-9ac8-e7271c9d5a9a
+name: Sentinel One - Same custom rule triggered on different hosts
+description: |
+  'Detects when same custom rule was triggered on different hosts.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SentinelOne
+    dataTypes:
+      - SentinelOne
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+query: | 
+  SentinelOne
+  | where ActivityType == 3608
+  | extend RuleName = extract(@'Custom Rule:\s(.*?)\sin Group', 1, EventOriginalMessage)
+  | extend DstHostname = extract(@'detected on\s(\S+)\.', 1, EventOriginalMessage)
+  | summarize hosts = makeset(DstHostname) by RuleName, bin(TimeGenerated, 15m)
+  | where array_length(hosts) > 1
+  | extend HostCustomEntity = hosts
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.1
+kind: Scheduled

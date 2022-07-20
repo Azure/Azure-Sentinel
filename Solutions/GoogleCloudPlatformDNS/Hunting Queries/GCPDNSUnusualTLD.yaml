@@ -1,0 +1,33 @@
+id: 2aff9e01-d3bb-4455-94e3-66be758474bd
+name: Google DNS - Unusual top level domains
+description: |
+  'Query searches for unusual TLDs.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1095
+query: |
+  let known_tlds =
+  GCPCloudDNS
+  | where TimeGenerated between (ago(30d) .. ago(1d))
+  | extend tld = extract(@'.*\.(\w+)\.$', 1, Query)
+  | summarize a_tld = makeset(tld)
+  | extend k=1;
+  known_tlds
+  | join (GCPCloudDNS
+  | where TimeGenerated > ago(24h)
+  | where isnotempty(Query)
+  | extend tld = extract(@'.*\.(\w+)\.$', 1, Query)
+  | extend k=1) on k
+  | where a_tld !has tld
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

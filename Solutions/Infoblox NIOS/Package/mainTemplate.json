@@ -1,0 +1,915 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Nikhil Tripathi - v-ntripathi@microsoft.com",
+    "comments": "Solution template for Infoblox NIOS"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "connector1-name": {
+      "type": "string",
+      "defaultValue": "773f604d-4cca-480f-b8c9-0644cdcac176"
+    },
+    "formattedTimeNow": {
+      "type": "string",
+      "defaultValue": "[utcNow('g')]",
+      "metadata": {
+        "description": "Appended to workbook displayNames to make them unique"
+      }
+    },
+    "workbook1-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the workbook"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Infoblox NIOS",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    },
+    "analytic1-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the scheduled alert rule"
+      }
+    },
+    "analytic2-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the scheduled alert rule"
+      }
+    },
+    "watchlist1-id": {
+      "type": "string",
+      "defaultValue": "Sources_by_SourceType",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the watchlist"
+      }
+    }
+  },
+  "variables": {
+    "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
+    "_connector1-source": "[variables('connector1-source')]",
+    "InfobloxNIOSConnector": "InfobloxNIOSConnector",
+    "_InfobloxNIOSConnector": "[variables('InfobloxNIOSConnector')]",
+    "Infoblox-Workbook-V2_workbook": "Infoblox-Workbook-V2_workbook",
+    "_Infoblox-Workbook-V2_workbook": "[variables('Infoblox-Workbook-V2_workbook')]",
+    "workbook-source": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]",
+    "_workbook-source": "[variables('workbook-source')]",
+    "workspace-dependency": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
+    "Infoblox_Parser": "Infoblox_Parser",
+    "_Infoblox_Parser": "[variables('Infoblox_Parser')]",
+    "Infoblox_allotherdhcpdTypes_Parser": "Infoblox_allotherdhcpdTypes_Parser",
+    "_Infoblox_allotherdhcpdTypes_Parser": "[variables('Infoblox_allotherdhcpdTypes_Parser')]",
+    "Infoblox_allotherdnsTypes_Parser": "Infoblox_allotherdnsTypes_Parser",
+    "_Infoblox_allotherdnsTypes_Parser": "[variables('Infoblox_allotherdnsTypes_Parser')]",
+    "Infoblox_allotherlogTypes_Parser": "Infoblox_allotherlogTypes_Parser",
+    "_Infoblox_allotherlogTypes_Parser": "[variables('Infoblox_allotherlogTypes_Parser')]",
+    "Infoblox_dhcp_consolidated_Parser": "Infoblox_dhcp_consolidated_Parser",
+    "_Infoblox_dhcp_consolidated_Parser": "[variables('Infoblox_dhcp_consolidated_Parser')]",
+    "Infoblox_dhcpack_Parser": "Infoblox_dhcpack_Parser",
+    "_Infoblox_dhcpack_Parser": "[variables('Infoblox_dhcpack_Parser')]",
+    "Infoblox_dhcpadded_Parser": "Infoblox_dhcpadded_Parser",
+    "_Infoblox_dhcpadded_Parser": "[variables('Infoblox_dhcpadded_Parser')]",
+    "Infoblox_dhcpbindupdate_Parser": "Infoblox_dhcpbindupdate_Parser",
+    "_Infoblox_dhcpbindupdate_Parser": "[variables('Infoblox_dhcpbindupdate_Parser')]",
+    "Infoblox_dhcpdiscover_Parser": "Infoblox_dhcpdiscover_Parser",
+    "_Infoblox_dhcpdiscover_Parser": "[variables('Infoblox_dhcpdiscover_Parser')]",
+    "Infoblox_dhcpexpire_Parser": "Infoblox_dhcpexpire_Parser",
+    "_Infoblox_dhcpexpire_Parser": "[variables('Infoblox_dhcpexpire_Parser')]",
+    "Infoblox_dhcpinform_Parser": "Infoblox_dhcpinform_Parser",
+    "_Infoblox_dhcpinform_Parser": "[variables('Infoblox_dhcpinform_Parser')]",
+    "Infoblox_dhcpoffer_Parser": "Infoblox_dhcpoffer_Parser",
+    "_Infoblox_dhcpoffer_Parser": "[variables('Infoblox_dhcpoffer_Parser')]",
+    "Infoblox_dhcpoption_Parser": "Infoblox_dhcpoption_Parser",
+    "_Infoblox_dhcpoption_Parser": "[variables('Infoblox_dhcpoption_Parser')]",
+    "Infoblox_dhcpother_Parser": "Infoblox_dhcpother_Parser",
+    "_Infoblox_dhcpother_Parser": "[variables('Infoblox_dhcpother_Parser')]",
+    "Infoblox_dhcprelease_Parser": "Infoblox_dhcprelease_Parser",
+    "_Infoblox_dhcprelease_Parser": "[variables('Infoblox_dhcprelease_Parser')]",
+    "Infoblox_dhcpremoved_Parser": "Infoblox_dhcpremoved_Parser",
+    "_Infoblox_dhcpremoved_Parser": "[variables('Infoblox_dhcpremoved_Parser')]",
+    "Infoblox_dhcprequest_Parser": "Infoblox_dhcprequest_Parser",
+    "_Infoblox_dhcprequest_Parser": "[variables('Infoblox_dhcprequest_Parser')]",
+    "Infoblox_dhcpsession_Parser": "Infoblox_dhcpsession_Parser",
+    "_Infoblox_dhcpsession_Parser": "[variables('Infoblox_dhcpsession_Parser')]",
+    "Infoblox_dns_consolidated_Parser": "Infoblox_dns_consolidated_Parser",
+    "_Infoblox_dns_consolidated_Parser": "[variables('Infoblox_dns_consolidated_Parser')]",
+    "Infoblox_dnsclient_Parser": "Infoblox_dnsclient_Parser",
+    "_Infoblox_dnsclient_Parser": "[variables('Infoblox_dnsclient_Parser')]",
+    "Infoblox_dnsgss_Parser": "Infoblox_dnsgss_Parser",
+    "_Infoblox_dnsgss_Parser": "[variables('Infoblox_dnsgss_Parser')]",
+    "Infoblox_dnszone_Parser": "Infoblox_dnszone_Parser",
+    "_Infoblox_dnszone_Parser": "[variables('Infoblox_dnszone_Parser')]",
+    "ExcessiveNXDOMAINDNSQueries_AnalyticalRules": "ExcessiveNXDOMAINDNSQueries_AnalyticalRules",
+    "_ExcessiveNXDOMAINDNSQueries_AnalyticalRules": "[variables('ExcessiveNXDOMAINDNSQueries_AnalyticalRules')]",
+    "PotentialDHCPStarvationAttack_AnalyticalRules": "PotentialDHCPStarvationAttack_AnalyticalRules",
+    "_PotentialDHCPStarvationAttack_AnalyticalRules": "[variables('PotentialDHCPStarvationAttack_AnalyticalRules')]",
+    "Sources_by_SourceType": "Sources_by_SourceType",
+    "_Sources_by_SourceType": "[variables('Sources_by_SourceType')]",
+    "sourceId": "azuresentinel.azure-sentinel-solution-infobloxnios",
+    "_sourceId": "[variables('sourceId')]"
+  },
+  "resources": [
+    {
+      "id": "[variables('_connector1-source')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Infoblox NIOS",
+          "publisher": "Infoblox",
+          "descriptionMarkdown": "The [Infoblox Network Identity Operating System (NIOS)](https://www.infoblox.com/glossary/network-identity-operating-system-nios/) connector allows you to easily connect your Infoblox NIOS logs with Azure Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "InfobloxNIOS",
+              "baseQuery": "Infoblox"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Total Count by DHCP Request Message Types",
+              "query": "union isfuzzy=true \n Infoblox_dhcpdiscover,Infoblox_dhcprequest,Infoblox_dhcpinform \n| summarize count() by Log_Type"
+            },
+            {
+              "description": "Top 5 Source IP address",
+              "query": "Infoblox_dnsclient \n | summarize count() by Client_IP \n | top 10 by count_ desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (InfobloxNIOS)",
+              "lastDataReceivedQuery": "Infoblox \n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Infoblox \n | where TimeGenerated > ago(3d)\n |take 1 \n | project isConnected = true"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Infoblox NIOS",
+                "description": "must be configured to export logs via Syslog"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "This data connector depends on querytime parser which is based on multiple Kusto Functions. As part of solution, Kusto functions and watchlists are saved in the Log analytics workspace provided at deployment time"
+            },
+            {
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux"
+            },
+            {
+              "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "[Follow these instructions](https://www.infoblox.com/wp-content/uploads/infoblox-deployment-guide-slog-and-snmp-configuration-for-nios.pdf) to enable syslog forwarding of Infoblox NIOS Logs. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+              "title": "3. Configure and connect the Infoblox NIOS"
+            }
+          ],
+          "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on a Kusto Function to work as expected. Follow the steps to use this Kusto functions alias **InfobloxNIOS** in queries and workbooks. [Follow these steps to get this Kusto functions.](https://aka.ms/sentinelgithubparsersinfoblox)"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/workbooks",
+      "name": "[parameters('workbook1-id')]",
+      "location": "[parameters('workspace-location')]",
+      "kind": "shared",
+      "apiVersion": "2021-08-01",
+      "properties": {
+        "displayName": "[concat(parameters('workbook1-name'), ' - ', parameters('formattedTimeNow'))]",
+        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"26773226-79a9-4dd2-9de6-ade1f250ace6\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"label\":\"Time Range\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":2419200000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true}},{\"id\":\"00be31a6-f3f8-4de8-845d-7a4985d41ef3\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"InfobloxDevice\",\"label\":\"Infoblox Device\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source\",\"value\":[\"computer1.domain.org\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"]},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"above\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 0\"},{\"type\":11,\"content\":{\"version\":\"LinkItem/1.0\",\"style\":\"tabs\",\"links\":[{\"id\":\"edf8a22f-492e-4c73-b113-31cb1bfee2ff\",\"cellValue\":\"selectedTab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"DHCP\",\"subTarget\":\"DHCPTab\",\"preText\":\"DHCP\",\"style\":\"link\"},{\"id\":\"f6c0c04f-5e57-43fb-9daf-f18a44dd1d87\",\"cellValue\":\"selectedTab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"DNS\",\"subTarget\":\"DNSTab\",\"style\":\"link\"}]},\"name\":\"links - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dhcp_consolidated\\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| where Log_Type startswith \\\"DHCP\\\"\\r\\n| summarize count() by Log_Type, bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"title\":\"Total Events by DHCP Message Type\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DHCPTab\"},\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union \\r\\nInfoblox_dhcpdiscover,Infoblox_dhcprequest,Infoblox_dhcpinform\\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| summarize count() by Log_Type, bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"title\":\"DHCP Requests by Message Type\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"DHCPREQUEST\",\"color\":\"magenta\"},{\"seriesName\":\"DHCPDISCOVER\",\"color\":\"green\"},{\"seriesName\":\"DHCPINFORM\",\"color\":\"blue\"}],\"xSettings\":{\"numberFormatSettings\":{\"unit\":0,\"options\":{\"style\":\"decimal\",\"useGrouping\":true}}}}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DHCPTab\"},\"customWidth\":\"50\",\"name\":\"query - 4 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union \\r\\nInfoblox_dhcpoffer,Infoblox_dhcpack\\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| summarize count() by Log_Type, bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"title\":\"DHCP Responses by Message Type\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"DHCPOFFER\",\"color\":\"blue\"},{\"seriesName\":\"DHCPACK\",\"color\":\"magenta\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DHCPTab\"},\"customWidth\":\"50\",\"name\":\"query - 4 - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dhcpdiscover\\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| summarize count() by tostring(Client_MAC_Address)\\r\\n| top 10 by count_\",\"size\":0,\"title\":\"Top 10 Clients by Requests\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"count_\",\"formatter\":3,\"formatOptions\":{\"palette\":\"coldHot\"}}],\"labelSettings\":[{\"columnId\":\"Client_MAC_Address\",\"label\":\"Client MAC Address\"},{\"columnId\":\"count_\",\"label\":\"Total\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DHCPTab\"},\"customWidth\":\"50\",\"name\":\"query - 4 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dhcpdiscover\\r\\n| summarize count() by tostring(Network)\\r\\n| distinct Network\\r\\n\\r\\n\",\"size\":0,\"title\":\"Top 10 Clients by Requests\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"count_\",\"formatter\":3,\"formatOptions\":{\"palette\":\"coldHot\"}}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DHCPTab\"},\"customWidth\":\"50\",\"name\":\"query - 4 - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dns_consolidated \\r\\n| where ProcessName == \\\"named\\\"\\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| summarize count() by Computer, bin(TimeGenerated,15m)\",\"size\":0,\"showAnnotations\":true,\"title\":\"DNS Activity by Server\",\"color\":\"magenta\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DNSTab\"},\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dnsclient \\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| summarize Response = countif(isnotempty(ResponseCode)), Request = countif(isnotempty(QueryDomainName) and isempty(ResponseCode)), count() by bin(TimeGenerated, {TimeRange:grain})\\r\\n| project-away count_\",\"size\":0,\"showAnnotations\":true,\"title\":\"DNS Requests vs Responses\",\"color\":\"magenta\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\",\"graphSettings\":{\"type\":0}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DNSTab\"},\"customWidth\":\"50\",\"name\":\"query - 6 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dnsclient \\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| where isnotempty(ResponseCode)\\r\\n| summarize count() by tostring(ResponseCode), bin(TimeGenerated, {TimeRange:grain})\\r\\n\",\"size\":0,\"title\":\"DNS Response Code\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"count_\",\"formatter\":3,\"formatOptions\":{\"palette\":\"turquoise\"}}],\"labelSettings\":[{\"columnId\":\"count_\",\"label\":\"Total\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DNSTab\"},\"customWidth\":\"50\",\"name\":\"query - 7 - Copy - Copy\",\"styleSettings\":{\"margin\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dnsclient \\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| where isempty(ResponseCode) and isnotempty(QueryDomainName)\\r\\n| summarize count() by tostring(Client_IP)\\r\\n| top 10 by count_\",\"size\":0,\"title\":\"Top 10 DNS Request Clients\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"count_\",\"formatter\":3,\"formatOptions\":{\"palette\":\"turquoise\"}}],\"labelSettings\":[{\"columnId\":\"Client_IP\",\"label\":\"Client IP\"},{\"columnId\":\"count_\",\"label\":\"Total\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DNSTab\"},\"customWidth\":\"50\",\"name\":\"query - 7\",\"styleSettings\":{\"margin\":\"50\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Infoblox_dnsclient \\r\\n| where Computer in ({InfobloxDevice}) or '*' in ({InfobloxDevice})\\r\\n| where isempty(ResponseCode) and isnotempty(QueryDomainName)\\r\\n| summarize count() by tostring(QueryDomainName)\\r\\n| top 10 by count_\",\"size\":0,\"title\":\"Top 10 DNS Request Domains\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"count_\",\"formatter\":3,\"formatOptions\":{\"palette\":\"turquoise\"}}],\"labelSettings\":[{\"columnId\":\"QueryDomainName\",\"label\":\"Domain Name\"},{\"columnId\":\"count_\",\"label\":\"Total\"}]}},\"conditionalVisibility\":{\"parameterName\":\"selectedTab\",\"comparison\":\"isEqualTo\",\"value\":\"DNSTab\"},\"customWidth\":\"50\",\"name\":\"query - 7 - Copy\",\"styleSettings\":{\"margin\":\"50\"}}],\"fromTemplateId\":\"sentinel-Infoblox\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+        "version": "1.0",
+        "sourceId": "[variables('_workbook-source')]",
+        "category": "sentinel"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2020-08-01",
+      "name": "[parameters('workspace')]",
+      "location": "[parameters('workspace-location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox",
+            "category": "Samples",
+            "functionAlias": "Infoblox",
+            "query": "\nunion\r\nInfoblox_dnsclient,Infoblox_dnsgss,Infoblox_dnszone,Infoblox_allotherdnsTypes,Infoblox_dhcpadded, Infoblox_dhcpbindupdate,Infoblox_dhcpdiscover,Infoblox_dhcpexpire,Infoblox_dhcpinform,Infoblox_dhcpoffer,Infoblox_dhcpoption,Infoblox_dhcpother,Infoblox_dhcprelease,Infoblox_dhcpremoved,Infoblox_dhcprequest,Infoblox_dhcpsession,Infoblox_dnsclient,Infoblox_allotherdhcpdTypes",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_allotherdhcpdTypes",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_allotherdhcpdTypes",
+            "category": "Samples",
+            "functionAlias": "Infoblox_allotherdhcpdTypes",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nSyslog \r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and not(SyslogMessage has_any (\"DHCPEXPIRE\",\"DHCPOFFER\",\"DHCPINFORM\",\"DHCPACK\",\"DHCPDISCOVER\",\"DHCPRELEASE\",\"DHCPACK\",\"r-l-e\", \"bind\",\"Added\",\"Option\", \"Removed\",\"balanced\",\"balancing\",\"failover\"))\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1])\r\n        | project-away Parser;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_allotherdnsTypes",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_allotherdnsTypes",
+            "category": "Samples",
+            "functionAlias": "Infoblox_allotherdnsTypes",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nSyslog \r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"named\" and not(SyslogMessage has_any (\"client\",\"gss_accept_sec_context\"))\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1])\r\n    | project-away Parser;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_allotherlogTypes",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_allotherlogTypes",
+            "category": "Samples",
+            "functionAlias": "Infoblox_allotherlogTypes",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nSyslog \r\n    | where Computer in (datasource) and ProcessName !in (\"dhcpd\",\"named\")\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1])            \r\n    | project-away Parser;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcp_consolidated",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcp_consolidated",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcp_consolidated",
+            "query": "\nunion\r\nInfoblox_dhcpadded,Infoblox_dhcpbindupdate,Infoblox_dhcpdiscover,Infoblox_dhcpexpire,Infoblox_dhcpinform,Infoblox_dhcpoffer,Infoblox_dhcpoption,Infoblox_dhcpother,Infoblox_dhcprelease,Infoblox_dhcpremoved,Infoblox_dhcprequest,Infoblox_dhcpsession,Infoblox_allotherdhcpdTypes",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpack",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpack",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpack",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource) \r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"DHCPACK\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1]),\r\n            RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpack = extract_all(@\"(\\s\\w+\\s(\\S+))\\sto\\s(\\S+)\\svia\\s(\\S+)(\\srelay\\s(\\S+))?(\\slease-duration\\s(\\d+))?(\\s\\(([a-zA-Z]+)\\))?(\\suid\\s(\\S+))?\", dynamic([1,2,3,4,5,6,7,8,9,10,11]), RawData_subString)[0]\r\n    | extend IPAddress = tostring(dhcpack[1]), \r\n        SrcMacAddr = tostring(dhcpack[2]),\r\n        Interface = tostring(dhcpack[4]),\r\n        Relay = tostring(dhcpack[5]), \r\n        LeaseDuration = tostring(dhcpack[7]),\r\n        SrcHostname = tostring(dhcpack[3]),\r\n        State = tostring(dhcpack[10])\r\n       | project-away SyslogMessage, dhcpack,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpadded",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpadded",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpadded",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"Added\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpadded = extract_all(@\"([\\w\\s]+)\\sfrom\\s(\\S+)\\sto\\s(\\S+)\", dynamic([1,2,3,4,5]), RawData_subString)[0]\r\n    | extend Log_Type = strcat(Type,\" \",tostring(dhcpadded[0])),\r\n        Source = tostring(dhcpadded[1]),  \r\n        Dest = tostring(dhcpadded[2])\r\n    | project-away SyslogMessage, dhcpadded, RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpbindupdate",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpbindupdate",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpbindupdate",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"bind\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;    \r\nRawData\r\n    | extend dhcpbindupdate = extract_all(@\"^\\s?(\\w+)\\s\\w+\\s([0-9.]+)\\sfrom\\s(\\S+)\\s(\\w+)\\:\\s(.*)\", dynamic([1,2,3,4,5]),  RawData_subString)[0]\r\n    | extend Log_Type = strcat(Type,\" \",tostring(dhcpbindupdate[0])),\r\n        DvcIpAddr = tostring(dhcpbindupdate[1]),  \r\n        Source = tostring(dhcpbindupdate[2]),\r\n        DvcAction = tostring(dhcpbindupdate[3]),  \r\n        EventMessage = tostring(dhcpbindupdate[4])\r\n    | project-away SyslogMessage, dhcpbindupdate,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpdiscover",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpdiscover",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpdiscover",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource) \r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"DHCPDISCOVER\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1]),\r\n            RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpdiscover = extract_all(@\"\\w+\\s((\\S+)(\\s\\(\\S+\\))?)\\s\\w+\\s(\\S+)\\sTransID\\s([a-z0-9]+)\\:?(\\suid\\s(\\S+))?(\\snetwork\\s(\\S+)\\:)?\\s?(.*)?\", dynamic([1,2,3,4,5,6,7,8,9,10]), RawData_subString)[0]\r\n    | extend SrcMacAddr = tostring(dhcpdiscover[0]), \r\n        DhcpSessionId = tostring(dhcpdiscover[4]),\r\n        SrcUserIdType = tostring(dhcpdiscover[6]), \r\n        Network = tostring(dhcpdiscover[8]),\r\n        EventMessage = tostring(dhcpdiscover[9])\r\n    | project-away SyslogMessage, dhcpdiscover,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpexpire",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpexpire",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpexpire",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"DHCPEXPIRE\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1]),\r\n            RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpexpire = extract_all(@\"\\w+\\s(\\S+)\\s\\w+\\s(\\S+)\", dynamic([1,2]), RawData_subString)[0]\r\n    | extend SrcIpAddr = tostring(dhcpexpire[0]),  \r\n        DvcMacAddr = tostring(dhcpexpire[1])        \r\n    | project-away SyslogMessage, dhcpexpire, RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpinform",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpinform",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpinform",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"DHCPINFORM\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1]),\r\n            RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpinform = extract_all(@\"\\w+\\s(\\S+)\\svia\\s(\\S+)\\sTransID\\s([a-z0-9]+)\", dynamic([1,2,3]), RawData_subString)[0]\r\n    | extend SrcIpAddr = tostring(dhcpinform[0]), \r\n        Relay = tostring(dhcpinform[1]), \r\n        DhcpSessionId = tostring(dhcpinform[2])        \r\n    | project-away SyslogMessage, dhcpinform,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpoffer",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpoffer",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpoffer",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"DHCPOFFER\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1]),\r\n            RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpoffer = extract_all(@\"\\w+\\s(\\S+)(\\s\\w+\\s((\\S+)(\\s\\(\\S+\\))?))?\\svia\\s(\\S+)(\\srelay\\s(\\S+))?(\\slease-duration\\s(\\d+))?(\\soffered-duration\\s(\\d+))?(\\sUID\\s(\\S+))?\", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14]), RawData_subString)[0]\r\n    | extend SrcIpAddr = tostring(dhcpoffer[0]),  \r\n        SrcMacAddr = tostring(dhcpoffer[3]),\r\n        Interface = tostring(dhcpoffer[5]),\r\n        Relay = tostring(dhcpoffer[7]), \r\n        LeaseDuration = tostring(dhcpoffer[9]),\r\n        OfferedDuration = tostring(dhcpoffer[11]),\r\n        SrcHostname = tostring(dhcpoffer[4]),\r\n        SrcUserIdType = tostring(dhcpoffer[13])\r\n       | project-away SyslogMessage, dhcpoffer,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpoption",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpoption",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpoption",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"Option\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpoption = extract_all(@'(\\d+)\\:\\s\\w+\\s\\w+\\s([A-Z\\s]+)\\s\\w+\\sfrom\\s\\S+\\s(\\S+)\\s[\\w\\s\\-]+\\\"([a-z0-9:]+)\\\"\\,\\s[\\w\\s\\-]+\\\"([a-z0-9:]+)\\\"\\sfor\\s(\\S+)\\s\\((\\S+)\\)\\s([\\w\\s]+)\\.\\s\\((\\S+)\\)', dynamic([1,2,3,4,5,6,7,8,9]), RawData_subString)[0]\r\n    | extend Log_Type = strcat(Type,\" \",tostring(dhcpoption[0])),\r\n        Relay = tostring(dhcpoption[2]),  \r\n        PacketType = tostring(dhcpoption[1]),  \r\n        CircuitID = tostring(dhcpoption[3]),  \r\n        RemoteID = tostring(dhcpoption[4]),  \r\n        DvcIpAddr = tostring(dhcpoption[5]),  \r\n        DvcMacAddr = tostring(dhcpoption[6]),  \r\n        EventMessage = tostring(dhcpoption[7]),\r\n        State = tostring(dhcpoption[8])\r\n    | project-away SyslogMessage, dhcpoption,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpother",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpother",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpother",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nSyslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and not(SyslogMessage has_any (\"balanced\",\"balancing\",\"failover\"))\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1])\r\n    | project-away Parser;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcprelease",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcprelease",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcprelease",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n   | where Computer in (datasource)\r\n   | where ProcessName == \"dhcpd\" and SyslogMessage has \"DHCPRELEASE\"\r\n   | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n   | extend responseTime = todatetime(Parser[0]),\r\n            Log_Type = tostring(Parser[1]),\r\n            RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n   | extend dhcprelease = extract_all(@\"of\\s(\\S+)\\sfrom\\s((\\S+)(\\s\\(\\S+\\))?)\\svia\\s(\\S+)(\\s\\((\\w+)\\))?(\\sTransID\\s([a-z0-9]+)\\s)?\", dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), RawData_subString)[0]\r\n    | extend SrcIpAddr = tostring(dhcprelease[0]), \r\n        SrcMacAddr = tostring(dhcprelease[2]),\r\n        SrcHostname = extract(@'\\((\\S+)\\)',1,tostring(dhcprelease[3])),\r\n        Relay = tostring(dhcprelease[4]), \r\n        DhcpSessionId = tostring(dhcprelease[8]),\r\n        State = tostring(dhcprelease[6])       \r\n    | project-away SyslogMessage, dhcprelease,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpremoved",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpremoved",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpremoved",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"Removed\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpremoved = extract_all(@\"([\\w\\s]+)(from|on)\\s(\\S+)(\\sto\\s(\\S+))?\", dynamic([1,2,3,4,5]), RawData_subString)[0]\r\n    | extend Log_Type = strcat(Type,\" \",tostring(dhcpremoved[0])),\r\n        SrcHostname = tostring(dhcpremoved[2]),  \r\n        DvcHostname = tostring(dhcpremoved[4])\r\n    | project-away SyslogMessage, dhcpremoved, RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcprequest",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcprequest",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcprequest",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog \r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"DHCPREQUEST\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             Log_Type = tostring(Parser[1]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcprequest = extract_all(@\"for\\s((\\S+)(\\s\\(\\S+\\))?)\\sfrom\\s((\\S+)(\\s\\(\\S+\\))?)\\svia\\s(\\S+)(\\sTransID\\s([a-z0-9]+)\\s)?(uid\\s([a-z0-9:]+)|uid$|uid)?(\\s\\(([a-zA-Z]+)\\)$)?\", dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), RawData_subString)[0]\r\n    | extend SrcIpAddr = tostring(dhcprequest[1]), \r\n        SrcMacAddr = tostring(dhcprequest[4]),\r\n        SrcHostname = extract(@\"\\((\\S+)\\)\",1,tostring(dhcprequest[5])),\r\n        Relay = tostring(dhcprequest[6]), \r\n        DhcpSessionId = tostring(dhcprequest[8]),\r\n        SrcUserIdType = tostring(dhcprequest[10]),\r\n        State = tostring(dhcprequest[11])        \r\n    | project-away SyslogMessage, dhcprequest,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dhcpsession",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dhcpsession",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dhcpsession",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"dhcpd\" and SyslogMessage has \"r-l-e\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             Log_Type = tostring(Parser[1]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;\r\nRawData\r\n    | extend dhcpsession = extract_all(@\"\\:?([0-9.]+)\\,([a-zA-Z]+)\\,([a-zA-Z0-9-]+)\\,([a-z0-9:]+)\\,([0-9]+)\\,([0-9]+)\\,([0-9]+)?\\,([\\w$\\s]+)\\,([0-9.]+)\\,([0-9]+)\\,([0-9-.]+)\", dynamic([1,2,3,4,5,6,7,8,9,10,11]), RawData_subString)[0]\r\n    | extend DvcIpAddr = tostring(dhcpsession[0]),  \r\n        Signature = tostring(dhcpsession[1]),\r\n        SrcHostname = tostring(dhcpsession[2]),  \r\n        DvcMacAddr = tostring(dhcpsession[3]),\r\n        StartTime = tostring(dhcpsession[4]),  \r\n        EndTime = tostring(dhcpsession[5]),  \r\n        Network = tostring(dhcpsession[8]),\r\n        NetworkRange = tostring(dhcpsession[10])\r\n    | project-away SyslogMessage, dhcpsession,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dns_consolidated",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dns_consolidated",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dns_consolidated",
+            "query": "\nunion\r\nInfoblox_dnsclient,Infoblox_dnsgss,Infoblox_dnszone",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dnsclient",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dnsclient",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dnsclient",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"named\" and SyslogMessage has \"client\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             Log_Type = tostring(Parser[1]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;  \r\nRawData\r\n    | extend dnsclient = extract_all(@\"(\\@[a-z0-9]+\\s)?([0-9\\.]+)\\#(\\d+)(\\s\\((\\S+)\\))?\\:\\s(?:view\\s)?(\\S+)?(?:\\:\\s)?((UDP|TCP)\\:\\s?)??query\\:\\s(\\S+)\\s(\\S+)\\s(\\S+)(\\sresponse:\\s([A-Z]+))?\\s(\\S+)(.*)\",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)[0]\r\n    | extend SrcIpAddr = tostring(dnsclient[1]),\r\n        SrcPortNumber = tostring(dnsclient[2]),\r\n        NetworkProtocol = tostring(dnsclient[7]),\r\n        DnsQuery = tostring(dnsclient[8]),\r\n        DnsQueryClassName = tostring(dnsclient[9]),\r\n        DnsQueryType = tostring(dnsclient[10]),\r\n        DnsResponseCode = tostring(dnsclient[12]),\r\n        DnsFlags = tostring(dnsclient[13]),\r\n        EventMessage = tostring(dnsclient[14])\r\n    | project-away SyslogMessage, dnsclient,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dnsgss",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dnsgss",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dnsgss",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"named\" and SyslogMessage has \"gss_accept_sec_context\"\r\n     | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             Log_Type = tostring(Parser[1]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;  \r\nRawData\r\n    | extend dnsgss = extract_all(@\":\\s(.*)\", dynamic([1,2]), RawData_subString)[0]\r\n    | extend EventMessage = tostring(dnsgss[0])\r\n    | project-away dnsgss, SyslogMessage,RawData_subString;",
+            "version": 1
+          }
+        },
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "Infoblox_dnszone",
+          "dependsOn": [
+            "[variables('workspace-dependency')]"
+          ],
+          "properties": {
+            "eTag": "*",
+            "displayName": "Infoblox_dnszone",
+            "category": "Samples",
+            "functionAlias": "Infoblox_dnszone",
+            "query": "\nlet datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);\r\nlet RawData = Syslog\r\n    | where Computer in (datasource)\r\n    | where ProcessName == \"named\" and SyslogMessage has \"zone\"\r\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\r\n    | extend responseTime = todatetime(Parser[0]),\r\n             Log_Type = tostring(Parser[1]),\r\n             RawData_subString = tostring(Parser[3])\r\n    | project-away Parser;  \r\nRawData\r\n    | extend dnszone = extract_all(@\"([a-z0-9\\.\\-]+)\\/([A-Z]+)\\:(\\s[A-Z]+)?\\s(\\w+\\s\\w+)\\s(for\\s\\'(\\S+)?\\':)?((\\d+)\\.?)?(\\s(\\with\\s|(\\d+)\\sIN\\s)([A-Z]+)\\s)?(\\(?serial\\s(\\d+)\\)?)?(.*)\", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)[0]\r\n    | extend Zone = tostring(dnszone[0]),\r\n        DvcAction = tostring(dnszone[3]),\r\n        SrcHostname = tostring(dnszone[5]),\r\n        TransactionIdHex = tostring(dnszone[7]),\r\n        Serial = tostring(dnszone[13]),\r\n        TTL = tostring(dnszone[10]),\r\n        DnsQueryType = tostring(dnszone[11])\r\n    | extend dnszone_substring = extract_all(@\"\\s?([a-zA-Z0-9\\.\\-\\_]+)\\.\\s(.*)\", dynamic([1,2]),tostring(dnszone[14]))[0]\r\n    | extend Src = tostring(dnszone_substring[0]),\r\n        EventMessage = tostring(dnszone_substring[1])\r\n    | project-away SyslogMessage, dnszone_substring, dnszone,RawData_subString;",
+            "version": 1
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "This creates an incident in the event a client generates excessive amounts of DNS queries for non-existent domains.",
+        "displayName": "Excessive NXDOMAIN DNS Queries",
+        "enabled": false,
+        "query": "\nlet threshold = 200;\nInfobloxNIOS\n| where ProcessName =~ \"named\" and Log_Type =~ \"client\"\n| where isnotempty(ResponseCode)\n| where ResponseCode =~ \"NXDOMAIN\"\n| summarize count() by Client_IP, bin(TimeGenerated,15m)\n| where count_ > threshold\n| join kind=inner (InfobloxNIOS\n    | where ProcessName =~ \"named\" and Log_Type =~ \"client\"\n    | where isnotempty(ResponseCode)\n    | where ResponseCode =~ \"NXDOMAIN\"\n    ) on Client_IP\n| extend timestamp = TimeGenerated, IPCustomEntity = Client_IP\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic2-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "This creates an incident in the event that an excessive amount of DHCPREQUEST have been recieved by a DHCP Server and could potentially be an indication of a DHCP Starvation Attack.",
+        "displayName": "Potential DHCP Starvation Attack",
+        "enabled": false,
+        "query": "\nlet threshold = 1000;\nInfobloxNIOS\n| where ProcessName =~ \"dhcpd\" and Log_Type =~ \"DHCPREQUEST\"\n| summarize count() by ServerIP, bin(TimeGenerated,5m)\n| where count_ > threshold\n| join kind=inner (InfobloxNIOS\n    | where ProcessName =~ \"dhcpd\" and Log_Type =~ \"DHCPREQUEST\"\n    ) on ServerIP\n| extend timestamp = TimeGenerated, IPCustomEntity = ServerIP\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ]
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist1-id'))]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
+      "kind": "",
+      "properties": {
+        "displayName": "Sources_by_SourceType",
+        "source": "Sources_by_SourceType.csv",
+        "description": "The watchlist is used by parsers to specify Sources and their types.",
+        "provider": "Custom",
+        "isDeleted": false,
+        "labels": ["watchlistdescription"],
+        "defaultDuration": "P1000Y",
+        "contentType": "Text/Csv",
+        "numberOfLinesToSkip": 0,
+        "itemsSearchKey": "SourceType",
+        "rawContent": "SourceType,Source\r\nContosoDns,contoso_machine1"
+      },
+      "apiVersion": "2021-03-01-preview"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "version": "1.0.3",
+        "kind": "Solution",
+        "contentId": "[variables('_sourceId')]",
+        "parentId": "[variables('_sourceId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Infoblox NIOS",
+          "sourceId": "[variables('_sourceId')]"
+        },
+        "author": {
+          "name": "Nikhil Tripathi",
+          "email": "v-ntripathi@microsoft.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_InfobloxNIOSConnector')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_Infoblox-Workbook-V2_workbook')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_allotherdhcpdTypes_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_allotherdnsTypes_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_allotherlogTypes_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcp_consolidated_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpack_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpadded_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpbindupdate_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpdiscover_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpexpire_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpinform_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpoffer_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpoption_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpother_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcprelease_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpremoved_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcprequest_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dhcpsession_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dns_consolidated_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dnsclient_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dnsgss_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_Infoblox_dnszone_Parser')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_ExcessiveNXDOMAINDNSQueries_AnalyticalRules')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_PotentialDHCPStarvationAttack_AnalyticalRules')]",
+              "version": "1.0.3"
+            },
+            {
+              "kind": "Watchlist",
+              "contentId": "[variables('_Sources_by_SourceType')]",
+              "version": "1.0.3"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-04-01",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+    }
+  ],
+  "outputs": {}
+}

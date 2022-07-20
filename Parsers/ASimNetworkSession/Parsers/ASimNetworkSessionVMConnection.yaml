@@ -1,0 +1,166 @@
+Parser:
+  Title: Network Session ASIM parser for VM connection information collected using the Log Analytics Agent
+  Version: '0.2'
+  LastUpdated: Jun 15, 2022
+Product:
+  Name: VMConnection
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: VM connection schema reference
+  Link: https://docs.microsoft.com/azure/azure-monitor/reference/tables/vmconnection
+- Title: Analysis of network connection data with Azure Monitor for virtual machines
+  Link: https://azure.microsoft.com/blog/analysis-of-network-connection-data-with-azure-monitor-for-virtual-machines/
+Description: |
+  This ASIM parser supports normalizing VM connection logs collected using the Log Analytics agent to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionVMConnection
+EquivalentBuiltInParser: _ASim_NetworkSession_VMConnection
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
+    '', 'Informational', 
+    '0', 'Informational',
+    '1', 'Low',
+    '2', 'Medium',
+    '3', 'High'
+  ];
+  let outbound = (disabled:bool=false) {
+    VMConnection
+    | where not (disabled)
+    | where Direction == "outbound"
+    | extend
+        SrcAppType = "Process",
+        SrcDvcIdType = "VMConnectionId",
+        SrcHostnameType = "Simple",
+        DstGeoCountry = RemoteCountry,
+        DstGeoLongitude = RemoteLongitude,
+        DstGeoLatitude = RemoteLatitude,
+        SrcAppId = Process,
+        SrcAppName = ProcessName,
+        SrcDvcId = Machine
+    | extend hostelements = split(Computer,'.')
+    | extend 
+        SrcHostname = tostring(hostelements[0]),
+        SrcDomain = strcat_array(array_slice(hostelements,1,-1), '.')
+    | extend
+        SrcDomainType = iff(SrcDomain != "", "FQDN", ""),
+        SrcFQDN = iff(SrcDomain != "", Computer, "")
+    | extend DstFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+    | extend DstDomainType = iff(DstFQDN != "", "FQDN", "")
+    | extend hostelements = split(DstFQDN,'.')
+    | extend 
+        DstHostname = iff(DstFQDN != "", tostring(hostelements[0]), ""),
+        DstDomain = iff(DstFQDN != "", strcat_array(array_slice(hostelements,1,-1), '.'), "")
+    | project-away hostelements
+    | extend
+        RemoteFQDN = DstFQDN,
+        RemoteHostname = DstHostname,
+        RemoteDomain = DstDomain,
+        RemoteDomainType = DstDomainType,
+        LocalFQDN = SrcFQDN,
+        LocalHostname = SrcHostname,
+        LocalDomain = SrcDomain,
+        LocalDomainType = SrcDomainType,
+        LocalIpAddr = SourceIp
+  };
+  let inbound = (disabled:bool=false) {
+    VMConnection
+    | where not (disabled)
+    | where Direction == "inbound"
+    | extend
+        DstAppType = "Process",
+        DstDvcIdType = "VMConnectionId",
+        SrcGeoCountry = RemoteCountry,
+        SrcGeoLongitude = RemoteLongitude,
+        SrcGeoLatitude = RemoteLatitude,
+        DstAppId = Process,
+        DstAppName = ProcessName,
+        DstDvcId = Machine
+    | extend hostelements = split(Computer,'.')
+    | extend 
+        DstHostname = tostring(hostelements[0]),
+        DstDomain = strcat_array(array_slice(hostelements,1,-1), '.')
+    | extend
+        DstDomainType = iff(DstDomain != "", "FQDN", ""),
+        DstFQDN = iff(DstDomain != "", Computer, "")
+    | extend SrcFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+    | extend SrcDomainType = iff(SrcFQDN != "", "FQDN", "")
+    | extend hostelements = split(SrcFQDN,'.')
+    | extend 
+        SrcHostname = iff(SrcFQDN != "", tostring(hostelements[0]), ""),
+        SrcDomain = iff(SrcFQDN != "", strcat_array(array_slice(hostelements,1,-1), '.'), "")
+    | project-away hostelements
+    | extend
+        RemoteFQDN = SrcFQDN,
+        RemoteHostname = SrcHostname,
+        RemoteDomain = SrcDomain,
+        RemoteDomainType = SrcDomainType,
+        LocalFQDN = DstFQDN,
+        LocalHostname = DstHostname,
+        LocalDomain = DstDomain,
+        LocalDomainType = DstDomainType,
+        LocalIpAddr = DestinationIp
+  };
+  let parser=(disabled:bool=false){
+    union outbound(disabled), inbound(disabled)
+    // Event fields
+    | extend 
+      EventCount = toint(LinksEstablished), // -- prioritized over LinksLive and LinksTerminated
+      EventStartTime = TimeGenerated,
+      EventVendor = "Microsoft",
+      EventProduct = "VMConnection",
+      EventSchema = "NetworkSession",
+      EventSchemaVersion = "0.2.2",
+      EventType = "EndpointNetworkSession",
+      NetworkDirection = iff(Direction=="inbound", "Inbound", "Outbound"),
+      EventEndTime = TimeGenerated
+    | project-rename
+      DstIpAddr = DestinationIp,
+      DstPortNumber = DestinationPort, 
+      SrcIpAddr = SourceIp, 
+      NetworkSessionId = ConnectionId,
+      ThreatName = IndicatorThreatType,
+      RemoteGeoCountry = RemoteCountry,
+      RemoteGeoLatitude = RemoteLatitude, 
+      RemoteGeoLongitude = RemoteLongitude,
+      LocalAppId = Process,
+      LocalAppName = ProcessName,
+      DvcId = Machine,
+      RemoteIpAddr = RemoteIp
+    // -- Calculated fields
+    | extend EventOriginalSeverity = tostring(Severity)
+    | lookup SeverityLookup on EventOriginalSeverity
+    | extend
+      EventResult = "Success",
+      LocalAppType = "Process",
+      NetworkDuration = toint(ResponseTimeMax),
+      ThreatRiskLevel = toint(Confidence),
+      NetworkProtocol = toupper(Protocol),
+      SrcBytes = tolong(BytesSent),
+      DstBytes = tolong(BytesReceived)
+    // -- Aliases
+    | extend
+      IpAddr = RemoteIpAddr,
+      Src = SrcIpAddr,
+      Local = LocalIpAddr,
+      DvcIpAddr = LocalIpAddr,
+      Dst = DstIpAddr,
+      Remote = RemoteIpAddr,
+      Dvc = LocalHostname,
+      DvcHostname = LocalHostname,
+      DvcDomain = LocalDomain,
+      DvcDomainType = LocalDomainType,
+      DvcFQDN = LocalFQDN,
+      Hostname = RemoteHostname,
+      Duration = NetworkDuration,
+      SessionId = NetworkSessionId
+  };
+  parser (disabled)
