@@ -1,4 +1,4 @@
-# Configuration of Palo Alto Networks NGFW CEF events as output
+# Steps to configure Palo Alto Networks NGFW for sending CEF events.
 
 Perform the following steps to configure the Palo Alto Networks firewall for CEF-formatted Syslog events. The PAN-OS Administrator’s Guide provides additional information about Syslog configuration. Please refer to the [latest PAN-OS Administrator’s Guide](https://docs.paloaltonetworks.com/pan-os/10-0/pan-os-admin) to ensure that you have configured log forwarding correctly for all the log types that you would like to forward to Sentinel platform. 
 
