@@ -1,13 +1,13 @@
 # Watchlists-InformSubowner-IncidentTrigger
 author: Lior Tamir
 
-This playbook levarages Azure Sentinel Watchlists in order to get the relevant subscription owner contact details, and inform about an ASC alert that occured in that subscription.
+This playbook leverages Microsoft Sentinel Watchlists in order to get the relevant subscription owner contact details, and inform about an ASC alert that occured in that subscription.
 It uses Microsoft Teams and Office 365 Outlook as ways to inform the sub owner.
 
 
 Note: This playbook utilizes two features currently in Preview.
-* Azure Sentinel Watchlists
-* Azure Sentinel Incident Trigger
+* Microsoft Sentinel Watchlists
+* Microsoft Sentinel Incident Trigger
 <br><br>
 
 <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Watchlist-InformSubowner-IncidentTrigger/images/designerView.png"/><br><br>

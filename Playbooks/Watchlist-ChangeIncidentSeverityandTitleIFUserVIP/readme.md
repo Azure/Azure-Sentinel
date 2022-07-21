@@ -3,7 +3,7 @@
 author: Yaniv Shasha
 <br><br>
 
-This playbook leverages Azure Sentinel Watchlists in order to adapt the incidents severity which include User entity and check it against VIP user list
+This playbook leverages Microsoft Sentinel Watchlists in order to adapt the incidents severity which include User entity and check it against VIP user list
 <br><br>
 
 ## Logical flow to use this playbook

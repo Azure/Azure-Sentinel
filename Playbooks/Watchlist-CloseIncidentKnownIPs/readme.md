@@ -1,7 +1,7 @@
 # Watchlists-CloseIncidentKnownIP
 author: Lior Tamir
 
-This playbook levarages Azure Sentinel Watchlists in order to close incidents which include IP addresses considered safe.
+This playbook levarages Microsoft Sentinel Watchlists in order to close incidents which include IP addresses considered safe.
 
 For each Ip address included in the alert (entities of type IP):
 1. Check if IP is included in watchlist.
