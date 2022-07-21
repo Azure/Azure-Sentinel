@@ -1,8 +1,8 @@
 # OpenCTI-Enrich Incident With OpenCTI Indicators Info Playbook
  ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
- 1. Fetches the matching indicator info of Entities (Accounts, Host, IP Address, FileHash, URL) from OpenCTI 
- 2. Adds a rich comment to the incident with all the collected information
+ 1. For each Entity (Accounts, Host, IP Address, FileHash, URL) available in Sentinel incident, it searches for a match in in OpenCTI indicators list
+ 2. If it finds the match, this playbook adds a rich comment to the incident with all the collected information
     ![Comment example](./images/CommentGetIndicatorInfofromOpenCTI.png)
 
 
