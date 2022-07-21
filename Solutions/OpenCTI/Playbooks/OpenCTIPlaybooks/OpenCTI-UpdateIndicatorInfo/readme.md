@@ -1,8 +1,8 @@
-# OpenCTI-Enrich Incident With OpenCTI Indicators Info Playbook
+# OpenCTI- Update indicator's confidence score Playbook
  ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
- 1. Fetches the matching indicator info of Entities (Accounts, Host, IP Address, FileHash, URL) from OpenCTI and updates the indiators confidence score in OpenCTI
- 2. Adds a rich comment to the incident with all the collected information
+ 1. Search for the indicators based on Entities (Accounts, Host, IP Address, FileHash, URL) in OpenCTI and updates the indiators confidence score in OpenCTI
+ 2. For each entity of Sentinel incident, if indicators are already available in OpenCTI, this playbook increases the confidence score
     ![Comment example](./images/CommentUpdateIndicator.png)
 
 
