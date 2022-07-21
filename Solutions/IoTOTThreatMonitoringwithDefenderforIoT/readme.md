@@ -48,6 +48,8 @@ This alert leverages Defender for IoT to detect an unauthorized DHCP configurati
 This alert leverages Defender for IoT to detect unauthorized changes to PLC ladder logic code indicating new functionality in the PLC, improper configuration of an application, or malicious activity on the network.<br>
 ### 14) Unauthorized remote access to the network (Microsoft Defender for IoT)
 This alert leverages Defender for IoT to detect unauthorized remote access to network devices, if another device on the network is compromised, target devices can be accessed remotely, increasing the attack surface.<br>
+### 15) No traffic on sensor detected (Microsoft Defender for IoT)
+This alert leverages Defender for IoT to detect that a sensor can no longer detect the network traffic, which indicates that the system is potentially insecure.<br>
 
 ## Playbooks
 ### 1) Auto Close Incidents
@@ -55,4 +57,6 @@ In some cases, maintenance activities generate alerts in Sentinel which distract
 ### 2) Mail by Production Line
 The following playbook will send mail to notify specific stake holders. One example can be in the case of specific security team per product line or per physical location. This playbook requires a watchlist which maps between the sensors name and the mail addresses of the alerts stockholders. For more information, see [AD4IoT-MailbyProductionLine](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AD4IoT-MailbyProductionLine)<br>
 ### 3) New Asset ServiceNow Ticket
-Normally, the authorized entity to program a PLC is the Engineering Workstation, to program a PLC attackers might create a new Engineering Workstation to create malicious programing. The following playbook will open a ticket in ServiceNow each time a new Engineering Workstation is detected. This playbook parses explicitly the IoT device entity fields. For more information, see [AD4IoT-NewAssetServiceNowTicket](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/AD4IoT-NewAssetServiceNowTicket/readme.md)<br>
+Normally, the authorized entity to program a PLC is the Engineering Workstation, to program a PLC attackers might create a new Engineering Workstation to create malicious programing. The following playbook will open a ticket in ServiceNow each time a new Engineering Workstation is detected. This playbook parses explicitly the IoT device entity fields. For more information, see [AD4IoT-NewAssetServiceNowTicket](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/AD4IoT-NewAssetServiceNowTicket/readme.md)
+### 4) Update alert statuses in Defender for IoT
+This playbook updates alert statuses in Defender for IoT whenever a related alert in Microsoft Sentinel has a Status update.<br>
