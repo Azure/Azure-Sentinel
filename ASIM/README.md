@@ -22,7 +22,7 @@ To deploy a single schema use the buttons below:
 | [Network Session](https://aka.ms/ASimNetworkSessionDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimNetworkSessionARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimNetworkSessionARMgov) |
 | [Web Session](https://aka.ms/ASimWebSessionDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimWebSessionARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimWebSessionARMgov)|
 | [Process Event](https://aka.ms/ASimProcessEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimProcessEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimProcessEventARMgov) |
-| [Registry](https://aka.ms/ASimRegistryEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimSentinelEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimRegistryEventARMgov) |
+| [Registry](https://aka.ms/ASimRegistryEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimRegistryEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimRegistryEventARMgov) |
 
 
 

@@ -13,9 +13,10 @@ relevantTechniques:
   - T1078.004
 query: |
   let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
   let auditLookback = starttime - 14d;
   let ts_data = (SigninLogs
-  | where TimeGenerated between(auditLookback..starttime)
+  | where TimeGenerated between (auditLookback..endtime)
   | where ResultType != 0
   | make-series count() on TimeGenerated step 1h by UserPrincipalName
   | extend series_decompose(count_)
@@ -28,7 +29,14 @@ query: |
   TimeSeriesAlerts
     | join kind=inner (
     SigninLogs
+    | where TimeGenerated between (auditLookback..endtime)
     | summarize ResultTypeCount=count(),ResultTypes=make_set(ResultType), Locations=make_set(Location), Apps=make_set(AppDisplayName), Ips=make_set( IPAddress) by UserPrincipalName, bin(TimeGenerated, 1h)
     ) on UserPrincipalName, TimeGenerated
     | summarize AnomolyTimes = make_set(TimeGenerated), Ips = make_set(Ips), Apps = make_set(Apps), sum(anomalies), Locations=make_set(Locations) by UserPrincipalName
     | sort by sum_anomalies desc
+    | extend timestamp = tostring(AnomolyTimes[0]), AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
