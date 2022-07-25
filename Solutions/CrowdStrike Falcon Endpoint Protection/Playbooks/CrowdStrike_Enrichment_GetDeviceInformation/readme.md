@@ -1,6 +1,6 @@
 # Crowdstrike_Enrichment_GetDeviceInformation
  ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions:
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions:
  1. Fetches the device information from Crowdstrike
  2. Enrich the incident with device information from Crowdstrike
 
@@ -22,13 +22,13 @@
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize connections.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky device 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky device 
 2. Configure the automation rules to trigger this playbook
 
 
@@ -36,8 +36,8 @@ Once deployment is complete, you will need to authorize connections.
 
 ## Playbook steps explained
 
-### When Azure Sentinel incident creation rule is triggered
-Azure Sentinel incident is created. The playbook receives the incident as the input.
+### When Microsoft Sentinel incident creation rule is triggered
+Microsoft Sentinel incident is created. The playbook receives the incident as the input.
 
 ### Entities - Get Hosts
 Get the list of risky devices as entities from the Incident
