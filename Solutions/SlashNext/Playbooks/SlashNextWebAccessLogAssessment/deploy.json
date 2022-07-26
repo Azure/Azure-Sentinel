@@ -18,8 +18,110 @@
       "apiVersion": "2018-05-01",
       "properties": {
         "mode": "Incremental",
-        "templateLink": {
-          "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SlashNext/Playbooks/SlashNextWebAccessLogAssessment/azure_function_deploy.json"
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {
+            "suffix": "[substring(toLower(uniqueString(resourceGroup().id, resourceGroup().location)),0,5)]",
+            "funcAppName": "Slashnext-azure-function",
+            "funcStorageName": "[concat('slashnextstorage', variables('suffix'))]",
+            "serverFarmName": "[concat('slashnextfarm', variables('suffix'))]",
+            "repoURL": "https://github.com/slashnext/processlogs",
+            "srcControlsName": "web",
+            "GitHubBranch": "master"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2018-11-01",
+              "name": "[variables('funcAppName')]",
+              "location": "[resourceGroup().location]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms',variables('serverFarmName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('funcStorageName'))]"
+              ],
+              "kind": "functionapp,linux",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+                "siteConfig": {
+                  "alwaysOn": true,
+                  "appSettings": [
+                    {
+                      "name": "AzureWebJobsDashboard",
+                      "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2019-06-01').keys[0].value,';EndpointSuffix=core.windows.net')]"
+                    },
+                    {
+                      "name": "AzureWebJobsStorage",
+                      "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2019-06-01').keys[0].value,';EndpointSuffix=core.windows.net')]"
+                    },
+                    {
+                      "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                      "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('funcStorageName'), ';AccountKey=', listKeys(variables('funcStorageName'),'2019-06-01').keys[0].value,';EndpointSuffix=core.windows.net')]"
+                    },
+                    {
+                      "name": "FUNCTIONS_EXTENSION_VERSION",
+                      "value": "~2"
+                    },
+                    {
+                      "name": "FUNCTIONS_WORKER_RUNTIME",
+                      "value": "python"
+                    }
+                  ],
+                  "linuxFxVersion": "python|3.6"
+                }
+              },
+              "resources": [
+                {
+                  "type": "sourcecontrols",
+                  "apiVersion": "2018-11-01",
+                  "name": "[variables('srcControlsName')]",
+                  "dependsOn": [
+                    "[resourceId('Microsoft.Web/sites/', variables('funcAppName'))]"
+                  ],
+                  "properties": {
+                    "RepoUrl": "[variables('repoURL')]",
+                    "branch": "[variables('GitHubBranch')]",
+                    "IsManualIntegration": true
+                  }
+                }
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2018-07-01",
+              "name": "[variables('funcStorageName')]",
+              "location": "[resourceGroup().location]",
+              "tags": {
+                "displayName": "funStorageName"
+              },
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2"
+            },
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2018-02-01",
+              "name": "[variables('serverFarmName')]",
+              "location": "[resourceGroup().location]",
+              "sku": {
+                "name": "S1",
+                "tier": "Standard"
+              },
+              "kind": "elastic",
+              "properties": {
+                "kind": "functionapp",
+                "name": "[variables('serverFarmName')]",
+                "computeMode": "Dynamic",
+                "reserved": true
+              }
+            }
+          ],
+          "outputs": {}
         },
         "parameters": {}
       }
@@ -210,7 +312,7 @@
                   "type": "ManagedServiceIdentity"
                 },
                 "body": {
-                  "query": "search * | where TimeGenerated \u003e= todatetime('@{body('Get_past_time')}') and TimeGenerated \u003c= todatetime('@{body('Current_time')}') |distinct $table"
+                  "query": "search * | where TimeGenerated > ago(2h)|distinct $table"
                 },
                 "method": "POST",
                 "uri": "@variables('Query API')"
@@ -303,7 +405,7 @@
                                   "type": "ManagedServiceIdentity"
                                 },
                                 "body": {
-                                  "query": "@{items('Fetch_Data_from_Each_Table_')} | where TimeGenerated \u003e= todatetime('@{body('Get_past_time')}') and TimeGenerated \u003c=todatetime('@{body('Current_time')}') "
+                                  "query": "@{items('Fetch_Data_from_Each_Table_')} |where ingestion_time() >= todatetime(format_datetime(datetime(@{body('Get_past_time')}),'yyyy-MM-dd HH:mm')) and ingestion_time() <todatetime(format_datetime(datetime(@{body('Current_time')}),'yyyy-MM-dd HH:mm')) "
                                 },
                                 "method": "POST",
                                 "uri": "@variables('Query API')"
@@ -421,7 +523,7 @@
                                                 "description": "@{items('Fetch_Data_from_Each_Table_')} table contains malicious url @{body('Parse_URL_Mapping')?['url']}",
                                                 "severity": "High",
                                                 "status": "New",
-                                                "title": "My incident"
+                                                "title": "Malicious Incident"
                                               }
                                             },
                                             "method": "PUT",
