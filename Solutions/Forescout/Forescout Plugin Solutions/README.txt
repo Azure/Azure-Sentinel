@@ -1,1 +1,0 @@
-This folder contains Forescout plugin related solutions 
