@@ -32,3 +32,17 @@ All Microsoft Sentinel solutions are now enabled for CSP Program (Cloud Service 
 
 ## Known Issue #7 - Private solutions in Content hub
 Private solutions or [Azure Marketplace private offers](https://docs.microsoft.com/azure/marketplace/private-plans) are not currently supported in Microsoft Sentinel Content hub. 
+
+## Known Issue #8 - Error "Detected multiple functions with the same name:"
+**Background:** As part of the consolidation of content as solutions in content hub, corresponding parsers are also packaged as part of the solutions. If a customer has used the data connector before, the installation instructions guided them to create a parser manually. Now, when customers install the solution, it will cause the problem as parser with the same name exists in their workspace. 
+
+**Cause of the error:** Log Analytics throws this error when more than one Function [parser] is created with the same name.
+
+**Resolution Steps:** 
+Delete the installed Functions manually and reinstall the solution by following the steps below 
+1.	Go to your Sentinel workspace and select logs from the left menu.
+2.	Click on Functions and search for the name of the parser (part of the error text) and once it is visible hover over the name and click on delete.
+NOTE: After Deleting the parser it will take 5-10 min to reflect.
+3.	Repeat step 2 for all the parsers that exist for the name that is shown in the error.
+4.	Reinstall the solution
+5.	Verify that there is only one instance of parser installed.
