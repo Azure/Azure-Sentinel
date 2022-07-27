@@ -15,7 +15,7 @@ This playbook will execute using an incident based trigger and add the IP entiti
 
 ## After Deployment
 
-- Grant the Logic App Managed Identity access to the Mirosoft Graph Policy.Read.All & Policy.ReadWrite.ConditionalAccess which can be done with the included PowerShell script [AddApiPermissions.ps1](./AddApiPermissions.ps1)
+- Grant the Logic App Managed Identity access to the Microsoft Graph Policy.Read.All & Policy.ReadWrite.ConditionalAccess which can be done with the included PowerShell script [AddApiPermissions.ps1](./AddApiPermissions.ps1)
 - Attach this playbook to an **automation rule** so it runs when specified incidents are created.
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
