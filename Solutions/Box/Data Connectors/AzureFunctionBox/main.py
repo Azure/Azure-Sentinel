@@ -56,12 +56,13 @@ def main(mytimer: func.TimerRequest):
         for events, stream_position in get_events(config_dict, created_after, stream_position=stream_position):
             for event in events:
                 sentinel.send(event)
-            last_event_date = events[-1]['created_at']
+            last_event_date = events[-1]['created_at'] if events else None
             if check_if_time_is_over(start_time, SCRIPT_EXECUTION_INTERVAL_MINUTES, AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES):
                 logging.info('Stopping script because time for execution is over.')
                 break
 
-    save_marker(state_manager, stream_position, last_event_date)
+    if last_event_date:
+        save_marker(state_manager, stream_position, last_event_date)
 
     if sentinel.failed_sent_events_number:
         logging.error('Script finished unsuccessfully. {} events have been sent. {} events have not been sent'.format(sentinel.successfull_sent_events_number, sentinel.failed_sent_events_number))
