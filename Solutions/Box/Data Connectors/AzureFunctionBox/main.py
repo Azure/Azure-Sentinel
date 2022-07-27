@@ -53,10 +53,11 @@ def main(mytimer: func.TimerRequest):
 
     sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri = logAnalyticsUri, shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
     with sentinel:
+        last_event_date = None
         for events, stream_position in get_events(config_dict, created_after, stream_position=stream_position):
             for event in events:
                 sentinel.send(event)
-            last_event_date = events[-1]['created_at'] if events else None
+            last_event_date = events[-1]['created_at'] if events else last_event_date
             if check_if_time_is_over(start_time, SCRIPT_EXECUTION_INTERVAL_MINUTES, AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES):
                 logging.info('Stopping script because time for execution is over.')
                 break
