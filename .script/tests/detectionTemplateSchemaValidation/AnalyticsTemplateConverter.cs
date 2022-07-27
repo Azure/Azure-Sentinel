@@ -34,18 +34,18 @@ namespace DetectionTemplateSchemaValidation.Tests
        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
             JObject jo = JObject.Load(reader);
-            string kindStr = jo["kind"].Value<string>();
             string name = jo["name"].Value<string>();
             string id = jo["id"].Value<string>();
+            string kindStr = jo["kind"].Value<string>();
+
             AlertRuleKind kind;
             if (!Enum.TryParse<AlertRuleKind>(kindStr, true, out kind))
             {
                 throw new JsonSerializationException($"The provided kind '{kindStr}' in template \"id: {id} name: {name}\" was not recognized as a valid template kind.");
             }
 
-
             if (templateKindToTemplateTypeMap.ContainsKey(kind))
-            {
+            {                
                 Type templateType;
                 templateKindToTemplateTypeMap.TryGetValue(kind, out templateType);
                 var templateInstance = Activator.CreateInstance(templateType);
