@@ -36,16 +36,20 @@ query: |
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
-      OfficeActivity | where TimeGenerated >= ago(dt_lookBack)
+      OfficeActivity
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where isnotempty(ClientIP)
+      | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]%]+)(%\d+)?\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+      | extend IPAddress = tostring(ClientIPValues[0])
       // renaming time column so it is clear the log this came from
       | extend OfficeActivity_TimeGenerated = TimeGenerated
   )
-  on $left.TI_ipEntity == $right.ClientIP
+  on $left.TI_ipEntity == $right.IPAddress
   | where OfficeActivity_TimeGenerated < ExpirationDateTime
   | summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId
   | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
   TI_ipEntity, ClientIP, UserId, Operation, ResultStatus, RecordType, OfficeObjectId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
-  | extend timestamp = OfficeActivity_TimeGenerated, IPCustomEntity = ClientIP, AccountCustomEntity = UserId, URLCustomEntity = Url
+  | extend timestamp = OfficeActivity_TimeGenerated, IPCustomEntity = TI_ipEntity, AccountCustomEntity = UserId, URLCustomEntity = Url
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -59,5 +63,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.2.1
+version: 1.2.2
 kind: Scheduled
