@@ -1,7 +1,7 @@
 # Get-VirusTotalURLReport
 author: Nicholas DiCola
 
-This playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).
+TThis playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
