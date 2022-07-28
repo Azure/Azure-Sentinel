@@ -23,7 +23,7 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 
 ## Prerequisites
 
-- After deploying the the playbook you will need to grant the playbook's Managed Identity **Azure Sentinel Responder** (or greater) access to the resource group where Azure Sentinel is installed. This gives the Managed Identity the necessary permissions to add comments, tags, and change incident severity.
+- After deploying the the playbook you will need to grant the playbook's Managed Identity **Microsoft Sentinel Responder** (or greater) access to the resource group where Microsoft Sentinel is installed. This gives the Managed Identity the necessary permissions to add comments, tags, and change incident severity.
                                                                                                                                      
 ## Screenshots
 ![Designer](./images/designerLight.jpg)
