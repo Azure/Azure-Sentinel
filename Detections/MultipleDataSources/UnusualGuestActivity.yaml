@@ -31,12 +31,13 @@ query: |
   | where TimeGenerated > ago(queryperiod)
   | where OperationName in ("Invite external user", "Bulk invite users - started (bulk)", "Invite external user with reset invitation status")
   | extend InitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
+  // Uncomment the following line to filter events where the inviting user was a guest user
   //| where InitiatedBy has_any ("live.com#", "#EXT#")
   | extend InvitedUser = TargetResources[0].userPrincipalName
-  | mv-expand UserToCompare = pack_array(InitiatedBy, InvitedUser)
+  | mv-expand UserToCompare = pack_array(InitiatedBy, InvitedUser) to typeof(string)
   | where UserToCompare has_any ("live.com#", "#EXT#")
   | extend
-      parsedUser = replace_string((iff(UserToCompare has "live.com#", tostring(split(UserToCompare, "#")[1]), tostring(split(UserToCompare, "#EXT#")[0]))), "@", "_"),
+      parsedUser = replace_string(tolower(iff(UserToCompare startswith "live.com#", tostring(split(UserToCompare, "#")[1]), tostring(split(UserToCompare, "#EXT#")[0]))), "@", "_"),
       InvitationTime = TimeGenerated
   | join (
       (union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs)
@@ -52,7 +53,8 @@ query: |
            "9bc3ab49-b65d-410a-85ad-de819febfddc",// Microsoft SharePoint Online Management Shell
            "12128f48-ec9e-42f0-b203-ea49fb6af367",// MS Teams Powershell Cmdlets
            "23d8f6bd-1eb0-4cc2-a08c-7bf525c67bcd",// Power BI PowerShell
-           "31359c7f-bd7e-475c-86db-fdb8c937548e" // PnP Management Shell
+           "31359c7f-bd7e-475c-86db-fdb8c937548e",// PnP Management Shell
+           "90f610bf-206d-4950-b61d-37fa6fd1b224" // Aadrm Admin Powershell
           )
       | summarize arg_min(TimeGenerated, *) by UserPrincipalName
       | extend
@@ -60,15 +62,19 @@ query: |
           SigninTime = TimeGenerated
       )
       on parsedUser
-  | project InvitationTime, InvitatedBy = InitiatedBy, OperationName, InvitedUser, SigninTime, SigninCategory = Category1, SigninUserPrincipalName = UserPrincipalName, IPAddress, AppDisplayName, ResourceDisplayName, UserAgent, InvitationAdditionalDetails = AdditionalDetails, InvitationTargetResources = TargetResources
+  | project InvitationTime, InitiatedBy, OperationName, InvitedUser, SigninTime, SigninCategory = Category1, SigninUserPrincipalName = UserPrincipalName, IPAddress, AppDisplayName, ResourceDisplayName, UserAgent, InvitationAdditionalDetails = AdditionalDetails, InvitationTargetResources = TargetResources
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: InitiatedByUser
+        columnName: InvitedUser
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatedBy
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.3
+version: 1.0.5
 kind: Scheduled

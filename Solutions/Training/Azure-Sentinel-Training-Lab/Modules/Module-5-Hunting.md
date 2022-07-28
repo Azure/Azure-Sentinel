@@ -125,7 +125,7 @@ If as part of our investigation, we determine that the bookmarked query result c
 ![incident1](../Images/hunting-9.png)
 
 
-2.	On the right-hand bookmark pane modify the **Bookmark Name** to **victim@buildseccxpninja.onmicrosoft.com** added key to **purview-spn** App with **High Risk** 
+2.	On the right-hand bookmark pane modify the **Bookmark Name** to **victim@buildseccxpninja.onmicrosoft.com added key to purview-spn App with High Risk** 
 3.	Using the drop down in the **entities** section of the **bookmark pane**, map the **Account** entity to the InitiatingUserOrApp column.  You can see a sample value in the drop down.  In the diagram below, the sample value is **victim@buildseccxpninja.onmicrosoft.com**.  
 4.	Map the IP entity to the InitiatingIpAddress column. In the diagram below, you can see the sample value **45.153.160.2**. 
 5.	We will also add a tag to map it to the main attack story. In the **tags** section write, **“solorwinds”**

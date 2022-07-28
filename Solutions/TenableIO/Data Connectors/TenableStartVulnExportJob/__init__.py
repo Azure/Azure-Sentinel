@@ -8,7 +8,10 @@ def main(timestamp: int) -> object:
     tio = TenableIO()
     logging.info(
         f'requesting a new Vuln Export Job from Tenable')
-    job_id = tio.exports.vulns(updated_at=timestamp)
+    # limiting number of assets to 50. For some bigger containers, 
+    # each chunk is reported to be some hundreds of MBs resulting
+    # into azure function crash due to OOM errors.
+    job_id = tio.exports.vulns(last_found=timestamp, num_assets=50)
 
     logging.info(f'received a response from Vuln Export Job request')
     logging.info(job_id)

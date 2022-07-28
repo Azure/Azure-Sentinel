@@ -1,6 +1,6 @@
 # Azure NSG flows ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Azure NSG flows.
+ARM template for ASIM NetworkSession schema parser for Azure NSG flows.
 
 This ASIM parser supports normalizing Azure Network Security Groups (NSG) flows to the ASIM Network Session normalized schema.
 

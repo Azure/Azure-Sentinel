@@ -28,8 +28,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     else:
         filter_by_time = int(
             (datetime.now(timezone.utc) - timedelta(minutes=export_schedule_minutes)).timestamp())
-    logging.info('filter by time')
-    logging.info(filter_by_time)
+    logging.info('filter by time: %d', filter_by_time)
 
     stats_store = ExportsTableStore(connection_string, stats_table_name)
 

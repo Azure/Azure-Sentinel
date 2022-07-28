@@ -8,7 +8,7 @@ Ingestion time transformation allows you to drop specific fields from events or 
 
 1. [Dropping fields](./Filtering#dropping-fields)
 2. [Dropping entire records](./Filtering#dropping-rows)
-3. [Multiple workspaces for idependent entities](./Filtering#multiple-workspaces-for-idependent-entities)
+3. [Multiple workspaces for independent entities](./Filtering#multiple-workspaces-for-idependent-entities)
 
 ### Enrichment/Tagging
 

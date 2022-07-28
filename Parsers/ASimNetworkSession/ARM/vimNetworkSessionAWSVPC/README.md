@@ -1,6 +1,6 @@
 # AWS VPC ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for AWS VPC.
+ARM template for ASIM NetworkSession schema parser for AWS VPC.
 
 This ASIM parser supports normalizing and filtering AWS VPC logs produced by the Microsoft Sentinel AWS S3 connector to the ASIM Network Session normalized schema.
 
