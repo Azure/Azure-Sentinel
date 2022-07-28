@@ -172,7 +172,7 @@ function QualysKB {
     # Really simple error check, if we get a 200 return the bearer token, ortherwise return false
 
     if($null -ne $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN){
-        Write-Host "Number of records returned after published Date $(startDate) : " $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length
+        Write-Host "Number of records returned after published Date $($startDate) : " $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length
         try {
             # Iterate through each vulnerability recieved from the API call and assign the variables (Column Names in LA) to each XML variable and place each vulnerability as an object in the $objs array.
             $objs = @()

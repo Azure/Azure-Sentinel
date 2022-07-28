@@ -74,7 +74,7 @@ These policies are required for all S3 connectors, regardless of AWS service.
         "AWS": "${roleArn}"
       },
       "Action": [
-        "s3:GetObject",
+        "s3:GetObject"
       ],
       "Resource": "arn:aws:s3:::${bucketName}/*"
     }
@@ -116,7 +116,7 @@ Apply the following additional policies if you are ingesting GuardDuty findings.
         ]
       },
       "Action": [
-        "kms:Decrypt",
+        "kms:Decrypt"
       ],
       "Resource": "*"
     }

@@ -1,0 +1,39 @@
+id: 0610e72f-ceaf-42d1-879e-952a1bd8d07a
+name: Azure Security Benchmark Posture Changed
+description: |
+  'This alert is designed to monitor Azure policies aligned with the Azure Security Benchmark Regulatory Compliance initiative. The alert triggers when policy compliance falls below 70% within a 1 week time-frame.'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: | 
+  let Last_Evaluated=SecurityRecommendation
+  | join kind=fullouter(SecurityRegulatoryCompliance| where ComplianceStandard == "Azure-Security-Benchmark") on RecommendationName
+  | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationName
+  | extend ComplianceDomain=iff(ComplianceControl contains "NS.", "Network Security", iff(ComplianceControl contains "IM.", "Identity Management", iff(ComplianceControl contains "PA.", "Privileged Access", iff(ComplianceControl contains "DP.", "Data Protection", iff(ComplianceControl contains "AM.", "Asset Management", iff(ComplianceControl contains "LT.", "Logging & Threat Detection", iff(ComplianceControl contains "IR.", "Incident Response", iff(ComplianceControl contains "PV.", "Posture & Vulnerability Management", iff(ComplianceControl contains "ES.", "Endpoint Security", iff(ComplianceControl contains "BR.", "Backup & Recovery", iff(ComplianceControl startswith "DS.", "DevOps Security", iff(ComplianceControl contains "GS.", "Governance & Strategy", "Other"))))))))))));
+  SecurityRecommendation
+  | join kind=fullouter(SecurityRegulatoryCompliance| where ComplianceStandard == "Azure-Security-Benchmark") on RecommendationName
+  | extend ComplianceDomain=iff(ComplianceControl contains "NS.", "Network Security", iff(ComplianceControl contains "IM.", "Identity Management", iff(ComplianceControl contains "PA.", "Privileged Access", iff(ComplianceControl contains "DP.", "Data Protection", iff(ComplianceControl contains "AM.", "Asset Management", iff(ComplianceControl contains "LT.", "Logging & Threat Detection", iff(ComplianceControl contains "IR.", "Incident Response", iff(ComplianceControl contains "PV.", "Posture & Vulnerability Management", iff(ComplianceControl contains "ES.", "Endpoint Security", iff(ComplianceControl contains "BR.", "Backup & Recovery", iff(ComplianceControl startswith "DS.", "DevOps Security", iff(ComplianceControl contains "GS.", "Governance & Strategy", "Other"))))))))))))
+  | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationName
+  | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by ComplianceDomain
+  | extend PassedControlsPercentage = (Passed/todouble(Total))*100
+  | join (Last_Evaluated) on ComplianceDomain
+  | project ComplianceDomain, Total, PassedControlsPercentage, Passed, Failed, LastEvaluated=TimeGenerated
+  | summarize arg_max(LastEvaluated, *) by ComplianceDomain, Total, PassedControlsPercentage, Passed, Failed
+  | where PassedControlsPercentage < 70 
+  | sort by PassedControlsPercentage, Passed desc
+  | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+  | extend URLCustomEntity = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled
