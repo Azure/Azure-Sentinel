@@ -1335,7 +1335,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $connectorData = $connectorData.resources[0]
                             $connectorUiConfig = $connectorData.properties.connectorUiConfig
                             # $connectorUiConfig.PSObject.Properties.Remove('id')
-                            $connectorUiConfig.PSObject.Properties.id = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
+                            $connectorUiConfig.id = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
 
                             $connectorObj = [PSCustomObject]@{
                                 # id         = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
