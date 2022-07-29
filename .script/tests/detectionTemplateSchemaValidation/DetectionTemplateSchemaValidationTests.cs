@@ -149,9 +149,12 @@ namespace Kqlvalidations.Tests
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
-            var invalidTemplateRuleKindsAndIds = templatesAsObjects
+            var templatesAfterRemovingSkipFiles = templatesAsObjects
+                                                    .Where(template => !TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds.Contains(template["id"].ToString()));
+
+            var invalidTemplateRuleKindsAndIds = templatesAfterRemovingSkipFiles
                 .Where(template => !Enum.TryParse(typeof(AlertRuleKind), template["kind"].ToString(), ignoreCase: false, out _))
-                .Select(template => (templdateId: template["id"].ToString(), templateKind: template["kind"].ToString()))
+                .Select(template => (templdateId: template["id"].ToString(), templateKind: template["kind"].Value<string>()))
                 .ToList();
 
             string exceptionMessage = "";
