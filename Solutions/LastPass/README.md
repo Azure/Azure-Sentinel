@@ -1,4 +1,4 @@
-# LastPass Solution for Azure Sentinel
+# LastPass Solution for Microsoft Sentinel
 This repository contains all resources for the LastPass Microsoft Sentinel Solution.
 The LastPass Solution is built in order to easily integrate LastPass with Microsoft Sentinel.
 
