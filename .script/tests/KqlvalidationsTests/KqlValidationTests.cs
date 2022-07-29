@@ -32,7 +32,6 @@ namespace Kqlvalidations.Tests
         public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var queryStr =  (string) res["query"];
             var id = (string) res["id"];
 
             //we ignore known issues
@@ -40,7 +39,8 @@ namespace Kqlvalidations.Tests
             {
                 return;
             }
-
+            
+            var queryStr =  (string) res["query"];
             ValidateKql(id, queryStr);
         }
 
@@ -50,12 +50,12 @@ namespace Kqlvalidations.Tests
         public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var queryStr =  (string) res["query"];
             var id = (string) res["id"];
         
             //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
-            if (ShouldSkipTemplateValidation(id))
+            if (ShouldSkipTemplateValidation(id) && res.ContainsKey("query"))
             {
+                var queryStr =  (string) res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
                 Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
             }
@@ -78,7 +78,6 @@ namespace Kqlvalidations.Tests
         public void Validate_ExplorationQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var queryStr =  (string) res["query"];
             var id = (string) res["Id"];
 
             //we ignore known issues
@@ -86,7 +85,8 @@ namespace Kqlvalidations.Tests
             {
                 return;
             }
-
+            
+            var queryStr =  (string) res["query"];
             ValidateKql(id, queryStr);
         }
 
@@ -95,12 +95,12 @@ namespace Kqlvalidations.Tests
         public void Validate_ExplorationQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
         {
             var res = ReadAndDeserializeYaml(encodedFilePath);
-            var queryStr =  (string) res["query"];
             var id = (string) res["Id"];
         
             //Templates that are in the skipped templates should not pass the validation (if they pass, why skip?)
-            if (ShouldSkipTemplateValidation(id))
+            if (ShouldSkipTemplateValidation(id) && res.ContainsKey("query"))
             {
+                var queryStr =  (string) res["query"];
                 var validationRes = _queryValidator.ValidateSyntax(queryStr);
                 Assert.False(validationRes.IsValid, $"Template Id:{id} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.");
             }
@@ -114,7 +114,6 @@ namespace Kqlvalidations.Tests
         {
             Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
             var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml);
-            var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
 
             //Ignore known issues
             yaml.TryGetValue("Id", out object id);
@@ -122,7 +121,8 @@ namespace Kqlvalidations.Tests
             {
                 return;
             }
-
+            
+            var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
             var parserName = (string)yaml["ParserName"];
             ValidateKql(parserName, queryStr);
         }
