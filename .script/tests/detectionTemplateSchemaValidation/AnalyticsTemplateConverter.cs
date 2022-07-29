@@ -37,12 +37,12 @@ namespace DetectionTemplateSchemaValidation.Tests
             string kindStr = jo["kind"].Value<string>();
             string name = jo["name"].Value<string>();
             string id = jo["id"].Value<string>();
-
             AlertRuleKind kind;
             if (!Enum.TryParse<AlertRuleKind>(kindStr, true, out kind))
             {
                 throw new JsonSerializationException($"The provided kind '{kindStr}' in template \"id: {id} name: {name}\" was not recognized as a valid template kind.");
             }
+
 
             if (templateKindToTemplateTypeMap.ContainsKey(kind))
             {
