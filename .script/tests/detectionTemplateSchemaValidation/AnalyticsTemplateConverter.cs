@@ -34,9 +34,9 @@ namespace DetectionTemplateSchemaValidation.Tests
        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
             JObject jo = JObject.Load(reader);
+            string kindStr = jo["kind"].Value<string>();
             string name = jo["name"].Value<string>();
             string id = jo["id"].Value<string>();
-            string kindStr = jo["kind"].Value<string>();
 
             AlertRuleKind kind;
             if (!Enum.TryParse<AlertRuleKind>(kindStr, true, out kind))
@@ -45,7 +45,7 @@ namespace DetectionTemplateSchemaValidation.Tests
             }
 
             if (templateKindToTemplateTypeMap.ContainsKey(kind))
-            {                
+            {
                 Type templateType;
                 templateKindToTemplateTypeMap.TryGetValue(kind, out templateType);
                 var templateInstance = Activator.CreateInstance(templateType);
