@@ -36,7 +36,7 @@ if not match:
     raise Exception("Armorblox Data Connector: Invalid Log Analytics URI")
 
 if (ARMORBLOX_INSTANCE_NAME == "") and (ARMORBLOX_INSTANCE_URL == ""):
-   raise Exception("At least one of Armorblox instance name or URL need to be provided")
+    raise Exception("At least one of Armorblox instance name or URL need to be provided")
 
 
 class Armorblox(Client):
@@ -56,22 +56,22 @@ class Armorblox(Client):
             logging.info("The last time point is: {}".format(past_time))
         else:
             logging.info("There is no last time point, trying to get incidents for last day.")
-            past_time = (current_time - datetime.timedelta(minutes=ARMORBLOX_INCIDENT_API_TIME_DELTA_IN_MINUTES)).strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT)
+            past_time = (current_time - datetime.timedelta(
+                minutes=ARMORBLOX_INCIDENT_API_TIME_DELTA_IN_MINUTES)).strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT)
 
         state.post(current_time.strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT))
         return past_time, current_time.strftime(ARMORBLOX_INCIDENT_API_TIME_FORMAT)
 
-
     def _process_incidents(self, params):
-        response_json,_ = self.incidents.list_resource(ARMORBLOX_INCIDENT_API_PATH, params=params)
+        response_json, next_page_token, total_count = self.incidents.list(page_token=None, params=params)
         if response_json is None:
             pass
         else:
-            self.incidents_list.extend(response_json.get('incidents',[]))
-            if "next_page_token" in response_json.keys():
+            self.incidents_list.extend(response_json)
+            while next_page_token:
                 params["page_token"] = response_json['next_page_token']
-                self._process_incidents(params)
-
+                response_json, next_page_token, total_count = self.incidents.list(page_token=None, params=params)
+                self.incidents_list.extend(response_json)
 
     def get_incidents(self):
 
@@ -79,10 +79,11 @@ class Armorblox(Client):
             "from_date": self.from_date,
             "to_date": self.to_date,
             "page_size": ARMORBLOX_INCIDENT_API_PAGE_SIZE
-        }      
+        }
 
         self._process_incidents(params)
         return self.incidents_list
+
 
 class Sentinel:
 
@@ -111,7 +112,8 @@ class Sentinel:
         string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(SENTINEL_WORKSPACE_KEY)
-        encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
+        encoded_hash = base64.b64encode(
+            hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
         authorization = "SharedKey {}:{}".format(SENTINEL_WORKSPACE_ID, encoded_hash)
         return authorization
 
@@ -134,6 +136,7 @@ class Sentinel:
             logging.info("Chunk was sent to Azure Sentinel({} events)".format(chunk_count))
         else:
             logging.info("Error during sending events to Azure Sentinel. Response code:{}".format(response.status_code))
+
 
 def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
