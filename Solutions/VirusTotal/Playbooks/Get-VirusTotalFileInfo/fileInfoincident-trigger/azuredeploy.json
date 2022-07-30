@@ -2,22 +2,31 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "comments": "This playbook will take each File Hash entity and query VirusTotal for file report (https://developers.virustotal.com/v3.0/reference#file-info).",
-        "author": "Nicholas DiCola"
+        "title": "FileHash Enrichment - Virus Total report",
+        "description": "This playbook will take each File Hash entity and query VirusTotal for file report (https://developers.virustotal.com/v3.0/reference#file-info).",
+        "prerequisites": ["- You will need to register to Virus Total community for an API key"],
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "entities": [ "FileHash" ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Nicholas DiCola"
+        },
+        "releaseNotes": [
+        {
+          "version": "1.0.0",
+          "title": "FileHash Enrichment - Virus Total report",
+          "notes": [
+          "Initial version"
+          ]
+        }
+        ]
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Get-VirusTotalFileInfo",
-            "type": "string"
-        },
-        "VirusTotalAPIKey": {
-            "defaultValue": "<APIKey>",
-            "type": "string"
-        },
-        "workspaceId": {
-            "type": "string"
-        },
-        "workSpaceKey": {
             "type": "string"
         }
     },
@@ -33,14 +42,10 @@
             "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('workspaceId')]",
+                "displayName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
-                },
-                "parameterValues": {
-                    "username": "[parameters('workspaceId')]",
-                    "password": "[parameters('workSpaceKey')]"
                 }
             }
         },
@@ -50,12 +55,8 @@
             "name": "[variables('VirusTotalConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
-                },
-                "parameterValues": {
-                    "api_key": "[parameters('VirusTotalAPIKey')]"
                 }
             }
         },
@@ -81,7 +82,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Get-VirusTotalFileInfo_alert",
+                "hidden-SentinelTemplateName": "Get-VirusTotalFileInfo",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -96,52 +97,10 @@
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "Microsoft_Sentinel_alert": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
                     "actions": {
-                        "Alert_-_Get_incident": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            }
-                        },
                         "Entities_-_Get_FileHashes": {
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -149,23 +108,18 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/filehash"
-                            }
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
                         },
                         "For_each": {
-                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
                             "actions": {
                                 "Condition": {
                                     "actions": {
                                         "Add_comment_to_incident_(V3)": {
-                                            "runAfter": {
-                                                "Send_Data": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
                                             "inputs": {
                                                 "body": {
-                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
                                                     "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
                                                 },
                                                 "host": {
@@ -175,11 +129,15 @@
                                                 },
                                                 "method": "post",
                                                 "path": "/Incidents/Comment"
-                                            }
+                                            },
+                                            "runAfter": {
+                                                "Send_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
                                         },
                                         "Send_Data": {
-                                            "runAfter": {},
-                                            "type": "ApiConnection",
                                             "inputs": {
                                                 "body": "@{body('Retrieve_information_about_a_file')?['data']}",
                                                 "headers": {
@@ -193,26 +151,17 @@
                                                 },
                                                 "method": "post",
                                                 "path": "/api/logs"
-                                            }
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
                                         }
-                                    },
-                                    "runAfter": {
-                                        "Retrieve_information_about_a_file": [
-                                            "Succeeded"
-                                        ]
                                     },
                                     "else": {
                                         "actions": {
                                             "Add_comment_to_incident_(V3)_2": {
-                                                "runAfter": {
-                                                    "Send_Data_2": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": {
-                                                        "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
                                                         "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
                                                     },
                                                     "host": {
@@ -222,11 +171,15 @@
                                                     },
                                                     "method": "post",
                                                     "path": "/Incidents/Comment"
-                                                }
+                                                },
+                                                "runAfter": {
+                                                    "Send_Data_2": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection"
                                             },
                                             "Send_Data_2": {
-                                                "runAfter": {},
-                                                "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": "@{body('Retrieve_information_about_a_file')?['data']}",
                                                     "headers": {
@@ -240,7 +193,9 @@
                                                     },
                                                     "method": "post",
                                                     "path": "/api/logs"
-                                                }
+                                                },
+                                                "runAfter": {},
+                                                "type": "ApiConnection"
                                             }
                                         }
                                     },
@@ -254,11 +209,14 @@
                                             }
                                         ]
                                     },
+                                    "runAfter": {
+                                        "Retrieve_information_about_a_file": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "If"
                                 },
                                 "Retrieve_information_about_a_file": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -267,9 +225,12 @@
                                         },
                                         "method": "get",
                                         "path": "/api/v3/files/@{encodeURIComponent(items('For_each')?['Value'])}"
-                                    }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
                                 }
                             },
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
                             "runAfter": {
                                 "Entities_-_Get_FileHashes": [
                                     "Succeeded"
@@ -278,7 +239,30 @@
                             "type": "Foreach"
                         }
                     },
-                    "outputs": {}
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
                 },
                 "parameters": {
                     "$connections": {

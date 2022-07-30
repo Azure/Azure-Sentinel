@@ -2,10 +2,10 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "URL Enrichment - Virus Total report",
-        "description": "This playbook will take each URL entity and query VirusTotal for URL Report (https://developers.virustotal.com/v3.0/reference#url-info). It will write the results to Log Analytics and add a comment to the incident.",
-        "prerequisites": "Register to Virus Total community for an API key.",
-        "lastUpdateTime": "2022-02-03T00:00:00.000Z",
+        "title": "URL Enrichment - Virus Total domain report",
+        "description": "This playbook will take each URL entity and query VirusTotal for Domain Report (https://developers.virustotal.com/v3.0/reference#domain-info). It will write the results to Log Analytics and add a comment to the incident.",
+        "prerequisites": ["Register to Virus Total community for an API key."],
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
         "entities": [ "URL" ],
         "tags": [ "Enrichment" ],
         "support": {
@@ -13,11 +13,20 @@
         },
         "author": {
             "name": "Nicholas DiCola"
+        },
+        "releaseNotes": [
+        {
+          "version": "1.0.0",
+          "title": "URL Enrichment - Virus Total domain report",
+          "notes": [
+          "Initial version"
+          ]
         }
+        ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Get-VirusTotalURLReport",
+            "defaultValue": "Get-VirusTotalDomainReport",
             "type": "string"
         }
     },
@@ -46,7 +55,6 @@
             "name": "[variables('VirusTotalConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[variables('VirusTotalConnectionName')]",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                 }
@@ -74,8 +82,8 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Get-VirusTotalURLReport",
-                "hidden-SentinelTemplateVersion": "1.1"
+                "hidden-SentinelTemplateName": "Get-VirusTotalDomainReport",
+                "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -106,37 +114,13 @@
                         },
                         "For_each": {
                             "actions": {
-                                "Analyse_an_URL": {
-                                    "inputs": {
-                                        "body": {
-                                            "$content-type": "multipart/form-data",
-                                            "$multipart": [
-                                                {
-                                                    "body": "@items('For_each')?['Url']",
-                                                    "headers": {
-                                                        "Content-Disposition": "form-data; name=\"url\""
-                                                    }
-                                                }
-                                            ]
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['virustotal']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/api/v3/urls"
-                                    },
-                                    "runAfter": {},
-                                    "type": "ApiConnection"
-                                },
                                 "Condition": {
                                     "actions": {
                                         "Add_comment_to_incident_(V3)": {
                                             "inputs": {
                                                 "body": {
                                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
+                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -155,9 +139,9 @@
                                         },
                                         "Send_Data": {
                                             "inputs": {
-                                                "body": "@{body('Retrieve_information_about_a_file_or_URL_analysis')['data']}",
+                                                "body": "@{body('Get_Domain_report')?['data']}",
                                                 "headers": {
-                                                    "Log-Type": "VTURLReport",
+                                                    "Log-Type": "VTDomainReport",
                                                     "time-generated-field": "@{utcNow()}"
                                                 },
                                                 "host": {
@@ -178,7 +162,7 @@
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
+                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -197,9 +181,9 @@
                                             },
                                             "Send_Data_2": {
                                                 "inputs": {
-                                                    "body": "@{body('Retrieve_information_about_a_file_or_URL_analysis')['data']}",
+                                                    "body": "@{body('Get_Domain_report')?['data']}",
                                                     "headers": {
-                                                        "Log-Type": "VTURLReport",
+                                                        "Log-Type": "VTDomainReport",
                                                         "time-generated-field": "@{utcNow()}"
                                                     },
                                                     "host": {
@@ -218,27 +202,21 @@
                                     "expression": {
                                         "or": [
                                             {
-                                                "greater": [
-                                                    "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']",
-                                                    0
-                                                ]
-                                            },
-                                            {
-                                                "greater": [
-                                                    "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']",
+                                                "greaterOrEquals": [
+                                                    "@body('Get_Domain_report')?['data']?['attributes']?['reputation']",
                                                     0
                                                 ]
                                             }
                                         ]
                                     },
                                     "runAfter": {
-                                        "Retrieve_information_about_a_file_or_URL_analysis": [
+                                        "Get_Domain_report": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "If"
                                 },
-                                "Retrieve_information_about_a_file_or_URL_analysis": {
+                                "Get_Domain_report": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -246,13 +224,9 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/api/v3/analyses/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
+                                        "path": "/api/v3/domains/@{encodeURIComponent(split(items('For_each')?['Url'], '/')[2])}"
                                     },
-                                    "runAfter": {
-                                        "Analyse_an_URL": [
-                                            "Succeeded"
-                                        ]
-                                    },
+                                    "runAfter": {},
                                     "type": "ApiConnection"
                                 }
                             },
@@ -295,7 +269,7 @@
                         "value": {
                             "azureloganalyticsdatacollector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                             },
                             "azuresentinel": {

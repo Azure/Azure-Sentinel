@@ -1,7 +1,7 @@
 # Get-VirusTotalDomainReport
 author: Nicholas DiCola
 
-TThis playbook will take each URL entity and query VirusTotal for Domain info (https://developers.virustotal.com/v3.0/reference#domain-info).
+This playbook will take each URL entity and query VirusTotal for Domain info (https://developers.virustotal.com/v3.0/reference#domain-info).
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)

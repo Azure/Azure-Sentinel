@@ -2,29 +2,36 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "FileHash Enrichment - Virus Total report",
-        "description": "This playbook will take each File Hash entity and query VirusTotal for File Report (https://developers.virustotal.com/v3.0/reference#file-info). It will write the results to Log Analytics and add a comment to the incident.",
-        "prerequisites": "Register to Virus Total community for an API key.",
-        "lastUpdateTime": "2021-05-08T00:00:00.000Z",
-        "entities": [ "FileHash" ],
+        "title": "URL Enrichment - Virus Total report",
+        "description": "This playbook will take each URL entity and query VirusTotal for info (https://developers.virustotal.com/v3.0/reference#url-info).",
+        "prerequisites": ["- You will need to register to Virus Total community for an API key"],
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "entities": [ "URL" ],
         "tags": [ "Enrichment" ],
         "support": {
-            "tier": "community"
+            "tier": "Community"
         },
         "author": {
             "name": "Nicholas DiCola"
-        }
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Handle MDE device Id missing case",
+                "notes":["- Added steps to handle if the entity from sentinel incident doesn't provide the MDE device ID."]
+            }
+        ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Get-VirusTotalFileInfo",
+            "defaultValue": "Get-VirusTotalURLReport",
             "type": "string"
         }
     },
     "variables": {
         "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "VirusTotalConnectionName": "[concat('virustotal-', parameters('PlaybookName'))]"
+        "VirusTotalConnectionName": "[concat('virustotal-',parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -46,6 +53,7 @@
             "name": "[variables('VirusTotalConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
+                "displayName": "[variables('VirusTotalConnectionName')]",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                 }
@@ -73,8 +81,8 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Get-VirusTotalFileInfo",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateName": "Get-VirusTotalURLReport",
+                "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -89,7 +97,7 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "Entities_-_Get_FileHashes": {
+                        "Entities_-_Get_URLs": {
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
@@ -98,20 +106,44 @@
                                     }
                                 },
                                 "method": "post",
-                                "path": "/entities/filehash"
+                                "path": "/entities/url"
                             },
                             "runAfter": {},
                             "type": "ApiConnection"
                         },
                         "For_each": {
                             "actions": {
+                                "Analyse_an_URL": {
+                                    "inputs": {
+                                        "body": {
+                                            "$content-type": "multipart/form-data",
+                                            "$multipart": [
+                                                {
+                                                    "body": "@items('For_each')?['Url']",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"url\""
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/v3/urls"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                },
                                 "Condition": {
                                     "actions": {
                                         "Add_comment_to_incident_(V3)": {
                                             "inputs": {
                                                 "body": {
                                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely harmless<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
+                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -130,9 +162,9 @@
                                         },
                                         "Send_Data": {
                                             "inputs": {
-                                                "body": "@{body('Retrieve_information_about_a_file')?['data']}",
+                                                "body": "@{body('Retrieve_information_about_a_file_or_URL_analysis')['data']}",
                                                 "headers": {
-                                                    "Log-Type": "VTFileReport",
+                                                    "Log-Type": "VTURLReport",
                                                     "time-generated-field": "@{utcNow()}"
                                                 },
                                                 "host": {
@@ -153,7 +185,7 @@
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Value']}<br>\nReputation is: @{body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']} which indicates likely malicous<br>\nQuery: VTFileReport_CL | where id_s == \"@{items('For_each')?['Value']}\"</p>"
+                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nSuspicious: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']}<br>\nMalicous: @{body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']}<br>\nQuery: VTURLReport_CL | where id_s == \"@{body('Analyse_an_URL')?['data']?['id']}\"</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -172,9 +204,9 @@
                                             },
                                             "Send_Data_2": {
                                                 "inputs": {
-                                                    "body": "@{body('Retrieve_information_about_a_file')?['data']}",
+                                                    "body": "@{body('Retrieve_information_about_a_file_or_URL_analysis')['data']}",
                                                     "headers": {
-                                                        "Log-Type": "VTFileReport",
+                                                        "Log-Type": "VTURLReport",
                                                         "time-generated-field": "@{utcNow()}"
                                                     },
                                                     "host": {
@@ -193,21 +225,27 @@
                                     "expression": {
                                         "or": [
                                             {
-                                                "greaterOrEquals": [
-                                                    "@body('Retrieve_information_about_a_file')?['data']?['attributes']?['reputation']",
+                                                "greater": [
+                                                    "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['malicious']",
+                                                    0
+                                                ]
+                                            },
+                                            {
+                                                "greater": [
+                                                    "@body('Retrieve_information_about_a_file_or_URL_analysis')['data']['attributes']['stats']['suspicious']",
                                                     0
                                                 ]
                                             }
                                         ]
                                     },
                                     "runAfter": {
-                                        "Retrieve_information_about_a_file": [
+                                        "Retrieve_information_about_a_file_or_URL_analysis": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "If"
                                 },
-                                "Retrieve_information_about_a_file": {
+                                "Retrieve_information_about_a_file_or_URL_analysis": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -215,15 +253,19 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/api/v3/files/@{encodeURIComponent(items('For_each')?['Value'])}"
+                                        "path": "/api/v3/analyses/@{encodeURIComponent(body('Analyse_an_URL')?['data']?['id'])}"
                                     },
-                                    "runAfter": {},
+                                    "runAfter": {
+                                        "Analyse_an_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "ApiConnection"
                                 }
                             },
-                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
                             "runAfter": {
-                                "Entities_-_Get_FileHashes": [
+                                "Entities_-_Get_URLs": [
                                     "Succeeded"
                                 ]
                             },
@@ -260,13 +302,8 @@
                         "value": {
                             "azureloganalyticsdatacollector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
-                            },
-                            "virustotal": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
-                                "connectionName": "[variables('VirusTotalConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                             },
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
@@ -277,6 +314,11 @@
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
+                            },
+                            "virustotal": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('VirusTotalConnectionName'))]",
+                                "connectionName": "[variables('VirusTotalConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                             }
                         }
                     }

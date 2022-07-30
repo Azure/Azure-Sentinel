@@ -2,22 +2,42 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
+        "comments": "This playbook will take each URL entity and query VirusTotal for domain info (https://developers.virustotal.com/v3.0/reference#domain-info).",
         "title": "URL Enrichment - Virus Total domain report",
-        "description": "This playbook will take each URL entity and query VirusTotal for Domain Report (https://developers.virustotal.com/v3.0/reference#domain-info). It will write the results to Log Analytics and add a comment to the incident.",
-        "prerequisites": "Register to Virus Total community for an API key.",
-        "lastUpdateTime": "2021-05-08T00:00:00.000Z",
-        "entities": [ "URL" ],
-        "tags": [ "Enrichment" ],
+        "description": "This playbook will take each URL entity and query VirusTotal for Domain info (https://developers.virustotal.com/v3.0/reference#domain-info).",
+        "prerequisites": ["- You will need to register to Virus Total community for an API key"],
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "entities": ["URL"],
+        "tags": ["Enrichment"],
         "support": {
             "tier": "Community"
         },
         "author": {
             "name": "Nicholas DiCola"
+        },
+        "releaseNotes": [
+        {
+          "version": "1.0.0",
+          "title": "URL Enrichment - Virus Total domain report",
+          "notes": [
+          "Initial version"
+          ]
         }
+        ]
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Get-VirusTotalDomainReport",
+            "type": "string"
+        },
+        "VirusTotalAPIKey": {
+            "defaultValue": "<APIKey>",
+            "type": "string"
+        },
+        "workspaceId": {
+            "type": "string"
+        },
+        "workSpaceKey": {
             "type": "string"
         }
     },
@@ -33,10 +53,14 @@
             "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                "displayName": "[parameters('workspaceId')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                },
+                "parameterValues": {
+                    "username": "[parameters('workspaceId')]",
+                    "password": "[parameters('workSpaceKey')]"
                 }
             }
         },
@@ -46,6 +70,9 @@
             "name": "[variables('VirusTotalConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
+                "customParameterValues": {
+                    "api_key": "[parameters('VirusTotalAPIKey')]"
+                },
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/virustotal')]"
                 }
@@ -73,7 +100,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Get-VirusTotalDomainReport",
+                "hidden-SentinelTemplateName": "Get-VirusTotalDomainReport_alert",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -88,10 +115,52 @@
                 "state": "Enabled",
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "actions": {
-                        "Entities_-_Get_URLs": {
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
                             "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -99,18 +168,23 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/url"
-                            },
-                            "runAfter": {},
-                            "type": "ApiConnection"
+                            }
                         },
                         "For_each": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
                             "actions": {
                                 "Condition": {
                                     "actions": {
                                         "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Send_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
                                             "inputs": {
                                                 "body": {
-                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
                                                     "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                 },
                                                 "host": {
@@ -120,15 +194,11 @@
                                                 },
                                                 "method": "post",
                                                 "path": "/Incidents/Comment"
-                                            },
-                                            "runAfter": {
-                                                "Send_Data": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection"
+                                            }
                                         },
                                         "Send_Data": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
                                             "inputs": {
                                                 "body": "@{body('Get_Domain_report')?['data']}",
                                                 "headers": {
@@ -142,17 +212,26 @@
                                                 },
                                                 "method": "post",
                                                 "path": "/api/logs"
-                                            },
-                                            "runAfter": {},
-                                            "type": "ApiConnection"
+                                            }
                                         }
+                                    },
+                                    "runAfter": {
+                                        "Get_Domain_report": [
+                                            "Succeeded"
+                                        ]
                                     },
                                     "else": {
                                         "actions": {
                                             "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {
+                                                    "Send_Data_2": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": {
-                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
                                                         "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                     },
                                                     "host": {
@@ -162,15 +241,11 @@
                                                     },
                                                     "method": "post",
                                                     "path": "/Incidents/Comment"
-                                                },
-                                                "runAfter": {
-                                                    "Send_Data_2": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "ApiConnection"
+                                                }
                                             },
                                             "Send_Data_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": "@{body('Get_Domain_report')?['data']}",
                                                     "headers": {
@@ -184,9 +259,7 @@
                                                     },
                                                     "method": "post",
                                                     "path": "/api/logs"
-                                                },
-                                                "runAfter": {},
-                                                "type": "ApiConnection"
+                                                }
                                             }
                                         }
                                     },
@@ -200,14 +273,11 @@
                                             }
                                         ]
                                     },
-                                    "runAfter": {
-                                        "Get_Domain_report": [
-                                            "Succeeded"
-                                        ]
-                                    },
                                     "type": "If"
                                 },
                                 "Get_Domain_report": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -216,12 +286,9 @@
                                         },
                                         "method": "get",
                                         "path": "/api/v3/domains/@{encodeURIComponent(split(items('For_each')?['Url'], '/')[2])}"
-                                    },
-                                    "runAfter": {},
-                                    "type": "ApiConnection"
+                                    }
                                 }
                             },
-                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
                             "runAfter": {
                                 "Entities_-_Get_URLs": [
                                     "Succeeded"
@@ -230,30 +297,7 @@
                             "type": "Foreach"
                         }
                     },
-                    "contentVersion": "1.0.0.0",
-                    "outputs": {},
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "Microsoft_Sentinel_incident": {
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
-                            },
-                            "type": "ApiConnectionWebhook"
-                        }
-                    }
+                    "outputs": {}
                 },
                 "parameters": {
                     "$connections": {
