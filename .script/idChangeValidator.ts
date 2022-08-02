@@ -34,7 +34,7 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
         if (idHasChanged) {
 
-            const arrayIds = [...diffSummary.matchAll(guidRegex)];
+            const arrayIds = [...diffSummary.matchAll("[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}")];
             console.log(arrayIds[1]);
             if (skipIdsFile.indexOf(arrayIds[1]) > -1) {
                 console.log(filePath + " is skipped from this validation.");
