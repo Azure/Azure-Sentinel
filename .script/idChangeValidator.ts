@@ -38,7 +38,7 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
             //console.log(typeof (regexp));
             const arrayIds = diffSummary.match('[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}');
             if (arrayIds) {
-                console.log(arrayIds.length + " " + arrayIds[1]);
+                console.log(arrayIds.length + " " + arrayIds);
             }
 
             if (arrayIds && skipIdsFile.indexOf(arrayIds[1]) > -1) {
