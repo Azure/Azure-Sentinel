@@ -13,10 +13,8 @@ const git: SimpleGit = gitP(workingDir);
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
     var skipValidationCheckFilePath = workingDir + "/.script/tests/idChangeValidatorTest/SkipIdValidationsTemplates.json";
-    console.log("skipValidationCheckFilePath: " + skipValidationCheckFilePath);
     var skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath, 'utf8'));
-    console.log(skipIdsFile + " " + typeof (skipIdsFile));
-
+    
     if (filePath.includes("Detections") || filePath.includes("Analytic Rules")) {
         filePath = workingDir + '/' + filePath;
         const pr = await GetPRDetails();
@@ -33,9 +31,6 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
         let idHasChanged = idPosition > 0;
 
         if (idHasChanged) {
-
-            //const regexp = new RegExp('[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}', 'g');
-            //console.log(typeof (regexp));
 
             const regex = RegExp('[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}', 'g');
             let array1;
