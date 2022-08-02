@@ -5,7 +5,7 @@ Learn more about the integration via the [connector documentation](https://docs.
 
 In order to successfully run this playbook you will need a valid ReversingLabs TitaniumCloud subscription with the  XREF(Historic Multi-AV Scan Records), File Reputation and File Hash Analysis Detail APIs enabled. You can obtain your subscription at support@reversinglabs.com.
 
-Playbook extracts hashes (SHA-1, SHA-256 or MD5) by utilizing Azure Sentinel-recognized entity FileHashCustomEntity. In your custom rule, map your hash field to this entity:
+Playbook extracts hashes (SHA-1, SHA-256 or MD5) by utilizing Microsoft Sentinel-recognized entity FileHashCustomEntity. In your custom rule, map your hash field to this entity:
 ```  
  YourLog_CL
     | extend FileHashCustomEntity = <your_hash_field>
