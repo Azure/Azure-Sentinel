@@ -13,7 +13,7 @@ const git: SimpleGit = gitP(workingDir);
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
     var skipValidationCheckFilePath = workingDir + "/.script/tests/idChangeValidatorTest/SkipIdValidationsTemplates.json";
-    console.log(skipValidationCheckFilePath);
+    console.log("skipValidationCheckFilePath: " + skipValidationCheckFilePath);
     const skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath));
     console.log(skipIdsFile);
 
