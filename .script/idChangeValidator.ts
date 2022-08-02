@@ -34,7 +34,7 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
         if (idHasChanged) {
 
-            var id = diffSummary.substring(idPosition, idPosition + 36);
+            var id = diffSummary.substring(idPosition+45, idPosition+81);
             console.log(id);
             console.log(skipIdsFile.indexOf(id) > -1);
             if (skipIdsFile.indexOf(id) > -1) {
