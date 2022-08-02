@@ -14,8 +14,8 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
     var skipValidationCheckFilePath = workingDir + "/.script/tests/idChangeValidatorTest/SkipIdValidationsTemplates.json";
     console.log("skipValidationCheckFilePath: " + skipValidationCheckFilePath);
-    const skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath));
-    console.log(skipIdsFile);
+    var skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath));
+    console.log(skipIdsFile + " " + typeof (skipIdsFile));
 
     if (filePath.includes("Detections") || filePath.includes("Analytic Rules")) {
         filePath = workingDir + '/' + filePath;
@@ -36,8 +36,8 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
             var id = diffSummary.substring(idPosition, idPosition + 36);
             console.log(id);
-            console.log(skipIdsFile.contains(id));
-            if (skipIdsFile.contains(id)) {
+            console.log(skipIdsFile.indexOf(id) > -1);
+            if (skipIdsFile.indexOf(id) > -1) {
                 console.log(filePath + " is skipped from this validation.");
                 return ExitCode.SUCCESS;
             } else {
