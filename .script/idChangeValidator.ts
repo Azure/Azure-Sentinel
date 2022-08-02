@@ -3,7 +3,7 @@ import { GetPRDetails } from "./utils/gitWrapper";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 import gitP, { SimpleGit } from 'simple-git/promise';
-import { readFileSync, promises as fsPromises } from 'fs';
+import { readFileSync } from 'fs';
 
 const workingDir: string = process.cwd();
 const guidRegex: string = "[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
