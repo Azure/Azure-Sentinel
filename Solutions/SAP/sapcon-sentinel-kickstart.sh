@@ -375,8 +375,8 @@ if [ -n "$SDKFILELOC" ] && [ ! -f "$SDKFILELOC" ]; then
 	exit 1
 fi
 
-if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ]; then
-	echo 'Invalid cloud name, avilable options: public, fairfax'
+if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'mooncake' ]; then
+	echo 'Invalid cloud name, avilable options: public, fairfax, mooncake.'
 	exit 1
 fi
 
@@ -522,6 +522,9 @@ else
 	elif [ $CLOUD == 'fairfax' ]; then
 		tagver=':ffx-latest'
 		az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
+	elif [ $CLOUD == 'mooncake' ]; then
+		tagver=':mc-latest'
+		az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 	fi
 	
 	if [ $PREVIEW ]; then
