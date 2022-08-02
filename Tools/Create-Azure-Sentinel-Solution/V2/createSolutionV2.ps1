@@ -403,7 +403,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
-                                    # dependencies = $workbookDependencies;
                                 }
                             }
 
