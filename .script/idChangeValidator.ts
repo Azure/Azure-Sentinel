@@ -37,8 +37,8 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
             //const regexp = new RegExp('[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}', 'g');
             //console.log(typeof (regexp));
             const arrayIds = [...diffSummary.match('[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}')];
-            console.log(arrayIds[1]);
-            if (skipIdsFile.indexOf(arrayIds[1]) > -1) {
+            //console.log(arrayIds[1]);
+            if (arrayIds && skipIdsFile.indexOf(arrayIds[1]) > -1) {
                 console.log(filePath + " is skipped from this validation.");
                 return ExitCode.SUCCESS;
             } else {
