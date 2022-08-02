@@ -27,8 +27,9 @@ This custom connector connects to PAN-OS service end point and performs defined 
 | **Create an address object group** | Creates a new address object group in the firewall|
 | **Updates an address object group** | Adds/Removes an address object group in the firewall (add/remove objects to the exiting group)  |
 | **List URL filtering security profiles** | Retrieves a list of all URL filtering security profiles in the firewall|
-| **Update URL filtering security profiles** | Updates URL filtering security profiles in the firewall (add/remove objects to the exiting security profile) |<br><br>
-### Deployment instructions 
+| **Update URL filtering security profiles** | Updates URL filtering security profiles in the firewall (add/remove objects to the exiting security profile)|
+| **Query Palo Alto XML API** | Fetch PCAPs or Device Info using the XML API |<br><br>
+### Deployment instructiFetch XML API for PCAPs and Device Infoons 
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required parameters:
     * Custom Connector Name : Enter the Custom connector name (e.g. contoso PAN-OS connector)
