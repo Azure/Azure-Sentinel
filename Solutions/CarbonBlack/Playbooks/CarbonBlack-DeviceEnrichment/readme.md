@@ -2,7 +2,8 @@
  ## Summary
  When a new Sentinel incident is created,this playbook gets triggered and performs below actions
  1. Fetches the devices information from CarbonBlack
- 2. Enrich the incident with device information by adding a comment to the incident<br>
+ 2. Enrich the incident with device information by adding a comment to the incident<br> <br>
+ ![Azure Firewall Test](./AzureFirewallConnector/AzureFirewallCustomConnector.png) <br>
      ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/Incident_Comment.PNG)
 <br>
 ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/designerOverviewLight.png)
