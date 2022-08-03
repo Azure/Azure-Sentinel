@@ -4,7 +4,7 @@
  1. Fetches the devices information from CarbonBlack
  2. Enrich the incident with device information by adding a comment to the incident<br>
      ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/Incident_Comment.PNG)
-<br>
+
 ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/designerOverviewLight.png)
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
