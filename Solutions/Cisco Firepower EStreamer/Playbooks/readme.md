@@ -14,7 +14,7 @@
 
 # Overview
 The Cisco Firepower Management Center (formerly FireSIGHT Management Center) is the administrative nerve center for select Cisco security products running on a number of different platforms. It provides complete and unified management of firewalls, application control, intrusion prevention, URL filtering, and advanced malware protection.<br><br>
-This integration allows to automate response to Azure Sentinel incidents which contain IPs or URLs. It contains the basic connector component, with which you can create your own playbooks that interact with Cisco Firepower. It also contains 3 playbook templates, ready to quick use, 2 directly modify the Cisco Firepower configuration and 1 allows direct response on Cisco Firepower from Microsoft Teams.
+This integration allows to automate response to Microsoft Sentinel incidents which contain IPs or URLs. It contains the basic connector component, with which you can create your own playbooks that interact with Cisco Firepower. It also contains 3 playbook templates, ready to quick use, 2 directly modify the Cisco Firepower configuration and 1 allows direct response on Cisco Firepower from Microsoft Teams.
 
 <a name="prerequisites"></a>
 
