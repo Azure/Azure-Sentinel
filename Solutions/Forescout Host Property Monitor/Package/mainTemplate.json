@@ -28,6 +28,14 @@
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
+    "analytic1-id": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Unique id for the scheduled alert rule"
+      }
+    },
     "playbook1-PlaybookName": {
       "defaultValue": "DnsniffEventPlaybook-1",
       "type": "string",
@@ -38,6 +46,8 @@
     }
   },
   "variables": {
+    "DnsniffEvent-1_AnalyticalRules": "DnsniffEvent-1_AnalyticalRules",
+    "_DnsniffEvent-1_AnalyticalRules": "[variables('DnsniffEvent-1_AnalyticalRules')]",
     "playbook1-Playbooks": "playbook1-Playbooks",
     "_playbook1-Playbooks": "[variables('playbook1-Playbooks')]",
     "playbook1-MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('playbook1-PlaybookName'))]",
@@ -47,6 +57,35 @@
     "_sourceId": "[variables('sourceId')]"
   },
   "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
+      "apiVersion": "2021-03-01-preview",
+      "kind": "Scheduled",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "description": "This rule creates an incident when more than certain number of Dnsniff events are generated from a host",
+        "displayName": "DnsniffEvent-1",
+        "enabled": false,
+        "query": "ForescoutHostProperties_CL | where HostProperties_DnsniffEvent_s <> '' | where HostProperties_DnsniffEvent_s matches regex \"A;DNS Query/Response:\" | extend ipaddress = iif(HostProperties_Ipv4Addr_s <> '', HostProperties_Ipv4Addr_s, (iif(HostProperties_Ipv6Addr_s <> '', HostProperties_Ipv6Addr_s, HostProperties_IpAddr_s))) | summarize NumEvents_d =count() by ipaddress, HostProperties_DnsniffEvent_s, HostProperties_EmIpAddr_s | where NumEvents_d > 5 | where ipaddress <> '' and HostProperties_EmIpAddr_s <> '' | sort by NumEvents_d asc | project NumEvents_d, ipaddress, HostProperties_EmIpAddr_s",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "NumEvents": "NumEvents_d",
+          "EmIp": "HostProperties_EmIpAddr_s",
+          "Ip": "ipaddress"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Dnsniff-Address-Check alert",
+          "alertDisplayNameFormat": "Dnsniff-Address-Check"
+        }
+      }
+    },
     {
       "properties": {
         "provisioningState": "Succeeded",
@@ -377,7 +416,7 @@
       "identity": {
         "type": "SystemAssigned"
       },
-      "apiVersion": "2017-05-01",
+      "apiVersion": "2019-05-01",
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('playbook1-MicrosoftSentinelConnectionName'))]"
       ]
@@ -422,6 +461,11 @@
         "dependencies": {
           "operator": "AND",
           "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_DnsniffEvent-1_AnalyticalRules')]",
+              "version": "1.0.0"
+            },
             {
               "kind": "Playbook",
               "contentId": "[variables('_playbook1-Playbooks')]",
