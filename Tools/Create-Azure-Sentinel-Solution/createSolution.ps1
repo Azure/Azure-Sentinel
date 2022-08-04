@@ -1084,7 +1084,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule.suppressionDuration = "PT1H"
                             
                             # Handle optional fields
-                            foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride")) {
+                            foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride", "incidentConfiguration", "sentinelEntitiesMappings")) {
                                 if ($yaml.$yamlField) {
                                     $alertRule | Add-Member -MemberType NoteProperty -Name $yamlField -Value $yaml.$yamlField
                                 }
