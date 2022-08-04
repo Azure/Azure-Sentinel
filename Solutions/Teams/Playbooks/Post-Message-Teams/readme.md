@@ -2,7 +2,7 @@
 
 Author: Yaniv Shasha
 
-This playbook will post a message in a Microsoft Teams channel when an Alert is created in Azure Sentinel
+This playbook will post a message in a Microsoft Teams channel when an Alert is created in Microsoft Sentinel
 
 ## Prerequisites
 
