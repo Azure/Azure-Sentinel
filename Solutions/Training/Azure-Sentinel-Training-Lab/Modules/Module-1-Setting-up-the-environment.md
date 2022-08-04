@@ -81,7 +81,7 @@ In this exercise, we will configure a Playbook that will be later used in the la
 
 ![playbook1](../Images/playbook1.png)
 
-3. Click on Edi **API connection** under **General**.
+3. Click on Edit **API connection** under **General**.
 
 ![playbook2](../Images/playbook2.png)
 
