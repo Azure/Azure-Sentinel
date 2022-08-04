@@ -2,10 +2,9 @@
  ## Summary
  When a new Sentinel incident is created,this playbook gets triggered and performs below actions
  1. Fetches the devices information from CarbonBlack
- 2. Enrich the incident with device information by adding a comment to the incident<br>
-     ![Comment example](./images/Incident_Comment.png)
-<br>
-![CarbonBlack-Enrich Incident With devices information](./images/designerOverviewLight.png)
+ 2. Enrich the incident with device information by adding a comment to the incident
+     ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/Incident_Comment.PNG)
+![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/designerOverviewLight.png)
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
@@ -34,30 +33,30 @@ Once deployment is complete, you will need to authorize each connection.
 
 
 ## Playbook steps explained
-###When Microsoft Sentinel incident creation rule is triggered
+### When Microsoft Sentinel incident creation rule is triggered
 
 Microsoft Sentinel incident is created. The playbook receives the incident as the input.
-###Entities - Get Hosts
+### Entities - Get Hosts
 
 Get the list of risky devices as entities from the Incident
 
-###Initialize variable to compose the devices information
+### Initialize variable to compose the devices information
 Initialize an array variable to format the license query and used as parameter while calling the search devices with organization API action
 
-###Initialize variable to assign the Organization Id
+### Initialize variable to assign the Organization Id
 Initialize an string variable to assign the Organization Id provided by Client while deploying the playbook and used a parameter while calling the search devices with organization API action.
 
-###For each-Hosts
+### For each-Hosts
 This action will append each host to array variable called Hosts
 
-###Join OR to the hosts
+### Join OR to the hosts
 This action will append logical OR operator to collected Hosts
 
-###Search devices in your organization
+### Search devices in your organization
 This action call API to search the devices in the organization by taking two parameters such as Organization Key and Query [ Query contains names of the devices ]
 
-###Construct HTML table
+### Construct HTML table
 This action will construct the HTML table with devices information
 
-###Add a comment to the incident with the information
+### Add a comment to the incident with the information
 This action will enrich the incident with the constructed HTML table with devices information
