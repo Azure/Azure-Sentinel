@@ -1,0 +1,33 @@
+id: 930f8b54-3bef-11ec-8d3d-0242ac130003
+name: NGINX - Abnormal request size
+description: |
+  'Query shows abnormal request size.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: NGINXHTTPServer
+    dataTypes:
+      - NGINXHTTPServer
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1530
+  - T1537
+query: |
+  let Average_Body_Bytes = NGINXHTTPServer
+  | where TimeGenerated > ago(30d)
+  | summarize Avg_Size = avg(tolong(HttpResponseBodyBytes))
+  | extend K = 1;
+  NGINXHTTPServer
+  | where TimeGenerated > ago(24h)
+  | extend File = extract(@"(.*\/)?(.*)", 2, tostring(UrlOriginal))
+  | extend K = 1
+  | join kind=inner Average_Body_Bytes on K
+  | where tolong(HttpResponseBodyBytes) > Avg_Size
+  | extend FileCustomEntity = File
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileCustomEntity
+  
