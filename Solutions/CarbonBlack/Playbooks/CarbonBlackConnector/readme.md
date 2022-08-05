@@ -1,6 +1,6 @@
 # CarbonBlack Logic Apps Custom connector
 
-<img src="./CarbonBlack.PNG" alt="drawing" width="20%"/><br>
+![](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlackConnector/CarbonBlack.PNG)
 
 This custom connector connects to CarbonBlack cloud end point and performs different actions on alerts, devices and threats using CarbonBlack cloud endpoint API.
 
@@ -9,15 +9,13 @@ This custom connector connects to CarbonBlack cloud end point and performs diffe
 *  API Key authentication
 
 ### Prerequisites in Carbon Black
-1. CarbonBlack clound end point should be known. (e.g.  https://{CarbonblackBaseURL})
+1. CarbonBlack cloud end point should be known. (e.g.  https://{CarbonblackBaseURL})
 2. Generate an API key. [Refer this link on how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key) with the relevant Access level:
 
 | **Actions in the connector** | **API** | **Service Category** | **API Key Access Level(s) Permitted** |
 | --------- | -------------- | ----------------- | ------------------------------------ |
 | Get endpoints info, Quarantine device, Update policy for a device, Dismiss an alert, Add a note to an alert | Alerts API, Devices API | /appservices/ | Custom (must add an access level with appropriate permissions) |
 | Search processes actions | Platform Search API for Processes | /investigate/ | Custom (must add an access level with appropriate permissions) |
-
-
 
 ## Actions supported by CarbonBlack custom connector
 
@@ -38,4 +36,3 @@ This custom connector connects to CarbonBlack cloud end point and performs diffe
     * Service Endpoint: Enter the CarbonBlack cloud end point (e.g. https://{CarbonblackBaseURL})
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlackConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlackConnector%2Fazuredeploy.json)
-
