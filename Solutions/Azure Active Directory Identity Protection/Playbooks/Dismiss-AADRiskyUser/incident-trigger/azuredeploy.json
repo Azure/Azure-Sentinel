@@ -2,16 +2,29 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "comments": "This playbook will dismiss the Risky User property in AAD using Graph API using a Beta API.",
-        "author": "Nicholas DiCola"
+        "title": "Dismiss AAD Risky User",
+        "description": "This playbook will dismiss the Risky User property in AAD using AAD Connectors.",
+        "prerequisites": [ "After playbook is deployed, add the managed identity that is created by the logic app to the Security Administrator role in Azure AD." ],
+        "lastUpdateTime": "2021-07-14T00:00:00.000Z",
+        "entities": [ "Account" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Nicholas DiCola"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Dismiss AAD Risky User",
+                "notes": [ "Initial version" ]
+            }
+        ]
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Dismiss-AADRiskyUser",
-            "type": "string"
-        },
-        "UserName": {
-            "defaultValue": "user@domain.com",
             "type": "string"
         }
     },
@@ -27,7 +40,7 @@
             "name": "[variables('AzureADConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[variables('AzureADConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
@@ -40,7 +53,7 @@
             "name": "[variables('AzureADIPConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "[variables('AzureADIPConnectionName')]",
                 "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureadip')]"
@@ -54,7 +67,7 @@
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[parameters('PlaybookName')]",
+                "displayName": "[variables('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
                 "parameterValueType": "Alternative",
                 "api": {
@@ -69,7 +82,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Dismiss-AADRiskyUser_alert",
+                "hidden-SentinelTemplateName": "Dismiss-AADRiskyUser",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -85,9 +98,9 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "Alert_-_Get_accounts": {
+                        "Entities_-_Get_Accounts": {
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -95,23 +108,6 @@
                                 },
                                 "method": "post",
                                 "path": "/entities/account"
-                            },
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection"
-                        },
-                        "Alert_-_Get_incident": {
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
                             },
                             "runAfter": {},
                             "type": "ApiConnection"
@@ -121,7 +117,7 @@
                                 "Add_comment_to_incident_(V3)": {
                                     "inputs": {
                                         "body": {
-                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
                                             "message": "<p>User [@{concat(items('For_each')?['Name'], '@', items('For_each')?['UPNSuffix'])}] was dismissed as a risky user via playbook.</p>"
                                         },
                                         "host": {
@@ -175,9 +171,9 @@
                                     "type": "ApiConnection"
                                 }
                             },
-                            "foreach": "@body('Alert_-_Get_accounts')?['Accounts']",
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "runAfter": {
-                                "Alert_-_Get_accounts": [
+                                "Entities_-_Get_Accounts": [
                                     "Succeeded"
                                 ]
                             },
@@ -193,7 +189,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_alert": {
+                        "Microsoft_Sentinel_incident": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -203,7 +199,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             },
                             "type": "ApiConnectionWebhook"
                         }
