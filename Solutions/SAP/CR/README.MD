@@ -25,3 +25,6 @@ The following table lists the SAP Log change requests that you must configure in
 | **All Logs** | NPLK900201 | 0.0.26 <br> <br>Use the complete package<br> <br>Basis<7.5 |
 | **Sample Authorizations Role** | NPLK900206 | 0.0.26 | 
 
+# How do I remove the user role and the optional CR deployed on my ABAP system?
+
+To remove the user role and optional CR imported to your system, import the deletion CR NPLK900259 into your ABAP system.
