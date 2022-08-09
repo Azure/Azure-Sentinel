@@ -1,5 +1,5 @@
 id: defe4855-0d33-4362-9557-009237623976
-name: Suspicious modification of  Global Administrator user properties
+name: Suspicious Login from deleted guest account
 description: |
   ' This query will detect logins from guest account which was recently deleted. 
   For any successful logins from deleted identities should be investigated further if any existing user accounts have been altered or linked to such identity prior deletion'
@@ -23,33 +23,26 @@ tags:
   - GuestorExternalIdentities
 query: |
   let lookback = 1d;
-  let GlobalAdmins = IdentityInfo
+  let DeleteExtUsers = AuditLogs
   | where TimeGenerated > ago(lookback)
-  | extend IsGlobalAdmin = set_has_element(AssignedRoles, "Global Administrator")
-  | where IsGlobalAdmin == true
-  | distinct AccountDisplayName, AccountUPN;
-  GlobalAdmins
-  | join kind=inner ( AuditLogs
+  | where Category =~ "UserManagement"
+  | where OperationName =~ "Delete external user"
+  | where Result =~ "success"
+  | extend InviteInitiator = tostring(InitiatedBy.["user"].["userPrincipalName"])
+  | extend Target = tostring(TargetResources[0].["displayName"])
+  | extend TargetUPN = tostring(extract(@"UPN\:\s(.+)\,\sEmail",1,Target)) , DeleteUserTime = TimeGenerated;
+  DeleteExtUsers
+  | join kind=inner (
+  SigninLogs
   | where TimeGenerated > ago(lookback)
-  | where OperationName=~ "Update user" 
-  | where Result =~ "success" 
-  | mv-expand TargetResources 
-  | mv-expand TargetResources.modifiedProperties 
-  | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) , oldValue_ = tostring(TargetResources_modifiedProperties.oldValue), newValue_ = tostring(TargetResources_modifiedProperties.newValue)
-  | where displayName_ == "UserPrincipalName" and oldValue_ !has "#EXT" and newValue_ has "#EXT"
-  | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)  
-  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) , IPAddress = tostring(InitiatedBy.["user"].["ipAddress"])
-  ) on $left.AccountUPN == $right.oldValue_
-  | project TimeGenerated, AADTenantId, IPAddress, Initiator, displayName_, oldValue_, newValue_
+  | extend LoginTime = TimeGenerated
+  ) on $left.TargetUPN == $right.UserPrincipalName
+  | where DeleteUserTime > LoginTime
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: Initiator
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: displayName_
+        columnName: InviteInitiator
   - entityType: IP
     fieldMappings:
       - identifier: Address
