@@ -1,14 +1,38 @@
 {
    "$schema":"https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
    "contentVersion":"1.0.0.0",
+   "metadata": {
+        "title": "AD4IoT-MailByProductionLine", 
+        "description": "The following playbook will send mail to notify specific stake holders. One example can be in the case of specific security team per product line or per physical location. This playbook requires a watchlist which maps between the sensors name and the mail addresses of the alerts stockholders. For more information, see [AD4IoT-MailbyProductionLine](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AD4IoT-MailbyProductionLine)",
+        "prerequisites": ["None"],
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z",
+        "entities": [], 
+        "tags": [], 
+        "support": {
+            "tier": "microsoft" 
+        },
+        "author": {
+            "name": "TJ Banasik"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "AD4IoT-MailByProductionLine",
+            "notes": [
+                "Initial version"
+            ]
+        }
+        ]
+    },
    "parameters":{
-      "PlaybookName":{
-         "defaultValue":"AD4IoT-AutoCloseIncidents",
+      "PlaybookName_AD4IoT-MailByProductionLine":{
+         "defaultValue":"AD4IoT-MailByProductionLine",
          "type":"String"
       }
    },
    "variables":{
-      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]"
+      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName_AD4IoT-MailByProductionLine'))]",
+      "AzureOffice365ConnectionName":"[concat('office365', parameters('PlaybookName_AD4IoT-MailByProductionLine'))]"
    },
    "resources": [
                {
@@ -25,40 +49,60 @@
                }
            }
        },
+        {
+           "type": "Microsoft.Web/connections",
+           "apiVersion": "2016-06-01",
+           "name": "[variables('AzureOffice365ConnectionName')]",
+           "location": "[resourceGroup().location]",
+           "properties": {
+               "displayName": "[variables('AzureOffice365ConnectionName')]",
+               "customParameterValues": {},
+               "api": {
+                   "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                   }
+           }
+       },
        {
            "type": "Microsoft.Logic/workflows",
            "apiVersion": "2017-07-01",
-           "name": "[parameters('PlaybookName')]",
+           "name": "[parameters('PlaybookName_AD4IoT-MailByProductionLine')]",
            "location": "[resourceGroup().location]",
            "dependsOn": [
-               "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+               "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+               "[resourceId('Microsoft.Web/connections', variables('AzureOffice365ConnectionName'))]"
            ],
            "properties": {
                 "state": "Enabled",
             "definition": {
         "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
         "actions": {
-            "Condition_2": {
+            "Condition": {
                 "actions": {
-                    "Update_incident": {
+                    "Compose_-_Owner_email_address": {
+                        "inputs": "@first(body('Run_query_and_list_results')?['value'])?['mail']",
+                        "runAfter": {},
+                        "type": "Compose"
+                    },
+                    "Send_an_email_(V2)": {
                         "inputs": {
                             "body": {
-                                "classification": {
-                                    "ClassificationAndReason": "BenignPositive - SuspiciousButExpected",
-                                    "ClassificationReasonText": "Known Manitenence Activity - closed by Playbook "
-                                },
-                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                "status": "Closed"
+                                "Body": "<p>@{triggerBody()?['object']?['properties']?['title']} was detcted on IP address @{body('Parse_JSON')?['SourceDeviceAddress']}<br>\n<br>\n@{triggerBody()?['object']?['properties']?['description']}<br>\nView full incident in Microsoft Sentinel: @{triggerBody()?['object']?['properties']?['incidentUrl']}</p>",
+                                "Subject": "@{triggerBody()?['object']?['properties']?['title']} detected",
+                                "To": "@{outputs('Compose_-_Owner_email_address')}"
                             },
                             "host": {
                                 "connection": {
-                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    "name": "@parameters('$connections')['office365']['connectionId']"
                                 }
                             },
-                            "method": "put",
-                            "path": "/Incidents"
+                            "method": "post",
+                            "path": "/v2/Mail"
                         },
-                        "runAfter": {},
+                        "runAfter": {
+                            "Compose_-_Owner_email_address": [
+                                "Succeeded"
+                            ]
+                        },
                         "type": "ApiConnection"
                     }
                 },
@@ -68,18 +112,6 @@
                             "greater": [
                                 "@length(body('Run_query_and_list_results')?['value'])",
                                 0
-                            ]
-                        },
-                        {
-                            "greater": [
-                                "@int(substring(split(triggerBody()?['object']?['properties']?['createdTimeUtc'],'T')[1],0,2))",
-                                "@int(0)"
-                            ]
-                        },
-                        {
-                            "less": [
-                                "@int(substring(split(triggerBody()?['object']?['properties']?['createdTimeUtc'],'T')[1],0,2))",
-                                "@int(23)"
                             ]
                         }
                     ]
@@ -97,15 +129,11 @@
                         {
                             "name": "WatchlistName",
                             "type": "string",
-                            "value": "ipaddresses"
+                            "value": "MailsBySensor"
                         }
                     ]
                 },
-                "runAfter": {
-                    "Parse_JSON": [
-                        "Succeeded"
-                    ]
-                },
+                "runAfter": {},
                 "type": "InitializeVariable"
             },
             "Parse_JSON": {
@@ -144,12 +172,16 @@
                         "type": "object"
                     }
                 },
-                "runAfter": {},
+                "runAfter": {
+                    "Initialize_variable": [
+                        "Succeeded"
+                    ]
+                },
                 "type": "ParseJson"
             },
             "Run_query_and_list_results": {
                 "inputs": {
-                    "body": "_GetWatchlist(\"@{variables('WatchlistName')}\") \n| where ip_address == \"@{body('Parse_JSON')?['SourceDeviceAddress']}\"",
+                    "body": "_GetWatchlist(\"@{variables('WatchlistName')}\") \n| where Sensor == \"@{body('Parse_JSON')?['SensorId']}\"",
                     "host": {
                         "connection": {
                             "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -166,7 +198,7 @@
                     }
                 },
                 "runAfter": {
-                    "Initialize_variable": [
+                    "Parse_JSON": [
                         "Succeeded"
                     ]
                 },
@@ -189,7 +221,7 @@
                     },
                     "host": {
                         "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
                         }
                     },
                     "path": "/incident-creation"
@@ -198,8 +230,6 @@
             }
         }
     },
-
-
     "parameters": {
             "$connections":{
                "value":{
@@ -207,6 +237,11 @@
                      "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                      "connectionName":"[variables('AzureSentinelConnectionName')]",
                      "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                  },
+                  "office365":{
+                     "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureOffice365ConnectionName'))]",
+                     "connectionName":"[variables('AzureOffice365ConnectionName')]",
+                     "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
                   }
                }
             }
