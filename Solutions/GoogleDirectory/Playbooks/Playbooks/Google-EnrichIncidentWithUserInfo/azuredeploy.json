@@ -1,16 +1,20 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
-        "title": "Google Directory - Enrich Incident With User Info", 
+    "metadata": {
+        "title": "Google Directory - Enrich Incident With User Info",
         "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Gets users from the incident.\n 2. [Obtains information about user.](https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/get)\n 3. Enriches the incident with the obtained info.",
         "prerequisites": [
             "1. Google Directory Custom API Connector has to be deployed prior to the deployment of this playbook under the same subscription.",
             "2. Google Directory API credentials are required. Refer to the Google Directory Custom Connector documentation."
         ],
-        "lastUpdateTime": "2022-08-08T12:00:00.000Z", 
-        "entities": ["Account"],
-        "tags": ["Enrichment"], 
+        "lastUpdateTime": "2022-08-08T12:00:00.000Z",
+        "entities": [
+            "Account"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
         "support": {
             "tier": "microsoft"
         },
@@ -99,7 +103,7 @@
                     "actions": {
                         "Add_comment_to_incident_(V3)": {
                             "runAfter": {
-                                "Create_HTML_table": [
+                                "Create_HTML_table_errors": [
                                     "Succeeded"
                                 ]
                             },
@@ -107,7 +111,7 @@
                             "inputs": {
                                 "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                    "message": "<p>@{body('Create_HTML_table')}<br>\n<br>\nErrors:<br>\n@{body('Create_HTML_table_errors')}</p>"
                                 },
                                 "host": {
                                     "connection": {
@@ -130,9 +134,21 @@
                                 "from": "@variables('users info list')"
                             }
                         },
+                        "Create_HTML_table_errors": {
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('errors')"
+                            }
+                        },
                         "Entities_-_Get_Accounts": {
                             "runAfter": {
-                                "Initialize_variable_users_info_list": [
+                                "Initialize_variable_errors": [
                                     "Succeeded"
                                 ]
                             },
@@ -151,56 +167,77 @@
                         "For_each_user": {
                             "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "actions": {
-                                "Append_to_array_variable": {
+                                "Append_to_array_variable_errors": {
                                     "runAfter": {
-                                        "Compose": [
-                                            "Succeeded"
+                                        "Scope": [
+                                            "Failed",
+                                            "TimedOut"
                                         ]
                                     },
                                     "type": "AppendToArrayVariable",
                                     "inputs": {
-                                        "name": "users info list",
-                                        "value": "@outputs('Compose')"
+                                        "name": "errors",
+                                        "value": {
+                                            "message": "User @{outputs('get_user_email')} is not found"
+                                        }
                                     }
                                 },
-                                "Compose": {
-                                    "runAfter": {
-                                        "Get_User": [
-                                            "Succeeded"
-                                        ]
+                                "Scope": {
+                                    "actions": {
+                                        "Append_to_array_variable_users_info_list": {
+                                            "runAfter": {
+                                                "Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "users info list",
+                                                "value": "@outputs('Compose')"
+                                            }
+                                        },
+                                        "Compose": {
+                                            "runAfter": {
+                                                "Get_User": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "emails": "@body('Get_User')?['emails']",
+                                                "id": "@body('Get_User')?['id']",
+                                                "isAdmin": "@body('Get_User')?['isAdmin']",
+                                                "isDelegatedAdmin": "@body('Get_User')?['isDelegatedAdmin']",
+                                                "name": "@body('Get_User')?['name']?['fullName']",
+                                                "primaryEmail": "@body('Get_User')?['primaryEmail']"
+                                            }
+                                        },
+                                        "Get_User": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['googledirectory']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/admin/directory/v1/users/@{encodeURIComponent(outputs('get_user_email'))}",
+                                                "queries": {
+                                                    "alt": "json",
+                                                    "prettyPrint": true,
+                                                    "projection": "basic",
+                                                    "viewType": "admin_view"
+                                                }
+                                            }
+                                        }
                                     },
-                                    "type": "Compose",
-                                    "inputs": {
-                                        "emails": "@body('Get_User')?['emails']",
-                                        "id": "@body('Get_User')?['id']",
-                                        "isAdmin": "@body('Get_User')?['isAdmin']",
-                                        "isDelegatedAdmin": "@body('Get_User')?['isDelegatedAdmin']",
-                                        "name": "@body('Get_User')?['name']?['fullName']",
-                                        "primaryEmail": "@body('Get_User')?['primaryEmail']"
-                                    }
-                                },
-                                "Get_User": {
                                     "runAfter": {
                                         "get_user_email": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['googledirectory']['connectionId']"
-                                            }
-                                        },
-                                        "method": "get",
-                                        "path": "/admin/directory/v1/users/@{encodeURIComponent(outputs('get_user_email'))}",
-                                        "queries": {
-                                            "alt": "json",
-                                            "prettyPrint": true,
-                                            "projection": "basic",
-                                            "viewType": "admin_view"
-                                        }
-                                    }
+                                    "type": "Scope"
                                 },
                                 "get_account_name": {
                                     "runAfter": {},
@@ -232,6 +269,23 @@
                                 ]
                             },
                             "type": "Foreach"
+                        },
+                        "Initialize_variable_errors": {
+                            "runAfter": {
+                                "Initialize_variable_users_info_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "errors",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
                         },
                         "Initialize_variable_users_info_list": {
                             "runAfter": {},
