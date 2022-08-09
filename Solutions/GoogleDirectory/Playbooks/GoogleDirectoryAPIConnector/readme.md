@@ -18,7 +18,12 @@ This custom connector connects to [Google Directory Users API](https://developer
 
 ## Actions supported by the connector
 
-The connector supports all the actions of [Google Directory Users API](https://developers.google.com/admin-sdk/directory/reference/rest/v1/users).
+| Component | Description |
+| --------- | -------------- |
+| **Get User** | Retrieves a user. |
+| **Update User** | Updates a user. This method supports patch semantics, meaning you only need to include the fields you wish to update. Fields that are not present in the request will be preserved, and fields set to `null` will be cleared. For more information refer to the [documentation](https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/update). |
+| **Sign Out User** | Signs a user out of all web and device sessions and reset their sign-in cookies. User will have to sign in by authenticating again. |
+
 
 
 
