@@ -5,11 +5,10 @@
  2. Sends an adaptive card to the SOC Teams channel, let the analyst decide on action:
     Quarantine the device or Update the policy based on SOC action
 
-    ![card example](./images/adaptiveCard.png)
+    ![card example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/images/adaptiveCard.png)
 
  3. Add a comment to the incident with the information collected from the carbon black, summary of the actions taken and close the incident
-     ![Comment example](./images/Incident_Comment.png)
-
+     ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/images/Incident_Comment.png)
 
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
