@@ -61,7 +61,7 @@ To configure the connector follow the instructions:
 
 | Parameters | Description |
 |----------------|--------------|
-|**For Playbooks**|
+|**GoogleDirectoryConnectorName** | Logic App Connector Name |
 |**Google-SuspendUser** | Name of the Playbook |
 |**Google-SignOutUser** | Name of the Playbook |
 |**Google-EnrichIncidentWithUserInfo** | Name of the Playbook |
