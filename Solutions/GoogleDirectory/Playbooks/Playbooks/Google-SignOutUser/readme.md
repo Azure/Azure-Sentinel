@@ -1,6 +1,6 @@
 # Google-SignOutUser
  ## Summary
- Once a new sentinal incident is created, this playbook gets triggered and performs the following actions:
+ Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:
  1. Gets users from the incident.
  2. [Signs out users.](https://developers.google.com/admin-sdk/directory/reference/rest/v1/users/signOut)
  3. Adds comment to the incident about signed out users.

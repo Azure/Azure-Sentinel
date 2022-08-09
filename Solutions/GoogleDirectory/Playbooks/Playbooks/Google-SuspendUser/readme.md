@@ -1,10 +1,10 @@
 # Google-SuspendUser
  ## Summary
- Once a new sentinal incident is created, this playbook gets triggered and performs the following actions:
+ Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:
  1. Gets users from the incident.
  2. Sends an adaptive card to the Teams channel where the analyst can choose users to suspend.
- 2. Suspends users.
- 3. Adds comment to the incident about suspended users.
+ 3. Suspends users.
+ 4. Adds comment to the incident about suspended users.
 
 <img src="./playbook_screenshot.png" width="80%"/><br>
 ### Prerequisites 
