@@ -1,16 +1,20 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
-        "title": "AWS IAM - Enrich incident with user info", 
+    "metadata": {
+        "title": "AWS IAM - Enrich incident with user info",
         "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Gets users from the incident.\n 2. Obtains information about users in AWS IAM.\n 3. Adds obtained information as a comment to the incident.",
         "prerequisites": [
             "1. AWS IAM Function App Connector has to be deployed prior to the deployment of this playbook under the same subscription.",
             "2. AWS IAM API credentials are required. Refer to the AWS IAM Function App Connector documentation."
         ],
-        "lastUpdateTime": "2022-08-10T12:00:00.000Z", 
-        "entities": ["Account"],
-        "tags": ["Enrichment"], 
+        "lastUpdateTime": "2022-08-10T12:00:00.000Z",
+        "entities": [
+            "Account"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
         "support": {
             "tier": "microsoft"
         },
@@ -95,17 +99,18 @@
                         "For_each_user": {
                             "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "actions": {
-                                "Add_comment_to_incident_(V3)": {
+                                "Add_comment_to_incident_(V3)_2": {
                                     "runAfter": {
-                                        "Create_message": [
-                                            "Succeeded"
+                                        "Scope": [
+                                            "TimedOut",
+                                            "Failed"
                                         ]
                                     },
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p>@{outputs('Create_message')}</p>"
+                                            "message": "<p>Playbook could not obtain information about user @{outputs('Get_user_name')}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -116,182 +121,209 @@
                                         "path": "/Incidents/Comment"
                                     }
                                 },
-                                "Create_HTML_table_with_tags": {
-                                    "runAfter": {
-                                        "Parse_GetUser_response": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Table",
-                                    "inputs": {
-                                        "format": "HTML",
-                                        "from": "@body('Parse_GetUser_response')?['Tags']"
-                                    }
-                                },
-                                "Create_HTML_table_with_user_groups": {
-                                    "runAfter": {
-                                        "Select_user_groups_fields_for_table": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Table",
-                                    "inputs": {
-                                        "format": "HTML",
-                                        "from": "@body('Select_user_groups_fields_for_table')"
-                                    }
-                                },
-                                "Create_message": {
-                                    "runAfter": {
-                                        "Create_HTML_table_with_user_groups": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Compose",
-                                    "inputs": "User name: @{body('Parse_GetUser_response')?['UserName']}\nUser ID: @{body('Parse_GetUser_response')?['UserId']}\nUser create date: @{body('Parse_GetUser_response')?['CreateDate']}\nUser tags:\n@{body('Create_HTML_table_with_tags')}\nUser groups:\n@{body('Create_HTML_table_with_user_groups')}"
-                                },
-                                "GetUser": {
-                                    "runAfter": {
-                                        "Get_user_name": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Function",
-                                    "inputs": {
-                                        "function": {
-                                            "id": "[concat(variables('aws_iam_functionapp_id'), '/functions/GetUser')]"
-                                        },
-                                        "method": "GET",
-                                        "queries": {
-                                            "username": "@outputs('Get_user_name')"
-                                        }
-                                    }
-                                },
                                 "Get_user_name": {
                                     "runAfter": {},
                                     "type": "Compose",
                                     "inputs": "@items('For_each_user')?['Name']"
                                 },
-                                "ListGroupsForUser": {
-                                    "runAfter": {
-                                        "GetUser": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Function",
-                                    "inputs": {
-                                        "function": {
-                                            "id": "[concat(variables('aws_iam_functionapp_id'), '/functions/ListGroupsForUser')]"
+                                "Scope": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Create_message": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>@{outputs('Create_message')}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
                                         },
-                                        "method": "GET",
-                                        "queries": {
-                                            "username": "@outputs('Get_user_name')"
-                                        }
-                                    }
-                                },
-                                "Parse_GetUser_response": {
-                                    "runAfter": {
-                                        "ListGroupsForUser": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@body('GetUser')",
-                                        "schema": {
-                                            "properties": {
-                                                "Arn": {
-                                                    "type": "string"
+                                        "Create_HTML_table_with_tags": {
+                                            "runAfter": {
+                                                "Parse_GetUser_response": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@body('Parse_GetUser_response')?['Tags']"
+                                            }
+                                        },
+                                        "Create_HTML_table_with_user_groups": {
+                                            "runAfter": {
+                                                "Select_user_groups_fields_for_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@body('Select_user_groups_fields_for_table')"
+                                            }
+                                        },
+                                        "Create_message": {
+                                            "runAfter": {
+                                                "Create_HTML_table_with_user_groups": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "User name: @{body('Parse_GetUser_response')?['UserName']}\nUser ID: @{body('Parse_GetUser_response')?['UserId']}\nUser create date: @{body('Parse_GetUser_response')?['CreateDate']}\nUser tags:\n@{body('Create_HTML_table_with_tags')}\nUser groups:\n@{body('Create_HTML_table_with_user_groups')}"
+                                        },
+                                        "GetUser": {
+                                            "runAfter": {},
+                                            "type": "Function",
+                                            "inputs": {
+                                                "function": {
+                                                    "id": "[concat(variables('aws_iam_functionapp_id'), '/functions/GetUser')]"
                                                 },
-                                                "CreateDate": {
-                                                    "type": "string"
+                                                "method": "GET",
+                                                "queries": {
+                                                    "username": "@outputs('Get_user_name')"
+                                                }
+                                            }
+                                        },
+                                        "ListGroupsForUser": {
+                                            "runAfter": {
+                                                "GetUser": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Function",
+                                            "inputs": {
+                                                "function": {
+                                                    "id": "[concat(variables('aws_iam_functionapp_id'), '/functions/ListGroupsForUser')]"
                                                 },
-                                                "Path": {
-                                                    "type": "string"
-                                                },
-                                                "Tags": {
+                                                "method": "GET",
+                                                "queries": {
+                                                    "username": "@outputs('Get_user_name')"
+                                                }
+                                            }
+                                        },
+                                        "Parse_GetUser_response": {
+                                            "runAfter": {
+                                                "ListGroupsForUser": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('GetUser')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "Arn": {
+                                                            "type": "string"
+                                                        },
+                                                        "CreateDate": {
+                                                            "type": "string"
+                                                        },
+                                                        "Path": {
+                                                            "type": "string"
+                                                        },
+                                                        "Tags": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "Key": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Value": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "Key",
+                                                                    "Value"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "UserId": {
+                                                            "type": "string"
+                                                        },
+                                                        "UserName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Parse_ListGroupsForUser_response": {
+                                            "runAfter": {
+                                                "Create_HTML_table_with_tags": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('ListGroupsForUser')",
+                                                "schema": {
                                                     "items": {
                                                         "properties": {
-                                                            "Key": {
+                                                            "Arn": {
                                                                 "type": "string"
                                                             },
-                                                            "Value": {
+                                                            "CreateDate": {
+                                                                "type": "string"
+                                                            },
+                                                            "GroupId": {
+                                                                "type": "string"
+                                                            },
+                                                            "GroupName": {
+                                                                "type": "string"
+                                                            },
+                                                            "Path": {
                                                                 "type": "string"
                                                             }
                                                         },
                                                         "required": [
-                                                            "Key",
-                                                            "Value"
+                                                            "Path",
+                                                            "GroupName",
+                                                            "GroupId",
+                                                            "Arn",
+                                                            "CreateDate"
                                                         ],
                                                         "type": "object"
                                                     },
                                                     "type": "array"
-                                                },
-                                                "UserId": {
-                                                    "type": "string"
-                                                },
-                                                "UserName": {
-                                                    "type": "string"
                                                 }
+                                            }
+                                        },
+                                        "Select_user_groups_fields_for_table": {
+                                            "runAfter": {
+                                                "Parse_ListGroupsForUser_response": [
+                                                    "Succeeded"
+                                                ]
                                             },
-                                            "type": "object"
+                                            "type": "Select",
+                                            "inputs": {
+                                                "from": "@body('Parse_ListGroupsForUser_response')",
+                                                "select": {
+                                                    "GroupId": "@item()['GroupId']",
+                                                    "GroupName": "@item()['GroupName']"
+                                                }
+                                            }
                                         }
-                                    }
-                                },
-                                "Parse_ListGroupsForUser_response": {
+                                    },
                                     "runAfter": {
-                                        "Create_HTML_table_with_tags": [
+                                        "Get_user_name": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@body('ListGroupsForUser')",
-                                        "schema": {
-                                            "items": {
-                                                "properties": {
-                                                    "Arn": {
-                                                        "type": "string"
-                                                    },
-                                                    "CreateDate": {
-                                                        "type": "string"
-                                                    },
-                                                    "GroupId": {
-                                                        "type": "string"
-                                                    },
-                                                    "GroupName": {
-                                                        "type": "string"
-                                                    },
-                                                    "Path": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "Path",
-                                                    "GroupName",
-                                                    "GroupId",
-                                                    "Arn",
-                                                    "CreateDate"
-                                                ],
-                                                "type": "object"
-                                            },
-                                            "type": "array"
-                                        }
-                                    }
-                                },
-                                "Select_user_groups_fields_for_table": {
-                                    "runAfter": {
-                                        "Parse_ListGroupsForUser_response": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Select",
-                                    "inputs": {
-                                        "from": "@body('Parse_ListGroupsForUser_response')",
-                                        "select": {
-                                            "GroupId": "@item()['GroupId']",
-                                            "GroupName": "@item()['GroupName']"
-                                        }
-                                    }
+                                    "type": "Scope"
                                 }
                             },
                             "runAfter": {
