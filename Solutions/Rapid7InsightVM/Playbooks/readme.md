@@ -59,6 +59,7 @@ To get Rapid7 InsightVM API key, follow the instructions in the [documentation](
 | Parameters | Description |
 |----------------|--------------|
 |**For Connector**|
+|**Connector Name**| Enter the Rapid7 InsightVM Logic App connector name here |
 |**Insight Platform Region** | The region indicates the geo-location of the Insight Platform. |
 |**For Playbooks**|
 |**Rapid7InsightVM-EnrichIncidentWithAssetInfo Playbook Name** | Name of the Playbook |

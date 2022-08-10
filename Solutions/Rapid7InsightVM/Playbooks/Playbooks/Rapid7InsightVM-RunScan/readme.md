@@ -26,6 +26,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
+    * Connector Name: Enter the Rapid7 InsightVM Logic App connector name here
     * Teams Group Id: Id of the Teams Group where the adaptive card will be posted.
     * Teams Channel Id: Id of the Teams Channel where the adaptive card will be posted.
 
