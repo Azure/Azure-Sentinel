@@ -16,7 +16,6 @@ from .state_manager import StateManager
 ARMORBLOX_API_TOKEN = os.environ["ArmorbloxAPIToken"]
 ARMORBLOX_INSTANCE_NAME = os.environ.get("ArmorbloxInstanceName", "").strip()
 ARMORBLOX_INSTANCE_URL = os.environ.get("ArmorbloxInstanceURL", "").strip()
-ARMORBLOX_INCIDENT_API_PATH = "incidents"
 ARMORBLOX_INCIDENT_API_PAGE_SIZE = 100
 ARMORBLOX_INCIDENT_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 ARMORBLOX_INCIDENT_API_TIME_DELTA_IN_MINUTES = 60
@@ -64,14 +63,11 @@ class Armorblox(Client):
 
     def _process_incidents(self, params):
         response_json, next_page_token, total_count = self.incidents.list(page_token=None, params=params)
-        if response_json is None:
-            pass
-        else:
+        self.incidents_list.extend(response_json)
+        while next_page_token:
+            params["page_token"] = next_page_token
+            response_json, next_page_token, total_count = self.incidents.list(page_token=None, params=params)
             self.incidents_list.extend(response_json)
-            while next_page_token:
-                params["page_token"] = response_json['next_page_token']
-                response_json, next_page_token, total_count = self.incidents.list(page_token=None, params=params)
-                self.incidents_list.extend(response_json)
 
     def get_incidents(self):
 
