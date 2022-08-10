@@ -1,0 +1,81 @@
+Parser:
+  Title: Network Session ASIM parser for WatchGuard Fireware OS
+  Version: '0.1.0'
+  LastUpdated: Aug 10th, 2022
+Product:
+  Name: WatchGuard Fireware OS
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing WatchGuard Fireware OS logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionWatchGuardFirewareOS
+EquivalentBuiltInParser: _ASim_NetworkSession_WatchGuardFirewareOS
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventLookup=datatable(DvcAction:string,EventResult:string,EventSeverity:string)
+  [
+      "Allow","Success","Informational"
+      , "Deny","Failure","Low"
+  ];
+  let Parser=(disabled:bool=false){
+  let AllLogs = Syslog
+  | where not(disabled)
+  | where SyslogMessage has_any('msg_id="3000-0148"' 
+      , 'msg_id="3000-0149"' 
+      , 'msg_id="3000-0150"'
+      , 'msg_id="3000-0151"'
+      , 'msg_id="3000-0173"'
+  )
+  | project TimeGenerated, SyslogMessage, HostName;
+  let WithFQDN = AllLogs
+  | where SyslogMessage has "fqdn_dst_match=" and SyslogMessage !has "3000-0151"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\sfqdn_dst_match="' DstDomain @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber @"\s" DstPortNumber @"\s" *
+  | extend DstDomainType = iif(isnotempty(DstDomain),"FQDN","");
+  let WithoutFQDN = AllLogs
+  | where SyslogMessage !has "fqdn_dst_match=" and SyslogMessage !has "3000-0151"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber @"\s" DstPortNumber @"\s" *;
+  let WithPortDuration = AllLogs
+  | where SyslogMessage has "3000-0151" and SyslogMessage !has "icmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber @"\s" DstPortNumber @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
+  | extend NetworkProtocol = extract(@"\s(tcp|udp|icmp|igmp)\s", 1, SyslogMessage)
+  ;
+  let ICMP = AllLogs
+  | where SyslogMessage has "3000-0151" and SyslogMessage has "icmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SrcIpAddr @"\s" DstIpAddr @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
+  | extend NetworkProtocol = extract(@"\s(tcp|udp|icmp|igmp)\s", 1, SyslogMessage);
+  union WithFQDN, WithoutFQDN, WithPortDuration, ICMP
+  | parse SyslogMessage with * 'geo_src="' SrcGeoCountry '"' *
+  | parse SyslogMessage with * 'geo_dst="' DstGeoCountry '"' *
+  | parse SyslogMessage with * 'src_user="' SrcUsername '"' *
+  | extend SrcUsernameType = iif(SrcUsername has "@","UPN","")
+  | parse SyslogMessage with * 'dst_user="' DstUsername '"' *
+  | extend DstUsernameType = iif(DstUsername has "@","UPN","")
+  | parse SyslogMessage with * "repeated " EventCount:int " times" *
+  | extend EventCount = iif(isnotempty(EventCount), EventCount, toint(1))
+  | extend EventSchema = "NetworkSession"
+      , EventSchemaVersion = "0.2.4"
+      , EventVendor = "WatchGuard"
+      , EventProduct = "Fireware"
+      , EventType = "NetworkSession"
+      , DvcHostname = HostName
+      , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+          , DstIpAddr contains ":", "IPv6"
+          , "")
+      , NetworkProtocol = toupper(NetworkProtocol)
+      , NetworkDuration = NetworkDuration * toint(1000)
+      , NetworkBytes = SrcBytes + DstBytes
+      , EventEndTime = TimeGenerated
+      , EventStartTime = TimeGenerated
+  | project-rename Dvc = HostName
+  | lookup EventLookup on DvcAction
+  };
+  Parser (disabled)
