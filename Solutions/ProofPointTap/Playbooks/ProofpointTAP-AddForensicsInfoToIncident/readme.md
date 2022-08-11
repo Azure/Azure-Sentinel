@@ -1,6 +1,6 @@
 # ProofpointTAP-AddForensicsInfoToIncident
  ## Summary
- Once a new sentinal incident is created, this playbook gets triggered and performs the following actions:
+ Once a new sentinel incident is created, this playbook gets triggered and performs the following actions:
  1. [Gets Forensics](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/Forensics_API) by the *campaignId*, provided in the alert custom entities. 
  2. Enriches the incident with Forensics info.
 
