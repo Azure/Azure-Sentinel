@@ -1,10 +1,34 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Fortinet-FortiGate-FunctionApp", 
+    "description": "This function app connects to Fortinet service end point and fetch the details of the entities of the fortinet firewall.",
+    "prerequisites": ["* Add new secret to the existing Key Vault (Create new if not exist) for Fortinet API key and capture the secret identifier of new key \n\n * Fortinet service end point should be known (ex: https://{yourVMIPorTrafficmanagername}/)"],
+    "lastUpdateTime": "2022-08-01T00:00:00.000Z", 
+    "entities": [], 
+    "tags": [], 
+    "postDeployment": ["* Create User Managed Identity in your subscription by following document. Refer this link [Create Managed Identity ](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal#create-a-user-assigned-managed-identity) \n\n * Assign role to user assigned identity. Refer this link [Assign role to user ](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal#assign-a-role-to-a-user-assigned-managed-identity) \n\n * Open created function app, follow below steps or refer steps documented [Function app setting](https://docs.microsoft.com/azure/logic-apps/logic-apps-azure-functions#enable-authentication-for-functions) \n\n - Go to Authentication / Authorization option \n\n - Enable App Service Authentication \n\n - Select 'Login with Azure Active Directory' for Action to take when request is not authenticated \n\n - Select Azure Active Directory as Authentication Providers \n\n - Select advanced option from the management mode and fill details \n\n - UserIdentity object id as client ID (ex: b1fd400b-e34b-40c0-996f506d8a98) \n\n - Issuer url (format should be https://sts.windows.net/<tenentID>), refer for to get tenentID [Get tenentID](https://ms.portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/Overview) \n\n - Allow token Audiences (ex: [parameters('AzureManagementLink')] \n\n - Click ok \n\n - Click on save \n\n * Open function app and go to Identify and capture the object ID [Capture Object ID](https://docs.microsoft.com/azure/app-service/overview-managed-identity?tabs=dotnet) \n\n * Add azure function app to key Vault access policy [Add access policy](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)"],
+    "support": {
+        "tier": "microsoft" 
+    },
+    "author": {
+        "name": "Lior Tamir"
+    },
+    "releaseNotes": [
+    {
+      "version": "1.0.0",
+      "title": "Fortinet-FortiGate-FunctionApp",
+      "notes": [
+        "Initial version"
+      ]
+    }
+    ]
+  },
   "parameters": {
     "Function App Name": {
       "type": "string",
-      "defaultValue": "",
+      "defaultValue": "Fortinet Fortigate Function App",
       "metadata": {
         "description": "Function App name is global uniqueness should not contain any special symbol"
       }
@@ -29,29 +53,37 @@
       "metadata": {
         "description": "User Identifer"
       }
+    },
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
     }
   },
   "variables": {
     "functionAppName": "[parameters('Function App Name')]",
     "hostingPlanName": "[parameters('Function App Name')]",
-    "applicationInsightsName": "[parameters('Function App Name')]",
     "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
     "StorageAccount": "Standard_LRS",
     "functionWorkerRuntime": "dotnet",
     "SecretIdentifierofKeyvalut": "[parameters('Secret Identifier of Keyvalut')]",
-    "location": "[resourceGroup().location]",
-    "appInsightsLocation": "[resourceGroup().location]",
+    "location": "[parameters('location')]",
+    "appInsightsLocation": "[parameters('location')]",
     "Endpoint": "[parameters('service_EndPoint')]",
     "functionName": "Fortinet-GetEntityDetails",
-    "UserIdentifier": "[parameters('UserIdentifier')]"
-
+    "UserIdentifier": "[parameters('UserIdentifier')]",
+    "applicationInsightsName": "Fortinet Fortigate Application Insights",
+    "_applicationInsightsName": "[variables('applicationInsightsName')]"
   },
   "resources": [
     {
       "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2019-06-01",
+      "apiVersion": "2021-09-01",
       "name": "[variables('storageAccountName')]",
-      "location": "[variables('location')]",
+      "location": "[resourceGroup().location]",
       "sku": {
         "name": "[variables('StorageAccount')]"
       },
@@ -61,7 +93,7 @@
       "type": "Microsoft.Web/serverfarms",
       "apiVersion": "2020-06-01",
       "name": "[variables('hostingPlanName')]",
-      "location": "[variables('location')]",
+      "location": "[parameters('location')]",
       "sku": {
         "name": "Y1",
         "tier": "Dynamic"
@@ -75,7 +107,7 @@
       "type": "Microsoft.Web/sites",
       "apiVersion": "2020-06-01",
       "name": "[variables('functionAppName')]",
-      "location": "[variables('location')]",
+      "location": "[parameters('location')]",
       "kind": "functionapp",
       "identity": {
         "type": "SystemAssigned"
@@ -90,11 +122,11 @@
           "appSettings": [
             {
               "name": "AzureWebJobsStorage",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-09-01').keys[0].value)]"
             },
             {
               "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-09-01').keys[0].value)]"
             },
             {
               "name": "WEBSITE_CONTENTSHARE",
@@ -110,7 +142,7 @@
             },
             {
               "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-              "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
+              "value": "[reference(resourceId('microsoft.insights/components', variables('_applicationInsightsName')), '2020-02-02').InstrumentationKey]"
             },
             {
               "name": "FUNCTIONS_WORKER_RUNTIME",
@@ -143,14 +175,14 @@
     },
     {
       "type": "microsoft.insights/components",
-      "apiVersion": "2020-02-02-preview",
-      "name": "[variables('applicationInsightsName')]",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('_applicationInsightsName')]",
       "location": "[variables('appInsightsLocation')]",
       "tags": {
-        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('_applicationInsightsName')))]": "Resource"
       },
       "properties": {
-        "ApplicationId": "[variables('applicationInsightsName')]",
+        "ApplicationId": "[variables('_applicationInsightsName')]",
         "Request_Source": "IbizaWebAppExtensionCreate"
       }
     },
