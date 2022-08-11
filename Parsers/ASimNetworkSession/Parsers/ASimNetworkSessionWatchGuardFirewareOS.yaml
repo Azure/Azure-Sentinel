@@ -28,7 +28,6 @@ ParserQuery: |
   ];
   let Parser=(disabled:bool=false){
   let AllLogs = Syslog
-  | where not(disabled)
   | where SyslogMessage has_any('msg_id="3000-0148"' 
       , 'msg_id="3000-0149"' 
       , 'msg_id="3000-0150"'
@@ -37,22 +36,26 @@ ParserQuery: |
   )
   | project TimeGenerated, SyslogMessage, HostName;
   let WithFQDN = AllLogs
-  | where SyslogMessage has "fqdn_dst_match=" and SyslogMessage !has "3000-0151"
-  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\sfqdn_dst_match="' DstDomain @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber @"\s" DstPortNumber @"\s" *
+  | where SyslogMessage has "fqdn_dst_match=" and SyslogMessage !has "3000-0151" and SyslogMessage !has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\sfqdn_dst_match="' DstDomain @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber:int @"\s" DstPortNumber:int @"\s" *
   | extend DstDomainType = iif(isnotempty(DstDomain),"FQDN","");
   let WithoutFQDN = AllLogs
-  | where SyslogMessage !has "fqdn_dst_match=" and SyslogMessage !has "3000-0151"
-  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber @"\s" DstPortNumber @"\s" *;
+  | where SyslogMessage !has "fqdn_dst_match=" and SyslogMessage !has "3000-0151" and SyslogMessage !has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber:int @"\s" DstPortNumber:int @"\s" *;
   let WithPortDuration = AllLogs
-  | where SyslogMessage has "3000-0151" and SyslogMessage !has "icmp"
-  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber @"\s" DstPortNumber @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
+  | where SyslogMessage has "3000-0151" and SyslogMessage !has "icmp" and SyslogMessage !has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SrcIpAddr @"\s" DstIpAddr @"\s" SrcPortNumber:int @"\s" DstPortNumber:int @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
   | extend NetworkProtocol = extract(@"\s(tcp|udp|icmp|igmp)\s", 1, SyslogMessage)
   ;
   let ICMP = AllLogs
-  | where SyslogMessage has "3000-0151" and SyslogMessage has "icmp"
+  | where SyslogMessage has "3000-0151" and SyslogMessage has "icmp" and SyslogMessage !has "igmp"
   | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SrcIpAddr @"\s" DstIpAddr @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
   | extend NetworkProtocol = extract(@"\s(tcp|udp|icmp|igmp)\s", 1, SyslogMessage);
-  union WithFQDN, WithoutFQDN, WithPortDuration, ICMP
+  let IGMP = AllLogs
+  | where SyslogMessage has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s\d{2}\s" NetworkProtocol @"\s\d+\s\d+\s" SrcIpAddr @"\s" DstIpAddr @'\s' *
+  ;
+  union WithFQDN, WithoutFQDN, WithPortDuration, ICMP, IGMP
   | parse SyslogMessage with * 'geo_src="' SrcGeoCountry '"' *
   | parse SyslogMessage with * 'geo_dst="' DstGeoCountry '"' *
   | parse SyslogMessage with * 'src_user="' SrcUsername '"' *
@@ -71,7 +74,7 @@ ParserQuery: |
           , DstIpAddr contains ":", "IPv6"
           , "")
       , NetworkProtocol = toupper(NetworkProtocol)
-      , NetworkDuration = NetworkDuration * toint(1000)
+      , NetworkDuration = toint(NetworkDuration * toint(1000))
       , NetworkBytes = SrcBytes + DstBytes
       , EventEndTime = TimeGenerated
       , EventStartTime = TimeGenerated

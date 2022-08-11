@@ -69,8 +69,8 @@ ParserQuery: |
   )
   | project TimeGenerated, SyslogMessage, HostName;
   let WithFQDN = AllLogs
-  | where SyslogMessage has "fqdn_dst_match=" and SyslogMessage !has "3000-0151"
-  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\sfqdn_dst_match="' DstDomain @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SourceIP @"\s" DestinationIP @"\s" SrcPortNumber @"\s" DestinationPort @"\s" *
+  | where SyslogMessage has "fqdn_dst_match=" and SyslogMessage !has "3000-0151" and SyslogMessage !has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\sfqdn_dst_match="' DstDomain @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SourceIP @"\s" DestinationIP @"\s" SrcPortNumber:int @"\s" DestinationPort:int @"\s" *
   | where  (isnull(dstportnumber) or DestinationPort==dstportnumber)
   | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any)
   , temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
@@ -86,8 +86,8 @@ ParserQuery: |
   | extend DstDomainType = iif(isnotempty(DstDomain),"FQDN","")
   ;
   let WithoutFQDN = AllLogs
-  | where SyslogMessage !has "fqdn_dst_match=" and SyslogMessage !has "3000-0151"
-  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SourceIP @"\s" DestinationIP @"\s" SrcPortNumber @"\s" DestinationPort @"\s" *
+  | where SyslogMessage !has "fqdn_dst_match=" and SyslogMessage !has "3000-0151" and SyslogMessage !has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s\d{2,5}\s" NetworkProtocol @"\s\d+\s\d+\s" SourceIP @"\s" DestinationIP @"\s" SrcPortNumber:int @"\s" DestinationPort:int @"\s" *
   | where  (isnull(dstportnumber) or DestinationPort==dstportnumber)
   | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any)
   , temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
@@ -102,8 +102,8 @@ ParserQuery: |
   | project-away temp_*
   ;
   let WithPortDuration = AllLogs
-  | where SyslogMessage has "3000-0151" and SyslogMessage !has "icmp"
-  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SourceIP @"\s" DestinationIP @"\s" SrcPortNumber @"\s" DestinationPort @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
+  | where SyslogMessage has "3000-0151" and SyslogMessage !has "icmp" and SyslogMessage !has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SourceIP @"\s" DestinationIP @"\s" SrcPortNumber:int @"\s" DestinationPort:int @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
   | where  (isnull(dstportnumber) or DestinationPort==dstportnumber)
   | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any)
   , temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
@@ -119,7 +119,7 @@ ParserQuery: |
   | extend NetworkProtocol = extract(@"\s(tcp|udp|icmp|igmp)\s", 1, SyslogMessage)
   ;
   let ICMP = AllLogs
-  | where SyslogMessage has "3000-0151" and SyslogMessage has "icmp"
+  | where SyslogMessage has "3000-0151" and SyslogMessage has "icmp" and SyslogMessage !has "igmp"
   | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s(tcp|udp|icmp|igmp)\s" SourceIP @"\s" DestinationIP @'\sduration="' NetworkDuration:int @'"\ssent_bytes="' SrcBytes:long @'"\srcvd_bytes="' DstBytes:long '"' *
   | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any)
   , temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
@@ -133,7 +133,22 @@ ParserQuery: |
   | where ASimMatchingIpAddr != "No match" 
   | project-away temp_*
   | extend NetworkProtocol = extract(@"\s(tcp|udp|icmp|igmp)\s", 1, SyslogMessage);
-  union WithFQDN, WithoutFQDN, WithPortDuration, ICMP
+  let IGMP = AllLogs
+  | where SyslogMessage has "igmp"
+  | parse kind=regex flags=U SyslogMessage with * @'msg_id="' MessageID @'"\s' DvcAction @"\s" RuleName @"\s\d{2}\s" NetworkProtocol @"\s\d+\s\d+\s" SourceIP @"\s" DestinationIP @'\s' *
+  | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any)
+  , temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
+  | extend ASimMatchingIpAddr=case(
+    array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+    temp_SrcMatch and temp_DstMatch, "Both",
+    temp_SrcMatch, "SrcIpAddr",
+    temp_DstMatch, "DstIpAddr",
+    "No match"
+  )
+  | where ASimMatchingIpAddr != "No match" 
+  | project-away temp_*
+  ;
+  union WithFQDN, WithoutFQDN, WithPortDuration, ICMP, IGMP
   | lookup EventLookup on DvcAction
   | where  (array_length(hostname_has_any)==0) and (eventresult=="*" or (DvcAction=="Allow" and eventresult=="Success") or (eventresult=="Failure"))
   | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
@@ -155,7 +170,7 @@ ParserQuery: |
         , DestinationIP contains ":", "IPv6"
         , "")
     , NetworkProtocol = toupper(NetworkProtocol)
-    , NetworkDuration = NetworkDuration * toint(1000)
+    , NetworkDuration = toint(NetworkDuration * toint(1000))
     , NetworkBytes = SrcBytes + DstBytes
     , EventEndTime = TimeGenerated
     , EventStartTime = TimeGenerated
