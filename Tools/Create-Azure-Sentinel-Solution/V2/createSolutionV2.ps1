@@ -1076,7 +1076,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             if ($null -ne $playbookTemplateSpecContent.properties.mainTemplate.metadata.prerequisites -and
-                            ![string]::IsNullOrWhitespace($playbookTemplateSpecContent.properties.mainTemplate.metadata.prerequisites))
+                            [string]::IsNullOrWhitespace($playbookTemplateSpecContent.properties.mainTemplate.metadata.prerequisites))
                             {
                                 $playbookTemplateSpecContent.properties.mainTemplate.metadata.PSObject.Properties.Remove("prerequisites");
                             }
