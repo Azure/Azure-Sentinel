@@ -44,33 +44,37 @@ function testParser([Parser] $parser) {
     Write-Host "-- Running schema test for '$($parser.Name)'"
     $schemaTest = "$($parserAsletStatement)`r`n$($letStatementName) | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
     invokeAsimTester $schemaTest $parser.Name "schema"
+    Write-Host ""
 
     Write-Host "-- Running data test for '$($parser.Name)'"
     $dataTest = "$($parserAsletStatement)`r`n$($letStatementName) | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest  $parser.Name "data"
+    Write-Host ""
+    Write-Host ""
 }
 
 function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
-    $query = $test + " | where Result startswith '(0) Error:'"
-    try {
-        $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
-        if ($rawResults.Results) {
-            $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
-            if ($resultsArray.count) {  
-                $errorMessage = "`r`n$($name) $($kind)- test failed with $($resultsArray.count) errors:`r`n"        
-                $resultsArray | ForEach-Object { $errorMessage += "$($_.Result)`r`n" } 
-                Write-Host $errorMessage
-                $global:failed = 1
-            }
-            else {
-                Write-Host "  -- $($name) $($kind) test done successfully"
-            }
-        }    
-    }
-    catch {
-        Write-Host $_
-        $global:failed = 1
-    }
+        $query = $test + " | where Result startswith '(0) Error:'"
+        try {
+            $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
+            if ($rawResults.Results) {
+                $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
+                if ($resultsArray.count) {  
+                    $errorMessage = "`r`n$($name) $($kind)- test failed with $($resultsArray.count) errors:`r`n"        
+                    $resultsArray | ForEach-Object { $errorMessage += "$($_.Result)`r`n" } 
+                    Write-Host $errorMessage
+                    $global:failed = 1
+                }
+                else {
+                    Write-Host "  -- $($name) $($kind) test done successfully"
+                }
+            }    
+        }
+        catch {
+            Write-Host "  -- $_"
+            Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
+            $global:failed = 1
+        }
 }
 
 function getParameters([System.Collections.Generic.List`1[System.Object]] $parserParams) {
