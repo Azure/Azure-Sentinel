@@ -1,0 +1,378 @@
+{
+    "handler": "Microsoft.Azure.CreateUIDef",
+    "version": "0.1.2-preview",
+    "parameters": {
+        "config": {
+            "isWizard": true,
+            "basics": {
+                "description": "**SIEM data migration accelerator**. Deploys a migration workstation that includes common migration tools (LightIngest, AzCopy and Custom Log ingestion tool) and the target platform for the data (ADX, Azure Monitor Logs or Azure Blob Storage)"
+            }
+        },
+      "basics": [
+      ],
+      "steps": [
+        {
+          "name": "migrationVM",
+          "label": "Migration VM",
+          "subLabel": {
+            "preValidation": "Required",
+            "postValidation": "Done"
+          },
+          "elements": [
+            {
+              "name": "virtualMachine",
+              "type": "Microsoft.Common.Section",
+              "elements": [
+                {
+                  "name": "textBlock1",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": true,
+                  "options": {
+                    "text": "This step creates a Windows 2019 Datacenter VM with LightIngest, AzCopy and and Custom Log ingestion tools installed.",
+                    "link": {
+                        "label": "Learn more",
+                        "uri": "https://aka.ms/siemdatamigration"
+                    }
+                  }
+                },
+                {
+                  "name": "vmName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "VM Name",
+                  "toolTip": "Name of your virtual machine",
+                  "constraints": {
+                    "required": true
+                  }
+                },
+                {
+                    "name": "vmUsername",
+                    "type": "Microsoft.Compute.UserNameTextBox",
+                    "label": "User name",
+                    "defaultValue": "",
+                    "toolTip": "The administrator username for the VM",
+                    "constraints": {
+                          "required": true,
+                          "regex": "^[a-z0-9A-Z]{1,30}$",
+                          "validationMessage": "Only alphanumeric characters are allowed, and the value must be 1-30 characters long."
+                        },
+                        "osPlatform": "Windows",
+                        "visible": true
+                },
+                {
+                  "name": "vmPassword",
+                  "type": "Microsoft.Compute.CredentialsCombo",
+                  "label": {
+                    "password": "Password",
+                    "confirmPassword": "Confirm password"
+                  },
+                  "toolTip": {
+                    "password": ""
+                  },
+                  "options": {
+                    "hideConfirmation": false
+                  },
+                  "osPlatform": "Windows",
+                  "visible": true
+                }
+              ],
+              "visible": true
+            },
+            {
+              "name": "vnet",
+              "type": "Microsoft.Network.VirtualNetworkCombo",
+              "toolTip": "A network security group will be created with RDP port open",
+              "label": {
+                "virtualNetwork": "Virtual Network",
+                "subnets": "Subnets"
+              },
+              "defaultValue": {
+                "name": "vmx-vnet",
+                "addressPrefixSize": "/24"
+              },
+              "constraints": {
+                "minAddressPrefixSize": "/29"
+              },
+              "subnets": {
+                "subnet1": {
+                  "label": "Subnet",
+                  "defaultValue": {
+                    "name": "vmx-subnet",
+                    "addressPrefixSize": "/24"
+                  },
+                  "constraints": {
+                    "minAddressPrefixSize": "/29",
+                    "minAddressCount": 8,
+                    "requireContiguousAddresses": true
+                  }
+                }
+              }
+            },
+            {
+              "name": "VMSize",
+              "type": "Microsoft.Compute.SizeSelector",
+              "label": "VM size",
+              "toolTip": "The size of virtual machine for VM.",
+              "recommendedSizes": [
+                "Standard_D2_v3"
+              ],
+              "constraints": {
+                "excludedSizes": []
+              },
+              "osPlatform": "Windows",
+              "imageReference": {
+                "publisher": "MicrosoftWindowsServer",
+                "offer": "WindowsServer",
+                "sku": "2019Datacenter"
+              }
+            }
+          ]
+        },
+        {
+            "name": "targetPlatform",
+            "label": "Target Platform",
+            "subLabel": {
+              "preValidation": "Required",
+              "postValidation": "Done"
+            },
+            "elements": [
+              {
+                "name": "textBlock1",
+                "type": "Microsoft.Common.TextBlock",
+                "visible": true,
+                "options": {
+                  "text": "This step creates the target platform the logs will be migrated to (ADX, Azure Monitor Logs or Azure Blob Storage.",
+                  "link": {
+                      "label": "Learn more",
+                      "uri": "https://aka.ms/siemdatamigration"
+                  }
+                }
+              },
+              {
+                "name": "platform",
+                "type": "Microsoft.Common.OptionsGroup",
+                "label": "Target platform to deploy",
+                "defaultValue": "Value two",
+                "toolTip": "Select the platform where logs will be migrated to. Selecting skip will not create any target platform.",
+                "constraints": {
+                    "allowedValues": [
+                     {
+                        "label": "Skip (no resources will be deployed by this step)",
+                        "value": "skip"
+                     },
+                     {
+                        "label": "Azure Data Explorer",
+                        "value": "adx"
+                     },
+                     {
+                        "label": "Azure Blob Storage",
+                        "value": "blob"
+                     },
+                     {
+                        "label": "Azure Monitor Logs workspace",
+                        "value": "loganalytics"
+                     }
+                    ],
+                    "required": true
+                },
+                "visible": true
+             },
+             {
+                "name": "storageAccount",
+                "type": "Microsoft.Storage.StorageAccountSelector",
+                "label": "Storage account",
+                "toolTip": "Select a new storage account to be the target of the data migration. For existing storage accounts, skip this step.",
+                "defaultValue": {
+                  "name": "storageaccount01",
+                  "type": "Premium_LRS"
+                },
+                "constraints": {
+                  "allowedTypes": [],
+                  "excludedTypes": []
+                },
+                "options": {
+                  "hideExisting": true
+                },
+                "visible": "[if(contains(steps('targetPlatform').platform,'blob'), true, false)]"
+             },
+             {  
+                "name": "adxCluster",
+                "type": "Microsoft.Common.TextBox",
+                "label": "ADX cluster name",
+                "defaultValue": "",
+                "toolTip": "Choose a unique name for your ADX cluster",
+                "placeholder": "",
+                "multiLine": false,
+                "constraints": {
+                    "required": true,
+                    "validations": [
+                        {
+                          "regex": "^[a-z0-9]{4,22}$",
+                          "message": "Only lowercase letters and numbers. It must contain from 4 to 22 characters long."
+                        }
+                    ]
+                },
+                "visible": "[if(contains(steps('targetPlatform').platform,'adx'), true, false)]"
+              },
+              {  
+                "name": "adxDb",
+                "type": "Microsoft.Common.TextBox",
+                "label": "ADX database name",
+                "defaultValue": "",
+                "toolTip": "Use only allowed characters",
+                "placeholder": "",
+                "multiLine": false,
+                "constraints": {
+                    "required": true,
+                    "validations": [
+                        {
+                          "regex": "^[a-z0-9A-Z]{1,30}$",
+                          "message": "Only alphanumeric characters are allowed, and the value must be 1-30 characters long."
+                        }
+                    ]
+                },
+                "visible": "[if(contains(steps('targetPlatform').platform,'adx'), true, false)]"
+              },
+              {
+                "name": "adxSku",
+                "type": "Microsoft.Common.DropDown",
+                "label": "ADX cluster SKU",
+                "toolTip": "Choose your ADX cluster SKU",
+                "multiselect": false,
+                "filter": true,
+                "filterPlaceholder": "Filter items ...",
+                "multiLine": true,
+                "defaultDescription": "Select ADX Cluster SKU",
+                "constraints": {
+                    "allowedValues": [
+                        {
+                            "label": "(Dev/Test) D11 v2",
+                            "description": "2 vCPU, 80 GB",
+                            "value": "Dev(No SLA)_Standard_D11_v2"
+                        },
+                        {
+                            "label": "(Dev/Test) E2a v4",
+                            "description": "2 vCPU, 18 GB",
+                            "value": "Dev(No SLA)_Standard_E2a_v4"
+                        },
+                        {
+                            "label": "(Storage Optimized) DS13 v2",
+                            "description": "8 vCPU, 1 TB",
+                            "value": "Standard_DS13_v2+1TB_PS"
+                        },
+                        {
+                            "label": "(Storage Optimized) DS13 v2",
+                            "description": "8 vCPU, 2 TB",
+                            "value": "Standard_DS13_v2+2TB_PS"
+                        },
+                        {
+                            "label": "(Storage Optimized) DS14 v2",
+                            "description": "16 vCPU, 3 TB",
+                            "value": "Standard_DS14_v2+3TB_PS"
+                        },
+                        {
+                            "label": "(Storage Optimized) DS14 v2",
+                            "description": "16 vCPU, 4 TB",
+                            "value": "Standard_DS14_v2+4TB_PS"
+                        },
+                        {
+                            "label": "(Compute Optimized) D11 v2",
+                            "description": "2 vCPU, 80 GB",
+                            "value": "Standard_D11_v2"
+                        },
+                        {
+                            "label": "(Compute Optimized) D12 v2",
+                            "description": "4 vCPU, 160 GB",
+                            "value": "Standard_D12_v2"
+                        },
+                        {
+                            "label": "(Compute Optimized) D13 v2",
+                            "description": "8 vCPU, 317 GB",
+                            "value": "Standard_D13_v2"
+                        },
+                        {
+                            "label": "(Compute Optimized) D14 v2",
+                            "description": "16 vCPU, 628 GB",
+                            "value": "Standard_D14_v2"
+                        },
+                        {
+                            "label": "(Heavy Compute) E2a v4",
+                            "description": "16 vCPU, 628 GB",
+                            "value": "Standard_E2a_v4"
+                        },
+                        {
+                            "label": "(Heavy Compute) E4a v4",
+                            "description": "16 vCPU, 628 GB",
+                            "value": "Standard_E4a_v4"
+                        },
+                        {
+                            "label": "(Heavy Compute) E8a v4",
+                            "description": "16 vCPU, 628 GB",
+                            "value": "Standard_E8a_v4"
+                        },
+                        {
+                            "label": "(Heavy Compute) E16a v4",
+                            "description": "16 vCPU, 628 GB",
+                            "value": "Standard_E16a_v4"
+                        }     
+                    ],
+                    "required": true
+                },
+                "visible": "[if(contains(steps('targetPlatform').platform,'adx'), true, false)]"
+               },
+               {
+                "name": "adxClusterSize",
+                "type": "Microsoft.Common.Slider",
+                "min": 1,
+                "max": 64,
+                "label": "ADX cluster Size",
+                "subLabel": "Number of nodes",
+                "defaultValue": 1,
+                "showStepMarkers": true,
+                "toolTip": "Pick the number of nodes in the ADX cluster",
+                "constraints": {
+                    "required": true
+                  },
+                "visible": "[if(contains(steps('targetPlatform').platform,'adx'), true, false)]"
+               },
+               {
+                "name": "workspaceName",
+                "type": "Microsoft.Common.TextBox",
+                "label": "Workspace name",
+                "toolTip": "The workspace name should include 4-63 letters or digits",
+                "constraints": {
+                  "required": true,
+                  "validations": [
+                    {
+                      "regex": "^[a-z0-9A-Z]{4,63}$",
+                      "message": "The workspace name should include 4-63 letters or digits"
+                    }
+                  ]
+                },
+                "visible": "[if(contains(steps('targetPlatform').platform,'loganalytics'), true, false)]"
+               }
+            ] 
+        }
+      ],
+      "outputs": {
+        "location": "[location()]",
+        "vmName": "[steps('migrationVM').virtualMachine.vmName]",
+        "adminUsername": "[steps('migrationVM').virtualMachine.vmUsername]",
+        "adminPassword": "[steps('migrationVM').virtualMachine.vmPassword.password]",
+        "virtualNetworkName": "[steps('migrationVM').vnet.name]",
+        "virtualNetworkNewOrExisting": "[steps('migrationVM').vnet.newOrExisting]",
+        "virtualNetworkAddressPrefix": "[first(steps('migrationVM').vnet.addressPrefixes)]",
+        "virtualNetworkResourceGroup": "[steps('migrationVM').vnet.resourceGroup]",
+        "virtualMachineSize": "[steps('migrationVM').VMSize]",
+        "subnetName": "[steps('migrationVM').vnet.subnets.subnet1.name]",
+        "subnetAddressPrefix": "[steps('migrationVM').vnet.subnets.subnet1.addressPrefix]",
+        "platform": "[steps('targetPlatform').platform]",
+        "storageAccountName": "[steps('targetPlatform').storageAccount.name]",
+        "storageAccountType": "[steps('targetPlatform').storageAccount.type]",
+        "adxClusterName": "[steps('targetPlatform').adxCluster]",
+        "adxDbName": "[steps('targetPlatform').adxDb]",
+        "adxSku": "[steps('targetPlatform').adxSku]",
+        "adxClusterSize": "[steps('targetPlatform').adxClusterSize]",
+        "workspaceName": "[steps('targetPlatform').workspaceName]"
+      }
+    }
+  }

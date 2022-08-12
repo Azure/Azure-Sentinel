@@ -1,6 +1,6 @@
 # Infoblox NIOS ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Infoblox NIOS.
+ARM template for ASIM Dns schema parser for Infoblox NIOS.
 
 This ASIM parser supports normalizing Infoblox NIOS DNS logs to the ASIM Dns normalized schema.
 

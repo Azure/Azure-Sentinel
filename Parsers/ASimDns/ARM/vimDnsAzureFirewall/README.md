@@ -1,6 +1,6 @@
 # Azure Firewall ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Azure Firewall.
+ARM template for ASIM Dns schema parser for Azure Firewall.
 
 This ASIM parser supports filtering and normalizing Azure Firewall logs to the ASIM Dns normalized schema.
 

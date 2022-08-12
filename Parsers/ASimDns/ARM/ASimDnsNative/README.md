@@ -1,6 +1,6 @@
 # Native ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Native.
+ARM template for ASIM Dns schema parser for Native.
 
 This ASIM parser supports normalizing the native Microsoft Sentinel DNS table (ASimDnsActivityLogs) to the ASIM DNS activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabiliteis, such as aliases, available only at query time. 
 

@@ -2,7 +2,7 @@
 
 This template deploys all ASIM {schema} parsers.
 
-The Advanced Security Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 

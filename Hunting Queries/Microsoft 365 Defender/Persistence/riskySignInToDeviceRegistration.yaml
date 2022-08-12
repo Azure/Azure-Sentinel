@@ -1,0 +1,37 @@
+id: ce2b03f8-92a4-4ec7-b55b-e9fa562fafa4
+name: Risky Sign-in with Device Registration
+description: |
+  Looks for a new device registration in AAD preceded by medium or high-risk sign-in session for the same user within maximum 6h timeframe. 
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - AADSignInEventsBeta
+tactics:
+- Persistence
+query: |
+  let registeredDevices=CloudAppEvents
+  | where ActionType =~ "Add registered owner to device."  
+  | where isnotempty(RawEventData.ObjectId) and isnotempty(RawEventData.ModifiedProperties[0].NewValue) and isnotempty(RawEventData.Target[1].ID) and isnotempty(RawEventData.ModifiedProperties[1].NewValue)
+  | where AccountDisplayName =~ "Device Registration Service" 
+  | extend AccountUpn = tostring(RawEventData.ObjectId) 
+  | extend AccountObjectId = tostring(RawEventData.Target[1].ID) 
+  | extend DeviceObjectId = tostring(RawEventData.ModifiedProperties[0].NewValue) 
+  | extend DeviceDisplayName = tostring(RawEventData.ModifiedProperties[1].NewValue) 
+  | project DeviceRegistrationTimestamp=Timestamp,ReportId,AccountUpn,AccountObjectId,DeviceObjectId,DeviceDisplayName; 
+  let registeringUser= 
+  registeredDevices 
+  | distinct AccountObjectId; 
+  let hasRegisteringUser = isnotempty(toscalar(registeringUser));
+  let riskySignins=AADSignInEventsBeta
+  | where hasRegisteringUser
+  | where AccountObjectId in (registeringUser) 
+  | where RiskLevelDuringSignIn in ("50","100") //Medium and High sign-in risk level. 
+  | where Application in ("Office 365 Exchange Online", "OfficeHome") 
+  | where isnotempty(SessionId) 
+  | project SignInTimestamp=Timestamp, Application, SessionId, AccountObjectId, IPAddress,RiskLevelDuringSignIn 
+  | summarize SignInTimestamp=argmin(SignInTimestamp,*) by Application,SessionId, AccountObjectId, IPAddress,RiskLevelDuringSignIn; 
+  registeredDevices 
+  | join riskySignins on AccountObjectId 
+  | where  DeviceRegistrationTimestamp - SignInTimestamp < 6h //Time delta between risky sign-in and device registration less than 6h 
+  | project-away AccountObjectId1

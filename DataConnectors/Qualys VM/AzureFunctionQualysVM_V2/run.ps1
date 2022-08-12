@@ -38,7 +38,7 @@ $logAnalyticsUri = $env:logAnalyticsUri
 $hdrs = @{"X-Requested-With"="PowerShell"}
 $uri = $env:uri
 $filterParameters = $env:filterParameters
-$api = "/api/2.0/fo/asset/host/vm/detection?"
+$api = "/api/2.0/fo/asset/host/vm/detection/?"
 $LOGGED = $BATCH = 0
 $param = @{'status'='New,Active,Fixed,Re-Opened'; 'action'='list'; 'show_results'=1; 'show_igs'=0}
 
@@ -212,7 +212,7 @@ Function Parse-and-Send($qualysResponse){
 							$detectionObject.Result_column_count = $result_column_count
 							for ($i = 0; $i -lt $result_column_count; $i++){
 								$result_column = "Results_$i"
-								if ([bool]($detectionObject.PSobject.Properties.name -match $result_column)){								
+								if ([bool]($detectionObject.PSobject.Properties.name -match $result_column)){
 									$detectionObject.$result_column = $results_array[$i]
 								} else{
 									Add-Member -InputObject $detectionObject -MemberType NoteProperty -Name "Results_$i" -Value $results_array[$i]

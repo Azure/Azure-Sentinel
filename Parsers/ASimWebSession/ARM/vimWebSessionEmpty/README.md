@@ -1,6 +1,6 @@
 # Microsoft ASIM WebSession Normalization Parser
 
-This template deploys the ASIM WebSession schema parser for Microsoft.
+ARM template for ASIM WebSession schema parser for Microsoft.
 
 This function returns an empty ASIM Web Session schema
 

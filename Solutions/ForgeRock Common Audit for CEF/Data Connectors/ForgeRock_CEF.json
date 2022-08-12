@@ -1,0 +1,138 @@
+{
+  "id" : "ForgeRock",
+  "title" : "ForgeRock Identity Platform",
+  "publisher" : "ForgeRock Inc",
+  "descriptionMarkdown" : "The ForgeRock Identity Platform provides a single common auditing framework. Extract and aggregate log data across the entire platform with common audit (CAUD) event handlers and unique IDs so that it can be tracked holistically. Open and extensible, you can leverage audit logging and reporting capabilities for integration with Microsoft Azure Sentinel via this CAUD for CEF connector.",
+  "graphQueries" : [
+    {
+      "metricName" : "Total data received",
+      "legend" : "ForgeRock",
+      "baseQuery" : "CommonSecurityLog\n| where DeviceVendor == \"ForgeRock Inc\""
+    }
+  ],
+  "sampleQueries" : [
+    {
+      "description" : "Total failed login attempts to the ForgeRock Platform",
+      "query" : "CommonSecurityLog\n| where DeviceVendor == \"ForgeRock Inc\"\n| where DeviceProduct in (\"IDM\") // can be ANY ForgeRock product (AM, IG, Etc)\n| where DeviceAction =~ \"FAILED\"\n| extend user = split(split(AdditionalExtensions, \";\", 3)[0], \"=\", 1)[0] // extract userID from 3rd field in json payload\n| where strlen(user) > 2 // if this field is null, it is not a user logon attempt"
+    },
+    {
+      "description" : "Autocluster failed logins by IP addresses ",
+      "query" : "CommonSecurityLog\n| where DeviceVendor == \"ForgeRock Inc\"\n| where DeviceProduct in (\"IDM\") // can be ANY ForgeRock product (AM, IG, Etc)\n| where DeviceAction =~ \"FAILED\"\n| project SourceIP \n| evaluate autocluster(0.6)"
+    }
+  ],
+  "dataTypes" : [
+    {
+      "name" : "CommonSecurityLog (ForgeRock)",
+      "lastDataReceivedQuery" : "CommonSecurityLog\n| where DeviceVendor == \"ForgeRock Inc\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias" : [
+    {
+      "type" : "IsConnectedQuery",
+      "value" : [
+        "CommonSecurityLog\n| where DeviceVendor == \"ForgeRock Inc\"\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability" : {
+    "status" : 1,
+    "isPreview": true
+  },
+  "permissions" : {
+    "resourceProvider" : [
+        {
+          "provider" : "Microsoft.OperationalInsights/workspaces",
+          "permissionsDisplayText" : "read and write permissions are required.",
+          "providerDisplayName" : "Workspace",
+          "scope" : "Workspace",
+          "requiredPermissions" : {
+            "read" : true,
+            "write" : true,
+            "delete": true
+          }
+        },
+        {
+          "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+          "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+          "providerDisplayName": "Keys",
+          "scope": "Workspace",
+          "requiredPermissions": {
+              "action": true
+          }
+      }
+    ]
+  },
+  "instructionSteps" : [
+    {
+      "title" : "Configuration for the ForgeRock Common Audit (CAUD) for Microsoft Azure Sentinel",
+      "description" : "In ForgeRock, install and configure this Common Audit (CAUD) for Azure Sentinel per the documentation at https://github.com/javaservlets/SentinelAuditEventHandler. Next, in Azure, follow the below CEF steps."
+    },
+    {
+      "title" : "\n\n\n1. Linux Syslog agent configuration",
+      "description" : "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Azure Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+      "innerSteps" : [
+        {
+          "title" : "1.1 Select or create a Linux machine",
+          "description" : "Select or create a Linux machine that Azure Sentinel will use as the proxy between your security solution and Azure Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+        },
+        {
+          "title" : "1.2 Install the CEF collector on the Linux machine",
+          "description" : "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Azure Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+          "instructions" : [
+            {
+              "parameters" : {
+                "fillWith" : [
+                  "WorkspaceId",
+                  "PrimaryKey"
+                ],
+                "label" : "Run the following command to install and apply the CEF collector:",
+                "value" : "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+              },
+              "type" : "CopyableLabel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title" : "2. Forward Common Event Format (CEF) logs to Syslog agent",
+      "description" : "Set your security solution to send Syslog messages in CEF format to the proxy machine. Make sure you to send the logs to port 514 TCP on the machine's IP address."
+    },
+    {
+      "title" : "3. Validate connection",
+      "description" : "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+      "instructions" : [
+        {
+          "parameters" : {
+            "fillWith" : [
+              "WorkspaceId"
+            ],
+            "label" : "Run the following command to validate your connectivity:",
+            "value" : "sudo wget  -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+          },
+          "type" : "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "title" : "4. Secure your machine ",
+      "description" : "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+    }
+  ],
+  "metadata": {
+    "id": "cb5b9a69-5ab1-445c-8491-6b96a2ea3100",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": {
+        "kind": "community"
+    },
+    "author": {
+        "name": "ForgeRock"
+    },
+    "support": {
+        "name": "ForgeRock",
+        "link": "https://www.forgerock.com/support",
+        "tier": "developer"
+    }
+}
+}

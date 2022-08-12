@@ -1,6 +1,6 @@
 # Source agnostic ASIM WebSession Normalization Parser
 
-This template deploys the ASIM WebSession schema parser for Source agnostic.
+ARM template for ASIM WebSession schema parser for Source agnostic.
 
 This ASIM parser supports normalizing Web Session logs from all supported sources to the ASIM Web Session normalized schema.
 
