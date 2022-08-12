@@ -64,7 +64,8 @@ Therefore [installation of the On-Premises Data Gateway](https://docs.microsoft.
 
 | Parameters              | Description                                             |
 |-------------------------|---------------------------------------------------------|
-| **For Connector**       |
+| **For Connector**       |                                                         |
+| **Connector Name**      | Logic App Connector name for TheHive                    |
 | **API Hostname**        | Hostname of TheHive instance                            |
 | **API Port**            | Port number of TheHive API. By default 9000.            |
 | **Http scheme**         | Http scheme for TheHive API.                            |
