@@ -22,19 +22,23 @@ tags:
   - log4shell
 query: |
   AzureDiagnostics
+  | where ResourceProvider == "MICROSOFT.NETWORK" and Category in ("ApplicationGatewayFirewallLog", "FrontdoorWebApplicationFirewallLog")
+  | extend details_data_s = column_ifexists("details_data_s", tostring(AdditionalFields.details_data))
   | where details_data_s has "jndi:"
-  | parse details_data_s with * '${' MaliciousCommand '}' *
+  | parse details_data_s with * '${' MaliciousCommand '} ' *
   | extend EncodeCmd = iff(MaliciousCommand has 'Base64/', split(split(MaliciousCommand, "Base64/",1)[0], "}", 0)[0], "")
   | extend EncodeCmd1 = iff(MaliciousCommand has 'base64/', split(split(MaliciousCommand, "base64/",1)[0], "}", 0)[0], "")
   | extend CmdLine = iff( isnotempty(EncodeCmd), EncodeCmd, EncodeCmd1)
   | extend DecodedCmdLine = base64_decode_tostring(tostring(CmdLine))
-  | extend DecodedCmdLine = iff( isnotempty(DecodedCmdLine), DecodedCmdLine, "Unable to decode")
-  | project TimeGenerated, Target=hostname_s, MaliciousHost = clientIp_s, MaliciousCommand, details_data_s, DecodedCmdLine, Message, ruleSetType_s, OperationName, SubscriptionId, details_message_s, details_file_s 
+  | extend DecodedCmdLine = iff( isnotempty(DecodedCmdLine), DecodedCmdLine, "Unable to decode/Doesn't need decoding")
+  | project TimeGenerated, Target=column_ifexists("hostname_s", tostring(AdditionalFields.hostname)), MaliciousHost = column_ifexists("clientIp_s", tostring(AdditionalFields.clientIp)) , MaliciousCommand, details_data_s = column_ifexists("details_data_s", tostring(AdditionalFields.details_data)), DecodedCmdLine, Message,
+  ruleSetType_s = column_ifexists("ruleSetType_s", tostring(AdditionalFields.ruleSetType)), OperationName, SubscriptionId, details_message_s = column_ifexists("details_message_s", tostring(AdditionalFields.details_message)), 
+  details_file_s = column_ifexists("details_message_s", tostring(AdditionalFields.details_file))
   | extend IPCustomEntity = MaliciousHost, timestamp = TimeGenerated
 entityMappings: 
 - entityType: IP
   fieldMappings:
     - identifier: Address
       columnName: IPCustomEntity
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
