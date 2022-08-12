@@ -21,6 +21,7 @@ When a new sentinel alerts is created, this playbook gets triggered and performs
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
+    * Connector Name: Enter the Logic App connector name for TheHive here
     * onPremiseGatewayName: Provide the On-premises data gateway that will be used with The Hive connector. Data gateway should be deployed under the same subscription and resource group as playbook.
 
 
