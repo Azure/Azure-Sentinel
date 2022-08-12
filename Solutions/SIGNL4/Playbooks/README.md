@@ -1,6 +1,6 @@
 # SIGNL4 Alerting
 
-This playbook will be sending alerts with basic incidents to SIGNL4 teams when an incident is created in Azure Sentinel.
+This playbook will be sending alerts with basic incidents to SIGNL4 teams when an incident is created in Microsoft Sentinel.
 
 ## Pre-requisites:
 A [SIGNL4](https://www.signl4.com) account.
