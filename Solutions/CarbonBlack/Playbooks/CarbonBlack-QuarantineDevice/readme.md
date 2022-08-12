@@ -1,6 +1,6 @@
 # CarbonBlack-QuarantineDevice Enrich Incident With devices information
  ## Summary
- When a new sentinal incident is created,this playbook gets triggered and performs below actions
+ When a new Sentinel incident is created,this playbook gets triggered and performs below actions
  1. Fetches the devices information from CarbonBlack
  2. Quarantine the device
  3. Enrich the incident with device information by fetching from CarbonBlack<br>
@@ -13,32 +13,32 @@
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
-3. Find Organziation key by refering this link [ Find Organization key by refering this link ](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
+3. Find Organization key by referring this link [ Find Organization key by referring this link ](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
 ### Deployment instructions 
-1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
-2. Fill in the required paramteres:
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex:CarbonBlack-QuarantineDevice)
     * OrganizationKey : Enter the Organization key
     
 ### Post-Deployment instructions 
 #### Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat step 2&3 while for CarbonBlack connector Connection to authorize connector API of the playbook (For authorizing the CarbonBlack API connection, API Key needs to be provided. API Key Value is the combination of API Key / API ID)
 #### Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky device 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky device 
 2. Configure the automation rules to trigger this playbook
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json)
 
 ## Playbook steps explained
 
-### When Azure Sentinel incident creation rule is triggered
-Azure Sentinel incident is created. The playbook receives the incident as the input.
+### When Microsoft Sentinel incident creation rule is triggered
+Microsoft Sentinel incident is created. The playbook receives the incident as the input.
 
 ### Entities - Get Hosts
 Get the list of risky devices as entities from the Incident
@@ -54,7 +54,7 @@ Initialize an array variable to assign the quarantined devices information used 
 
 ### For each-Hosts
 This action will perform the below actions
- a. Make a call to CarbonBlack API with the parameters such as Organization Key and Quary [ Contains device name ]
+ a. Make a call to CarbonBlack API with the parameters such as Organization Key and Query [ Contains device name ]
  b. Verify the CarbonBlack returned the results and Check the device is quarantined
  c. If the device is not quarantined then isolate it.
 
@@ -68,4 +68,4 @@ This action will construct the HTML table with Quarantined devices through playb
 This action will enrich the incident with the constructed HTML table with devices information
 
 ### Close the comment
-This action will close the incident if there is no exceptions occured while quarantining the devices
+This action will close the incident if there is no exceptions occurred while quarantining the devices
