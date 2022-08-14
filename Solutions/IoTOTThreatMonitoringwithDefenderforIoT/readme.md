@@ -62,5 +62,5 @@ Normally, the authorized entity to program a PLC is the Engineering Workstation,
 This playbook updates alert statuses in Defender for IoT whenever a related alert in Microsoft Sentinel has a Status update.
 ### 5) Send Email to IoT/OT Device Owner
 The playbooks automate the SOC workflow by automatically emailing the incident details to the right IoT/OT device owner (based on Defender for IoT dafinition) and allowing him to respond by email. The incident is automatically updated based on the email response from the device owner.
-### 6) Automatically Triage Incidents based on crown jewels definition
+### 6) Triage incidents involving Crown Jewels devices automatically
 SOC and OT engineers can stream their workflows using the playbook, which automatically updates the incident severity based on the devices involved in the incident and their importance.
