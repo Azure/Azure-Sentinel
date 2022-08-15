@@ -17,6 +17,7 @@ This playbook uses the DomainTools Iris Investigate API. Given a domain, return 
  
 Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
+This playbook works as follows:
 - It fetches all the Domain objects in the Incident.
 - Iterates through the Domain objects and fetches the results from DomaintTools Iris Investigate for each Domain.
 - It will get the details from the following actions of the Iris Investigate Custom Connector:
