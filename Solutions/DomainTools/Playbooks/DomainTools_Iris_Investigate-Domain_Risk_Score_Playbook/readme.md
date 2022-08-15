@@ -13,7 +13,7 @@
 <a name="overview">
 
 ## Overview
-This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident return the risk scores and adjust the severity of the incident if a high risk domain is observed, adding the risk details in the comments of the incident.
+This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident return the risk scores and adjust the severity of the incident if a high risk domain is observed, adding the risk scoring details in the comments of the incident.
  
 Learn more about the Custom Connector via the https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request a Api key.
 
@@ -21,12 +21,12 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 
 - It fetches all the Domain objects in the Incident.
 - Iterates through the Domains objects and fetches the results from DomaintTools Iris Investigate for each Domain.
-- The Risk Score details from DomainTools Iris Investigate will be added as comments in a tabular format.
-- The Incident Severity is updated based on the Risk Score of the Domain: 
-  - Domain Risk Score between 0-49, the incident severity will be set to informational.
-  - Domain Risk Score between 50-69, the incident severity will be set to low.
-  - Domain Risk Score between 70-89, the incident severity will be set to medium.
-  - Domain Risk Score between 90-100, the incident severity will be set to high.
+- The Risk Scoring details from DomainTools Iris Investigate will be added as comments in a tabular format.
+- The Incident Severity is updated based on the overall Risk Score of the Domain: 
+  - Domain overall Risk Score between 0-49, the incident severity will be set to informational.
+  - Domain overall Risk Score between 50-69, the incident severity will be set to low.
+  - Domain overall Risk Score between 70-89, the incident severity will be set to medium.
+  - Domain overall Risk Score between 90-100, the incident severity will be set to high.
 
 ![Incident Comments](./graphics/comments1.png)
 
