@@ -15,7 +15,7 @@
 ## Overview
 This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident return the risk scores and adjust the severity of the incident if a high risk domain is observed, adding the risk scoring details in the comments of the incident.
  
-Learn more about the Custom Connector via the https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request a Api key.
+Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
 When a new Azure Sentinel Incident is created, this playbook gets triggered and triggered and performs the following actions:
 
