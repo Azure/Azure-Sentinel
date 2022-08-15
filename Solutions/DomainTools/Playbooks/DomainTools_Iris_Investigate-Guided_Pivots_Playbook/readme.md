@@ -44,13 +44,13 @@ Learn more about the Custom Connector via https://docs.microsoft.com/en-us/conne
 <a name="authentication">
 
 ## Authentication
-Authentication methods this connector supports
+Authentication methods this connector supports:
  - [API Key authentication](https://www.domaintools.com/integrations)
 
 <a name="prerequisites">
 
 ## Prerequisites
-- DomainTools Iris Investigate Api Key
+- A DomainTools API Key provisioned for Iris Investigate
 
 <a name="deployment">
 
