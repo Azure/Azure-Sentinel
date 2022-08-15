@@ -22,11 +22,11 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 - It fetches all the Domain objects in the Incident.
 - Iterates through the Domains objects and fetches the results from DomaintTools Iris Investigate for each Domain.
 - The Risk Score details from DomainTools Iris Investigate will be added as comments in a tabular format.
-- Also the Incident Severity is updated based on the Risk Score of the Domain. 
-- Domain Risk Score between 0-49, the incident severity will be set to informational.
-- Domain Risk Score between 50-69, the incident severity will be set to low.
-- Domain Risk Score between 70-89, the incident severity will be set to medium.
-- Domain Risk Score between 90-100, the incident severity will be set to high.
+- The Incident Severity is updated based on the Risk Score of the Domain: 
+  - Domain Risk Score between 0-49, the incident severity will be set to informational.
+  - Domain Risk Score between 50-69, the incident severity will be set to low.
+  - Domain Risk Score between 70-89, the incident severity will be set to medium.
+  - Domain Risk Score between 90-100, the incident severity will be set to high.
 
 ![Incident Comments](./graphics/comments1.png)
 
@@ -39,12 +39,13 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 <a name="authentication">
 
 ## Authentication
-Authentication methods this connector supports- [API Key authentication](https://www.domaintools.com/integrations)
+Authentication methods this connector supports
+ - [API Key authentication](https://www.domaintools.com/integrations)
 
 <a name="prerequisites">
 
 ## Prerequisites
-- DomainTools Iris Investigate Api Key
+- A DomainTools API Key provisioned for Iris Investigate
 
 <a name="deployment">
 
@@ -55,18 +56,18 @@ Authentication methods this connector supports- [API Key authentication](https:/
 <a name="postdeployment">
 
 ### Post-Deployment instructions
-#### a. Authorize connections 
-Once deployment is complete, you will need to authorize each connection.
-- Click the Azure Sentinel connection resource
-- Click edit API connection
-- Click Authorize
-- Sign in
-- Click Save
-- Repeat steps for other connections such as DomainTools connector API Connection (For authorizing the DomainTools connector API connection, API Key and API secret needs to be provided.)
-- Go to sentinel hook playbook to azure sentinel rules.
-#### b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
-- Configure the automation rules to trigger the playbooks.
-#### c. Managed Identity for Azure Sentinel Logic Apps connector
-As a best practice, we used sentinel connection in playbooks that uses "ManagedSecurityIdentity". Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
+#### a. Authorize connections: 
+Once deployment is complete, you will need to authorize each connection:
+- Click the "Azure Sentinel" connection resource
+- Click "Edit API connection"
+- Click "Authorize"
+- Enter your DomainTools API credentials
+- Click "Save"
+- Repeat steps for other connections such as the DomainTools connector API Connection. (In order to authorize the DomainTools connector API connection, an API Username and API Password need to be provided.)
+- Go to the Sentinel Hook Playbook to edit Azure Sentinel rules.
+#### b. Configurations in Sentinel:
+- In Azure Sentinel, analytical rules should be configured to trigger an incident with risky Domain indicators 
+- Configure the automation rules to trigger the playbook
+#### c. Managed Identity for Azure Sentinel Logic App connector:
+As a best practice, we  recommend using the Sentinel connection in playbooks that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
 
