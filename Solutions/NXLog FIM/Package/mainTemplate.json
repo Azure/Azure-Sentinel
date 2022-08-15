@@ -1,0 +1,199 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "NXLog - support@nxlog.org",
+    "comments": "Solution template for NXLog FIM"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "connector1-name": {
+      "type": "string",
+      "defaultValue": "94a2e74a-8f06-4367-b696-6ad467fc8aac"
+    }
+  },
+  "variables": {
+    "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
+    "_connector1-source": "[variables('connector1-source')]",
+    "NXLogFIMConnector": "NXLogFIMConnector",
+    "_NXLogFIMConnector": "[variables('NXLogFIMConnector')]",
+    "sourceId": "nxlogltd1589381969261.NXLog_FIM",
+    "_sourceId": "[variables('sourceId')]"
+  },
+  "resources": [
+    {
+      "id": "[variables('_connector1-source')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "NXLog FIM",
+          "publisher": "NXLog",
+          "descriptionMarkdown": "The NXLog [FIM](https://nxlog.co/documentation/nxlog-user-guide/im_fim.html) module allows for the scanning of files and directories, reporting detected additions, changes, renames and deletions on the designated paths through calculated checksums during successive scans. This REST API connector can efficiently export the configured FIM events to Azure Sentinel in real-time.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "NXLogFIM_CL",
+              "baseQuery": "NXLogFIM_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Find all DELETE events",
+              "query": "NXLogFIM_CL\n| where EventType_s == 'DELETE'\n| project-away\n   SourceSystem,\n   Type\n| sort by EventTime_t"
+            },
+            {
+              "description": "Bar Chart for Events per type, per host",
+              "query": "NXLogFIM_CL\n| summarize EventCount = count() by Hostname_s, EventType_s\n| where strlen(EventType_s) > 1\n| project Eventype = Hostname_s, EventType_s, EventCount\n| order by EventCount desc\n| render barchart"
+            },
+            {
+              "description": "Pie Chart for visualization of events per host",
+              "query": "NXLogFIM_CL\n| summarize EventCount = count() by Hostname_s, EventType_s\n| sort by EventCount\n| render piechart"
+            },
+            {
+              "description": "General Summary of Events per Host",
+              "query": "NXLogFIM_CL\n| summarize count() by Hostname_s, EventType_s"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "NXLogFIM_CL",
+              "lastDataReceivedQuery": "NXLogFIM_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "NXLogFIM_CL | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Follow the step-by-step instructions in the *NXLog User Guide* Integration Topic [Microsoft Azure Sentinel](https://nxlog.co/documentation/nxlog-user-guide/sentinel.html) to configure this connector.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "version": "1.0.0",
+        "kind": "Solution",
+        "contentId": "[variables('_sourceId')]",
+        "parentId": "[variables('_sourceId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "NXLog FIM",
+          "sourceId": "[variables('_sourceId')]"
+        },
+        "author": {
+          "name": "NXLog",
+          "email": "support@nxlog.org"
+        },
+        "support": {
+          "name": "NXLog",
+          "tier": "Partner",
+          "link": "https://nxlog.co/user?destination=node/add/support-ticket"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_NXLogFIMConnector')]",
+              "version": "1.0.0"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-08-15",
+        "providers": [
+          "NXLog"
+        ],
+        "categories": {
+          "domains": [
+            "IT Operations",
+            "Security - Others"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+    }
+  ],
+  "outputs": {}
+}
