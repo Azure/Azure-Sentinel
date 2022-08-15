@@ -13,7 +13,7 @@
 <a name="overview">
 
 ## Overview
-This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident return all Iris Investigate data for those domains as comments in the incident.
+This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident this playbook returns all Iris Investigate data for those domains as comments in the incident.
  
 Learn more about the Custom Connector via the https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request a Api key.
 
@@ -65,4 +65,4 @@ Once deployment is complete, you will need to authorize each connection.
 - In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
 - Configure the automation rules to trigger the playbooks.
 #### c. Managed Identity for Azure Sentinel Logic Apps connector
-As a best practice, we used sentinel connection in playbooks that uses "ManagedSecurityIdentity". Please refer [this](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
+As a best practice, we used sentinel connection in playbooks that uses "ManagedSecurityIdentity". Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
