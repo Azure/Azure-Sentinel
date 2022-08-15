@@ -1,0 +1,31 @@
+id: 4a6030de-c11c-4206-b4ea-cd005ebf80a2
+name: LOLBins and LOLScripts
+description: |
+  'This query identifies Microsoft-signed Binaries and Scripts that are not system initiated. This technique is commonly used in phishing attacks'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1218
+  
+query: |
+  //This query uses sysmon data depending on table name used this may need updataing
+  let Bin = externaldata(Binary: string,values: dynamic) [@"https://github.com/sonnyakhere/LOLBAS_to_CSV/blob/main/lolbas.csv"]
+  with (format="txt")
+  | where Binary has "blob-code blob-code-inner js-file-line"
+  | project extract(">([a-zA-Z.]+)", 1, Binary);
+  let ioc = dynamic(["http", "ftp"]);
+  SecurityEvent
+  | where TimeGenerated between ( datetime(2022-08-07, 00:00) .. datetime(2022-08-07, 23:59) )
+  // Looking to exclude system initiated activity
+  | where SubjectUserName !endswith "$"
+  | where SubjectUserName != "SYSTEM"
+  | where ParentProcessName has_any (Bin)
+  // Looking to only include details of those that have command line activities matching 1 or more of the defined IOCs
+  | where ProcessCommandLine  has_any (ioc)
+  | project TimeGenerated, SubjectMachineName, SubjectUserName, ParentProcessName, Process, ProcessCommandLine
+  | sort by TimeGenerated asc
