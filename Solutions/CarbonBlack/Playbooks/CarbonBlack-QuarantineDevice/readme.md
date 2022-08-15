@@ -4,11 +4,12 @@
  1. Fetches the devices information from CarbonBlack
  2. Quarantine the device
  3. Enrich the incident with device information by fetching from CarbonBlack<br>
-    ![CarbonBlack-Enrich Incident With devices information](./images/Incident_Comment.png)
+    ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-QuarantineDevice/images/Incident_Comment.png)
 
 
-![CarbonBlack-Enrich Incident With devices information](./images/designerOverviewLight1.png)<br>
-![CarbonBlack-Enrich Incident With devices information](./images/designerOverviewLight2.png)
+![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight1.png)
+
+![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight2.png)
 
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
@@ -29,6 +30,7 @@ Once deployment is complete, you will need to authorize each connection.
 4.	Sign in
 5.	Click Save
 6.	Repeat step 2&3 while for CarbonBlack connector Connection to authorize connector API of the playbook (For authorizing the CarbonBlack API connection, API Key needs to be provided. API Key Value is the combination of API Key / API ID)
+
 #### Configurations in Sentinel
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky device 
 2. Configure the automation rules to trigger this playbook
