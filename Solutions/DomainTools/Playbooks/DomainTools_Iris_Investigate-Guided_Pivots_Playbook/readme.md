@@ -74,5 +74,5 @@ Once deployment is complete, you will need to authorize each connection:
 - In Azure Sentinel, analytical rules should be configured to trigger an incident with risky Domain indicators 
 - Configure the automation rules to trigger the playbook
 #### c. Managed Identity for Azure Sentinel Logic App connector:
-As a best practice, we using Sentinel connection in playbooks that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
+As a best practice, we  recommend using the Sentinel connection in playbooks that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
 
