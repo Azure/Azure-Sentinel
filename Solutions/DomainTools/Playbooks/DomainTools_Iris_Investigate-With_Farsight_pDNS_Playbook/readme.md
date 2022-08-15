@@ -15,9 +15,9 @@
 ## Overview
 This playbook uses the DomainTools Iris Investigate API and Farsight DNSDB API. Given a domain or set of domains associated with an incident, enrich the domain using the DomainTools Iris Investigate API, returning whois and infrastructure details. Subsequently retrieve associated subdomains from passive DNS information seen in Farsight’s DNSDB. DomainTools Iris Investigate and Farsight DNSDB API subscriptions are required to run this playbook.
  
-Learn more about the Custom Connector via the https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request a Api key.
+Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
-When a new Azure Sentinel Incident is created, this playbook gets triggered and performs below actions:
+When a new Azure Sentinel Incident is created, this playbook gets triggered and performs these actions:
 
 - It fetches all the Domain objects in the Incident.
 - Iterates through the Domains objects and fetches the results from DomaintTools Iris Investigate and Farsight DNSDB for each Domain.
@@ -36,13 +36,14 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 <a name="authentication">
 
 ## Authentication
-Authentication methods this connector supports- [API Key authentication](https://www.domaintools.com/integrations)
+Authentication methods this connector supports
+ - [API Key authentication](https://www.domaintools.com/integrations)
 
 <a name="prerequisites">
 
 ## Prerequisites
-- DomainTools Iris Investigate Api Key
-- Farsight DNSDB Api Key
+- A DomainTools API Key provisioned for Iris Investigate
+- A Farsight DNSDB API Key
 
 <a name="deployment">
 
@@ -53,17 +54,18 @@ Authentication methods this connector supports- [API Key authentication](https:/
 <a name="postdeployment">
 
 ### Post-Deployment instructions
-#### a. Authorize connections 
-Once deployment is complete, you will need to authorize each connection.
-- Click the Azure Sentinel connection resource
-- Click edit API connection
-- Click Authorize
-- Sign in
-- Click Save
-- Repeat steps for other connections such as DomainTools connector API Connection (For authorizing the DomainTools connector API connection, API Key and API secret needs to be provided.)
-- Go to sentinel hook playbook to azure sentinel rules.
-#### b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
-- Configure the automation rules to trigger the playbooks.
-#### c. Managed Identity for Azure Sentinel Logic Apps connector
-As a best practice, we used sentinel connection in playbooks that uses "ManagedSecurityIdentity". Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
+#### a. Authorize connections: 
+Once deployment is complete, you will need to authorize each connection:
+- Click the "Azure Sentinel" connection resource
+- Click "Edit API connection"
+- Click "Authorize"
+- Enter your DomainTools API credentials
+- Click "Save"
+- Repeat steps for other connections such as the DomainTools connector API Connection. (In order to authorize the DomainTools connector API connection, an API Username and API Password need to be provided.)
+- Go to the Sentinel Hook Playbook to edit Azure Sentinel rules.
+#### b. Configurations in Sentinel:
+- In Azure Sentinel, analytical rules should be configured to trigger an incident with risky Domain indicators 
+- Configure the automation rules to trigger the playbook
+#### c. Managed Identity for Azure Sentinel Logic App connector:
+As a best practice, we  recommend using the Sentinel connection in playbooks that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
+
