@@ -15,7 +15,7 @@
 <a name="overview">
 
 # Overview
-This playbook uses the DomainTools Iris Enrich API, which we recommend over Iris Investigate for high-volume API lookup activity. It is able to provide domain infrastructure information for a domain or set of domains associated with an incident. If your account is provisioned for Iris Enrich, use the Iris Enrich endpoint to return all Iris Enrich data for a given domain or set of domains.
+This playbook uses the DomainTools Iris Enrich API, which we recommend over Iris Investigate for high-volume API lookup activities. It is able to provide domain infrastructure information for a domain or set of domains associated with an incident. If your account is provisioned for Iris Enrich, use the Iris Enrich endpoint to return Whois, mailserver, DNS, SSL and related indicators from Iris Enrich for a given domain or set of domains.
  
 You can learn more about the Custom Connector via the https://docs.microsoft.com/en-us/connectors/domaintoolsirisenric or visit https://www.domaintools.com/integrations to request a Api key.
 
@@ -37,12 +37,13 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 <a name="authentication">
 
 ## Authentication
-Authentication methods this connector supports- [API Key authentication](https://www.domaintools.com/integrations)
+Authentication methods this connector supports:
+- [API Key authentication](https://www.domaintools.com/integrations)
 
 <a name="prerequisites">
 
 ## Prerequisites for using and deploying playbook
-- DomainTools Iris Enrich Api Key
+- A DomainTools API Key provisioned for Iris Enrich
 
 <a name="deployment">
 
@@ -53,17 +54,17 @@ Authentication methods this connector supports- [API Key authentication](https:/
 <a name="postdeployment">
 
 ### Post-Deployment instructions
-#### a. Authorize connections 
-Once deployment is complete, you will need to authorize each connection. To do so, do the following steps:
-- Click the Azure Sentinel connection resource
-- Click edit API connection
-- Click Authorize
-- Sign in
+#### a. Authorize connections
+Once deployment is complete, you will need to authorize each connection:
+- Click the "Azure Sentinel" connection resource
+- Click "Edit API connection"
+- Click "Authorize"
+- Enter your DomainTools API credentials
 - Click Save
-- Repeat steps for other connections such as DomainTools connector API Connection (For authorizing the DomainTools connector API connection, API Key and API secret needs to be provided.)
-- Go to sentinel hook playbook to azure sentinel rules.
-#### b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with with risky user account behaviors. 
-- Configure the automation rules to trigger the playbooks.
-#### c. Managed Identity for Azure Sentinel Logic Apps connector
-As a best practice, we used sentinel connection in playbooks that uses "ManagedSecurityIdentity". Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
+- Repeat steps for other connections such as the DomainTools connector API Connection (In order to authorize the DomainTools connector API connection, an API Username and API Password need to be provided.)
+- Go to the Sentinel Hook Playbook to edit Azure Sentinel rules.
+#### b. Configurations in Sentinel:
+- In Azure Sentinel, analytical rules should be configured to trigger an incident with with risky Domain indicators 
+- Configure the automation rules to trigger the playbook
+#### c. Managed Identity for Azure Sentinel Logic Apps connector:
+As a best practice, we  recommend using the Sentinel connection in playbooks that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
