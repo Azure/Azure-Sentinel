@@ -1,0 +1,170 @@
+Parser:
+  Title: Network Session ASIM parser for Checkpoint Firewall
+  Version: '1.0'
+  LastUpdated: July 15, 2022
+Product:
+  Name: CheckpointFirewall
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Field Description in Checkpoint Logs 
+    Link: https://supportcenter.checkpoint.com/supportcenter/portal?eventSubmit_doGoviewsolutiondetails=&solutionid=sk144192
+Description: |
+  This ASIM parser supports normalizing Checkpoint VPN-1 & Firewall-1 logs coming from CEF Data Connector to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionCheckpointFirewall                               
+EquivalentBuiltInParser: _Im_NetworkSession_CheckpointFirewall                                 
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ProtocolLookup = datatable(Protocol:int, NetworkProtocol:string) [
+      let NWParser = (
+          starttime:datetime=datetime(null), 
+          endtime:datetime=datetime(null),
+          srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+          dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+          ipaddr_has_any_prefix:dynamic=dynamic([]),
+          dstportnumber:int=int(null), 
+          hostname_has_any:dynamic=dynamic([]), 
+          dvcaction:dynamic=dynamic([]), 
+          eventresult:string='*', 
+          disabled:bool=false)
+      {
+          let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+          let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+          CommonSecurityLog
+          | where not(disabled)
+          | where
+              (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | where DeviceVendor=="Check Point" and DeviceProduct=="VPN-1 & FireWall-1"
+          | where (isnull(dstportnumber) or (DestinationPort == dstportnumber))
+          | extend temp_isSrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any), 
+                temp_isDstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
+          | extend ASimMatchingIpAddr = case(
+                              array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                              (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                              temp_isSrcMatch, "SrcIpAddr",
+                              temp_isDstMatch, "DstIpAddr",
+                              "No match"
+                          )
+          | where ASimMatchingIpAddr != "No match"
+          | extend 
+                  EventVendor = DeviceVendor,
+                  EventProduct = "VPN & Firewall",
+                  EventCount = toint(1),
+                  EventType = "NetworkSession",
+                  EventOriginalType = "TRAFFIC",
+                  EventSchema = "NetworkSession",
+                  EventSchemaVersion = "0.2.3",
+                  DeviceAction = coalesce(DeviceAction, extract(@'rule_action=(\w+)',1,AdditionalExtensions, typeof(string))),        
+                  NetworkRuleName = extract(@'rule_uid=([\w+\-]*)',1,AdditionalExtensions, typeof(string)),
+                  EventOriginalUid = extract(@'loguid=(\{[^\}]+\})',1,AdditionalExtensions, typeof(string)),
+                  Dvc = coalesce(extract(@'origin=([\d+\.]*)',1,AdditionalExtensions, typeof(string)), Computer),
+                  DvcHostname = extract(@'originsicname=CN\\=(.+)\,O',1,AdditionalExtensions, typeof(string)),
+                  SrcZone = extract(@'inzone=([^;]+)',1,AdditionalExtensions, typeof(string)),
+                  DstZone = extract(@'outzone=([^;]+)',1,AdditionalExtensions, typeof(string)),
+                  CommunicationDirection = extract(@'conn_direction=(\w+)',1,AdditionalExtensions, typeof(string)),                  
+                  DstAppName = coalesce(Activity, extract(@'service_id=(\w+)',1,AdditionalExtensions, typeof(string))),
+                  ThreatCategory = case (
+                                    AdditionalExtensions has "alert=", extract(@'alert=([\w+\-]*)',1,AdditionalExtensions, typeof(string)),
+                                    AdditionalExtensions has "inspection_category=", extract(@'inspection_category=([\w+\-]*)',1,AdditionalExtensions, typeof(string)),
+                                    ""),
+                  ThreatName = extract(@'inspection_item=([\w+\-]*)',1,AdditionalExtensions, typeof(string))
+          | extend
+                  EventResult = case(
+                                      isempty(DeviceAction), "", 
+                                      DeviceAction == "Accept", "Success",
+                                      "Failure"
+                                  ), 
+                  NetworkRuleName = coalesce(DeviceCustomString2, NetworkRuleName),
+                  Protocol = toint(Protocol),
+                  EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
+          | where ((eventresult == "*") or (EventResult == eventresult))
+          | extend NetworkProtocol = case(
+                                    Protocol == 1, "ICMP",
+                                    Protocol == 2, "IGMP",
+                                    Protocol == 4, "IPv4",
+                                    Protocol == 6, "TCP",
+                                    Protocol == 17, "UDP",
+                                    Protocol == 41, "IPv6",
+                                    Protocol == 253, "",
+                                    tostring(Protocol)),
+                    NetworkDirection = case(
+                                    CommunicationDirection == 'Incoming', 'Inbound',
+                                    CommunicationDirection == 'Outgoing', 'Outbound',
+                                    CommunicationDirection == 'Internal', 'Local',
+                                    ""),
+                    DvcAction = case(
+                                    DeviceAction == 'Accept', 'Allow',
+                                    DeviceAction == 'Drop', 'Drop',
+                                    ""
+                                ) 
+          | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+          | extend         
+                  DstPortNumber = DestinationPort,
+                  DstIpAddr = DestinationIP,
+                  SrcPortNumber = SourcePort,
+                  SrcIpAddr = SourceIP,
+                  DstNatIpAddr = DestinationTranslatedAddress,
+                  DstNatPortNumber = DestinationTranslatedPort,
+                  SrcNatIpAddr = SourceTranslatedAddress,
+                  SrcNatPortNumber = SourceTranslatedPort,
+                  EventProductVersion = DeviceVersion,
+                  EventOriginalSeverity = LogSeverity,
+                  Rule = NetworkRuleName,
+                  EventEndTime = EventStartTime,
+                  DvcOriginalAction = DeviceAction
+          | extend
+                  IpAddr = SrcIpAddr,
+                  Dst = DstIpAddr,
+                  Src = SrcIpAddr,
+                  EventSeverity = case(
+                                      DvcAction == "Drop", "Low",
+                                      DvcAction == "Allow", "Informational",
+                                      EventOriginalSeverity
+                                  ),
+                  NetworkDirection = case(
+                                          isnotempty(NetworkDirection), NetworkDirection,
+                                          SrcZone == "Internal" and (DstZone == "Internal" or DstZone == "Local"), "Local",
+                                          (SrcZone == "Internal" or SrcZone == "Local") and DstZone == "External", "Outbound",
+                                          SrcZone == "External" and (DstZone == "Internal" or DstZone == "Local"), "Inbound",
+                                          ""
+                                      ),
+                  EventMessage = Message
+            | project-away Activity, AdditionalExtensions, ApplicationProtocol, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, LogSeverity, Malicious*, Message, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity 
+        };
+      NWParser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
