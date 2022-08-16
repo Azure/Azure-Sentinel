@@ -13,7 +13,7 @@
 <a name="overview">
 
 ## Overview
-This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident return the risk scores and adjust the severity of the incident if a high risk domain is observed, adding the risk scoring details in the comments of the incident.
+This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident, return the risk scores and adjust the severity of the incident if a high risk domain is observed. Add the risk scoring details in the comments of the incident.
  
 Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
