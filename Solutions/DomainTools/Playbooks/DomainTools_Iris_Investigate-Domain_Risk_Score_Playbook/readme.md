@@ -17,7 +17,7 @@ This playbook uses the DomainTools Iris Investigate API. Given a domain or set o
  
 Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
-When a new Azure Sentinel Incident is created, this playbook gets triggered and triggered and performs the following actions:
+When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
 
 - It fetches all the Domain objects in the Incident.
 - Iterates through the Domains objects and fetches the results from DomaintTools Iris Investigate for each Domain.
