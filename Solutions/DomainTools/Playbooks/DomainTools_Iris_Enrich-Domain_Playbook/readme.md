@@ -22,10 +22,11 @@ You can learn more about the Custom Connector via the https://docs.microsoft.com
 When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
 
 - It fetches all the Domain objects in the Incident.
-- Iterates through the Domains objects and fetches the results from DomaintTools Iris Enrich for each Domain.
+- Iterates through the Domain objects and fetches the results from DomaintTools Iris Enrich for each Domain.
 - All the details from DomainTools Iris Enrich will be added as comments in a tabular format.
 
-![Incident Comments](./graphics/comments1.png)(./graphics/comments2.png)
+![Incident Comments](./graphics/comments1.png)
+![Incident Comments](./graphics/comments2.png)
 
 <a name="deployplaybook">
 
