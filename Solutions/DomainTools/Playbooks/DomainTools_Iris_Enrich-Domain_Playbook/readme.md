@@ -57,15 +57,14 @@ Authentication methods this connector supports:
 ### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection:
-- Click the "Azure Sentinel" connection resource
-- Click "Edit API connection"
-- Click "Authorize"
-- Enter your DomainTools API credentials
-- Click Save
-- Repeat steps for other connections such as the DomainTools connector API Connection (In order to authorize the DomainTools connector API connection, an API Username and API Password need to be provided.)
-- Go to the Sentinel Hook Playbook to edit Azure Sentinel rules.
+- Open the Logic App in the edit mode
+- Open "For each Host" Action
+- Provide connection details for the DomainTools Iris Enrich Custom Connector (API Username and API Password need to be provided)
+- Click on "Add New", Provide a name to the connection, enter your DomainTools Iris Enrich API Username and API Password
+- Click Create
+- Repeat steps for other connections and select the above created connection.
+- Save the Logic App, if Logic App prompts any missing connections, please update the connections accordingly.
+- As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.
 #### b. Configurations in Sentinel:
 - In Azure Sentinel, analytical rules should be configured to trigger an incident with with risky Domain indicators 
 - Configure the automation rules to trigger the playbook
-#### c. Managed Identity for Azure Sentinel Logic Apps connector:
-As a best practice, we  recommend using the Sentinel connection in playbooks that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204)
