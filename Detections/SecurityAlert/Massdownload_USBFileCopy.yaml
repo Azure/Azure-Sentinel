@@ -1,4 +1,4 @@
-id: 6267ce44-1e9d-471b-9f1e-ae76a6b7aa84
+: 6267ce44-1e9d-471b-9f1e-ae76a6b7aa84
 name: Mass Download & copy to USB device by single user
 description: |
   'This query looks for any mass download by a single user with possible file copy activity to a new USB drive. Malicious insiders may perform such activities that may cause harm to the organization. 
@@ -11,6 +11,7 @@ requiredDataConnectors:
       - SecurityAlert
   - connectorId: MicrosoftThreatProtection
     dataTypes:
+      - CloudAppEvents
       - DeviceEvents
       - DeviceFileEvents
 queryFrequency: 1d
@@ -22,29 +23,56 @@ tactics:
 relevantTechniques:
   - T1052
 query: |
-  SecurityAlert
+  let lookback = 01d;
+  let Alerts = SecurityAlert
+  | where TimeGenerated >= ago(lookback)
   | where AlertName =~ "mass download by a single user"
-  | extend Extprop = parse_json(ExtendedProperties)
-  | extend Computer = iff(isnotempty(toupper(tostring(Extprop["Compromised Host"]))), toupper(tostring(Extprop["Compromised Host"])), tostring(parse_json(Entities)[0].HostName))
-  | extend Account = iff(isnotempty(tolower(tostring(Extprop["User Name"]))), tolower(tostring(Extprop["User Name"])), tolower(tostring(Extprop["user name"])))
-  | extend IpAddress = tostring(parse_json(ExtendedProperties).["IpAddress"]) 
-  | project timestamp=TimeGenerated, AlertName, Computer, Account, IpAddress, ExtendedProperties
-  | join kind=inner
-  ( 
+  | where Status != 'Resolved'
+  | extend ipEnt = parse_json(Entities), accountEnt = parse_json(Entities)
+  | mv-apply tempParams = ipEnt on (
+  mv-expand ipEnt
+  | where ipEnt.Type == "ip" 
+  | extend IpAddress = tostring(ipEnt.Address)
+  )
+  | mv-apply tempParams = accountEnt on (
+  mv-expand accountEnt
+  | where accountEnt.Type == "account"
+  | extend AADUserId = tostring(accountEnt.AadUserId)
+  )
+  | extend Alert_TimeGenerated = TimeGenerated
+  | distinct Alert_TimeGenerated, IpAddress, AADUserId, Type, DisplayName, Description, ProductName, ExtendedProperties, Entities, Status, CompromisedEntity;
+  let CA_Events = CloudAppEvents
+  | where TimeGenerated >= ago(lookback)
+  | where ActionType == "FileDownloaded"
+  | extend parsed = parse_json(RawEventData)
+  | extend UserId = tostring(parsed.UserId)
+  | extend FileName = tostring(parsed.SourceFileName)
+  | extend FileExtension = tostring(parsed.SourceFileExtension)
+  | summarize CloudAppEvent_Files = make_set(FileName), FileCount = dcount(FileName) by Application, AccountObjectId, UserId, IPAddress, City, CountryCode;
+  let CA_Alerts_Events = Alerts | join kind=inner (CA_Events)
+  on $left.AADUserId == $right.AccountObjectId and $left.IpAddress == $right.IPAddress
+  ;
+  let CA_FileList = CA_Alerts_Events | project CloudAppEvent_Files;
+  CA_Alerts_Events
+  | join kind=inner ( DeviceFileEvents
+  | where TimeGenerated >= ago(lookback)
+  | where ActionType in ("FileCreated", "FileRenamed")
+  | where FileName in~ (CA_FileList)
+  | summarize FileEvent_StartTime = min(TimeGenerated), FileEvent_EndTime = max(TimeGenerated), ActionTypes = make_set(ActionType), FileEvent_Files = make_set(FolderPath), FileEvent_FileCount = dcount(FolderPath) by InitiatingProcessAccountUpn, DeviceId, DeviceName, InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessCommandLine, InitiatingProcessParentFileName
+  ) on $left.UserId == $right.InitiatingProcessAccountUpn
+  | where FileEvent_StartTime >= Alert_TimeGenerated
+  | project-reorder Type, DisplayName, FileEvent_StartTime, UserId, AADUserId, IpAddress
+  | join kind=inner (
   DeviceEvents
-  | where  ActionType == "PnpDeviceConnected"
+  | where TimeGenerated >= ago(lookback)
+  | where ActionType == "PnpDeviceConnected"
   | extend parsed = parse_json(AdditionalFields)
-  | project DeviceId, DriveClass = tostring(parsed.ClassName), UsbDeviceId = tostring(parsed.DeviceId), ClassId = tostring(parsed.DeviceId), DeviceDescription = tostring(parsed.DeviceDescription), VendorIds = tostring(parsed.VendorIds), AccountDomain,AccountName,TimeGenerated, ActionType, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, Type
-  | where DriveClass == 'USB' and DeviceDescription == 'USB Mass Storage Device'
-  ) on $left.Account == $right.AccountName
-  | join kind=inner 
-  (
-  DeviceFileEvents
-  | where FolderPath !startswith "c" and FolderPath !startswith @"\"
-  )  on DeviceId
-  | project  TimeGenerated, ActionType, Computer, FileName, FileSize, IpAddress, InitiatingProcessCommandLine, InitiatingProcessFileName, Account
-  | extend timestamp = TimeGenerated, CompromisedEntity = Computer, AccountCustomEntity=Account, ProcessCustomEntity = InitiatingProcessFileName, IPCustomEntity=IpAddress
-
+  | summarize by USB_TimeGenerated = bin(TimeGenerated, 1d), DeviceId, DeviceEvent_DriveClass = tostring(parsed.ClassName), DeviceEvent_DeviceDescription = tostring(parsed.DeviceDescription)
+  | where DeviceEvent_DriveClass == 'USB' and DeviceEvent_DeviceDescription == 'USB Mass Storage Device'
+  )  
+  on DeviceId
+  | project-away DeviceId1
+  | extend HostCustomEntity = DeviceName, AccountCustomEntity = UserId, ProcessCustomEntity = InitiatingProcessFileName, CommandLineCustomEntity = InitiatingProcessCommandLine, IPCustomEntity = IPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -56,11 +84,13 @@ entityMappings:
         columnName: IPCustomEntity
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: CompromisedEntity
+      - identifier: HostName
+        columnName: HostCustomEntity
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
         columnName: ProcessCustomEntity
-version: 1.0.0
+      - identifier: CommandLine
+        columnName: CommandLineCustomEntity
+version: 1.0.1
 kind: Scheduled
