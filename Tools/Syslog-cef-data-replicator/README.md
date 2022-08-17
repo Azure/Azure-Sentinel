@@ -21,6 +21,8 @@ We have 2 flavors
 	
 ### 1. Generating syslog / cef traffic using raw log
 
+- Step 0: Down;pad 
+
 - Step 1: Make sure raw log present in a file (with any extension) and each record separated by new line char (\n)
 
      For example:
@@ -67,6 +69,26 @@ We have 2 flavors
 	--eps  (optional – default is 100 if not specified)
 	Name of the file where we have same data is mandatory like python syslogfromcsv.py cef_microsoft_ata.log
 	```
+- Step 5: (Optional) Run the script multiple time to achieve higer EPS.
+
+ 	During testing we have observed that with single invocation of this script we can get upto 100 EPS volume. If you want to get the more EPS, you need to run the 	script multiple times in the in the background.
+	```
+	#!/usr/bin/env python3
+	chmod +x syslogfromraw.py
+	nohup /path/to/syslogfromraw.py &
+	or
+	nohup python /path/to/syslogfromraw.py &
+	```
+- Step 6: (Optional) Use azure batch account and data factory for achieving higher EPS
+
+	Setting up batch account and VMs pool
+	
+	Upload scripts and sample data (and customization file) to storage account
+	
+	Create data factory pipeline with azure batch
+	
+	Schedule data factory job to run for every 10 minutes
+	
 ### 2. Generating syslog / cef traffic using csv file
 
 - Step 1: Make sure csv file present with header and at least 1 record, records are separated by new line char (\n)
