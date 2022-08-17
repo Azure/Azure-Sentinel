@@ -62,11 +62,11 @@ Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode.
 - Open "For each Host" Action.
 - Provide connection details for the DomainTools Iris Enrich Custom Connector (A DomainTools API Username and API Key need to be provided).
- ![for_each](./graphics/for_each.png)
+  ![for_each](./graphics/for_each.png)
 - Click on "Add New", provide a name for the connection, enter your DomainTools Iris Enrich API Username and API Key.
 - Click "Create".
-  ![connection](./graphics/connection.png)
 - Repeat these steps for any other connections and select the connection details created above.
+  ![connection](./graphics/connection.png)
 - Save the Logic App. If the Logic App prompts any missing connections, please update the connections similarly.
 - As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.
 #### b. Configurations in Sentinel:
