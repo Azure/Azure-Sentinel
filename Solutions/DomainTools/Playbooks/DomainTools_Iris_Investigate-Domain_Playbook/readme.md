@@ -49,6 +49,8 @@ Authentication methods this connector supports:
 ### Deployment instructions
 - Deploy the playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
+  ![deployment](./graphics/deployment.png)
+- Click "Review + create". Once the validation is successful, click on "Create".
 
 <a name="postdeployment">
 
@@ -58,9 +60,12 @@ Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode
 - Open "For each Host" Action
 - Provide connection details for the DomainTools Iris Investigate Custom Connector (A DomainTools API Username and API Key need to be provided)
+
+  ![for_each](./graphics/for_each.png)
 - Click on "Add New", provide a name for the connection, enter your DomainTools Investigate API Username and API Key
 - Click "Create"
 - Repeat these steps for any other connections and select the connection details created above.
+  ![connection](./graphics/connection.png)
 - Save the Logic App. If the Logic App prompts any missing connections, please update the connections similarly.
 - As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.
 #### b. Configurations in Sentinel:
