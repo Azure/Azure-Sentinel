@@ -62,6 +62,7 @@ Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode.
 - Open "For each Host" Action.
 - Provide connection details for the DomainTools Iris Enrich Custom Connector (A DomainTools API Username and API Key need to be provided).
+  
   ![for_each](./graphics/for_each.png)
 - Click on "Add New", provide a name for the connection, enter your DomainTools Iris Enrich API Username and API Key.
 - Click "Create".
