@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Fortinet FortiGate logs to the ASIM Web Session normalized schema.
+  This ASIM parser supports normalizing Fortinet FortiGate logs to the ASIM Network Session normalized schema.
 ParserName: ASimNetworkSessionFortinetFortiGate
 EquivalentBuiltInParser: _ASim_NetworkSession_FortinetFortiGate
 ParserParams:
@@ -21,15 +21,15 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventResultDetails:string)
+  let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventSeverity:string,EventResultDetails:string)
   [
-      "accept","Allow","Success",""
-      , "client-rst","Reset Source","Failure",""
-      , "close","","Success",""
-      , "deny","Deny","Failure",""
-      , "ip-conn","","Failure","IP connection error"
-      , "server-rst","Reset Destination","Failure",""
-      , "timeout","","Failure",""
+    "accept","Allow","Success","Informational",""
+    , "client-rst","Reset Source","Failure","Low",""
+    , "close","Allow","Success","Informational",""
+    , "deny","Deny","Failure","Low",""
+    , "ip-conn","Allow","Failure","Informational","IP connection error"
+    , "server-rst","Reset Destination","Failure","Low",""
+    , "timeout","Allow","Failure","Informational",""
   ];
   let ProtocolLookup=datatable(Protocol:string,NetworkProtocol:string)
   [
@@ -186,16 +186,15 @@ ParserQuery: |
       | where not(disabled)
       | where DeviceVendor == "Fortinet" and DeviceProduct startswith "FortiGate" and AdditionalExtensions has "cat=traffic"
       | where DeviceAction != "dns"
-      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceName,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated
+      | extend Dvc = iif(isnotempty(DeviceName),DeviceName,Computer)
+      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,Dvc,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated
+      | extend EventProduct = DeviceProduct
       | project-rename DstBytes = ReceivedBytes
           , DstInterfaceName = DeviceOutboundInterface
           , DstIpAddr = DestinationIP
           , DstPortNumber = DestinationPort
-          , Dvc = DeviceName
-          , EventEndTime = TimeGenerated
           , EventMessage = Activity
           , EventOriginalSeverity = LogSeverity
-          , EventProduct = DeviceProduct
           , EventProductVersion = DeviceVersion
           , SrcBytes = SentBytes
           , SrcInterfaceName = DeviceInboundInterface
@@ -203,39 +202,41 @@ ParserQuery: |
           , SrcPortNumber = SourcePort
       | lookup EventLookup on DeviceAction 
       | lookup ProtocolLookup on Protocol
-      | project-rename DvcOriginalAction = DeviceAction
-      | parse AdditionalExtensions with "start=" EventStartTime:datetime 
-      ";" * "srcintfrole=" SrcZone 
-      ";" * "dstintfrole=" DstZone
-      ";" * "externalID=" NetworkSessionId
-      ";" * "policyid=" NetworkRuleNumber:int
-      ";" * "dstcountry=" DstGeoCountry
-      ";" * "srccountry=" SrcGeoCountry
-      ";" *
+      | parse AdditionalExtensions with * "srcintfrole=" SrcZone 
+        ";" * "dstintfrole=" DstZone
+        ";" * 
+      | parse AdditionalExtensions with * "srccountry=" DstGeoCountry
+        ";" * "dstcountry=" SrcGeoCountry
+        ";" *
+      | parse AdditionalExtensions with * "externalID=" NetworkSessionId
+        ";" * "policyid=" NetworkRuleNumber:int
+        ";" * 
       | parse AdditionalExtensions with * "crscore=" ThreatRiskLevel:int
-      ";" *
+        ";" *
       | parse AdditionalExtensions with * "duration=" NetworkDuration:int
-      ";" * "sentpkt=" SrcPackets:long
-      ";" * "rcvdpkt=" DstPackets:long
-      ";" *
+        ";" * "sentpkt=" SrcPackets:long
+        ";" * "rcvdpkt=" DstPackets:long
+        ";" *
       | extend EventCount = int(1)
           , EventSchema = "NetworkSession"
           , EventSchemaVersion = "0.2.3"
-          , EventSeverity = iif(EventOriginalSeverity == 5, "Informational", "")
           , EventType = "NetworkSession"
           , EventVendor = "Fortinet"
+          , EventProduct = "FortiGate"
           , NetworkBytes = DstBytes + SrcBytes
           , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
               , DstIpAddr contains ":", "IPv6"
               , "")
           , NetworkPackets = DstPackets + SrcPackets
+          , EventEndTime = TimeGenerated
+          , DvcOriginalAction = DeviceAction
       | extend 
           Src = SrcIpAddr,
           Dst = DstIpAddr,
-          SessionId = NetworkSessionId,
           IpAddr = SrcIpAddr,
-          Rule = tostring(NetworkRuleNumber),
-          Duration = NetworkDuration
+          Duration = NetworkDuration,
+          Rule = iif(isnotempty(NetworkRuleNumber),tostring(NetworkRuleNumber),""),
+          SessionId = iif(isnotempty(NetworkSessionId),tostring(NetworkSessionId),"")
       | project-away Protocol
   };
   Parser (disabled=disabled)
