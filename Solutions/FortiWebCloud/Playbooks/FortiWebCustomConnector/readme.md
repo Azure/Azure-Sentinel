@@ -1,6 +1,6 @@
 # FortiWeb WAF Logic Apps Custom connector
 
-FortiWeb Cloud connector provides an API that uses Representational State Transfer (RESTful API) design principles to access and modify the settings of FortiWeb applications.
+This custom connector connects to Fortiweb WAF service end point to runs any fortiweb waf supported API get/post calls and gives response back in json format.
 ### Authentication methods this connector supports
 
 *  API Key authentication
