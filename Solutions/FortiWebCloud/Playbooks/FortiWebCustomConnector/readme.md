@@ -1,4 +1,4 @@
-# OpenCTI Logic Apps Custom connector
+# FortiWeb WAF Logic Apps Custom connector
 
 FortiWeb Cloud connector provides an API that uses Representational State Transfer (RESTful API) design principles to access and modify the settings of FortiWeb applications.
 ### Authentication methods this connector supports
