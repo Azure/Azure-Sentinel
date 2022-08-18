@@ -62,11 +62,11 @@ Once deployment is complete, you will need to authorize each connection:
 - Open "For each Host" Action.
 - Provide connection details for the DomainTools Iris Investigate Custom Connector (A DomainTools API Username and API Key need to be provided).
 
- 
   ![for_each](./graphics/for_each.png)
 - Click on "Add New", provide a name for the connection, enter your DomainTools Investigate API Username and API Key.
 - Click "Create".
 - Repeat these steps for any other DomainTools Iris Investigate Custom Connector connections and select the connection details created above.
+ 
   ![connection](./graphics/connection.png)
 - Open "Check if results exists" Action.
 - Provide connection details for the Farsight DNSDB Custom Connector (A Farsight DNSDB API Key needs to be provided).
