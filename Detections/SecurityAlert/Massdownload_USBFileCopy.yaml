@@ -23,9 +23,8 @@ tactics:
 relevantTechniques:
   - T1052
 query: |
-  let lookback = 01d;
   let Alerts = SecurityAlert
-  | where TimeGenerated >= ago(lookback)
+  | where TimeGenerated >= ago(7d)
   | where AlertName =~ "mass download by a single user"
   | where Status != 'Resolved'
   | extend ipEnt = parse_json(Entities), accountEnt = parse_json(Entities)
@@ -42,20 +41,20 @@ query: |
   | extend Alert_TimeGenerated = TimeGenerated
   | distinct Alert_TimeGenerated, IpAddress, AADUserId, Type, DisplayName, Description, ProductName, ExtendedProperties, Entities, Status, CompromisedEntity;
   let CA_Events = CloudAppEvents
-  | where TimeGenerated >= ago(lookback)
+  | where TimeGenerated >= ago(7d)
   | where ActionType == "FileDownloaded"
   | extend parsed = parse_json(RawEventData)
   | extend UserId = tostring(parsed.UserId)
   | extend FileName = tostring(parsed.SourceFileName)
   | extend FileExtension = tostring(parsed.SourceFileExtension)
-  | summarize CloudAppEvent_Files = make_set(FileName), FileCount = dcount(FileName) by Application, AccountObjectId, UserId, IPAddress, City, CountryCode;
+  | summarize CloudAppEvent_StartTime = min(TimeGenerated), CloudAppEvent_EndTime = max(TimeGenerated), CloudAppEvent_Files = make_set(FileName), FileCount = dcount(FileName) by Application, AccountObjectId, UserId, IPAddress, City, CountryCode;
   let CA_Alerts_Events = Alerts | join kind=inner (CA_Events)
   on $left.AADUserId == $right.AccountObjectId and $left.IpAddress == $right.IPAddress
   ;
   let CA_FileList = CA_Alerts_Events | project CloudAppEvent_Files;
   CA_Alerts_Events
   | join kind=inner ( DeviceFileEvents
-  | where TimeGenerated >= ago(lookback)
+  | where TimeGenerated >= ago(7d)
   | where ActionType in ("FileCreated", "FileRenamed")
   | where FileName in~ (CA_FileList)
   | summarize FileEvent_StartTime = min(TimeGenerated), FileEvent_EndTime = max(TimeGenerated), ActionTypes = make_set(ActionType), FileEvent_Files = make_set(FolderPath), FileEvent_FileCount = dcount(FolderPath) by InitiatingProcessAccountUpn, DeviceId, DeviceName, InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessCommandLine, InitiatingProcessParentFileName
@@ -64,33 +63,34 @@ query: |
   | project-reorder Type, DisplayName, FileEvent_StartTime, UserId, AADUserId, IpAddress
   | join kind=inner (
   DeviceEvents
-  | where TimeGenerated >= ago(lookback)
+  | where TimeGenerated >= ago(7d)
   | where ActionType == "PnpDeviceConnected"
-  | extend parsed = parse_json(AdditionalFields)
-  | summarize by USB_TimeGenerated = bin(TimeGenerated, 1d), DeviceId, DeviceEvent_DriveClass = tostring(parsed.ClassName), DeviceEvent_DeviceDescription = tostring(parsed.DeviceDescription)
+  | extend parsed = parse_json(AdditionalFields), USB_TimeGenerated = TimeGenerated
+  | summarize USB_TimeGenerated = make_list(TimeGenerated) by DeviceId, DeviceEvent_DriveClass = tostring(parsed.ClassName), DeviceEvent_DeviceDescription = tostring(parsed.DeviceDescription)
   | where DeviceEvent_DriveClass == 'USB' and DeviceEvent_DeviceDescription == 'USB Mass Storage Device'
   )  
   on DeviceId
   | project-away DeviceId1
-  | extend HostCustomEntity = DeviceName, AccountCustomEntity = UserId, ProcessCustomEntity = InitiatingProcessFileName, CommandLineCustomEntity = InitiatingProcessCommandLine, IPCustomEntity = IPAddress
+  | where CloudAppEvent_EndTime <= Alert_TimeGenerated
+  | project Alert_TimeGenerated, UserId,DeviceName, IPAddress,InitiatingProcessParentFileName,  InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessCommandLine, FileEvent_Files,FileCount, Application, City, CountryCode, DeviceId,AADUserId, USB_TimeGenerated,CloudAppEvent_EndTime, CloudAppEvent_StartTime
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: IPAddress
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: HostCustomEntity
+        columnName: DeviceName
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
-        columnName: ProcessCustomEntity
+        columnName: InitiatingProcessFileName
       - identifier: CommandLine
-        columnName: CommandLineCustomEntity
+        columnName: InitiatingProcessCommandLine
 version: 1.0.1
 kind: Scheduled
