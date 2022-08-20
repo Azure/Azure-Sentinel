@@ -3,9 +3,10 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Post Message Slack",
-        "description": "This playbook will post a message in a Slack channel when an Incident is created in Azure Sentinel",
+        "description": "This playbook will post a message in a Slack channel when an alert is created in Azure Sentinel",
         "prerequisites": "Slack connector will require a Slack account and user credentials",
-        "lastUpdateTime": "2021-07-14T00:00:00.000Z",
+        "postDeployment": "After deployment, you can run this playbook manually on an alert or attach it to an **analytics rule** so it will rune when an alert is created.",
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z",
         "entities": [],
         "tags": ["Notification" ],
         "support": {
@@ -13,11 +14,18 @@
         },
         "author": {
             "name": "Yaniv Shasha"
-        }
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "PostMessageSlack-OnAlert",
+                "notes": [ "Initial version" ]
+            }
+        ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "PostMessageSlack",
+            "defaultValue": "PostMessageSlack-OnAlert",
             "type": "string",
             "metadata": {
                 "description": "Name of the Logic Apps resource to be created"
@@ -59,7 +67,7 @@
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "tags": {
-                "hidden-SentinelTemplateName": "PostMessageSlack",
+                "hidden-SentinelTemplateName": "PostMessageSlack_alert",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "dependsOn": [
@@ -78,7 +86,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_incident": {
+                        "Microsoft_Sentinel_alert": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -89,13 +97,30 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/incident-creation"
+                                "path": "/subscribe"
                             }
                         }
                     },
                     "actions": {
-                        "Post_message": {
+                        "Alert_-_Get_incident": {
                             "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Post_message": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection",
                             "inputs": {
                                 "host": {
@@ -107,7 +132,7 @@
                                 "path": "/chat.postMessage",
                                 "queries": {
                                     "channel": "",
-                                    "text": "New Incident: @{triggerBody()?['object']?['properties']?['title']}\nDescription: @{triggerBody()?['object']?['properties']?['description']}\nIncident Severity: @{triggerBody()?['object']?['properties']?['severity']}\nSubscription: @{triggerBody()?['workspaceInfo']?['SubscriptionId']}\nIncident Entites: @{triggerBody()?['object']?['properties']?['relatedEntities']}\n\nPlease Investigate.\n\n"
+                                    "text": "New Incident: @{body('Alert_-_Get_incident')?['properties']?['title']}\nDescription: @{body('Alert_-_Get_incident')?['properties']?['description']}\nIncident Severity: @{body('Alert_-_Get_incident')?['properties']?['severity']}\nSubscription: @{triggerBody()?['WorkspaceSubscriptionId']}\nIncident Entites: @{triggerBody()?['Entities']}\n\nPlease Investigate.\n\n"
                                 }
                             }
                         }
