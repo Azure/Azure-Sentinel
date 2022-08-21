@@ -1,6 +1,10 @@
-// This should be adapted for each working schedule and location time.
-// This is currently configured for Central European Time and European Daylight Saving Times.
+// This query can help you to compute if a date (or the current time) happens during a predefined working schedule, it returns true or false.
+//
+// This should be adapted for each working schedule and time zone (https://docs.microsoft.com/en-us/azure/data-explorer/kusto/query/timezone)
+// This is currently configured for Central European Time and European Daylight Saving Times (Madrid, Spain time)
+//
 // Click "Save as function", in Parameters write in the fields: "datetime" "date_time" "datetime(null)"
+//
 // If you name the function "IsWorkingTime", you can check the function with queries like the following:
 //
 // print IsWorkingTime()
@@ -11,8 +15,11 @@
 // | project TimeGenerated, IsWorkingTime(TimeGenerated)
 //
 //let Function = (date_time:datetime = datetime(null)){
+    // Pick your timezone string from https://docs.microsoft.com/en-us/azure/data-explorer/kusto/query/timezone
+    let time_zome = 'Europe/Madrid';
     // If empty, take current time
     let parsed_date_time = iff(isnull(date_time), now(), date_time);
+    let corrected_date_time = datetime_utc_to_local(parsed_date_time, time_zome);
     // Start and end hours of daily work schedule
     let schedule_start_hour = 8;
     let schedule_end_hour = 17;
@@ -22,21 +29,15 @@
     let IntensiveStartTime = make_datetime(getyear(parsed_date_time), 6, 16);
     // End date of intensive working time
     let IntensiveEndTime = make_datetime(getyear(parsed_date_time), 9, 16);
-    // Timezone hour offsets versus UTC
-    let winter_UTC_offset = 1h; // For Central European Time
-    let summer_UTC_offset = 2h; // For Central European Summer Time
-    // Compute hour and day integer values of timezone date versus UTC
-    let FirstEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 3, 1))); // First European Daylight Saving Time
-    let SecondEuropeDST = startofweek(endofmonth(make_datetime(getyear(parsed_date_time), 10, 1))); // Second European Daylight Saving Time
-    let corrected_date_time = parsed_date_time + iff(parsed_date_time between (FirstEuropeDST..SecondEuropeDST), summer_UTC_offset, winter_UTC_offset);
     let hour_of_day = hourofday(corrected_date_time);
     let day_of_week = dayofweek(corrected_date_time - 1d)/1d + 1;
-    let Intensive = corrected_date_time between (IntensiveStartTime..IntensiveEndTime);
+    let Intensive = corrected_date_time between (IntensiveStartTime .. IntensiveEndTime);
     // Return boolean indicating if a date is working time
     case(
         day_of_week < 5 and not(Intensive) and hour_of_day between (schedule_start_hour..(schedule_end_hour - 1)), true, // Monday to Thursday
         day_of_week < 5 and Intensive and hour_of_day between (schedule_start_hour..(schedule_intensive_end_hour - 1)), true, // Intensive Monday to Thursday
-        day_of_week == 5 and hour_of_day between (schedule_start_hour..(schedule_friday_end_hour - 1)), true, // Friday
-        false)
+        day_of_week == 5 and hour_of_day between (schedule_start_hour .. (schedule_friday_end_hour - 1)), true, // Friday
+        false
+    )
 //};
 //Function(date_time)
