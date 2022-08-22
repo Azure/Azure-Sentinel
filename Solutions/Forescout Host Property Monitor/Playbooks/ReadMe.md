@@ -61,8 +61,8 @@ WLAN Block	42	restrict
 Whitelist Network Access	43	restrict  
 Use the Microsoft Apps Designer to view or edit the playbook as needed to fulfil security requirements. The code is prepared by using the visual editor, which can be easily viewed and modified.  
 
-
-
 <a name="limitations">
-## Known issues and limitations
+  
+# Known issues and limitations  
+  N/A
 
