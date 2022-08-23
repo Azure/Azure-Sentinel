@@ -82,12 +82,43 @@ We have 2 flavors
 - Step 6: (Optional) Use azure batch account and data factory for achieving higher EPS
 
 	Setting up batch account and VMs pool
+	- You can find the details here https://docs.microsoft.com/en-us/azure/batch/accounts and https://docs.microsoft.com/en-us/azure/batch/nodes-and-pools
 	
 	Upload scripts and sample data (and customization file) to storage account
-	
-	Create data factory pipeline with azure batch
+	- Find more details here - https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal
+	 
+	Create data factory pipeline with azure batch task 
+	- You can find more details here - https://techcommunity.microsoft.com/t5/azure-paas-blog/configure-a-simple-azure-batch-job-with-azure-data-factory/ba-p/2260759
 	
 	Schedule data factory job to run for every 10 minutes
+	- More details are here  - https://docs.microsoft.com/en-us/azure/data-factory/how-to-create-schedule-trigger?tabs=data-factory
+	
+	Important tips:
+	
+	- Have 1 task(activity) for each 100 EPS (during our testing, we found out that this is ideal)
+		- For example, If you want 5000 EPS throuput, then have 50 parallell tasks / activities running (each task throughputs 100 EPS)
+		- ![image](https://user-images.githubusercontent.com/10404181/186093885-3c7bfd1c-2e58-4328-b296-bf017d23b564.png)
+	
+	- Schedule pipeline with 10 mins frequency and enable to kill previous taks before starting new activity. (Set timeout to lesser than 10 minutes)
+		- ![image](https://user-images.githubusercontent.com/10404181/186095028-d4854978-d4fd-4866-8756-223fd59d69c8.png)
+	
+	- Use local ip addres to send the logs (which will give good throuput). Have agent and batch account's nodes in the same network
+		- ![image](https://user-images.githubusercontent.com/10404181/186095413-6bb22cb0-2e64-4b3a-a2c8-0e1c6dadeb20.png)
+	
+	```
+	python syslogfromraw.py --host "10.4.87.1" --port 514 --eventtype 'syslog' --cust_file fortigate_customizations.json syslog_meraki_raw.log
+	python syslogfromraw.py --host "localhost" --port 514 --eventtype 'syslog' --cust_file fortigate_customizations.json syslog_meraki_raw.log 
+	```
+	
+	- If possible have agent installed locally on the batch account nodes
+	- On Agent node - Make sure you stop the logging into /var/log/syslog, otherwise you may get into memory issues
+	
+	```
+	cd /etc/rsyslog.d/
+	nano 50-default.conf
+	//Comment the line that stores the logs into /var/log/syslog
+	service rsyslog restart
+	```
 	
 ### 2. Generating syslog / cef traffic using csv file
 
