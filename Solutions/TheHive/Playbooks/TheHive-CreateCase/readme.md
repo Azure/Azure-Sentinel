@@ -9,7 +9,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 3. Create task and bind it to case.
 4. Creates obsarvebles with hosts and IPs for created case. 
 
-<img src="./playbook_screenshot.png" width="50%"/><br>
+<img src="./playbook_screenshot.PNG" width="50%"/><br>
 
 ### Prerequisites
 
