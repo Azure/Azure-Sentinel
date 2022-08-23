@@ -17,11 +17,16 @@ This repository contains a console application (Python) that helps to replicate 
 
 We have 2 flavors
 1.	Generating syslog / cef traffic using raw log
-2.	Generating syslog / cef traffic using csv file
+2.	Generating syslog / cef traffic using csv file (deprecated)
 	
 ### 1. Generating syslog / cef traffic using raw log
 
-- Step 0: Down;pad 
+- Step 0: Download the package 
+	```
+		sudo apt-get install zip unzip
+		wget https://github.com/Azure/Azure-Sentinel/blob/SyslogDataReplication/Tools/Syslog-cef-data-replicator/syslog_cef_data_replicator.zip?raw=true
+		unzip syslog_cef_data_replicator.zip
+	```
 
 - Step 1: Make sure raw log present in a file (with any extension) and each record separated by new line char (\n)
 
