@@ -23,6 +23,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  
   let ProtocolLookup=datatable(Protocol:string,NetworkProtocol:string)
   [
       "0","HOPOPT"
@@ -178,83 +179,68 @@ ParserQuery: |
       "Incoming","Inbound", 
       "Outgoing","Outbound", 
       "Internal","Local"];
-  let ActionLookup=datatable(DvcOriginalAction:string,DvcAction:string)
+  let ActionLookup=datatable(DvcOriginalAction:string,DvcAction:string,EventResult:string,EventSeverity:string)
   [
-      "Accept","Allow", 
-      "Allow","Allow", 
-      "Drop","Drop", 
-      "Reject","Deny", 
-      "Encrypt","Encrypt", 
-      "Decrypt","Decrypt",
-      "Bypass","Allow", 
-      "Block","Deny", 
-      "Detect","Deny", 
-      "Do not send","Drop",  
-      "Authorize","", 
-      "Deauthorize","", 
-      "Ask User","", 
-      "Extract",""];
-let NWParser=(disabled:bool=false){
-    CommonSecurityLog
-    | where not(disabled)
-    | where DeviceVendor=="Check Point" and DeviceProduct=="VPN-1 & FireWall-1"
-    | extend 
-            EventProduct = "Firewall",
-            EventCount = toint(1),
-            EventType = "NetworkSession",
-            EventSchema = "NetworkSession",
-            EventSchemaVersion = "0.2.4"
-    | parse AdditionalExtensions with * "rule_action=" DeviceAction ";" * "rule_uid=" NetworkRuleName ";" *
-    | parse AdditionalExtensions with * "loguid=" EventOriginalUid ";" * "origin=" Dvc ";" * "originsicname=CN\\=" DvcHostname "," *
-    | parse AdditionalExtensions with * "inzone=" SrcZone ";" * "outzone=" DstZone ";" * 
-    | parse AdditionalExtensions with * "conn_direction=" CommunicationDirection ";" 
-    | parse AdditionalExtensions with * "alert=" AlertName ";" *
-    | parse AdditionalExtensions with * "inspection_category=" InspectionCategory ";" * "inspection_item=" ThreatName ";"                   
-    | extend
-            ThreatCategory = coalesce(AlertName, InspectionCategory),
-            EventResult = case(
-                                isempty(DeviceAction), "", 
-                                DeviceAction == "Accept", "Success",
-                                "Failure"
-                            ), 
-            NetworkRuleName = coalesce(DeviceCustomString2, NetworkRuleName),
-            EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime))
-    | project-rename  
-            EventVendor = DeviceVendor,
-            DstPortNumber = DestinationPort,
-            DstIpAddr = DestinationIP,
-            SrcPortNumber = SourcePort,
-            SrcIpAddr = SourceIP,
-            DstNatIpAddr = DestinationTranslatedAddress,
-            DstNatPortNumber = DestinationTranslatedPort,
-            SrcNatIpAddr = SourceTranslatedAddress,
-            SrcNatPortNumber = SourceTranslatedPort,
-            EventProductVersion = DeviceVersion,
-            EventOriginalSeverity = LogSeverity,
-            Rule = NetworkRuleName,
-            DstAppName = Activity,
-            DvcOriginalAction = DeviceAction
-    | lookup ProtocolLookup on Protocol
-    | lookup DirectionLookup on CommunicationDirection
-    | lookup ActionLookup on DvcOriginalAction
-    | extend 
-            EventEndTime = EventStartTime,
-            IpAddr = SrcIpAddr,
-            Dst = DstIpAddr,
-            Src = SrcIpAddr,
-            EventMessage = Message,
-            EventSeverity = case(
-                                DvcAction == "Drop", "Low",
-                                DvcAction == "Allow", "Informational",
-                                ""
-                            ),
-            NetworkDirection = case(
-                                isnotempty(NetworkDirection), NetworkDirection,
-                                SrcZone == "Internal" and (DstZone == "Internal" or DstZone == "Local"), "Local",
-                                (SrcZone == "Internal" or SrcZone == "Local") and DstZone == "External", "Outbound",
-                                SrcZone == "External" and (DstZone == "Internal" or DstZone == "Local"), "Inbound",
-                                ""
-                                )
-    | project-away AlertName, ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, InspectionCategory, Malicious*, Message, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity 
-  };
-  NWParser(disabled=disabled)
+      "Accept","Allow","Success","Informational",
+      "Allow","Allow","Success","Informational",
+      "Drop","Drop","Failure","Low",
+      "Reject","Deny","Failure","Low",
+      "Encrypt","Encrypt","Success","Informational",
+      "Decrypt","Decrypt","Success","Informational",
+      "Bypass","Allow","Success","Informational",
+      "Block","Deny","Failure","Low",
+      "","","NA","Informational"];
+    let NWParser=(disabled:bool=false){
+        CommonSecurityLog
+        | where not(disabled)
+        | where DeviceVendor=="Check Point" and DeviceProduct=="VPN-1 & FireWall-1"
+        | extend 
+                EventProduct = "Firewall",
+                EventCount = toint(1),
+                EventType = "NetworkSession",
+                EventSchema = "NetworkSession",
+                EventSchemaVersion = "0.2.4"
+        | parse AdditionalExtensions with * "rule_action=" DeviceAction ";" * "rule_uid=" NetworkRuleName ";" *
+        | parse AdditionalExtensions with * "loguid=" EventOriginalUid ";" * "origin=" Dvc ";" * "originsicname=CN\\=" DvcHostname "," *
+        | parse AdditionalExtensions with * "inzone=" SrcZone ";" * "outzone=" DstZone ";" * 
+        | parse AdditionalExtensions with * "conn_direction=" CommunicationDirection ";" 
+        | parse AdditionalExtensions with * "alert=" AlertName ";" *
+        | parse AdditionalExtensions with * "inspection_category=" InspectionCategory ";" * "inspection_item=" ThreatName ";"                   
+        | extend
+                ThreatCategory = coalesce(AlertName, InspectionCategory),
+                NetworkRuleName = coalesce(DeviceCustomString2, NetworkRuleName),
+                EventStartTime = TimeGenerated
+        | project-rename  
+                EventVendor = DeviceVendor,
+                DstPortNumber = DestinationPort,
+                DstIpAddr = DestinationIP,
+                SrcPortNumber = SourcePort,
+                SrcIpAddr = SourceIP,
+                DstNatIpAddr = DestinationTranslatedAddress,
+                DstNatPortNumber = DestinationTranslatedPort,
+                SrcNatIpAddr = SourceTranslatedAddress,
+                SrcNatPortNumber = SourceTranslatedPort,
+                EventProductVersion = DeviceVersion,
+                EventOriginalSeverity = LogSeverity,
+                Rule = NetworkRuleName,
+                DstAppName = Activity,
+                DvcOriginalAction = DeviceAction,
+                EventMessage = Message
+        | lookup ProtocolLookup on Protocol
+        | lookup DirectionLookup on CommunicationDirection
+        | lookup ActionLookup on DvcOriginalAction
+        | extend 
+                EventEndTime = EventStartTime,
+                IpAddr = SrcIpAddr,
+                Dst = DstIpAddr,
+                Src = SrcIpAddr,
+                NetworkDirection = case(
+                                    isnotempty(NetworkDirection), NetworkDirection,
+                                    SrcZone == "Internal" and (DstZone == "Internal" or DstZone == "Local"), "Local",
+                                    (SrcZone == "Internal" or SrcZone == "Local") and DstZone == "External", "Outbound",
+                                    SrcZone == "External" and (DstZone == "Internal" or DstZone == "Local"), "Inbound",
+                                    ""
+                                    )
+        | project-away AlertName, ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, InspectionCategory, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity 
+      };
+      NWParser(disabled=disabled)
