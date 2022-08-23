@@ -28,8 +28,8 @@ This custom connector connects to Fortiweb WAF service end point to runs any for
     * Custom Connector Name : Enter the Custom connector name (ex:FortiWebCloud)
     * Fortiweb cloud Host URL: Enter the Fortiweb cloud URL or Host (ex: api.fortiweb-cloud.com)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSolutions%2F%2FortiWebCloud%2FPlaybooks%2FFortiWebCloudCustomConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSolutions%2F%2FortiWebCloud%2FPlaybooks%2FFortiWebCloudCustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FFortiWebCloud%2FPlaybooks%2FFortiWebCloudCustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FFortiWebCloud%2FPlaybooks%2FFortiWebCloudCustomConnector%2Fazuredeploy.json)
 
 ## Usage Examples
 * Get details of attacks and add to Sentinel incodent comment through playbook
