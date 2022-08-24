@@ -1,17 +1,13 @@
 # OpenCTI- Update indicator's confidence score Playbook
  ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
- 1. Search for the indicators based on Entities (Accounts, Host, IP Address, FileHash, URL) in OpenCTI and updates the indicators' confidence score in OpenCTI
- 2. For each entity of Sentinel incident, if indicators are already available in OpenCTI, this playbook increases the confidence score
-    ![Comment example](./images/CommentUpdateIndicator.png)
-
-
-
+ This playbook fetches indicators from OpenCTI and send to Sentinel. Supported types are Domain, File, IPv4, IPv6, Account, Url.  This runs for every 10 minutes
+ 
 ![Playbook Designer view](./images/UpdateIndicatorWorkflow.png)<br>
 
 ### Prerequisites 
 1. OpenCTI Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. API key. To get API Key, login into your OpenCTI instance dashboard and navigate to User profile page --> API Access.
+3. OpenCTI-ImportToSentinel must be installed and keep playbook name and batchname handy
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
@@ -21,6 +17,8 @@
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (Ex: OpenCTI-UpdateIndicatorInfo)
     * Custom Connector Name: Enter the OpenCTI custom connector name here (Ex: OpenCTICustomConnector)
+    * Import Batch Playbook Name: Enter the Name of the batch import playbook here (Ex: OpenCTI-ImportToSentinel)
+    * Batch Name: Enter the batch name that used in OpenCTI-ImportToSentinel playbook here (Ex: OpenCTIToSentinel)
     
 ### Post-Deployment instructions 
 #### a. Authorize connections
@@ -32,7 +30,6 @@ Once deployment is complete, you will need to authorize each connection.
 5.	Click Save
 6.	Repeat steps for Okta Api  Connection (For authorizing the Okta API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account or host or URL or FileHash or IP Address. 
-2. Configure the automation rules to trigger this playbook
+1. None
 
 
