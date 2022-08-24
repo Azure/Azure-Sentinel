@@ -178,7 +178,7 @@ ParserQuery: |
           "Incoming","Inbound", 
           "Outgoing","Outbound", 
           "Internal","Local"];
-      let ActionLookup=datatable(DvcOriginalAction:string,DvcAction:string,EventResult:string,EventSeverity:string)
+      let ActionLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventSeverity:string)
       [
           "Accept","Allow","Success","Informational",
           "Allow","Allow","Success","Informational",
@@ -190,10 +190,45 @@ ParserQuery: |
           "Block","Deny","Failure","Low",
           "","","NA","Informational"
        ];
-        let NWParser=(disabled:bool=false){
+        let NWParser=(
+            starttime:datetime=datetime(null), 
+            endtime:datetime=datetime(null),
+            srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+            dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+            ipaddr_has_any_prefix:dynamic=dynamic([]),
+            dstportnumber:int=int(null), 
+            hostname_has_any:dynamic=dynamic([]), 
+            dvcaction:dynamic=dynamic([]), 
+            eventresult:string='*', 
+            disabled:bool=false)
+        {
+        let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+        let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
         CommonSecurityLog
         | where not(disabled)
+        | where
+                        (isnull(starttime) or TimeGenerated >= starttime) 
+                        and (isnull(endtime) or TimeGenerated <= endtime)
+        | where 
+                        array_length(hostname_has_any) == 0
         | where DeviceVendor=="Check Point" and DeviceProduct=="VPN-1 & FireWall-1"
+        | where (isnull(dstportnumber) or (DestinationPort == dstportnumber))
+        | where ((eventresult == "*") 
+                        or (eventresult == "Success" and AdditionalExtensions has "Accept") 
+                        or (eventresult == "Failure" and AdditionalExtensions !has "Accept"))
+        | extend temp_isSrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any), 
+                 temp_isDstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
+        | extend ASimMatchingIpAddr = case(
+                            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                            (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                            temp_isSrcMatch, "SrcIpAddr",
+                            temp_isDstMatch, "DstIpAddr",
+                            "No match"
+                        )
+        | where ASimMatchingIpAddr != "No match"
+        | lookup ActionLookup on DeviceAction
+        | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+        | lookup ProtocolLookup on Protocol
         | extend 
                 EventProduct = "Firewall",
                 EventCount = toint(1),
@@ -201,7 +236,6 @@ ParserQuery: |
                 EventSchema = "NetworkSession",
                 EventSchemaVersion = "0.2.4"
         | parse-kv AdditionalExtensions as (
-                    rule_action:string, 
                     rule_uid:string,
                     loguid:string,
                     origin:string,
@@ -216,13 +250,12 @@ ParserQuery: |
         | extend
                 ThreatCategory = coalesce(alert, inspection_category),
                 NetworkRuleName = coalesce(DeviceCustomString2, rule_uid, Activity),
-                EventStartTime = TimeGenerated,
-                DvcHostname = tostring(extract_all(@"CN\\=(\S+),",originsicname)[0])
+                EventStartTime = TimeGenerated
+        | parse originsicname with "CN\\=" DvcHostname "," *
         | project-rename
                 Dvc = origin,                
                 EventOriginalUid = loguid,
-                ThreatName = inspection_item,  
-                DeviceAction = rule_action,
+                ThreatName = inspection_item,
                 EventVendor = DeviceVendor,
                 DstPortNumber = DestinationPort,
                 DstIpAddr = DestinationIP,
@@ -235,12 +268,10 @@ ParserQuery: |
                 EventProductVersion = DeviceVersion,
                 EventOriginalSeverity = LogSeverity,
                 Rule = NetworkRuleName,
-                DstAppName = Activity,
                 DvcOriginalAction = DeviceAction,
+                DstAppName = Activity,
                 EventMessage = Message
-        | lookup ProtocolLookup on Protocol
         | lookup DirectionLookup on conn_direction
-        | lookup ActionLookup on DvcOriginalAction
         | extend 
                 EventEndTime = EventStartTime,
                 IpAddr = SrcIpAddr,
@@ -264,6 +295,6 @@ ParserQuery: |
                                         toint(column_ifexists("fieldDeviceCustomNumber3", long(null))),
                                         toint(column_ifexists("DeviceCustomNumber3",long(null)))
                                         )
-        | project-away ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, rule_uid, originsicname, inzone, outzone, alert, conn_direction, inspection_category
+        | project-away ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, rule_uid, originsicname, inzone, outzone, alert, conn_direction, inspection_category, temp_isDstMatch, temp_isSrcMatch
       };
-      NWParser(disabled=disabled)
+      NWParser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)
