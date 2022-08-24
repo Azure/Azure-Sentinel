@@ -1,0 +1,68 @@
+id: 3201b17a-06e1-4a8d-8157-c69345baa808
+name: Insider Risk_Possible Sabotage
+description: |
+  'This query correlates users with entity anomalies, security alerts, and delete/remove actions for identification of possible sabotage activities (watchlists configurable). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert (IPC)
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert (ASC)
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (MCAS)
+  - connectorId: OfficeATP
+    dataTypes:
+      - SecurityAlert (Office 365)
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  let RemoveActions = AzureActivity
+  | where OperationName contains "delete" or OperationName contains "remove"
+  | extend UserPrincipalName = Caller
+  | project UserPrincipalName, OperationName, Category, Resource, ResourceId, ActivityStatus, TimeGenerated;
+  let InsiderRiskManagementAlerts = SecurityAlert
+  | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+  | mv-expand todynamic(Entities)
+  | where Entities["Type"] =~ "account"
+  | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]), 
+            Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+  | extend UserPrincipalName = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+  | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+  | where UserPrincipalName <> ""
+  | summarize PreviousSecurityAlertLinks=make_set(AlertLink) by UserPrincipalName, AlertLink, AlertName;
+  BehaviorAnalytics
+  | where UserPrincipalName <> ""
+  | where ActivityInsights contains "True"
+  | extend EntityAnomalies = strcat(ActivityInsights)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, EntityAnomalies
+  | join kind=innerunique (InsiderRiskManagementAlerts) on UserPrincipalName
+  | join kind=innerunique (RemoveActions) on UserPrincipalName
+  | project UserPrincipalName, EntityAnomalies, AlertName, AlertLink, PreviousSecurityAlertLinks, OperationName, Category, Resource, ResourceId, ActivityStatus, TimeGenerated
+  //| lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | sort by TimeGenerated desc
+  | limit 50
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountCustomEntity
