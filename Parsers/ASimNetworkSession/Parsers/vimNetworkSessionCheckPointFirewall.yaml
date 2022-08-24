@@ -50,7 +50,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let ProtocolLookup=datatable(Protocol:string,NetworkProtocol:string)
+    let ProtocolLookup=datatable(Protocol:string,NetworkProtocol:string)
       [
           "0","HOPOPT"
           , "1","ICMP"
@@ -205,7 +205,7 @@ ParserQuery: |
           "Incoming","Inbound", 
           "Outgoing","Outbound", 
           "Internal","Local"];
-      let ActionLookup=datatable(DvcOriginalAction:string,DvcAction:string,EventResult:string,EventSeverity:string)
+      let ActionLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventSeverity:string)
       [
           "Accept","Allow","Success","Informational",
           "Allow","Allow","Success","Informational",
@@ -253,6 +253,9 @@ ParserQuery: |
                             "No match"
                         )
         | where ASimMatchingIpAddr != "No match"
+        | lookup ActionLookup on DeviceAction
+        | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+        | lookup ProtocolLookup on Protocol
         | extend 
                 EventProduct = "Firewall",
                 EventCount = toint(1),
@@ -260,7 +263,6 @@ ParserQuery: |
                 EventSchema = "NetworkSession",
                 EventSchemaVersion = "0.2.4"
         | parse-kv AdditionalExtensions as (
-                    rule_action:string, 
                     rule_uid:string,
                     loguid:string,
                     origin:string,
@@ -274,8 +276,7 @@ ParserQuery: |
                 ) with (pair_delimiter=';', kv_delimiter='=')
         | extend
                 ThreatCategory = coalesce(alert, inspection_category),
-                NetworkRuleName = coalesce(DeviceCustomString2, rule_uid, Activity),,
-                DvcOriginalAction = coalesce(DeviceAction,rule_action),
+                NetworkRuleName = coalesce(DeviceCustomString2, rule_uid, Activity),
                 EventStartTime = TimeGenerated
         | parse originsicname with "CN\\=" DvcHostname "," *
         | project-rename
@@ -294,12 +295,10 @@ ParserQuery: |
                 EventProductVersion = DeviceVersion,
                 EventOriginalSeverity = LogSeverity,
                 Rule = NetworkRuleName,
+                DvcOriginalAction = DeviceAction,
                 DstAppName = Activity,
                 EventMessage = Message
-        | lookup ProtocolLookup on Protocol
         | lookup DirectionLookup on conn_direction
-        | lookup ActionLookup on DvcOriginalAction
-        | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
         | extend 
                 EventEndTime = EventStartTime,
                 IpAddr = SrcIpAddr,
@@ -323,6 +322,6 @@ ParserQuery: |
                                         toint(column_ifexists("fieldDeviceCustomNumber3", long(null))),
                                         toint(column_ifexists("DeviceCustomNumber3",long(null)))
                                         )
-        | project-away ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, rule_action, rule_uid, originsicname, inzone, outzone, alert, conn_direction, inspection_category, temp_isDstMatch, temp_isSrcMatch
+        | project-away ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, rule_uid, originsicname, inzone, outzone, alert, conn_direction, inspection_category, temp_isDstMatch, temp_isSrcMatch
       };
       NWParser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)
