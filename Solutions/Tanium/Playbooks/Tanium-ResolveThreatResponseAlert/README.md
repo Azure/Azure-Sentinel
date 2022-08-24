@@ -1,18 +1,12 @@
-# Tanium-QuarantineHosts
+# Tanium-ResolveThreatResponseAlert
 
 ## Overview
 
-This playbook will use Tanium to quarantine any hosts associated with a Microsoft Sentinel incident.
-
-The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the quarantine actions expire after thirty minutes.
+This playbook will resolve any associated alerts in Tanium Threat Response associated with a Microsoft Sentinel incident.
 
 ## Prerequisites
 
-Your Tanium Server will need the "IR Quarantine" content installed.
-
-Sentinel incidents with associated hosts.
-
-The "Tanium Threat Response Alerts" analytic rule will generate incidents from Tanium Threat Response Alerts with associated hosts from Tanium Threat Response alerts.
+Only Microsoft Sentinel Incidents created by the "Tanium Threat Response Alerts" analytic rule will have the required metadata to allow resolving the associated Tanium Threat Response alert.
 
 ## Post-Deployment Instructions
 

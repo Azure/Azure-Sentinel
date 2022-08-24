@@ -1,10 +1,10 @@
-# Tanium-QuarantineHosts
+# Tanium-UnquarantineHosts
 
 ## Overview
 
-This playbook will use Tanium to quarantine any hosts associated with a Microsoft Sentinel incident.
+This playbook will use Tanium to remove a previously applied Tanium quarantine from hosts associated with a Microsoft Sentinel incident.
 
-The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the quarantine actions expire after thirty minutes.
+The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the un-quarantine actions expire after thirty minutes.
 
 ## Prerequisites
 
