@@ -25,7 +25,7 @@ When a new sentinel alerts is created, this playbook gets triggered and performs
     * onPremiseGatewayName: Provide the On-premises data gateway that will be used with The Hive connector. Data gateway should be deployed under the same subscription and resource group as playbook.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fbase-playbooks-solution%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2FPlaybooks%2FVendorProduct-playbookname%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fbase-playbooks-solution%2FSolutions%2FBasePlaybooksSolution%2FPlaybooks%2FPlaybooks%2FVendorProduct-playbookname%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTheHive%2FPlaybooks%2FPlaybooks%2FTheHive-CreateAlert%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTheHive%2FPlaybooks%2FPlaybooks%2FTheHive-CreateAlert%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
