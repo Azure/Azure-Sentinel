@@ -9,15 +9,10 @@ terraform {
   required_version = ">= 0.15.0"
 }
 
-provider "google" {
-  region  = "us-central1"
-  zone    = "us-central1-c"
-}
-
-variable "topicName" {
+variable "topic-name" {
   type    = string
-  default = "SentinelTopic"
-  description = "Topic name"
+  default = "sentinel-topic"
+  description = "Name of existing topic"
 }
 
 data "google_project" "project" {}
@@ -28,21 +23,22 @@ resource "google_project_service" "enable-api" {
 }
 
 resource "google_pubsub_topic" "sentinel-topic" {
-  name = var.topicName
+  count = "${var.topic-name != "sentinel-topic" ? 0 : 1}"
+  name = var.topic-name
   project = data.google_project.project.project_id
 }
 
 resource "google_pubsub_subscription" "sentinel-subscription" {
   project = data.google_project.project.project_id
-  name  = "SentinelSubscription"
-  topic = google_pubsub_topic.sentinel-topic.name
+  name  = "sentinel-subscription"
+  topic = var.topic-name
 }
 
 resource "google_iam_workload_identity_pool" "sentinel-workload-identity-pool" {
   provider                           = google-beta
   project = data.google_project.project.project_id
-  workload_identity_pool_id = "sentinel-workload-identity-pool"
-  display_name              = "Sentinel Workload Identity Pool"
+  workload_identity_pool_id = "33e019214d644f8ca0555bdaffd5e33d"
+  display_name              = "sentinel-workload-identity-pool"
 }
 
 resource "google_iam_workload_identity_pool_provider" "sentinel-workload-identity-pool-provider" {
@@ -95,4 +91,28 @@ resource "google_service_account_iam_binding" "bind-workloadIdentityUser-role-to
   members = [
     "principalSet://iam.googleapis.com/projects/${data.google_project.project.number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.sentinel-workload-identity-pool.workload_identity_pool_id}/*",
   ]
+}
+
+output "GCP_project_id" {
+  value       = data.google_project.project.project_id
+}
+
+output "GCP_project_number" {
+  value       = data.google_project.project.number
+}
+
+output "GCP_subscription_name" {
+  value       = google_pubsub_subscription.sentinel-subscription.name
+}
+
+output "Identity_federation_pool_name" {
+  value       = google_iam_workload_identity_pool.sentinel-workload-identity-pool.display_name
+}
+
+output "Service_account_name" {
+  value       = "${google_service_account.sentinel-service-account.account_id}@${data.google_project.project.project_id}.iam.gserviceaccount.com"
+}
+
+output "Identity_provider_id" {
+  value       = google_iam_workload_identity_pool_provider.sentinel-workload-identity-pool-provider.workload_identity_pool_provider_id
 }
