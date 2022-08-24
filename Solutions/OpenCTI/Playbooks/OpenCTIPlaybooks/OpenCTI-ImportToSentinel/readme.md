@@ -2,7 +2,7 @@
  ## Summary
  This playbook sends messages to Security GraphAPI in batches
 
-![Playbook Designer view](./images/BatchImportToSentinel..png)<br>
+![Playbook Designer view](./images/BatchImportToSentinel.png)<br>
 
 ### Prerequisites 
 1. None
