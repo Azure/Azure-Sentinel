@@ -3,6 +3,7 @@ name: Multiple scans in the network (Microsoft Defender for IoT)
 description: |
   'This alert leverages Defender for IoT to detect multiple scans on the network indicating new devices, functionality, application misconfiguration, or malicious reconnaissance activity on the network.'
 severity: High
+status: Available
 requiredDataConnectors:
   - connectorId: IoT
     dataTypes:
@@ -19,11 +20,13 @@ query: |
   SecurityAlert
   | where ProductName == "Azure Security Center for IoT"
   | where AlertName contains "Scan"
+  | where TimeGenerated <= ProcessingEndTime + 60m
   | extend DeviceId = tostring(parse_json(ExtendedProperties).DeviceId)
   | extend SourceDeviceAddress = tostring(parse_json(ExtendedProperties).SourceDeviceAddress)
   | extend DestDeviceAddress = tostring(parse_json(ExtendedProperties).DestinationDeviceAddress)
   | extend RemediationSteps = tostring(parse_json(RemediationSteps)[0])
   | extend Protocol = tostring(parse_json(ExtendedProperties).Protocol)
+  | extend AlertManagementUri = tostring(parse_json(ExtendedProperties).AlertManagementUri)
   | project
     TimeGenerated,
     DeviceId,
@@ -37,21 +40,21 @@ query: |
     DestDeviceAddress,
     RemediationSteps,
     Tactics,
-    AlertLink
+    Entities,
+    VendorOriginalId,
+    AlertLink,
+    AlertManagementUri
 entityMappings:
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: SourceDeviceAddress
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: DestDeviceAddress
+sentinelEntitiesMappings:
+  - columnName: Entities
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
   Sensor: DeviceId
   Protocol: Protocol
+  AlertLink: AlertLink
+  VendorOriginalId: VendorOriginalId
+  AlertManagementUri: AlertManagementUri
 alertDetailsOverride:
   alertDisplayNameFormat: (MDIoT) {{AlertName}}
   alertDescriptionFormat: (MDIoT) {{Description}}
