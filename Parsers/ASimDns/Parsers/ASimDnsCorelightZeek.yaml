@@ -121,63 +121,65 @@ ParserQuery: |
     Corelight_CL | where not(disabled)
     | where Message has '"_path":"dns"' or Message has '"_path":"dns_red"'
     | parse-kv Message as (
-        _system_name:string, // ??
-        _write_ts:datetime, // ??
-        ts:datetime,
-        uid:string,
-        ['id.orig_h']:string,
-        ['id.orig_p']:int,
-        ['id.resp_h']:string,
-        ['id.resp_p']:int,
-        proto:string,
-        trans_id:int,
-        query:string,
-        qclass:int,
-        qtype:int,
-        AA:bool,
-        TC:bool,
-        CD:bool,
-        RD:bool,
-        RA:bool,
-        Z:int,
-        rejected:bool,
-        rcode:int,
-        rcode_name:string,
-        TTLs:string,
-        rtt:real
+        ['"_system_name"']:string, // ??
+        ['"_write_ts"']:datetime, // ??
+        ['"ts"']:datetime,
+        ['"uid"']:string,
+        ['"id.orig_h"']:string,
+        ['"id.orig_p"']:int,
+        ['"id.resp_h"']:string,
+        ['"id.resp_p"']:int,
+        ['"proto"']:string,
+        ['"trans_id"']:int,
+        ['"query"']:string,
+        ['"qclass"']:int,
+        ['"qtype"']:int,
+        ['"AA"']:bool,
+        ['"TC"']:bool,
+        ['"CD"']:bool,
+        ['"RD"']:bool,
+        ['"RA"']:bool,
+        ['"Z"']:int,
+        ['"rejected"']:bool,
+        ['"rcode"']:int,
+        ['"rcode_name"']:string,
+        ['"rtt"']:real,
     ) 
-    with (regex = @'"([^"]+)":"?([^"]+)"?[,}]')
-    | extend answers = extract (@'"answers":(.*),"TTLs":',1, Message)
+    with (quote = '"')
+    | parse Message with * '"answers":' answers:string ',"TTLs":' TTLs:string ',"rejected"' *
     | extend 
         EventCount=int(1),
         EventProduct="Zeek",
         EventVendor="Corelight",
         EventSchema = "Dns",
         EventSchemaVersion="0.1.4",
-        EventType="Query",
-        EventSubType=iff(isnull(rcode),'request','response')
+        EventType="Query"
     | project-rename
-        EventEndTime= ts,
-        EventOriginalUid = uid,
-        SrcIpAddr = ["id.orig_h"],
-        SrcPortNumber = ["id.orig_p"],
-        DstIpAddr = ["id.resp_h"],
-        DstPortNumber = ["id.resp_p"],
-        NetworkProtocol = proto,
-        DnsQuery = query,
-        DnsResponseCode = rcode,
-        EventResultDetails = rcode_name,
-        DnsFlagsAuthoritative = AA,
-        DnsFlagsTruncated = TC,
-        DnsFlagsRecursionDesired = RD,
-        DnsFlagsCheckingDisabled = CD,
-        DnsFlagsRecursionAvailable = RA,
-        DnsQueryClass = qclass,
-        DnsQueryType = qtype,
+        EventEndTime= ['"ts"'],
+        EventOriginalUid = ['"uid"'],
+        SrcIpAddr = ['"id.orig_h"'],
+        SrcPortNumber = ['"id.orig_p"'],
+        DstIpAddr = ['"id.resp_h"'],
+        DstPortNumber = ['"id.resp_p"'],
+        NetworkProtocol = ['"proto"'],
+        DnsQuery = ['"query"'],
+        DnsResponseCode = ['"rcode"'],
+        EventResultDetails = ['"rcode_name"'],
+        DnsFlagsAuthoritative = ['"AA"'],
+        DnsFlagsTruncated = ['"TC"'],
+        DnsFlagsRecursionDesired = ['"RD"'],
+        DnsFlagsCheckingDisabled = ['"CD"'],
+        DnsFlagsRecursionAvailable = ['"RA"'],
+        DnsQueryClass = ['"qclass"'],
+        DnsQueryType = ['"qtype"'],
+        Z = ['"Z"'],
+        trans_id = ['"trans_id"'],
+        rejected = ['"rejected"'],
         Dvc = hostname_s
     | lookup query_type_lookup on DnsQueryType
     | lookup class_lookup on DnsQueryClass
     | extend
+        EventSubType=iff(isnull(DnsResponseCode),'request','response'),
         EventStartTime = EventEndTime,
         // DnsNetworkDuration = rtt, : not sure what the rtt units are.
         EventResult = iff (EventResultDetails!~'NOERROR' or rejected,'Failure','Success'),
@@ -194,6 +196,6 @@ ParserQuery: |
         Src=SrcIpAddr,
         //Duration=DnsNetworkDuration,
         Dst=DstIpAddr
-    | project-away Z, Message, MG, ManagementGroupName, RawData, SourceSystem, Computer, TTLs, answers, trans_id, rejected
+    | project-away Message, MG, ManagementGroupName, RawData, SourceSystem, Computer, Z, TTLs, answers, trans_id, rejected
   };
   parser (disabled=disabled)

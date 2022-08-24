@@ -165,39 +165,38 @@ ParserQuery: |
       and (response_has_ipv4=='*' or has_ipv4(Message,response_has_ipv4) )
       and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(Message, response_has_any_prefix))
     // --
-    | parse-kv Message as (
-        _system_name:string, // ??
-        _write_ts:datetime, // ??
-        ts:datetime,
-        uid:string,
-        ['id.orig_h']:string,
-        ['id.orig_p']:int,
-        ['id.resp_h']:string,
-        ['id.resp_p']:int,
-        proto:string,
-        trans_id:int,
-        query:string,
-        qclass:int,
-        qtype:int,
-        AA:bool,
-        TC:bool,
-        CD:bool,
-        RD:bool,
-        RA:bool,
-        Z:int,
-        rejected:bool,
-        rcode:int,
-        rcode_name:string,
-        TTLs:string,
-        rtt:real
+   | parse-kv Message as (
+        ['"_system_name"']:string, // ??
+        ['"_write_ts"']:datetime, // ??
+        ['"ts"']:datetime,
+        ['"uid"']:string,
+        ['"id.orig_h"']:string,
+        ['"id.orig_p"']:int,
+        ['"id.resp_h"']:string,
+        ['"id.resp_p"']:int,
+        ['"proto"']:string,
+        ['"trans_id"']:int,
+        ['"query"']:string,
+        ['"qclass"']:int,
+        ['"qtype"']:int,
+        ['"AA"']:bool,
+        ['"TC"']:bool,
+        ['"CD"']:bool,
+        ['"RD"']:bool,
+        ['"RA"']:bool,
+        ['"Z"']:int,
+        ['"rejected"']:bool,
+        ['"rcode"']:int,
+        ['"rcode_name"']:string,
+        ['"rtt"']:real,
     ) 
-    with (regex = @'"([^"]+)":"?([^"]+)"?[,}]')
-    | extend answers = extract (@'"answers":(.*),"TTLs":',1, Message)
+    with (quote = '"')
+    | parse Message with * '"answers":' answers:string ',"TTLs":' TTLs:string ',"rejected"' *
     // -- Post-filtering accurately now that message is parsed
     | where
-         (srcipaddr=="*" or srcipaddr==["id.orig_h"])
-          and (array_length(domain_has_any) ==0 or query has_any (domain_has_any))
-          and (responsecodename=="*" or rcode_name has responsecodename)
+         (srcipaddr=="*" or srcipaddr==['"id.orig_h"'])
+          and (array_length(domain_has_any) ==0 or ['"query"'] has_any (domain_has_any))
+          and (responsecodename=="*" or ['"rcode_name"'] has responsecodename)
           and (response_has_ipv4=='*' or has_ipv4(answers,response_has_ipv4) )
           and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(answers, response_has_any_prefix))
     | extend 
@@ -206,30 +205,33 @@ ParserQuery: |
         EventVendor="Corelight",
         EventSchema = "Dns",
         EventSchemaVersion="0.1.4",
-        EventType="Query",
-        EventSubType=iff(isnull(rcode),'request','response')
+        EventType="Query"
     | project-rename
-        EventEndTime= ts,
-        EventOriginalUid = uid,
-        SrcIpAddr = ["id.orig_h"],
-        SrcPortNumber = ["id.orig_p"],
-        DstIpAddr = ["id.resp_h"],
-        DstPortNumber = ["id.resp_p"],
-        NetworkProtocol = proto,
-        DnsQuery = query,
-        DnsResponseCode = rcode,
-        EventResultDetails = rcode_name,
-        DnsFlagsAuthoritative = AA,
-        DnsFlagsTruncated = TC,
-        DnsFlagsRecursionDesired = RD,
-        DnsFlagsCheckingDisabled = CD,
-        DnsFlagsRecursionAvailable = RA,
-        DnsQueryClass = qclass,
-        DnsQueryType = qtype,
+        EventEndTime= ['"ts"'],
+        EventOriginalUid = ['"uid"'],
+        SrcIpAddr = ['"id.orig_h"'],
+        SrcPortNumber = ['"id.orig_p"'],
+        DstIpAddr = ['"id.resp_h"'],
+        DstPortNumber = ['"id.resp_p"'],
+        NetworkProtocol = ['"proto"'],
+        DnsQuery = ['"query"'],
+        DnsResponseCode = ['"rcode"'],
+        EventResultDetails = ['"rcode_name"'],
+        DnsFlagsAuthoritative = ['"AA"'],
+        DnsFlagsTruncated = ['"TC"'],
+        DnsFlagsRecursionDesired = ['"RD"'],
+        DnsFlagsCheckingDisabled = ['"CD"'],
+        DnsFlagsRecursionAvailable = ['"RA"'],
+        DnsQueryClass = ['"qclass"'],
+        DnsQueryType = ['"qtype"'],
+        Z = ['"Z"'],
+        trans_id = ['"trans_id"'],
+        rejected = ['"rejected"'],
         Dvc = hostname_s
     | lookup query_type_lookup on DnsQueryType
     | lookup class_lookup on DnsQueryClass
     | extend
+        EventSubType=iff(isnull(DnsResponseCode),'request','response'),
         EventStartTime = EventEndTime,
         // DnsNetworkDuration = rtt, : not sure what the rtt units are.
         EventResult = iff (EventResultDetails!~'NOERROR' or rejected,'Failure','Success'),
