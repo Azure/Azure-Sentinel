@@ -173,7 +173,7 @@ ParserQuery: |
           , "253",""
           , "254",""
           , "255","Reserved"];
-      let DirectionLookup=datatable(Direction:string,NetworkDirection:string)
+      let DirectionLookup=datatable(conn_direction:string,NetworkDirection:string)
       [
           "Incoming","Inbound", 
           "Outgoing","Outbound", 
@@ -200,17 +200,29 @@ ParserQuery: |
                 EventType = "NetworkSession",
                 EventSchema = "NetworkSession",
                 EventSchemaVersion = "0.2.4"
-        | parse AdditionalExtensions with * "rule_action=" DeviceAction ";" * "rule_uid=" NetworkRuleName ";" *
-        | parse AdditionalExtensions with * "loguid=" EventOriginalUid ";" * "origin=" Dvc ";" * "originsicname=CN\\=" DvcHostname "," *
-        | parse AdditionalExtensions with * "inzone=" SrcZone ";" * "outzone=" DstZone ";" * 
-        | parse AdditionalExtensions with * "conn_direction=" Direction ";" *
-        | parse AdditionalExtensions with * "alert=" AlertName ";" *
-        | parse AdditionalExtensions with * "inspection_category=" InspectionCategory ";" * "inspection_item=" ThreatName ";"                   
+        | parse-kv AdditionalExtensions as (
+                    rule_action:string, 
+                    rule_uid:string,
+                    loguid:string,
+                    origin:string,
+                    originsicname:string,
+                    inzone:string,
+                    outzone:string,
+                    conn_direction:string,
+                    alert:string,
+                    inspection_category:string,
+                    inspection_item:string
+                ) with (pair_delimiter=';', kv_delimiter='=')
         | extend
-                ThreatCategory = coalesce(AlertName, InspectionCategory),
-                NetworkRuleName = coalesce(DeviceCustomString2, NetworkRuleName),
-                EventStartTime = TimeGenerated
-        | project-rename  
+                ThreatCategory = coalesce(alert, inspection_category),
+                NetworkRuleName = coalesce(DeviceCustomString2, rule_uid),
+                EventStartTime = TimeGenerated,
+                DvcHostname = tostring(extract_all(@"CN\\=(\S+),",originsicname)[0])
+        | project-rename
+                Dvc = origin,                
+                EventOriginalUid = loguid,
+                ThreatName = inspection_item,  
+                DeviceAction = rule_action,
                 EventVendor = DeviceVendor,
                 DstPortNumber = DestinationPort,
                 DstIpAddr = DestinationIP,
@@ -227,7 +239,7 @@ ParserQuery: |
                 DvcOriginalAction = DeviceAction,
                 EventMessage = Message
         | lookup ProtocolLookup on Protocol
-        | lookup DirectionLookup on Direction
+        | lookup DirectionLookup on conn_direction
         | lookup ActionLookup on DvcOriginalAction
         | extend 
                 EventEndTime = EventStartTime,
@@ -236,14 +248,22 @@ ParserQuery: |
                 Src = SrcIpAddr,
                 NetworkDirection = case(
                                     isnotempty(NetworkDirection), NetworkDirection,
-                                    SrcZone == "Internal" and (DstZone == "Internal" or DstZone == "Local"), "Local",
-                                    (SrcZone == "Internal" or SrcZone == "Local") and DstZone == "External", "Outbound",
-                                    SrcZone == "External" and (DstZone == "Internal" or DstZone == "Local"), "Inbound",
-                                    CommunicationDirection == "0", "Inbound",
-                                    CommunicationDirection == "1", "Outbound",
+                                    inzone == "Internal" and (outzone == "Internal" or outzone == "Local"), "Local",
+                                    (inzone == "Internal" or inzone == "Local") and outzone == "External", "Outbound",
+                                    inzone == "External" and (outzone == "Internal" or outzone == "Local"), "Inbound",
+                                    conn_direction == "0", "Inbound",
+                                    conn_direction == "1", "Outbound",
                                     ""
                                     ),
-                EventSeverity = iif(isnotempty(ThreatCategory),"High",EventSeverity)
-        | project-away AlertName, ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, Direction, DstZone, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, InspectionCategory, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, SrcZone, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity 
+                EventSeverity = iif(isnotempty(ThreatCategory),"High",EventSeverity),
+                NetworkIcmpType = coalesce(
+                                        tostring(column_ifexists("fieldDeviceCustomNumber2", long(null))),
+                                        tostring(column_ifexists("DeviceCustomNumber2",long(null)))
+                                        ),
+                NetworkIcmpCode = coalesce(
+                                        toint(column_ifexists("fieldDeviceCustomNumber3", long(null))),
+                                        toint(column_ifexists("DeviceCustomNumber3",long(null)))
+                                        )
+        | project-away ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, rule_uid, originsicname, inzone, outzone, alert, conn_direction, inspection_category
       };
       NWParser(disabled=disabled)
