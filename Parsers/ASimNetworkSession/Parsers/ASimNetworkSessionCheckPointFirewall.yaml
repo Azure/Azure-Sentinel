@@ -23,7 +23,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-      let ProtocolLookup=datatable(Protocol:string,NetworkProtocol:string)
+  let ProtocolLookup=datatable(Protocol:string,NetworkProtocol:string)
       [
           "0","HOPOPT"
           , "1","ICMP"
@@ -178,7 +178,7 @@ ParserQuery: |
           "Incoming","Inbound", 
           "Outgoing","Outbound", 
           "Internal","Local"];
-      let ActionLookup=datatable(DvcOriginalAction:string,DvcAction:string,EventResult:string,EventSeverity:string)
+      let ActionLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventSeverity:string)
       [
           "Accept","Allow","Success","Informational",
           "Allow","Allow","Success","Informational",
@@ -190,10 +190,13 @@ ParserQuery: |
           "Block","Deny","Failure","Low",
           "","","NA","Informational"
        ];
-        let NWParser=(disabled:bool=false){
+        let NWParser=(disabled:bool=false)
+        {
         CommonSecurityLog
         | where not(disabled)
         | where DeviceVendor=="Check Point" and DeviceProduct=="VPN-1 & FireWall-1"
+        | lookup ActionLookup on DeviceAction
+        | lookup ProtocolLookup on Protocol
         | extend 
                 EventProduct = "Firewall",
                 EventCount = toint(1),
@@ -201,7 +204,6 @@ ParserQuery: |
                 EventSchema = "NetworkSession",
                 EventSchemaVersion = "0.2.4"
         | parse-kv AdditionalExtensions as (
-                    rule_action:string, 
                     rule_uid:string,
                     loguid:string,
                     origin:string,
@@ -216,13 +218,12 @@ ParserQuery: |
         | extend
                 ThreatCategory = coalesce(alert, inspection_category),
                 NetworkRuleName = coalesce(DeviceCustomString2, rule_uid, Activity),
-                EventStartTime = TimeGenerated,
-                DvcHostname = tostring(extract_all(@"CN\\=(\S+),",originsicname)[0])
+                EventStartTime = TimeGenerated
+        | parse originsicname with "CN\\=" DvcHostname "," *
         | project-rename
                 Dvc = origin,                
                 EventOriginalUid = loguid,
-                ThreatName = inspection_item,  
-                DeviceAction = rule_action,
+                ThreatName = inspection_item,
                 EventVendor = DeviceVendor,
                 DstPortNumber = DestinationPort,
                 DstIpAddr = DestinationIP,
@@ -235,12 +236,10 @@ ParserQuery: |
                 EventProductVersion = DeviceVersion,
                 EventOriginalSeverity = LogSeverity,
                 Rule = NetworkRuleName,
-                DstAppName = Activity,
                 DvcOriginalAction = DeviceAction,
+                DstAppName = Activity,
                 EventMessage = Message
-        | lookup ProtocolLookup on Protocol
         | lookup DirectionLookup on conn_direction
-        | lookup ActionLookup on DvcOriginalAction
         | extend 
                 EventEndTime = EventStartTime,
                 IpAddr = SrcIpAddr,
@@ -266,4 +265,4 @@ ParserQuery: |
                                         )
         | project-away ApplicationProtocol, AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, ReportReferenceLink, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, rule_uid, originsicname, inzone, outzone, alert, conn_direction, inspection_category
       };
-      NWParser(disabled=disabled)
+      NWParser (disabled=disabled)
