@@ -9,10 +9,10 @@ terraform {
   required_version = ">= 0.15.0"
 }
 
-variable "topic-name" {
+variable "subscription-name" {
   type    = string
-  default = "sentinel-topic"
-  description = "Name of existing topic"
+  default = "sentinel-subscription"
+  description = "Name of existing subscription"
 }
 
 data "google_project" "project" {}
@@ -23,15 +23,16 @@ resource "google_project_service" "enable-api" {
 }
 
 resource "google_pubsub_topic" "sentinel-topic" {
-  count = "${var.topic-name != "sentinel-topic" ? 0 : 1}"
-  name = var.topic-name
+  count = "${var.subscription-name != "sentinel-subscription" ? 0 : 1}"
+  name = "sentinel-topic"
   project = data.google_project.project.project_id
 }
 
 resource "google_pubsub_subscription" "sentinel-subscription" {
+  count = "${var.subscription-name != "sentinel-subscription" ? 0 : 1}"
   project = data.google_project.project.project_id
-  name  = "sentinel-subscription"
-  topic = var.topic-name
+  name  = var.subscription-name
+  topic = google_pubsub_topic.sentinel-topic[0].name
 }
 
 resource "google_iam_workload_identity_pool" "sentinel-workload-identity-pool" {
@@ -79,7 +80,7 @@ resource "google_project_iam_member" "bind-sentinel-custom-role-to-sentinel-serv
 
   condition {
     title       = "Permissions only for sentinel-subscription"
-    expression  = "resource.name == (\"projects/_/subscriptions/${google_pubsub_subscription.sentinel-subscription.name}\")"
+    expression  = "resource.name == (\"projects/_/subscriptions/${var.subscription-name}\")"
   }
 }
 
@@ -102,7 +103,7 @@ output "GCP_project_number" {
 }
 
 output "GCP_subscription_name" {
-  value       = google_pubsub_subscription.sentinel-subscription.name
+  value       = var.subscription-name
 }
 
 output "Identity_federation_pool_name" {
