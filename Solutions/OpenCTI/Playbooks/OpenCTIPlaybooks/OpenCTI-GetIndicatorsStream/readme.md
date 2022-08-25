@@ -28,7 +28,7 @@ Once deployment is complete, you will need to authorize each connection.
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for Okta Api  Connection (For authorizing the Okta API connection, API Key needs to be provided)
+6.	Repeat steps for OpenCTI Connection (For authorizing the OpenCTI GraphQL API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
 1. None
 

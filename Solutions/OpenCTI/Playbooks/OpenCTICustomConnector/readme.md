@@ -23,7 +23,7 @@ This custom connector connects to OpenCTI service end point to runs any OpenCTI 
     * Custom Connector Name : Enter the Custom connector name (ex:OpenCTICustomConnector)
     * OpenCTI Host URL: Enter the OpenCTI URL or Host (ex: demo.opencti.io)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSolutions%2F%2OpenCTI%2FPlaybooks%2FOpenCTICustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2F%2OpenCTI%2FPlaybooks%2FOpenCTICustomConnector%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSolutions%2F%2OpenCTI%2FPlaybooks%2FOpenCTICustomConnector%2Fazuredeploy.json)
 
 ## Usage Examples
