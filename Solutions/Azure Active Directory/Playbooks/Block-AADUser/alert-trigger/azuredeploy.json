@@ -2,11 +2,11 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Block AAD user - Incident",
-        "description": "For each account entity included in the incident, this playbook will disable the user in Azure Active Directoy, add a comment to the incident that contains this alert and notify manager if available. Note: This playbook will not disable admin user!",
-        "prerequisites": "",
+        "title": "Block AAD user - Alert",
+        "description": "For each account entity included in the alert, this playbook will disable the user in Azure Active Directoy, add a comment to the incident that contains this alert and notify manager if available. Note: This playbook will not disable admin user!",
+        "prerequisites": ["None"],
         "postDeployment": ["1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity.", "2. Grant User.Read.All, User.ReadWrite.All, Directory.Read.All, Directory.ReadWrite.All permissions to the managed identity.", "3. Authorize Azure AD and Office 365 Outlook Logic App connections."],
-        "lastUpdateTime": "2021-11-25T00:00:00.000Z",
+        "lastUpdateTime": "2022-07-11T00:00:00.000Z",
         "entities": [ "Account" ],
         "tags": [ "Remediation" ],
         "support": {
@@ -14,11 +14,18 @@
         },
         "author": {
             "name": "Nicholas DiCola"
-        }
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Added manager notification action",
+                "notes": [ "Initial version" ]
+            }
+        ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Block-AADUser-Incident",
+            "defaultValue": "Block-AADUser-Alert",
             "type": "string"
         }
     },
@@ -76,7 +83,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Block-AADUser",
+                "hidden-SentinelTemplateName": "Block-AADUser_alert",
                 "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
@@ -99,7 +106,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_incident": {
+                        "Microsoft_Sentinel_alert": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -110,16 +117,33 @@
                                         "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/incident-creation"
+                                "path": "/subscribe"
                             }
                         }
                     },
                     "actions": {
-                        "Entities_-_Get_Accounts": {
+                        "Alert_-_Get_incident": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
@@ -145,7 +169,7 @@
                                                     "type": "ApiConnection",
                                                     "inputs": {
                                                         "body": {
-                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
                                                             "message": "<p>User @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUser. Manager (@{body('Parse_JSON_-_get_user_manager')?['userPrincipalName']}) is notified.</p>"
                                                         },
                                                         "host": {
@@ -181,7 +205,7 @@
                                                         "body": {
                                                             "Body": "<p>Security notification! This is automated email sent by Microsoft Sentinel Automation!<br>\n<br>\nYour direct report @{items('For_each')?['Name']} has been disabled in Azure AD due to the security incident. Can you please notify the user and work with him to reach&nbsp;our support.<br>\n<br>\nDirect report details:<br>\nFirst name: @{body('Get_user_-_details')?['displayName']}<br>\nSurname: @{body('Get_user_-_details')?['surname']}<br>\nJob title: @{body('Get_user_-_details')?['jobTitle']}<br>\nOffice location: @{body('Get_user_-_details')?['officeLocation']}<br>\nBusiness phone: @{body('Get_user_-_details')?['businessPhones']}<br>\nMobile phone: @{body('Get_user_-_details')?['mobilePhone']}<br>\nMail: @{body('Get_user_-_details')?['mail']}<br>\n<br>\nThank you!</p>",
                                                             "Importance": "High",
-                                                            "Subject": "@{items('For_each')?['Name']}  has been disabled in Azure AD due to the security risk!",
+                                                            "Subject": "@{items('For_each')?['Name']} has been disabled in Azure AD due to the security risk!",
                                                             "To": "@body('Parse_JSON_-_get_user_manager')?['userPrincipalName']"
                                                         },
                                                         "host": {
@@ -206,7 +230,7 @@
                                                         "type": "ApiConnection",
                                                         "inputs": {
                                                             "body": {
-                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
                                                                 "message": "<p>User @{items('For_each')?['Name']} (UPN - @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])}) was disabled in AAD via playbook Block-AADUser. Manager has not been notified, since it is not found for this user!</p>"
                                                             },
                                                             "host": {
@@ -280,7 +304,7 @@
                                                 "type": "ApiConnection",
                                                 "inputs": {
                                                     "body": {
-                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
                                                         "message": "<p>Block-AADUser playbook could not disable user @{items('For_each')?['Name']}.<br>\nError message: @{body('Update_user_-_disable_user')['error']['message']}<br>\nNote: If user is admin, this playbook don't have privilages to block admin users!</p>"
                                                     },
                                                     "host": {

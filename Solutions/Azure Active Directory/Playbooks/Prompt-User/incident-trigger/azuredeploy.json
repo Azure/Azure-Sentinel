@@ -2,11 +2,11 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Prompt User - Alert",
-        "description": "This playbook will ask the user if they completed the action from the alert in Microsoft Sentinel.  If so, it will close the incident and add a comment.  If not, it will post a message to teams for the SOC to investigate and add a comment to the incident.",
-        "prerequisites": "1. You will need the Team Id and Channel Id.",
+        "title": "Prompt User - Incident",
+        "description": "This playbook will ask the user if they completed the action from the Incident in Microsoft Sentinel.  If so, it will close the incident and add a comment.  If not, it will post a message to teams for the SOC to investigate and add a comment to the incident.",
+        "prerequisites": [ "1. You will need the Team Id and Channel Id." ],
         "postDeployment": [ "1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity.", "2. Authorize Azure AD, Microsoft Teams, and Office 365 Outlook Logic App connections." ],
-        "lastUpdateTime": "2022-03-22T00:00:00.000Z",
+        "lastUpdateTime": "2022-07-11T00:00:00.000Z",
         "entities": [ "Account" ],
         "tags": [ "Remediation" ],
         "support": {
@@ -14,11 +14,18 @@
         },
         "author": {
             "name": "Nicholas DiCola"
-        }
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Added new Post a Teams message action",
+                "notes": [ "Initial version" ]
+            }
+        ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Prompt-User-Alert",
+            "defaultValue": "Prompt-User-Incident",
             "type": "string"
         },
         "TeamsId": {
@@ -102,7 +109,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "LogicAppsCategory": "security",
-                "hidden-SentinelTemplateName": "Prompt-User_alert",
+                "hidden-SentinelTemplateName": "Prompt-User",
                 "hidden-SentinelTemplateVersion": "1.1"
             },
             "identity": {
@@ -119,22 +126,9 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "Alert_-_Get_incident": {
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            },
-                            "runAfter": {},
-                            "type": "ApiConnection"
-                        },
                         "Entities_-_Get_Accounts": {
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -143,11 +137,7 @@
                                 "method": "post",
                                 "path": "/entities/account"
                             },
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "ApiConnection"
                         },
                         "For_each": {
@@ -157,7 +147,7 @@
                                         "Add_comment_to_incident_(V3)": {
                                             "inputs": {
                                                 "body": {
-                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
                                                     "message": "<p>@{body('Get_user')?['displayName']} confirms they completed the action that triggered the alert. &nbsp;Closing the incident.</p>"
                                                 },
                                                 "host": {
@@ -178,7 +168,7 @@
                                                         "ClassificationAndReason": "BenignPositive - SuspiciousButExpected",
                                                         "ClassificationReasonText": "User Confirmed it was them"
                                                     },
-                                                    "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
                                                     "status": "Closed"
                                                 },
                                                 "host": {
@@ -202,7 +192,7 @@
                                             "Add_comment_to_incident_(V3)_2": {
                                                 "inputs": {
                                                     "body": {
-                                                        "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
                                                         "message": "<p>@{body('Get_user')?['displayName']} confirms they did not complete the action. Further investigation is needed.</p>"
                                                     },
                                                     "host": {
@@ -219,12 +209,12 @@
                                             "Post_message_in_a_chat_or_channel": {
                                                 "inputs": {
                                                     "body": {
-                                                        "messageBody": "<p>New alert from Azure Sentinel.<br>\nPlease investigate ASAP.<br>\nSeverity : @{body('Alert_-_Get_incident')?['properties']?['severity']}<br>\nDescription: @{body('Alert_-_Get_incident')?['properties']?['description']}<br>\n<br>\n@{body('Get_user')?['displayName']} user confirmed they did not complete the action.</p>",
+                                                        "messageBody": "<p>New alert from Azure Sentinel.<br>\nPlease investigate ASAP.<br>\nSeverity : @{triggerBody()?['object']?['properties']?['severity']}<br>\nDescription: @{triggerBody()?['object']?['properties']?['description']}<br>\n<br>\n@{body('Get_user')?['displayName']} user confirmed they did not complete the action.</p>",
                                                         "recipient": {
                                                             "channelId": "[parameters('TeamsChannelId')]",
                                                             "groupId": "[parameters('TeamsId')]"
                                                         },
-                                                        "subject": "Incident @{body('Alert_-_Get_incident')?['properties']?['incidentNumber']} - @{body('Alert_-_Get_incident')?['properties']?['title']}"
+                                                        "subject": "Incident @{triggerBody()?['object']?['properties']?['incidentNumber']} - @{triggerBody()?['object']?['properties']?['title']}"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -247,7 +237,7 @@
                                         "and": [
                                             {
                                                 "equals": [
-                                                    "",
+                                                    "@body('Send_approval_email')?['SelectedOption']",
                                                     "This was me"
                                                 ]
                                             }
@@ -277,12 +267,12 @@
                                     "inputs": {
                                         "body": {
                                             "Message": {
-                                                "Body": "New Alert from Azure Sentinel.\nPlease respond ASAP.\nSeverity: @{triggerBody()?['Severity']}\nName: @{triggerBody()?['AlertDisplayName']}\nDescription: @{triggerBody()?['Description']}",
+                                                "Body": "New Alert from Azure Sentinel.\nPlease respond ASAP.\nSeverity: @{triggerBody()?['object']?['properties']?['severity']}\nName: @{triggerBody()?['object']?['properties']?['title']}\nDescription: @{triggerBody()?['object']?['properties']?['description']}",
                                                 "HideHTMLMessage": false,
                                                 "Importance": "High",
                                                 "Options": "This was me, This was not me",
                                                 "ShowHTMLConfirmationDialog": false,
-                                                "Subject": "Security Alert: @{body('Alert_-_Get_incident')?['properties']?['title']}",
+                                                "Subject": "Security Alert: @{triggerBody()?['object']?['properties']?['title']}",
                                                 "To": "@body('Get_user')?['mail']"
                                             },
                                             "NotificationUrl": "@{listCallbackUrl()}"
@@ -320,7 +310,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_alert": {
+                        "Microsoft_Sentinel_incident": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -330,7 +320,7 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             },
                             "type": "ApiConnectionWebhook"
                         }
