@@ -6,6 +6,8 @@
     1. Gets Information from CheckPhish by URL, provided in the alert custom entities.
     2. Enriches the incident with the obtained info.
 
+    ![Incident Comment](./images/CheckPhishEnrichmentComment.png)<br>
+
 ![Playbook Designer view](./images/CheckPhishFlow.png)<br>
 
 ### Prerequisites 
