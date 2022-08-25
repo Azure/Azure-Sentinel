@@ -36,4 +36,3 @@ Once deployment is complete, you will need to authorize each connection.
 #### b. Configurations in Sentinel
 1. None
 
-
