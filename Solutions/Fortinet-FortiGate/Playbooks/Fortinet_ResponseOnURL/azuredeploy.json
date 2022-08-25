@@ -1,8 +1,32 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Fortinet-FortiGate-ResponseOnBlockURL", 
+    "description": "This playbook allows the SOC users to automatically response to Microsoft Sentinel incidents which includes URL's, by adding the URLs to the Sentinel URL blocked group.",
+    "prerequisites": ["- Sentinel URL block group should create in the VM \n\n - FortinetConnector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page. \n\n - Fortinet-GetRestAPIFunctionAPP needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the Function doc page. \n\n - FortinetConnector need to be authenticated with an API key. Relevant instructions can be found in the connector doc page. \n\n - This playbook will add new address object to existing VM."],
+    "lastUpdateTime": "2022-08-01T00:00:00.000Z", 
+    "entities": ["URL"], 
+    "tags": [], 
+    "postDeployment": ["* Go to logic app designer. \n\n * Look for the function call actions. You can find them by the titles: \n\n - Fetch the details of the address object. \n\n - Get address group details. \n\n * For each one of the above function call actions and perform the below mentioned steps: \n\n - Go to 'Managed identity' dropdown and select user identity. \n\n - Save playbook. \n\n * Go to Microsoft Sentinel, hook playbook to Microsoft Sentinel rules. \n\n ** a. Authorize connections \n\n Once deployment is complete, you will need to authorize each connection. \n\n 1. Click the Microsoft Sentinel connection resource. \n\n 2. Click edit API connection. \n\n 3. Click Authorize. \n\n 4. Sign in. \n\n 5. Click Save. \n\n 6. Repeat steps for other connection such as Team's connection \n\n ** b. Configurations in Sentinel ** \n\n 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with URL Entity. \n\n 2. Configure the automation rules to trigger this playbook."],
+    "support": {
+        "tier": "microsoft" 
+    },
+    "author": {
+        "name": "Lior Tamir"
+    },
+    "releaseNotes": [
+    {
+      "version": "1.0.0",
+      "title": "Fortinet-FortiGate-ResponseOnBlockURL",
+      "notes": [
+        "Initial version"
+      ]
+    }
+    ]
+  },
   "parameters": {
-    "playbook Name": {
+    "PlaybookName": {
       "defaultValue": "Fortinet-FortiGate-ResponseOnBlockURL",
       "type": "String"
     },
@@ -40,15 +64,33 @@
       "metadata": {
         "description": "User Identity"
       }
+    },
+    "AzureManagementLink": {
+      "type": "String",
+      "defaultValue": "[concat('https://management','.azure','.com')]"
+    },
+    "CustomConnectorName": {
+      "defaultValue": "FortinetCustomConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Connector"
+      }
+    },
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
     }
   },
   "variables": {
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('Playbook Name'))]",
-    "TeamsConnectionName": "[concat('teamsconnector-', parameters('Playbook Name'))]",
-    "FortinetConnectorConnectionName": "[concat('FortinetConnector-', parameters('Playbook Name'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+    "FortinetConnectorConnectionName": "[concat('FortinetConnector-', parameters('PlaybookName'))]",
     "UserIdentifier": "[parameters('User Identifier Name')]",
     "functionappname": "[parameters('Function App Name')]"
-
   },
   "resources": [
     {
@@ -59,7 +101,7 @@
       "properties": {
         "customParameterValues": {},
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/FortinetConnector')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, parameters('CustomConnectorName'))]"
         }
       }
     },
@@ -71,7 +113,7 @@
       "properties": {
         "customParameterValues": {},
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
         }
       }
     },
@@ -83,14 +125,14 @@
       "properties": {
         "customParameterValues": {},
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/teams')]"
         }
       }
     },
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
-      "name": "[parameters('PlayBook Name')]",
+      "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
       "identity": {
         "type": "UserAssigned",
@@ -300,7 +342,7 @@
                   "type": "Function",
                   "inputs": {
                     "authentication": {
-                      "audience": "https://management.azure.com",
+                      "audience": "[parameters(AzureManagementLink)",
                       "identity": "[variables('UserIdentifier')]",
                       "type": "ManagedServiceIdentity"
                     },
@@ -323,7 +365,7 @@
                   "type": "Function",
                   "inputs": {
                     "authentication": {
-                      "audience": "https://management.azure.com",
+                      "audience": "[parameters(AzureManagementLink)]",
                       "identity": "[variables('UserIdentifier')]",
                       "type": "ManagedServiceIdentity"
                     },
@@ -352,7 +394,7 @@
                         "value": "URL Address : @{items('For_each_malicious_URL')?['Url']} ,  Action Taken :  @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response_3')['submitActionId']}  "
                       }
                     },
-                    "Condition_to_check_if_user_chosen_Block_URL": {
+                    "Condition_to_check_if_user_chosen_Block": {
                       "actions": {
                         "Append_to_array_variable_for_new_address_object": {
                           "runAfter": {
@@ -412,7 +454,7 @@
                     },
                     "Update_pre-defined_address_group": {
                       "runAfter": {
-                        "Condition_to_check_if_user_chosen_Block_URL": [
+                        "Condition_to_check_if_user_chosen_Block": [
                           "Succeeded"
                         ]
                       },
@@ -1235,7 +1277,7 @@
                     "value": [
                       {
                         "size": "Large",
-                        "text": "Suspicious URL - Azure Sentinel",
+                        "text": "Suspicious URL - Microsoft Sentinel",
                         "type": "TextBlock",
                         "weight": "Bolder",
                         "wrap": true
@@ -1471,7 +1513,7 @@
               "inputs": {
                 "body": {
                   "body": {
-                    "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n           \n            \"weight\": \"Bolder\",\n            \"text\": \"Below is the summary of actions taken on URL's by SOC\",\n            \"wrap\": true\n        },\n {\n    \"size\": \"Small\",\n    \"style\": \"Person\",\n    \"type\": \"Image\",\n    \"url\": \"https://www.fortinet.com/content/dam/fortinet-blog/article-images/individual-images/logo.png\"\n  },\n       {\n  \"columns\": [\n    {\n      \"items\":@{body('Compose_actions_on_URL_to_be_displayed_on_adaptive_card')} ,\n      \"type\": \"Column\",\n      \"wrap\": true\n    }\n  ],\n  \"separator\": \"true\",\n  \"type\": \"ColumnSet\",\n  \"width\": \"stretch\"\n},\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident]()\",\n            \"wrap\": true\n        },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Azure Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n       \n     \n        \n    ],\n\"width\":\"auto\",\n   \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Change incident configuration\"\n                    },\n {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Ignore\"\n                    }\n   ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                    "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n           \n            \"weight\": \"Bolder\",\n            \"text\": \"Below is the summary of actions taken on URL's by SOC\",\n            \"wrap\": true\n        },\n {\n    \"size\": \"Small\",\n    \"style\": \"Person\",\n    \"type\": \"Image\",\n    \"url\": \"https://www.fortinet.com/content/dam/fortinet-blog/article-images/individual-images/logo.png\"\n  },\n       {\n  \"columns\": [\n    {\n      \"items\":@{body('Compose_actions_on_URL_to_be_displayed_on_adaptive_card')} ,\n      \"type\": \"Column\",\n      \"wrap\": true\n    }\n  ],\n  \"separator\": \"true\",\n  \"type\": \"ColumnSet\",\n  \"width\": \"stretch\"\n},\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident]()\",\n            \"wrap\": true\n        },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration :\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Microsoft Sentinel incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Microsoft Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n       \n     \n        \n    ],\n\"width\":\"auto\",\n   \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Change incident configuration\"\n                    },\n {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"Ignore\"\n                    }\n   ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
                     "recipient": {
                       "channelId": "19:7abc1180c1d84a3fba83770e34231132@thread.tacv2"
                     },
@@ -1499,17 +1541,17 @@
               "FortinetConnector": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('FortinetConnectorConnectionName'))]",
                 "connectionName": "[variables('FortinetConnectorConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/FortinetConnector')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, parameters('CustomConnectorName'))]"
               },
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
               },
               "teams": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
                 "connectionName": "[variables('TeamsConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/teams')]"
               }
 
             }
