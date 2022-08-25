@@ -90,6 +90,7 @@ MODE="kvmi"
 CONNECTIONMODE="abap"
 CONFIGPATH="/opt"
 TRUSTEDCA=()
+CLOUD='public'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -238,6 +239,10 @@ while [[ $# -gt 0 ]]; do
 		DEVACRPWD="$2"
 		shift 2
 		;;
+	--cloud)
+		CLOUD="$2"
+		shift 2
+		;;
 	--preview)
 		PREVIEW=1
 		shift 1
@@ -367,6 +372,11 @@ fi
 
 if [ -n "$SDKFILELOC" ] && [ ! -f "$SDKFILELOC" ]; then
 	echo 'Invalid SDK path'
+	exit 1
+fi
+
+if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'mooncake' ]; then
+	echo 'Invalid cloud name, avilable options: public, fairfax, mooncake.'
 	exit 1
 fi
 
@@ -507,12 +517,22 @@ if [ $DEVMODE ]; then
 	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
 else
 	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
-	if [ $PREVIEW ]; then
-		tagver=":latest-preview"
-	else
-		tagver=":latest"
+	if [ $CLOUD == 'public' ]; then
+		tagver=':latest'
+	elif [ $CLOUD == 'fairfax' ]; then
+		tagver=':ffx-latest'
+		az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
+	elif [ $CLOUD == 'mooncake' ]; then
+		tagver=':mc-latest'
+		az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 	fi
+	
+	if [ $PREVIEW ]; then
+		tagver="$tagver-preview"
+	fi
+
 fi
+
 
 # sudo groupadd docker
 echo "Creating group 'docker' and adding current user to 'docker' group"

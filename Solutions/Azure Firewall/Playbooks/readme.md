@@ -37,11 +37,11 @@ This package includes:
 
 You can choose to deploy the whole package: connector + all three playbook templates (below buttons), or each one seperately from it's specific folder.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAzureFirewall%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Firewall%2FPlaybooks%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAzureFirewall%2Fazuredeploy.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Firewall%2FPlaybooks%2Fazuredeploy.json" target="_blank">
    <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
 </a>
 
@@ -79,7 +79,7 @@ To use your own application with the Azure Sentinel connector, perform the follo
 
     In this step we use the app credentials to authenticate to the Sentinel connector in Logic Apps.
 
-    In the custome connector for Azure Firewall, fill in the required parameters (can be found in the registered application blade)
+    In the custom connector for Azure Firewall, fill in the required parameters (can be found in the registered application blade)
         - Tenant Id: under **Overview**
         - Client Id: under **Overview**
         - Client Secret: under **Certificates & secrets**
@@ -133,9 +133,9 @@ Once deployment is complete, you will need to authorize each connection.
 ##  Reference to the playbook templates and the connector
 
  Connector
-* [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewallConnector)
+* [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewallConnector)
 
 Playbooks
-* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addToIPGroup)
-* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewall-BlockIP-addNewRule)
-* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident ](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AzureFirewall/AzureFirewall-AddIPtoTIAllowList)
+* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-AddIPtoTIAllowList)
+* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-BlockIP-addNewRule)
+* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident ](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-BlockIP-addToIPGroup)

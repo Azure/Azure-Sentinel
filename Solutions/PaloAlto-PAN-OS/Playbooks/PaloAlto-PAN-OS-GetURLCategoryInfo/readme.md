@@ -8,7 +8,7 @@
 ![PaloAlto-PAN-OS-GetURLCategoryInfo](./designerscreenshot.PNG)<br>
 ### Prerequisites 
 1. PAN-OS Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
-2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
+2. Generate an API key. [Refer this link on how to generate the API Key](https://docs.paloaltonetworks.com/pan-os/10-1/pan-os-panorama-api/get-started-with-the-pan-os-xml-api/get-your-api-key)
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
@@ -18,7 +18,7 @@
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -26,16 +26,16 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for PAN-OS API Connection (For authorizing the PAN-OS API connection, API Key needs to be provided)
 
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account 
 2. Configure the automation rules to trigger this playbook
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)
 
 ## Playbook steps explained
 
-### When Azure Sentinel incident creation rule is triggered
+### When Microsoft Sentinel incident creation rule is triggered
 
-Azure Sentinel incident is created. The playbook receives the incident as the input.
+Microsoft Sentinel incident is created. The playbook receives the incident as the input.
 
 ### Entities - Get URLs
 
