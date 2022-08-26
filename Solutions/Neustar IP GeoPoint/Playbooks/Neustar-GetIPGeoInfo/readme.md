@@ -8,12 +8,13 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 2. Gets Geographical location information from Neustart IP GeoPoint API
 3. Summarize the details and add as a comment to the incident.
 
-<img src="TODO" width="50%"/><br>
+<img src="./images/Playbook_NeustarGetIPGeoInfo.jpg" width="50%"/><br>
+<img src="./images/Playbook_Incident_Comment.jpg" width="50%"/><br>
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, [Neustar IP GeoPoint API Function App Connector](../../AWS_IAM_FunctionAppConnector/) needs to be deployed under the same subscription.
-2. Refer to [Neustar IP GeoPoint API Function App Connector](../../AWS_IAM_FunctionAppConnector/readme.md) documentation to obtain Neustar IP GeoPoint API Key and Shared Secret. 
+1. Prior to the deployment of this playbook, [Neustar IP GeoPoint API Function App Connector](../../NeustarIPGeoPoint_FunctionAppConnector/) needs to be deployed under the same subscription.
+2. Refer to [Neustar IP GeoPoint API Function App Connector](../../NeustarIPGeoPoint_FunctionAppConnector/readme.md) documentation to obtain Neustar IP GeoPoint API Key and Shared Secret. 
 
 ### Deployment instructions
 
@@ -23,7 +24,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Tag Key: Tag key that will be added to user in AWS
     * Tag Value: Tag value that will be added to user in AWS
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FPlaybooks%2FAWSIAM-AddTagToUser%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FPlaybooks%2FAWSIAM-AddTagToUser%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Frahul0216%2FAzure-Sentinel%2Fblob%2Fusers%2Frahul%2FNeustarIPGeoPoint%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustar-GetIPGeoInfo%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Frahul0216%2FAzure-Sentinel%2Fblob%2Fusers%2Frahul%2FNeustarIPGeoPoint%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustar-GetIPGeoInfo%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 

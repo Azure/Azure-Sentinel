@@ -33,5 +33,4 @@ Neustar IP GeoPoint API Key and Share Secret are required.
     - NeustarIPGeoPointAPIKey
     - NeustarIPGeoPointSecret
 
-==TODO==
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FAWS_IAM_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FAWS_IAM_FunctionAppConnector%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Frahul0216%2FAzure-Sentinel%2Fblob%2Fusers%2Frahul%2FNeustarIPGeoPoint%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustarIPGeoPoint_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Frahul0216%2FAzure-Sentinel%2Fblob%2Fusers%2Frahul%2FNeustarIPGeoPoint%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustarIPGeoPoint_FunctionAppConnector%2Fazuredeploy.json) 

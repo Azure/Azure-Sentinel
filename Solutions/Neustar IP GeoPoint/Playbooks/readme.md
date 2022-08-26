@@ -1,3 +1,3 @@
 # Neustar IP GeoPoint Playbook Templates
 
-![](NeustarLogo.jpeg)
+<img src="NeustarLogo.jpeg" alt="neustar" style="width:150px; height:150px"/>
