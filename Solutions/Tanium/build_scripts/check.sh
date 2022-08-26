@@ -41,7 +41,6 @@ check-command() {
 
 check-prerequisites() {
   check-command "git"
-  check-command "bat"
 }
 
 top_level_repo_directory() {
@@ -76,6 +75,14 @@ compare_contents() {
   unzip -l "$2" | sed -e 's/^/  /'
 }
 
+show_diff_commands() {
+  _msg "\nTo diff mainTemplate.json:"
+  _msg "    diff -u <(unzip -p \"$previous\" mainTemplate.json | jq .) <(unzip -p \"$current\" mainTemplate.json | jq .)"
+  _msg "\nTo diff createUiDefinition.json:"
+  _msg "    diff -u <(unzip -p \"$previous\" createUiDefinition.json | jq .) <(unzip -p \"$current\" createUiDefinition.json | jq .)"
+  _msg "\nNOTE: you'll need to cd to the top level of the repo for the paths to work"
+}
+
 main() {
   check-prerequisites
 
@@ -93,6 +100,7 @@ main() {
 
     check_expected_files "$current"
     compare_contents "$previous" "$current"
+    show_diff_commands "$previous" "$current"
   )
 }
 
