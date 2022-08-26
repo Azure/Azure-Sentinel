@@ -10,7 +10,7 @@ This custom connector connects to OpenCTI service end point to runs any OpenCTI 
 2. API key. To get API Key, login into your OpenCTI instance dashboard and navigate to User profile page --> API Access.
 
 
-## Actions supported by okta custom connector
+## Actions supported by OpenCTI custom connector
 
 | Component | Description |
 | --------- | -------------- |

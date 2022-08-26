@@ -30,7 +30,7 @@ Once deployment is complete, you will need to authorize each connection.
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for Okta Api  Connection (For authorizing the Okta API connection, API Key needs to be provided)
+6.	Repeat steps for OpenCTI Api  Connection (For authorizing the OpenCTI GraphQL API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account or host or URL or FileHash or IP Address. 
 2. Configure the automation rules to trigger this playbook
