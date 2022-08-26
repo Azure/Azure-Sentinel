@@ -107,16 +107,30 @@ check-command() {
   fi
 }
 
+check-new-version() {
+  local declared_version
+  declared_version=$(jq -r ".Version" Solutions/Tanium/build_scripts/input.json)
+  if find Solutions/Tanium/Package -name '*.zip' | grep -q "$declared_version"; then
+    _msg
+    _msg_error "Found $declared_version.zip already built in Solutions/Tanium/Package"
+    _msg
+    _msg "Did you forget to increment the version in Solutions/Tanium/build_scripts/input.json?"
+    _msg
+    exit 1
+  fi
+}
+
 check-prerequisites() {
+  check-command "jq"
   check-command "git"
   check-command "pwsh" "powershell"
+  check-new-version
 }
 
 
 main() {
-  check-prerequisites
-
   (cd "$(git rev-parse --show-toplevel)" || _die "Unable to cd to top level repo directory"
+    check-prerequisites
     declare logfile="/tmp/tanium_sentinel_create_package.log"
     declare tmpdir
     tmpdir=$(mktemp -d)
