@@ -8,6 +8,8 @@ This playbook will resolve any associated alerts in Tanium Threat Response assoc
 
 Only Microsoft Sentinel Incidents created by the "Tanium Threat Response Alerts" analytic rule will have the required metadata to allow resolving the associated Tanium Threat Response alert.
 
+This playbook requires Tanium API Gateway 1.4+
+
 ## Post-Deployment Instructions
 
 You must authorize the API Connections used by this playbook after deployment.

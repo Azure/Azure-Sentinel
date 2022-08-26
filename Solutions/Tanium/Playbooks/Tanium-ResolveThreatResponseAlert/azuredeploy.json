@@ -46,7 +46,7 @@
     },
     "variables": {
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "ThreatResponseAlertsApi": "[uri(concat('https://',parameters('TaniumServerHostname')),'/plugin/products/detect3/api/v1/alerts')]"
+        "TaniumApiGatewayApi": "[uri(concat('https://',parameters('TaniumServerHostname')),'/plugin/products/gateway/graphql')]"
     },
     "resources": [
         {
@@ -96,11 +96,14 @@
                             "defaultValue": {},
                             "type": "Object"
                         },
-                        "TaniumApiToken": {
-                            "type": "SecureString"
-                        },
-                        "ThreatResponseAlertsApi": {
+                        "TaniumApiGatewayApi": {
                             "type": "String"
+                        },
+                        "TaniumApiToken": {
+                            "type": "SecureString",
+                            "metadata": {
+                                "description": "The Tanium API Token provides access to the Tanium Server. Access is restricted to the level of access available to the user who generated the token."
+                            }
                         }
                     },
                     "triggers": {
@@ -120,50 +123,63 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V3)": {
-                            "runAfter": {
-                                "Create_HTML_table": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": {
-                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p><span style=\"font-size: 16px\"><strong>Resolved Threat Response Alerts</strong></span><br>\n@{body('Create_HTML_table')}</p>"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        "Check_API_Gateway_response": {
+                            "actions": {
+                                "Comment_success": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><span style=\"font-size: 16px\"><strong>Resolved Tanium Threat Response Alert</strong></span></p><p><span style=\"font-size: 12px\">\nThreat Response alert </span><span style=\"font-size: 12px\">@{body('Extract_Threat_Response_Alert_GUID')}</span><span style=\"font-size: 12px\"> is now resolved</span></p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
                                     }
-                                },
-                                "method": "post",
-                                "path": "/Incidents/Comment"
-                            }
-                        },
-                        "Construct_Alert_IDs_querystring": {
+                                }
+                            },
                             "runAfter": {
-                                "For_each_alert_in_response": [
+                                "Resolve_Threat_Response_Alert_using_Tanium_API_Gateway": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Join",
-                            "inputs": {
-                                "from": "@variables('alert id queries')",
-                                "joinWith": "&"
-                            }
-                        },
-                        "Create_HTML_table": {
-                            "runAfter": {
-                                "Select_alert_data_for_comment": [
-                                    "Succeeded"
+                            "else": {
+                                "actions": {
+                                    "Comment_failure": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p><span style=\"font-size: 16px\"><strong>Failed to resolve Tanium Threat Response Alert</strong></span></p><p>Threat Response alert @{body('Extract_Threat_Response_Alert_GUID')['body']} failed to resolve<br>\nError: @{body('Resolve_Threat_Response_Alert_using_Tanium_API_Gateway')?['errors']?[0]['message']}</p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Resolve_Threat_Response_Alert_using_Tanium_API_Gateway')?['errors']",
+                                            "@null"
+                                        ]
+                                    }
                                 ]
                             },
-                            "type": "Table",
-                            "inputs": {
-                                "format": "HTML",
-                                "from": "@body('Select_alert_data_for_comment')"
-                            }
+                            "type": "If"
                         },
                         "Extract_Threat_Response_Alert_GUID": {
                             "runAfter": {},
@@ -172,56 +188,9 @@
                                 "code": "const sentinel = workflowContext.trigger.outputs.body\r\n\r\nreturn JSON.parse(sentinel.object.properties.relatedEntities.find(e => e.kind === \"Url\").properties.url.replace(/\\\\/g, \"\")).alert_guid"
                             }
                         },
-                        "Fetch_updated_alert_states_by_GUID": {
+                        "Initialize_API_Gateway_mutation": {
                             "runAfter": {
-                                "Resolve_Threat_Response_Alerts_by_ID": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "headers": {
-                                    "Content-Type": "application/json",
-                                    "session": "@parameters('TaniumApiToken')"
-                                },
-                                "method": "GET",
-                                "uri": "@{concat(parameters('ThreatResponseAlertsApi'), '?guid=', body('Extract_Threat_Response_Alert_GUID'))}"
-                            },
-                            "runtimeConfiguration": {
-                                "secureData": {
-                                    "properties": [
-                                        "inputs"
-                                    ]
-                                }
-                            }
-                        },
-                        "For_each_alert_in_response": {
-                            "foreach": "@body('Parse_Threat_Response_Alerts_response')",
-                            "actions": {
-                                "Append_to_Alert_ID_queries": {
-                                    "runAfter": {},
-                                    "type": "AppendToArrayVariable",
-                                    "inputs": {
-                                        "name": "alert id queries",
-                                        "value": "id=@{items('For_each_alert_in_response')['id']}"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Initialize_Alert_ID_queries": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach",
-                            "runtimeConfiguration": {
-                                "concurrency": {
-                                    "repetitions": 1
-                                }
-                            }
-                        },
-                        "Initialize_Alert_ID_queries": {
-                            "runAfter": {
-                                "Parse_Threat_Response_Alerts_response": [
+                                "Extract_Threat_Response_Alert_GUID": [
                                     "Succeeded"
                                 ]
                             },
@@ -229,253 +198,52 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "alert id queries",
-                                        "type": "array"
+                                        "name": "api gateway mutation",
+                                        "type": "string",
+                                        "value": "mutation($threatResponseAlert: ThreatResponseAlertRef!) {\n  threatResponseAlertResolve(ref: $threatResponseAlert) {\n    error {\n      message\n      retryable\n      timedOut\n    }\n    guid\n    resolved\n  }\n}"
                                     }
                                 ]
                             }
                         },
-                        "Parse_Threat_Response_Alerts_response": {
+                        "Initialize_API_Gateway_mutation_variables": {
                             "runAfter": {
-                                "Query_Threat_Response_Alert_GUID_to_ID": [
+                                "Initialize_API_Gateway_mutation": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "ParseJson",
+                            "type": "InitializeVariable",
                             "inputs": {
-                                "content": "@body('Query_Threat_Response_Alert_GUID_to_ID')",
-                                "schema": {
-                                    "items": {
-                                        "properties": {
-                                            "alertedAt": {
-                                                "type": "string"
-                                            },
-                                            "computerIpAddress": {
-                                                "type": "string"
-                                            },
-                                            "computerName": {
-                                                "type": "string"
-                                            },
-                                            "createdAt": {
-                                                "type": "string"
-                                            },
-                                            "details": {
-                                                "type": "string"
-                                            },
-                                            "eid": {},
-                                            "guid": {
-                                                "type": "string"
-                                            },
-                                            "id": {
-                                                "type": "integer"
-                                            },
-                                            "intelDocId": {
-                                                "type": "integer"
-                                            },
-                                            "intelDocRevisionId": {},
-                                            "matchType": {
-                                                "type": "string"
-                                            },
-                                            "priority": {
-                                                "type": "string"
-                                            },
-                                            "scanConfigId": {
-                                                "type": "integer"
-                                            },
-                                            "scanConfigRevisionId": {
-                                                "type": "integer"
-                                            },
-                                            "severity": {
-                                                "type": "string"
-                                            },
-                                            "state": {
-                                                "type": "string"
-                                            },
-                                            "type": {
-                                                "type": "string"
-                                            },
-                                            "updatedAt": {
-                                                "type": "string"
+                                "variables": [
+                                    {
+                                        "name": "api gateway mutation variables",
+                                        "type": "object",
+                                        "value": {
+                                            "threatResponseAlert": {
+                                                "guid": "@body('Extract_Threat_Response_Alert_GUID')"
                                             }
-                                        },
-                                        "required": [
-                                            "id",
-                                            "state",
-                                            "type",
-                                            "guid",
-                                            "priority",
-                                            "severity",
-                                            "intelDocId",
-                                            "intelDocRevisionId",
-                                            "scanConfigId",
-                                            "scanConfigRevisionId",
-                                            "computerName",
-                                            "computerIpAddress",
-                                            "matchType",
-                                            "eid",
-                                            "details",
-                                            "alertedAt",
-                                            "createdAt",
-                                            "updatedAt"
-                                        ],
-                                        "type": "object"
-                                    },
-                                    "type": "array"
-                                }
-                            }
-                        },
-                        "Parse_Updated_Alerts_Response": {
-                            "runAfter": {
-                                "Fetch_updated_alert_states_by_GUID": [
-                                    "Succeeded"
+                                        }
+                                    }
                                 ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@body('Fetch_updated_alert_states_by_GUID')",
-                                "schema": {
-                                    "items": {
-                                        "properties": {
-                                            "alertedAt": {
-                                                "type": "string"
-                                            },
-                                            "computerIpAddress": {
-                                                "type": "string"
-                                            },
-                                            "computerName": {
-                                                "type": "string"
-                                            },
-                                            "createdAt": {
-                                                "type": "string"
-                                            },
-                                            "details": {
-                                                "type": "string"
-                                            },
-                                            "eid": {},
-                                            "guid": {
-                                                "type": "string"
-                                            },
-                                            "id": {
-                                                "type": "integer"
-                                            },
-                                            "intelDocId": {
-                                                "type": "integer"
-                                            },
-                                            "intelDocRevisionId": {},
-                                            "matchType": {
-                                                "type": "string"
-                                            },
-                                            "priority": {
-                                                "type": "string"
-                                            },
-                                            "scanConfigId": {
-                                                "type": "integer"
-                                            },
-                                            "scanConfigRevisionId": {
-                                                "type": "integer"
-                                            },
-                                            "severity": {
-                                                "type": "string"
-                                            },
-                                            "state": {
-                                                "type": "string"
-                                            },
-                                            "type": {
-                                                "type": "string"
-                                            },
-                                            "updatedAt": {
-                                                "type": "string"
-                                            }
-                                        },
-                                        "required": [
-                                            "id",
-                                            "state",
-                                            "type",
-                                            "guid",
-                                            "priority",
-                                            "severity",
-                                            "intelDocId",
-                                            "intelDocRevisionId",
-                                            "scanConfigId",
-                                            "scanConfigRevisionId",
-                                            "computerName",
-                                            "computerIpAddress",
-                                            "matchType",
-                                            "eid",
-                                            "details",
-                                            "alertedAt",
-                                            "createdAt",
-                                            "updatedAt"
-                                        ],
-                                        "type": "object"
-                                    },
-                                    "type": "array"
-                                }
                             }
                         },
-                        "Query_Threat_Response_Alert_GUID_to_ID": {
+                        "Resolve_Threat_Response_Alert_using_Tanium_API_Gateway": {
                             "runAfter": {
-                                "Extract_Threat_Response_Alert_GUID": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "headers": {
-                                    "Content-Type": "application/json",
-                                    "session": "@parameters('TaniumApiToken')"
-                                },
-                                "method": "GET",
-                                "uri": "@{concat(parameters('ThreatResponseAlertsApi'), '?guid=', body('Extract_Threat_Response_Alert_GUID'))}"
-                            },
-                            "runtimeConfiguration": {
-                                "secureData": {
-                                    "properties": [
-                                        "inputs"
-                                    ]
-                                }
-                            }
-                        },
-                        "Resolve_Threat_Response_Alerts_by_ID": {
-                            "runAfter": {
-                                "Construct_Alert_IDs_querystring": [
+                                "Initialize_API_Gateway_mutation_variables": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Http",
                             "inputs": {
                                 "body": {
-                                    "state": "resolved"
+                                    "query": "@variables('api gateway mutation')",
+                                    "variables": "@variables('api gateway mutation variables')"
                                 },
                                 "headers": {
                                     "Content-Type": "application/json",
                                     "session": "@parameters('TaniumApiToken')"
                                 },
-                                "method": "PUT",
-                                "uri": "@{concat(parameters('ThreatResponseAlertsApi'), '?', body('Construct_Alert_IDs_querystring'))}"
-                            },
-                            "runtimeConfiguration": {
-                                "secureData": {
-                                    "properties": [
-                                        "inputs"
-                                    ]
-                                }
-                            }
-                        },
-                        "Select_alert_data_for_comment": {
-                            "runAfter": {
-                                "Parse_Updated_Alerts_Response": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Select",
-                            "inputs": {
-                                "from": "@body('Parse_Updated_Alerts_Response')",
-                                "select": {
-                                    "guid": "@item()['guid']",
-                                    "id": "@item()['id']",
-                                    "state": "@item()['state']"
-                                }
+                                "method": "POST",
+                                "uri": "@parameters('TaniumApiGatewayApi')"
                             }
                         }
                     },
@@ -494,8 +262,8 @@
                     "TaniumApiToken": {
                         "value": "[parameters('TaniumApiToken')]"
                     },
-                    "ThreatResponseAlertsApi": {
-                        "value": "[variables('ThreatResponseAlertsApi')]"
+                    "TaniumApiGatewayApi": {
+                        "value": "[variables('TaniumApiGatewayApi')]"
                     }
                 }
             }
