@@ -115,6 +115,7 @@ check-new-version() {
     _msg_error "Found $declared_version.zip already built in Solutions/Tanium/Package"
     _msg
     _msg "Did you forget to increment the version in Solutions/Tanium/build_scripts/input.json?"
+    _msg "If you want to rebuild $declared_version then delete the zip file first"
     _msg
     exit 1
   fi
