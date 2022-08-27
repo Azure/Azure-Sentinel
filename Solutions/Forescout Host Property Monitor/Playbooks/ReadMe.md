@@ -6,7 +6,6 @@
 
 1. [Overview](#overview)
 1. [Playbook Templates](#playbooks)
-1. [Known issues and limitations](#limitations)
 
 <a name="overview">
 
@@ -26,7 +25,7 @@ Use the Analytic Rule to check what kind of incident is created and how many tim
   -	disposition: Represents the actual action in 2-digit format. For example, 00 for Recheck Host, 10 for HTTP Notification.  
   -	endpoint_ip: Indicates the IP address of the endpoint, which can be an IPv4 or IPv6 address.  
   -	em_ip: Indicates the IP address of the Enterprise Manager to which the endpoint belongs.  
-  -	info: Indicates addistional information   
+  -	info: Indicates additional information   
 The em_ip and info are optional.  
 
 Note that the eyeExtend for Microsoft Sentinel module polls the incidents information periodically and examines the Description field of each incident. Based on the information set in the Description field, the Continuum Platform applies the requested action set by Microsoft Sentinel to the endpoints.  
@@ -34,35 +33,140 @@ The following is a sample description field of an incident set by the playbook:
 action_group="restrict";disposition="31";endpoint_ip=["10.16.141.130"];em_ip=["10.16.147.96"];info=Generated_by_Dnsniff_event  
 Each action has a unique disposition value. The action name, disposition value, and action group supported by eyeExtend for Microsoft Sentinel are as follows:  
 
-Recheck Host	00	manage  
-HTTP Notification	10	notify  
-HTTP Redirection to URL	11	notify  
-Send Balloon Notification	12	notify  
-Send Email	13	notify  
-Send Email to User	14	notify  
-MAC User Notification	15	notify  
-Disable Dual Homed	20	remediate  
-Kill Cloud Storage	21	remediate  
-Kill Instant Messaging	22	remediate  
-Kill Peer-to-peer	23	remediate  
-Switch Block	30	restrict  
-Endpoint Address ACL	31	restrict  
-Disable External Device	32	restrict  
-Expedite IP Discovery	33	restrict  
-Get Microsoft SMS/SCCM Updates	34	restrict  
-Start Windows Updates	35	restrict  
-Start Macintosh Updates	36	restrict  
-Windows Self Remediation	37	restrict  
-Block Network Access	38	restrict  
-Block Suspected MAC Spoofing	39	restrict  
-RADIUS Authorize	40	restrict  
-VPN Block	41	restrict  
-WLAN Block	42	restrict  
-Whitelist Network Access	43	restrict  
+<table>
+  <tr>
+    <th>Action Name</th>
+    <th>Disposition Value</th>
+    <th>Action Group</th>
+  </tr>
+  <tr>
+    <td>Recheck Host</td>
+    <td>00</td>
+    <td>manage</td>
+  </tr>
+  <tr>
+    <td>HTTP Notification</td>
+    <td>10</td>
+    <td>notify</td>
+  </tr>
+  <tr>
+    <td>HTTP Redirection to URL</td>
+    <td>11</td>
+    <td>notify</td>
+  </tr>
+  <tr>
+    <td>Send Balloon Notification</td>
+    <td>12</td>
+    <td>notify</td>
+  </tr>
+  <tr>
+    <td>Send Email</td>
+    <td>13</td>
+    <td>notify</td>
+  </tr>
+  <tr>
+    <td>Send Email to User</td>
+    <td>14</td>
+    <td>notify</td>
+  </tr>
+  <tr>
+    <td>MAC User Notification</td>
+    <td>15</td>
+    <td>notify</td>
+  </tr>
+  <tr>
+    <td>Disable Dual Homed</td>
+    <td>20</td>
+    <td>remediate</td>
+  </tr>
+  <tr>
+    <td>Kill Cloud Storage</td>
+    <td>21</td>
+    <td>remediate</td>
+  </tr>
+  <tr>
+    <td>Kill Instant Messaging</td>
+    <td>22</td>
+    <td>remediate</td>
+  </tr>
+  <tr>
+    <td>Kill Peer-to-peer</td>
+    <td>23</td>
+    <td>remediate</td>
+  </tr>
+  <tr>
+    <td>Switch Block</td>
+    <td>30</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Endpoint Address ACL</td>
+    <td>31</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Disable External Device</td>
+    <td>32</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Expedite IP Discovery</td>
+    <td>33</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Get Microsoft SMS/SCCM Updates</td>
+    <td>34</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Start Windows Updates</td>
+    <td>35</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Start Macintosh Updates</td>
+    <td>36</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Windows Self Remediation</td>
+    <td>37</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Block Network Access</td>
+    <td>38</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Block Suspected MAC Spoofing</td>
+    <td>39</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>RADIUS Authorize</td>
+    <td>40</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>VPN Block</td>
+    <td>41</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>WLAN Block</td>
+    <td>42</td>
+    <td>restrict</td>
+  </tr>
+  <tr>
+    <td>Whitelist Network Access</td>
+    <td>43</td>
+    <td>restrict</td>
+  </tr>
+</table>  
+  
+
 Use the Microsoft Apps Designer to view or edit the playbook as needed to fulfil security requirements. The code is prepared by using the visual editor, which can be easily viewed and modified.  
 
-<a name="limitations">
-  
-# Known issues and limitations  
-  N/A
 
