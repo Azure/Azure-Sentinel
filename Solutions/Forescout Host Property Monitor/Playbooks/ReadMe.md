@@ -20,12 +20,15 @@ This package includes:
 
 * DNS Sniff Event Playbook   
 This topic describes a sample Logic App/Playbook, "DNS Sniff Event Analysis".
-Use the Analytic Rule to check what kind of incident is created and how many times the events happened for any endpoint within the time interval. Based on this information, the Logic App/Playbook will set the Description field of the incident with the following information:  
-  -	action_group: Indicates the category of action. The valid values are manage, notify, remediate, and restrict.  
-  -	disposition: Represents the actual action in 2-digit format. For example, 00 for Recheck Host, 10 for HTTP Notification.  
-  -	endpoint_ip: Indicates the IP address of the endpoint, which can be an IPv4 or IPv6 address.  
-  -	em_ip: Indicates the IP address of the Enterprise Manager to which the endpoint belongs.  
-  -	info: Indicates additional information   
+Use the Analytic Rule to check what kind of incident is created and how many times the events happened for any endpoint within the time interval. Based on this information, the Logic App/Playbook will set the Description field of the incident with the following information:   
+
+<table>
+<tr> <td>action_group </td> <td>Indicates the category of action. Valid values are manage, notify, remediate, and restrict.</td></tr>
+<tr> <td>disposition</td> <td>Represents the actual action in 2-digit format. For example, 00 for Recheck Host, 10 for HTTP Notification.</td></tr>
+<tr> <td>endpoint_ip</td> <td>Indicates the IP address of the endpoint, which can be an IPv4 or IPv6 address.</td></tr>
+<tr> <td>em_ip</td> <td>Indicates the IP address of the Enterprise Manager to which the endpoint belongs.</td></tr>
+<tr> <td>info</td> <td> Indicates additional information</td></tr>
+</table
 The em_ip and info are optional.  
 
 Note that the eyeExtend for Microsoft Sentinel module polls the incidents information periodically and examines the Description field of each incident. Based on the information set in the Description field, the Continuum Platform applies the requested action set by Microsoft Sentinel to the endpoints.  
