@@ -277,7 +277,7 @@ ParserQuery: |
       let all_302014_302016 = allLogs
                 | where DeviceEventClassID in ("302014", "302016")
                 | parse kind=regex Message with * ": " DeviceAction " " Protocol " connection " NetworkSessionId " for " SrcInterfaceName ":" SrcIpAddr "/" SrcPortNumber:int @"[(]?" SrcUsername @"[)]? to " DstInterfaceName ":" DstIpAddr "/" DstPortNumber:int @"[(]?" DstUsername1 @"[)]? [Dd]uration " NetworkDuration " bytes " DstBytes:long @"\s?" Remaining 
-                | extend reasonParsed = extract_all(@"$|\((\S+)\)|([\S+\s*]+)\s+from+\s+\S+\s+(\(\S+\)|\S+)$|([\S+\s*]+)\s+from+\s+\S+$|([\S+\s*]+)\s+\((\S+)\)$|([\S+\s*]+)$",Remaining)[0]
+                | extend reasonParsed = extract_all(@"$|\((\S+)\)|([\S+\s*]+)\sfrom\s\S+\s(\(\S+\)|\S+)$|([\S+\s*]+)\sfrom\s\S+$|([\S+\s*]+)\s\((\S+)\)$|([\S+\s*]+)$",Remaining)[0]
                 | extend 
                             SrcUsername = trim(@"[()]", SrcUsername),
                             DstUsername = trim(@"[()]",coalesce(reasonParsed[0], reasonParsed[2], reasonParsed[5], DstUsername1)),
@@ -352,9 +352,7 @@ ParserQuery: |
                                     (SrcInterfaceName in (externalInterface) and DstInterfaceName in (internalInterface)) or SrcInterfaceName in (externalInterface), "Inbound",
                                     SrcInterfaceName in (internalInterface) and DstInterfaceName in (internalInterface), "Local",
                                     ""),
-                        NetworkProtocol = case(isnotempty(Protocol), toupper(Protocol),
-                                                Protocol == "41", "IPv6",
-                                                Protocol == "47", "GRE",
+                        NetworkProtocol = case(isempty(NetworkProtocol) and isnotempty(Protocol), toupper(Protocol),
                                                 ""),
                         EventResult = case(isnotempty(EventResult), EventResult,
                                             DvcAction == "Allow", "Success",
