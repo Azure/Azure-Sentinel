@@ -6,7 +6,7 @@ When  this playbook gets triggered and performs the following actions:
 
 1. Retrieves all destinations lists from Cisco Umbrella.
 2. Adds all IP to all destination list received in previous step.
-4. Creates comment about action taken.
+3. Creates comment about action taken.
 
 <img src="./Images/playbook_screenshot.png" width="50%"/><br>
 

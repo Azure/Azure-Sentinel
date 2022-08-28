@@ -23,7 +23,7 @@ When this playbook gets triggered performs below actions:
 
 ## Prerequisites
 1. Cisco Firepower custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector [doc pages](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/CiscoFirepower/CustomConnector).
-1. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)
+2. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)
 
 <a name="deployment-instructions"></a>
 ### Deployment instructions 
