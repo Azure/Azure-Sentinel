@@ -58,7 +58,7 @@ Authentication methods this connector supports:
 - <strong>Note:</strong> If you wish to change the "Function App Name", please note down the name as the same "Function App Name" must be provided in the Logic App deployment as well.
  
  
-![Incident Comments](./graphics/function_deploy1.png)
+![Function App](./graphics/function_deploy1.png)
 - Deploy the playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
   ![deployment](./graphics/deployment.png)
@@ -70,7 +70,7 @@ Authentication methods this connector supports:
 #### a. Set Python Version in the Function App
 - Go to the newly Deployed "Function App", on the left hand side pane, select "Settings>Configuration>General settings", in the "Python Vesion" dropdown select "Python 3.8" and click on Save.
 - On the left hand side pane, select "Overview" and restart the "Function App".
-![Incident Comments](./graphics/function_deploy2.png)
+![Function App Python](./graphics/function_deploy2.png)
 #### b. Authorize connections: 
 Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode.
