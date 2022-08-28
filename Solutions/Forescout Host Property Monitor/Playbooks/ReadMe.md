@@ -172,4 +172,7 @@ Each action has a unique disposition value. The action name, disposition value, 
 
 Use the Microsoft Apps Designer to view or edit the playbook as needed to fulfil security requirements. The code is prepared by using the visual editor, which can be easily viewed and modified.  
 
+You can choose to deploy the playbook:
+   
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FForescout%2520Host%2520Property%2520Monitor/Playbooks%2FForescout-DNSSniffEventPlaybook.json)
 
