@@ -121,8 +121,8 @@ ParserQuery: |
     Corelight_CL | where not(disabled)
     | where Message has '"_path":"dns"' or Message has '"_path":"dns_red"'
     | parse-kv Message as (
-        ['"_system_name"']:string, // ??
-        ['"_write_ts"']:datetime, // ??
+        ['"_system_name"']:string,
+        ['"_write_ts"']:datetime,
         ['"ts"']:datetime,
         ['"uid"']:string,
         ['"id.orig_h"']:string,
@@ -155,7 +155,8 @@ ParserQuery: |
         EventSchemaVersion="0.1.4",
         EventType="Query"
     | project-rename
-        EventEndTime= ['"ts"'],
+        EventStartTime= ['"ts"'],
+        EventEndTime = ['"_write_ts"'],
         EventOriginalUid = ['"uid"'],
         SrcIpAddr = ['"id.orig_h"'],
         SrcPortNumber = ['"id.orig_p"'],
@@ -172,16 +173,16 @@ ParserQuery: |
         DnsFlagsRecursionAvailable = ['"RA"'],
         DnsQueryClass = ['"qclass"'],
         DnsQueryType = ['"qtype"'],
+        rtt = ['"rtt"'],
         Z = ['"Z"'],
         trans_id = ['"trans_id"'],
         rejected = ['"rejected"'],
-        Dvc = hostname_s
+        Dvc = ['"_system_name"']
     | lookup query_type_lookup on DnsQueryType
     | lookup class_lookup on DnsQueryClass
     | extend
         EventSubType=iff(isnull(DnsResponseCode),'request','response'),
-        EventStartTime = EventEndTime,
-        // DnsNetworkDuration = rtt, : not sure what the rtt units are.
+        DnsNetworkDuration = toint(rtt*1000),
         EventResult = iff (EventResultDetails!~'NOERROR' or rejected,'Failure','Success'),
         DnsQueryTypeName = case (DnsQueryTypeName == "" and not(isnull(DnsQueryType)), strcat("TYPE", DnsQueryType), DnsQueryTypeName),
         DnsQueryClassName = case (DnsQueryClassName == "" and not(isnull(DnsQueryClass)), strcat("CLASS", DnsQueryClass), DnsQueryClassName),
@@ -196,6 +197,6 @@ ParserQuery: |
         Src=SrcIpAddr,
         //Duration=DnsNetworkDuration,
         Dst=DstIpAddr
-    | project-away Message, MG, ManagementGroupName, RawData, SourceSystem, Computer, Z, TTLs, answers, trans_id, rejected
+    | project-away Message, MG, ManagementGroupName, RawData, SourceSystem, Computer, Z, TTLs, answers, trans_id, rejected, hostname_s
   };
   parser (disabled=disabled)
