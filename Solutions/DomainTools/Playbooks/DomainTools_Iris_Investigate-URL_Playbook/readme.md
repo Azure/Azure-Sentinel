@@ -56,6 +56,8 @@ Authentication methods this connector supports:
 - Deploy the Function App by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Provide Subscription and Resource group details.
 - <strong>Note:</strong> If you wish to change the "Function App Name", please note down the name as the same "Function App Name" must be provided in the Logic App deployment as well.
+ 
+ 
 ![Incident Comments](./graphics/function_deploy1.png)
 - Deploy the playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
