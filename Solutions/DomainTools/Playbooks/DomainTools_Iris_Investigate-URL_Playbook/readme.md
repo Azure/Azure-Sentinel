@@ -32,7 +32,19 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 ## Links to deploy the DomainTools Function App
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDomainTools%2FPlaybooks%2FDomainTools_Iris_Investigate-URL_Playbook%2FFunctionApp%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDomainTools%2FPlaybooks%2FDomainTools_Iris_Investigate-URL_Playbook%2FFunctionApp%2Fazuredeploy.json)
+
+- Deploy the Function App by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
+- Provide Subscription and Resource group details.
+- <strong>Note:</strong> If you wish to change the "Function App Name", please note down the name as the same "Function App Name" must be provided in the Logic App deployment as well.
  
+ 
+![Function App](./graphics/function_deploy1.png)
+
+#### Set Python Version in the Function App
+- Go to the newly Deployed "Function App", on the left hand side pane, select "Settings>Configuration>General settings", in the "Python Vesion" dropdown select "Python 3.8" and click on Save.
+- On the left hand side pane, select "Overview" and restart the "Function App".
+![Function App Python](./graphics/function_deploy2.png)
+
 ## Links to deploy the DomainTools Iris Investigate URL Playbook
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDomainTools%2FPlaybooks%2FDomainTools_Iris_Investigate-URL_Playbook%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FDomainTools%2FPlaybooks%2FDomainTools_Iris_Investigate-URL_Playbook%2azuredeploy.json)
@@ -53,12 +65,6 @@ Authentication methods this connector supports:
 <a name="deployment">
 
 ### Deployment instructions
-- Deploy the Function App by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-- Provide Subscription and Resource group details.
-- <strong>Note:</strong> If you wish to change the "Function App Name", please note down the name as the same "Function App Name" must be provided in the Logic App deployment as well.
- 
- 
-![Function App](./graphics/function_deploy1.png)
 - Deploy the playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill in the required parameters for deploying the playbook.
   ![deployment](./graphics/deployment.png)
@@ -67,11 +73,7 @@ Authentication methods this connector supports:
 <a name="postdeployment">
 
 ### Post-Deployment instructions
-#### a. Set Python Version in the Function App
-- Go to the newly Deployed "Function App", on the left hand side pane, select "Settings>Configuration>General settings", in the "Python Vesion" dropdown select "Python 3.8" and click on Save.
-- On the left hand side pane, select "Overview" and restart the "Function App".
-![Function App Python](./graphics/function_deploy2.png)
-#### b. Authorize connections: 
+#### a. Authorize connections: 
 Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode.
 - Open "For each" Action.
@@ -84,6 +86,6 @@ Once deployment is complete, you will need to authorize each connection:
   ![connection](./graphics/connection.png)
 - Save the Logic App. If the Logic App prompts any missing connections, please update the connections similarly.
 - As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.
-#### c. Configurations in Sentinel:
+#### b. Configurations in Sentinel:
 - In Azure Sentinel, analytical rules should be configured to trigger an incident with risky Domain indicators. 
 - Configure the automation rules to trigger the playbook.
