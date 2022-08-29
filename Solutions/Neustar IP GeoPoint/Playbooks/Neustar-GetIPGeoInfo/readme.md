@@ -13,16 +13,14 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, [Neustar IP GeoPoint API Function App Connector](../../NeustarIPGeoPoint_FunctionAppConnector/) needs to be deployed under the same subscription.
-2. Refer to [Neustar IP GeoPoint API Function App Connector](../../NeustarIPGeoPoint_FunctionAppConnector/readme.md) documentation to obtain Neustar IP GeoPoint API Key and Shared Secret. 
+1. Prior to the deployment of this playbook, [Neustar IP GeoPoint API Function App Connector](../NeustarIPGeoPoint_FunctionAppConnector/) needs to be deployed under the same subscription.
+2. Refer to [Neustar IP GeoPoint API Function App Connector](../NeustarIPGeoPoint_FunctionAppConnector/readme.md) documentation to obtain Neustar IP GeoPoint API Key and Shared Secret. 
 
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
-    * Playbook Name: Enter the playbook name here
-    * Tag Key: Tag key that will be added to user in AWS
-    * Tag Value: Tag value that will be added to user in AWS
+    * Playbook Name
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Frahul0216%2FAzure-Sentinel%2Fblob%2Fusers%2Frahul%2FNeustarIPGeoPoint%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustar-GetIPGeoInfo%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Frahul0216%2FAzure-Sentinel%2Fblob%2Fusers%2Frahul%2FNeustarIPGeoPoint%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustar-GetIPGeoInfo%2Fazuredeploy.json)
 
