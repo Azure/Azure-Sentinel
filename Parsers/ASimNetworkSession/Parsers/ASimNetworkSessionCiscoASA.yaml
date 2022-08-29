@@ -210,38 +210,47 @@ ParserQuery: |
           , "253",""
           , "254",""
           , "255","Reserved"];
-  let NWParser=(disabled:bool=false){
+    let NWParser=(disabled:bool=false){
       let allLogs = CommonSecurityLog
       | where not(disabled)
       | where DeviceVendor == "Cisco" and DeviceProduct == "ASA"
-      | project-away Activity, AdditionalExtensions, ApplicationProtocol, DeviceFacility, DeviceAddress, DeviceName,DestinationDnsDomain, DestinationServiceName, DestinationTranslatedAddress, DestinationTranslatedPort, DeviceDnsDomain, DeviceExternalID, DeviceInboundInterface, DeviceNtDomain, DeviceOutboundInterface, DevicePayloadId, DeviceTranslatedAddress, DestinationHostName, DestinationMACAddress, DestinationNTDomain, DestinationProcessId, DestinationProcessName, DestinationUserID, DestinationUserName, DestinationUserPrivileges, DeviceMacAddress, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, Process*, ReceiptTime, ReceivedBytes, Remote*, Report*, Request*, SourceServiceName, SourceTranslatedAddress, SourceTranslatedPort, SourceUserID, SourceUserName, SourceUserPrivileges, SourceDnsDomain, SourceHostName, SourceMACAddress, SourceProcessId, SourceProcessName, SourceSystem, SentBytes, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, DeviceCustomDate*, DeviceCustomFloatingPoint*, DeviceCustomIPv6Address*, DeviceCustomNumber*, DeviceTimeZone;
+      | project-rename AliasDeviceEventClassID = DeviceEventClassID,
+               AliasDeviceVersion = DeviceVersion,
+               AliasDeviceAction = DeviceAction,
+               NetworkRuleName = DeviceCustomString2,
+               SrcIpAddr = SourceIP,
+               SrcPortNumber = SourcePort,
+               DstIpAddr = DestinationIP, 
+               DstPortNumber = DestinationPort
+      | project-away Activity, AdditionalExtensions, ApplicationProtocol, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, Process*, ReceiptTime, ReceivedBytes, Remote*, Report*, Request*, Source*, SentBytes, StartTime, TenantId, Threat*;
       let all_106001_alike = allLogs
-                | where DeviceEventClassID in ("106001", "106006", "106015", "106016", "106021", "106022") 
+                | where AliasDeviceEventClassID in ("106001", "106006", "106015", "106016", "106021", "106022") 
                 | parse Message with * " interface " DstInterfaceName;
       let all_106010_alike = allLogs
-                | where DeviceEventClassID in ("106010", "106014")
+                | where AliasDeviceEventClassID in ("106010", "106014")
                 | parse Message with * " src "  SrcInterfaceName ":" * " dst " DstInterfaceName ":" * "(type " NetworkIcmpType ", code " NetworkIcmpCode:int ")";
       let all_106018 = allLogs
-                | where DeviceEventClassID == "106018"
+                | where AliasDeviceEventClassID == "106018"
                 | parse Message with * " packet type " NetworkIcmpType " " * "list " NetworkRuleName " " *;
       let all_106023 = allLogs
-                | where DeviceEventClassID == "106023" and not(Message has "protocol 41") and isnotempty(SourceIP)
+                | where AliasDeviceEventClassID == "106023" and not(Message has "protocol 41") and isnotempty(SrcIpAddr)
                 | parse Message with * " src "  SrcInterfaceName ":" * " dst " DstInterfaceName ":" * ' by access-group "' NetworkRuleName '" '  *
                 | parse Message with * "(type " NetworkIcmpType ", code " NetworkIcmpCode:int ")" *;
       let all_106023_unparsed = allLogs
-                | where DeviceEventClassID == "106023" and isempty(SourceIP) and not(Message has "protocol 41")
+                | where AliasDeviceEventClassID == "106023" and isempty(SrcIpAddr) and not(Message has "protocol 41")
                 | parse Message with * ": " DeviceAction " " Protocol " src " SrcInterfaceName ":" SrcIpAddrAndPort "(" SrcUsername ") dst " DstInterfaceName ":" DstIpAddrAndPort " " NetworkIcmpInfo 'by access-group "' NetworkRuleName '" [' * "]"
                 | parse NetworkIcmpInfo with "(type " NetworkIcmpType ", code " NetworkIcmpCode:int ") "
-                | extend SrcIpAddr = tostring(split(SrcIpAddrAndPort,"/",0)[0]),
-                        SrcPortNumber = toint(split(SrcIpAddrAndPort,"/",1)[0]),
-                        DstIpAddr = tostring(split(DstIpAddrAndPort,"/",0)[0]),
-                        DstPortNumber = toint(split(DstIpAddrAndPort,"/",1)[0])
+                | extend SrcIpAddrAndPort = split(SrcIpAddrAndPort,"/"), DstIpAddrAndPort = split(DstIpAddrAndPort,"/")
+                | extend SrcIpAddr = tostring(SrcIpAddrAndPort[0]),
+                        SrcPortNumber = toint(SrcIpAddrAndPort[1]),
+                        DstIpAddr = tostring(DstIpAddrAndPort[0]),
+                        DstPortNumber = toint(DstIpAddrAndPort[1])
                 | extend 
                         SrcUsernameType = iif(isnotempty(SrcUsername),"Windows",""),
                         SimplifiedDeviceAction = iff(isempty(SimplifiedDeviceAction), DeviceAction, SimplifiedDeviceAction)
-                | project-away SrcIpAddrAndPort, DstIpAddrAndPort, NetworkIcmpInfo, Destination*, Source*;
+                | project-away SrcIpAddrAndPort, DstIpAddrAndPort, NetworkIcmpInfo;
       let all_106023_41 = allLogs
-                | where DeviceEventClassID == "106023" and Message has "protocol 41"
+                | where AliasDeviceEventClassID == "106023" and Message has "protocol 41"
                 | parse Message with * ": " Action " " ProtocolFromLog " src " SrcInterfaceName ":" SrcIpAddr " dst " DstInterfaceName ":" DstIpAddr ' by access-group ' NetworkRuleName ' '  *
                 | parse Message with * "(type " NetworkIcmpType ", code " NetworkIcmpCode:int ")" *
                 | extend Protocol = case(isnotempty(Protocol), Protocol,
@@ -250,22 +259,22 @@ ParserQuery: |
                         NetworkRuleName = trim(@'"',NetworkRuleName),
                         DeviceAction = trim_start(@"\s*",Action),
                         SimplifiedDeviceAction = trim_start(@"\s*",Action)
-                | project-away ProtocolFromLog, Action, Destination*, Source*;
+                | project-away ProtocolFromLog, Action;
       let all_302013_302015_parsed = allLogs
-                | where DeviceEventClassID in ("302013","302015") and isnotempty(SourceIP)
+                | where AliasDeviceEventClassID in ("302013","302015") and isnotempty(SrcIpAddr)
                 | parse Message with * ":  " * " " * " " * " connection " NetworkSessionId " for " SrcInterfaceName ":" * "/" * " (" SrcNatIpAddr "/" SrcNatPortNumber:int ")" SrcUsername "to " DstInterfaceName ":" * "/" * " (" DstNatIpAddr "/" DstNatPortNumber:int ")" DstUsername
-                | extend SrcUsername = trim(@"[()]", SrcUsername),
-                        DstUsername = trim(@"[()]", DstUsername)
+                | extend SrcUsername = trim(@"\s?\(?\)?\s?", SrcUsername),
+                        DstUsername = trim(@"\s?\(?\)?\s?", DstUsername)
                 | extend 
                         SrcUsernameType = iif(isnotempty(SrcUsername),"Windows",""),
                         DstUsernameType = iif(isnotempty(DstUsername),"Windows",""),
-                        SimplifiedDeviceAction = DeviceAction,
+                        SimplifiedDeviceAction = AliasDeviceAction,
                         SessionId = NetworkSessionId;
       let all_302013_302015_unparsed = allLogs
-                | where DeviceEventClassID in ("302013","302015") and isempty(SourceIP)
+                | where AliasDeviceEventClassID in ("302013","302015") and isempty(SrcIpAddr)
                 | parse Message with * ":  " DeviceAction " " NetworkDirection " " Protocol " connection " NetworkSessionId " for " SrcInterfaceName ":" SrcIpAddr "/" SrcPortNumber:int " (" SrcNatIpAddr "/" SrcNatPortNumber:int ")" SrcUsername "to " DstInterfaceName ":" DstIpAddr "/" DstPortNumber:int " (" DstNatIpAddr "/" DstNatPortNumber:int ")" DstUsername
-                | extend SrcUsername = trim(@"[()]", SrcUsername),
-                        DstUsername = trim(@"[()]", DstUsername),
+                | extend SrcUsername = trim(@"\s?\(?\)?\s?", SrcUsername),
+                        DstUsername = trim(@"\s?\(?\)?\s?", DstUsername),
                         NetworkDirection = case(NetworkDirection == "inbound", "Inbound",
                                                     NetworkDirection == "outbound", "Outbound",
                                                     "")
@@ -275,12 +284,12 @@ ParserQuery: |
                         SimplifiedDeviceAction = DeviceAction,
                         SessionId = NetworkSessionId;
       let all_302014_302016 = allLogs
-                | where DeviceEventClassID in ("302014", "302016")
-                | parse kind=regex Message with * ": " DeviceAction " " Protocol " connection " NetworkSessionId " for " SrcInterfaceName ":" SrcIpAddr "/" SrcPortNumber:int @"[(]?" SrcUsername @"[)]? to " DstInterfaceName ":" DstIpAddr "/" DstPortNumber:int @"[(]?" DstUsername1 @"[)]? [Dd]uration " NetworkDuration " bytes " DstBytes:long @"\s?" Remaining 
+                | where AliasDeviceEventClassID in ("302014", "302016")
+                | parse kind=regex Message with * ": " DeviceAction " " Protocol " connection " NetworkSessionId " for " SrcInterfaceName ":" SrcIpAddr "/" SrcPortNumber:int @"\(?" SrcUsername @"\)? to " DstInterfaceName ":" DstIpAddr "/" DstPortNumber:int @"\(?" DstUsername1 @"\)? [Dd]uration " NetworkDuration " bytes " DstBytes:long @"\s?" Remaining 
                 | extend reasonParsed = extract_all(@"$|\((\S+)\)|([\S+\s*]+)\sfrom\s\S+\s(\(\S+\)|\S+)$|([\S+\s*]+)\sfrom\s\S+$|([\S+\s*]+)\s\((\S+)\)$|([\S+\s*]+)$",Remaining)[0]
                 | extend 
-                            SrcUsername = trim(@"[()]", SrcUsername),
-                            DstUsername = trim(@"[()]",coalesce(reasonParsed[0], reasonParsed[2], reasonParsed[5], DstUsername1)),
+                            SrcUsername = trim(@"\s?\(?\)?\s?", SrcUsername),
+                            DstUsername = trim(@"\s?\(?\)?\s?",coalesce(reasonParsed[0], reasonParsed[2], reasonParsed[5], DstUsername1)),
                             NetworkDuration = toint(24 * 60 * totimespan(NetworkDuration) / time(1s)),
                             Reason = tostring(coalesce(reasonParsed[1], reasonParsed[3], reasonParsed[4], reasonParsed[6]))
                 | lookup EventResultMapping on Reason
@@ -290,35 +299,36 @@ ParserQuery: |
                         SimplifiedDeviceAction = iff(isempty(SimplifiedDeviceAction), DeviceAction, SimplifiedDeviceAction),
                         SessionId = NetworkSessionId,
                         EventOriginalResultDetails = iif(isnotempty(EventOriginalResultDetails), strcat(Reason, " - ", EventOriginalResultDetails), EventOriginalResultDetails)
-                | project-away reasonParsed, Reason, DstUsername1, Remaining;
+        | project-away reasonParsed, Reason, DstUsername1, Remaining;        
       let all_302020_302021 = allLogs
-                | where DeviceEventClassID in ("302020","302021")
+                | where AliasDeviceEventClassID in ("302020","302021")
                 | parse Message with * "(" SrcUsername ")" *
                 | parse Message with * "type " NetworkIcmpType " code " NetworkIcmpCode:int *
                 | extend SrcUsernameType = iif(isnotempty(SrcUsername),"Windows","");
       let all_7_series = allLogs
-                | where DeviceEventClassID in ("710002","710003","710004","710005")
+                | where AliasDeviceEventClassID in ("710002","710003","710004","710005")
                 | parse Message with * " to " DstInterfaceName ":" *;
       let all_106007 = allLogs
-                | where DeviceEventClassID in ("106007")
+                | where AliasDeviceEventClassID in ("106007")
                 | parse Message with * " due to " EventOriginalResultDetails;
       let all_106017 = allLogs
-                | where DeviceEventClassID in ("106017")
+                | where AliasDeviceEventClassID in ("106017")
                 | extend EventOriginalResultDetails = "Land Attack";
       let all_106100_parsed = allLogs
-                | where DeviceEventClassID in ("106100") and isnotempty(SourceIP)
+                | where AliasDeviceEventClassID in ("106100") and isnotempty(SrcIpAddr)
                 | parse Message with * "access-list " * " " * " " * " " SrcInterfaceName "/" * ") -> " DstInterfaceName "/" * ") hit-cnt " EventCount:int *;
       let all_106100_unparsed = allLogs
-                | where DeviceEventClassID in ("106100") and isempty(SourceIP)
+                | where AliasDeviceEventClassID in ("106100") and isempty(SrcIpAddr)
                 | parse Message with * "access-list " NetworkRuleName " " DeviceAction " " Protocol " " SrcInterfaceName "/" SrcIpAddr "(" SrcPortNumber:int ") -> " DstInterfaceName "/" DstIpAddr "(" DstPortNumber:int ") hit-cnt " EventCount:int * 
                 | extend SimplifiedDeviceAction = case(DeviceAction == "denied", "Deny",
                                                         "Allow");
       let remainingLogs = allLogs
-                | where DeviceEventClassID in ("106002", "106012", "106013", "106020");
+                | where AliasDeviceEventClassID in ("106002", "106012", "106013", "106020");
       let networkaddressWatchlistData = materialize (_ASIM_GetWatchlistRaw("NetworkAddresses"));
       let internalInterface = networkaddressWatchlistData | where WatchlistItem.Tags has "Internal" | distinct tostring(WatchlistItem["Range Name"]);
       let externalInterface = networkaddressWatchlistData | where WatchlistItem.Tags has "External" | distinct tostring(WatchlistItem["Range Name"]);
-      union isfuzzy=true all_106001_alike, all_106010_alike, all_106018, all_106023, all_106023_unparsed, all_106023_41,  all_302013_302015_unparsed, all_302013_302015_parsed, all_302014_302016, all_302020_302021, all_7_series, all_106007, all_106017, all_106100_parsed, all_106100_unparsed, remainingLogs
+      union isfuzzy=false all_106001_alike, all_106010_alike, all_106018, all_106023, all_106023_unparsed, all_106023_41,  all_302013_302015_unparsed, all_302013_302015_parsed, all_302014_302016, all_302020_302021, all_7_series, all_106007, all_106017, all_106100_parsed, all_106100_unparsed, remainingLogs
+                | extend SimplifiedDeviceAction = trim(@"\s",SimplifiedDeviceAction)
                 | extend 
                         EventStartTime = TimeGenerated,
                         EventEndTime = TimeGenerated,
@@ -328,35 +338,31 @@ ParserQuery: |
                         EventType = "NetworkSession",
                         EventSchema = "NetworkSession",
                         EventSchemaVersion = "0.2.4",
-                        DvcAction = case(trim(@"\s",SimplifiedDeviceAction) in ("Teardown","Built"), "",
+                        DvcAction = case(SimplifiedDeviceAction has_any ("Teardown","Built"), "",
                                         SimplifiedDeviceAction),
                         SrcInterfaceName = tolower(SrcInterfaceName),
                         DstInterfaceName = tolower(SrcInterfaceName)
+                | extend 
+                        EventResult = case(isnotempty(EventResult), EventResult,
+                                            DvcAction == "Allow", "Success",
+                                            "Failure")
                 | lookup ProtocolLookup on Protocol
                 | project-rename 
-                        EventProductVersion = DeviceVersion,
-                        EventOriginalType = DeviceEventClassID,
+                        EventProductVersion = AliasDeviceVersion,
+                        EventOriginalType = AliasDeviceEventClassID,
                         EventOriginalSeverity = OriginalLogSeverity,
                         DvcOriginalAction = DeviceAction,
                         EventMessage = Message,
                         Dvc = Computer
                 | extend
-                        EventSeverity = iff(isempty(DvcAction) or DvcAction == "Allow", "Informational", "Low"),                             
-                        DstPortNumber = coalesce(DstPortNumber, DestinationPort),
-                        SrcPortNumber = coalesce(SrcPortNumber, SourcePort),
-                        DstIpAddr = coalesce(DstIpAddr, DestinationIP),
-                        SrcIpAddr = coalesce(SrcIpAddr, SourceIP),
-                        NetworkRuleName = coalesce(NetworkRuleName, DeviceCustomString2),
+                        EventSeverity = iff(isempty(EventResult) or EventResult == "Success", "Informational", "Low"),
                         NetworkDirection = case(isnotempty(CommunicationDirection), CommunicationDirection,
                                     (SrcInterfaceName in (internalInterface) and DstInterfaceName in (externalInterface)) or DstInterfaceName in (externalInterface), "Outbound",
                                     (SrcInterfaceName in (externalInterface) and DstInterfaceName in (internalInterface)) or SrcInterfaceName in (externalInterface), "Inbound",
                                     SrcInterfaceName in (internalInterface) and DstInterfaceName in (internalInterface), "Local",
                                     ""),
                         NetworkProtocol = case(isempty(NetworkProtocol) and isnotempty(Protocol), toupper(Protocol),
-                                                ""),
-                        EventResult = case(isnotempty(EventResult), EventResult,
-                                            DvcAction == "Allow", "Success",
-                                            "Failure")
+                                                NetworkProtocol)
                 | extend 
                         Src = SrcIpAddr,
                         Dst = DstIpAddr,
@@ -364,6 +370,6 @@ ParserQuery: |
                         IpAddr = SrcIpAddr,
                         Rule = NetworkRuleName,
                         User = DstUsername
-                | project-away CommunicationDirection, Destination*, Device*, LogSeverity, Protocol, SimplifiedDeviceAction, Source*
+                | project-away CommunicationDirection, Alias*, Device*, LogSeverity, Protocol, SimplifiedDeviceAction
                 };
         NWParser(disabled=disabled)
