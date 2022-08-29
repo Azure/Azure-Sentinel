@@ -15,7 +15,7 @@
 ## Overview
 This playbook uses the DomainTools Iris Investigate API and Farsight DNSDB API. Given a domain or set of domains associated with an incident, enrich the domain using the DomainTools Iris Investigate API, returning whois and infrastructure details. Subsequently retrieve associated subdomains from passive DNS information seen in Farsight’s DNSDB. DomainTools Iris Investigate and Farsight DNSDB API subscriptions are required to run this playbook.
  
-Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
+Learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
 When a new Azure Sentinel Incident is created, this playbook gets triggered and performs these actions:
 
