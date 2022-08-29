@@ -64,3 +64,6 @@ This playbook updates alert statuses in Defender for IoT whenever a related aler
 The playbooks automate the SOC workflow by automatically emailing the incident details to the right IoT/OT device owner (based on Defender for IoT dafinition) and allowing him to respond by email. The incident is automatically updated based on the email response from the device owner.
 ### 6) Triage incidents involving Crown Jewels devices automatically
 SOC and OT engineers can stream their workflows using the playbook, which automatically updates the incident severity based on the devices involved in the incident and their importance.
+### 7) Incident with active CVEs: Auto Workflow 
+The playbook automates the SOC workflow by automatically enriching incident comments with the CVEs of the involved devices based on Defender for IoT data.
+An automated triage is performed if the CVE is critical, and the asset owner is automatically notified by email
