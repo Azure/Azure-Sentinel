@@ -53,355 +53,377 @@
     "variables":  {
         "OpencticustomconnectorConnectionName":  "[concat('Opencticustomconnector-', parameters('PlaybookName'))]",
         "BatchImportPlaybookPath": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('PlaybookNameBatching'))]",
-        "BatchName": "[parameters('BatchName')]"
+        "BatchName": "[parameters('BatchName')]",
+        "azureTenantId": "[parameters('AzureTenantId')]"
     },
     "resources":  [
         {
             "properties":  {
                 "provisioningState":  "Succeeded",
                 "state":  "Enabled",
-                "definition":  {
-                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion":  "1.0.0.0",
-                    "parameters":  {
-                        "$connections":  {
-                            "defaultValue":  {
-                            },
-                            "type":  "Object"
+                   "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
                         }
                     },
-                    "triggers":  {
-                        "Recurrence":  {
-                            "recurrence":  {
-                                "frequency":  "Minute",
-                                "interval":  10
+                    "triggers": {
+                        "Sliding_Window": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 10
                             },
-                            "evaluatedRecurrence":  {
-                                "frequency":  "Minute",
-                                "interval":  10
+                            "evaluatedRecurrence": {
+                                "frequency": "Minute",
+                                "interval": 10
                             },
-                            "type":  "Recurrence"
+                            "type": "SlidingWindow",
+                            "inputs": {
+                                "delay": "PT10M"
+                            }
                         }
                     },
-                    "actions":  {
-                        "Initialize_variable_Cursor":  {
-                            "runAfter":  {
-                                "Initialize_variable_StartTime":  [
+                    "actions": {
+                        "Initialize_variable_Cursor": {
+                            "runAfter": {
+                                "Initialize_variable_StartTime": [
                                     "Succeeded"
                                 ]
                             },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
                                     {
-                                        "name":  "Cursor",
-                                        "type":  "string"
+                                        "name": "Cursor",
+                                        "type": "string"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_variable_StartTime":  {
-                            "runAfter":  {
-                                "Parse_OpenCTI_response":  [
+                        "Initialize_variable_StartTime": {
+                            "runAfter": {
+                                "Parse_OpenCTI_response": [
                                     "Succeeded"
                                 ]
                             },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
                                     {
-                                        "name":  "StartTime",
-                                        "type":  "string",
-                                        "value":  "@{addMinutes(utcNow(),-10)}"
+                                        "name": "StartTime",
+                                        "type": "string",
+                                        "value": "@body('Parse_JSON')?['outputs']?['windowStartTime']"
                                     }
                                 ]
                             }
                         },
-                        "Initialize_variable_azureTenantId":  {
-                            "runAfter":  {
-                                "Initialize_variable_Cursor":  [
+                        "Initialize_variable_azureTenantId": {
+                            "runAfter": {
+                                "Initialize_variable_Cursor": [
                                     "Succeeded"
                                 ]
                             },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
                                     {
-                                        "name":  "azureTenantId",
-                                        "type":  "string",
-                                        "value": "[parameters('AzureTenantId')]"
+                                        "name": "azureTenantId",
+                                        "type": "string",
+                                        "value": "[variables('azureTenantId')]"
                                     }
                                 ]
                             }
                         },
-                        "Parse_OpenCTI_response":  {
-                            "runAfter":  {
-                                "Run_Sample_GraphQL_Query_to_check_Auth_":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "ParseJson",
-                            "inputs":  {
-                                "content":  "@body('Run_Sample_GraphQL_Query_to_check_Auth_')",
-                                "schema":  {
-                                    "properties":  {
-                                        "data":  {
-                                            "properties":  {
-                                                "about":  {
-                                                    "properties":  {
-                                                        "memory":  {
-                                                            "properties":  {
-                                                                "heapTotal":  {
-                                                                    "type":  "integer"
-                                                                },
-                                                                "heapUsed":  {
-                                                                    "type":  "integer"
-                                                                },
-                                                                "rss":  {
-                                                                    "type":  "integer"
-                                                                }
-                                                            },
-                                                            "type":  "object"
-                                                        }
-                                                    },
-                                                    "type":  "object"
+                        "Parse_JSON": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@trigger()",
+                                "schema": {
+                                    "properties": {
+                                        "clientTrackingId": {
+                                            "type": "string"
+                                        },
+                                        "code": {
+                                            "type": "string"
+                                        },
+                                        "endTime": {
+                                            "type": "string"
+                                        },
+                                        "inputs": {
+                                            "properties": {
+                                                "delay": {
+                                                    "type": "string"
                                                 }
                                             },
-                                            "type":  "object"
+                                            "type": "object"
+                                        },
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "originHistoryName": {
+                                            "type": "string"
+                                        },
+                                        "outputs": {
+                                            "properties": {
+                                                "windowEndTime": {
+                                                    "type": "string"
+                                                },
+                                                "windowStartTime": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "scheduledTime": {
+                                            "type": "string"
+                                        },
+                                        "startTime": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "trackingId": {
+                                            "type": "string"
                                         }
                                     },
-                                    "type":  "object"
+                                    "type": "object"
                                 }
                             }
                         },
-                        "Run_Sample_GraphQL_Query_to_check_Auth_":  {
-                            "runAfter":  {
+                        "Parse_OpenCTI_response": {
+                            "runAfter": {
+                                "Run_Sample_GraphQL_Query_to_check_Auth_": [
+                                    "Succeeded"
+                                ]
                             },
-                            "type":  "ApiConnection",
-                            "inputs":  {
-                                "body":  {
-                                    "query":  "query{\n  about{\n    memory{\n      rss\n      heapTotal\n      heapUsed\n    }\n  }\n}"
-                                },
-                                "headers":  {
-                                    "Content-Type":  "application/json"
-                                },
-                                "host":  {
-                                    "connection":  {
-                                        "name":  "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
-                                    }
-                                },
-                                "method":  "post",
-                                "path":  "/graphql"
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Run_Sample_GraphQL_Query_to_check_Auth_')",
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "about": {
+                                                    "properties": {
+                                                        "memory": {
+                                                            "properties": {
+                                                                "heapTotal": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "heapUsed": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "rss": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
                             }
                         },
-                        "Terminate_in_case_of_JSON_Parse_Failed":  {
-                            "runAfter":  {
-                                "Parse_OpenCTI_response":  [
+                        "Run_Sample_GraphQL_Query_to_check_Auth_": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "query": "query{\n  about{\n    memory{\n      rss\n      heapTotal\n      heapUsed\n    }\n  }\n}"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/graphql"
+                            }
+                        },
+                        "Terminate_in_case_of_JSON_Parse_Failed": {
+                            "runAfter": {
+                                "Parse_OpenCTI_response": [
                                     "Failed",
                                     "TimedOut",
                                     "Skipped"
                                 ]
                             },
-                            "type":  "Terminate",
-                            "inputs":  {
-                                "runError":  {
-                                    "code":  "FAIL",
-                                    "message":  "@{body('Run_Sample_GraphQL_Query_to_check_Auth_')}"
+                            "type": "Terminate",
+                            "inputs": {
+                                "runError": {
+                                    "code": "FAIL",
+                                    "message": "@{body('Run_Sample_GraphQL_Query_to_check_Auth_')}"
                                 },
-                                "runStatus":  "Failed"
+                                "runStatus": "Failed"
                             }
                         },
-                        "Until_hasNextPage_is_false":  {
-                            "actions":  {
-                                "For_each_Indicator":  {
-                                    "foreach":  "@body('Parse_JSON_Indicators')?['data']?['indicators']?['edges']",
-                                    "actions":  {
-                                        "Parse_JSON_Indicator_Info":  {
-                                            "runAfter":  {
-                                            },
-                                            "type":  "ParseJson",
-                                            "inputs":  {
-                                                "content":  "@items('For_each_Indicator')",
-                                                "schema":  {
-                                                    "properties":  {
-                                                        "node":  {
-                                                            "properties":  {
-                                                                "created":  {
-                                                                    "type":  "string"
+                        "Until_hasNextPage_is_false": {
+                            "actions": {
+                                "For_each_Indicator": {
+                                    "foreach": "@body('Parse_JSON_Indicators')?['data']?['indicators']?['edges']",
+                                    "actions": {
+                                        "Parse_JSON_Indicator_Info": {
+                                            "runAfter": {},
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each_Indicator')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "node": {
+                                                            "properties": {
+                                                                "created": {
+                                                                    "type": "string"
                                                                 },
-                                                                "createdBy":  {
-                                                                    "properties":  {
-                                                                        "confidence":  {
-                                                                            "type":  "integer"
+                                                                "createdBy": {
+                                                                    "properties": {
+                                                                        "confidence": {
+                                                                            "type": "integer"
                                                                         },
-                                                                        "id":  {
-                                                                            "type":  "string"
+                                                                        "id": {
+                                                                            "type": "string"
                                                                         },
-                                                                        "name":  {
-                                                                            "type":  "string"
+                                                                        "name": {
+                                                                            "type": "string"
                                                                         }
                                                                     },
-                                                                    "type":  "object"
+                                                                    "type": "object"
                                                                 },
-                                                                "created_at":  {
-                                                                    "type":  "string"
+                                                                "created_at": {
+                                                                    "type": "string"
                                                                 },
-                                                                "creator":  {
-                                                                    "properties":  {
-                                                                        "firstname":  {
+                                                                 "pattern_type": {
+                                                                    "type": ["string","null"]
+                                                                },
+                                                                 "pattern": {
+                                                                    "type": ["string","null"]
+                                                                },
+                                                                "creator": {
+                                                                    "properties": {
+                                                                        "firstname": {},
+                                                                        "id": {
+                                                                            "type": "string"
                                                                         },
-                                                                        "id":  {
-                                                                            "type":  "string"
-                                                                        },
-                                                                        "lastname":  {
-                                                                        },
-                                                                        "name":  {
-                                                                            "type":  "string"
+                                                                        "lastname": {},
+                                                                        "name": {
+                                                                            "type": "string"
                                                                         }
                                                                     },
-                                                                    "type":  "object"
+                                                                    "type": "object"
                                                                 },
-                                                                "description":  {
-                                                                    "type":  "string"
+                                                                "description": {
+                                                                    "type": "string"
                                                                 },
-                                                                "entity_type":  {
-                                                                    "type":  "string"
+                                                                "entity_type": {
+                                                                    "type": "string"
                                                                 },
-                                                                "id":  {
-                                                                    "type":  "string"
+                                                                "id": {
+                                                                    "type": "string"
                                                                 },
-                                                                "indicator_types":  {
-                                                                    "items":  {
-                                                                        "type":  [
+                                                                "indicator_types": {
+                                                                    "items": {
+                                                                        "type": [
                                                                             "string",
                                                                             "null"
                                                                         ]
                                                                     },
-                                                                    "type":  "array"
+                                                                    "type": "array"
                                                                 },
-                                                                "name":  {
-                                                                    "type":  "string"
+                                                                "name": {
+                                                                    "type": "string"
                                                                 },
-                                                                "pattern_type":  {
-                                                                    "type":  "string"
-                                                                },
-                                                                "status":  {
-                                                                    "type":  [
+                                                                "status": {
+                                                                    "type": [
                                                                         "string",
                                                                         "null"
                                                                     ]
                                                                 },
-                                                                "valid_from":  {
-                                                                    "type":  [
+                                                                "valid_from": {
+                                                                    "type": [
                                                                         "string",
                                                                         "null"
                                                                     ]
                                                                 },
-                                                                "valid_until":  {
-                                                                    "type":  [
+                                                                "valid_until": {
+                                                                    "type": [
                                                                         "string",
                                                                         "null"
                                                                     ]
                                                                 },
-                                                                "x_opencti_main_observable_type":  {
-                                                                    "type":  "string"
+                                                                "x_opencti_main_observable_type": {
+                                                                    "type": "string"
                                                                 },
-                                                                "x_opencti_score":  {
-                                                                    "type":  [
+                                                                "x_opencti_score": {
+                                                                    "type": [
                                                                         "integer",
                                                                         "null"
                                                                     ]
                                                                 }
                                                             },
-                                                            "type":  "object"
+                                                            "type": "object"
                                                         }
                                                     },
-                                                    "type":  "object"
+                                                    "type": "object"
                                                 }
                                             }
                                         },
-                                        "Switch_2":  {
-                                            "runAfter":  {
-                                                "Parse_JSON_Indicator_Info":  [
+                                        "Switch_2": {
+                                            "runAfter": {
+                                                "Parse_JSON_Indicator_Info": [
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "cases":  {
-                                                "Case_Domain-Name":  {
-                                                    "case":  "Domain-Name",
-                                                    "actions":  {
-                                                        "Compose_Domain-Name":  {
-                                                            "runAfter":  {
-                                                            },
-                                                            "type":  "Compose",
-                                                            "inputs":  {
-                                                                "action":  "alert",
-                                                                "additionalInformation":  "@{body('Parse_JSON_Indicator_Info')?['node']}",
-                                                                "azureTenantId":  "@{variables('azureTenantId')}",
-                                                                "confidence":  "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
-                                                                "description":  "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
-                                                                "domainName":  "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
-                                                                "expirationDateTime":  "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
-                                                                "ingestedDateTime":  "@{utcNow()}",
-                                                                "targetProduct":  "Azure Sentinel",
-                                                                "threatType":  "@{body('Parse_JSON_Indicator_Info')?['node']?['indicator_types']}",
-                                                                "tlpLevel":  "amber"
+                                            "cases": {
+                                                "Case_Domain-Name": {
+                                                    "case": "Domain-Name",
+                                                    "actions": {
+                                                        "Compose_Domain-Name": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@{body('Parse_JSON_Indicator_Info')?['node']}",
+                                                                "azureTenantId": "@{variables('azureTenantId')}",
+                                                                "confidence": "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
+                                                                "description": "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
+                                                                "domainName": "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
+                                                                "expirationDateTime": "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
+                                                                "ingestedDateTime": "@{utcNow()}",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "amber"
                                                             }
                                                         },
-                                                        "OpenCTI-ImportToSentinel":  {
-                                                            "runAfter":  {
-                                                                "Compose_Domain-Name":  [
+                                                        "OpenCTI-ImportToSentinel": {
+                                                            "runAfter": {
+                                                                "Compose_Domain-Name": [
                                                                     "Succeeded"
                                                                 ]
                                                             },
-                                                            "type":  "SendToBatch",
-                                                            "inputs":  {
-                                                                "batchName":  "[variables('BatchName')]",
-                                                                "content":  "@outputs('Compose_Domain-Name')",
-                                                                "host":  {
-                                                                    "triggerName":  "Batch_messages",
-                                                                    "workflow":  {
-                                                                       "id": "[variables('BatchImportPlaybookPath')]"
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                "Case_Email-Addr":  {
-                                                    "case":  "Email-Addr",
-                                                    "actions":  {
-                                                        "Compose_Email-Addr":  {
-                                                            "runAfter":  {
-                                                            },
-                                                            "type":  "Compose",
-                                                            "inputs":  {
-                                                                "action":  "alert",
-                                                                "additionalInformation":  "@{body('Parse_JSON_Indicator_Info')?['node']}",
-                                                                "azureTenantId":  "@{variables('azureTenantId')}",
-                                                                "confidence":  "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
-                                                                "description":  "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
-                                                                "emailSenderAddress":  "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
-                                                                "expirationDateTime":  "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
-                                                                "ingestedDateTime":  "@{utcNow()}",
-                                                                "targetProduct":  "Azure Sentinel",
-                                                                "threatType":  "@{body('Parse_JSON_Indicator_Info')?['node']?['indicator_types']}",
-                                                                "tlpLevel":  "amber"
-                                                            }
-                                                        },
-                                                        "OpenCTI-ImportToSentinel_2":  {
-                                                            "runAfter":  {
-                                                                "Compose_Email-Addr":  [
-                                                                    "Succeeded"
-                                                                ]
-                                                            },
-                                                            "type":  "SendToBatch",
-                                                            "inputs":  {
-                                                                "batchName":  "[variables('BatchName')]",
-                                                                "content":  "@outputs('Compose_Email-Addr')",
-                                                                "host":  {
-                                                                    "triggerName":  "Batch_messages",
-                                                                    "workflow":  {
+                                                            "type": "SendToBatch",
+                                                            "inputs": {
+                                                                "batchName": "[variables('BatchName')]",
+                                                                "content": "@outputs('Compose_Domain-Name')",
+                                                                "host": {
+                                                                    "triggerName": "Batch_messages",
+                                                                    "workflow": {
                                                                         "id": "[variables('BatchImportPlaybookPath')]"
                                                                     }
                                                                 }
@@ -409,40 +431,39 @@
                                                         }
                                                     }
                                                 },
-                                                "Case_IPv4-Addr":  {
-                                                    "case":  "IPv4-Addr",
-                                                    "actions":  {
-                                                        "Compose_IPv4-Addr":  {
-                                                            "runAfter":  {
-                                                            },
-                                                            "type":  "Compose",
-                                                            "inputs":  {
-                                                                "action":  "alert",
-                                                                "additionalInformation":  "@{body('Parse_JSON_Indicator_Info')?['node']}",
-                                                                "azureTenantId":  "@{variables('azureTenantId')}",
-                                                                "confidence":  "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
-                                                                "description":  "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
-                                                                "expirationDateTime":  "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
-                                                                "ingestedDateTime":  "@{utcNow()}",
-                                                                "networkIPv4":  "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
-                                                                "targetProduct":  "Azure Sentinel",
-                                                                "threatType":  "@{body('Parse_JSON_Indicator_Info')?['node']?['indicator_types']}",
-                                                                "tlpLevel":  "amber"
+                                                "Case_Email-Addr": {
+                                                    "case": "Email-Addr",
+                                                    "actions": {
+                                                        "Compose_Email-Addr": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@{body('Parse_JSON_Indicator_Info')?['node']}",
+                                                                "azureTenantId": "@{variables('azureTenantId')}",
+                                                                "confidence": "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
+                                                                "description": "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
+                                                                "emailSenderAddress": "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
+                                                                "expirationDateTime": "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
+                                                                "ingestedDateTime": "@{utcNow()}",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "amber"
                                                             }
                                                         },
-                                                        "OpenCTI-ImportToSentinel_4":  {
-                                                            "runAfter":  {
-                                                                "Compose_IPv4-Addr":  [
+                                                        "OpenCTI-ImportToSentinel_2": {
+                                                            "runAfter": {
+                                                                "Compose_Email-Addr": [
                                                                     "Succeeded"
                                                                 ]
                                                             },
-                                                            "type":  "SendToBatch",
-                                                            "inputs":  {
-                                                                "batchName":  "[variables('BatchName')]",
-                                                                "content":  "@outputs('Compose_IPv4-Addr')",
-                                                                "host":  {
-                                                                    "triggerName":  "Batch_messages",
-                                                                    "workflow":  {
+                                                            "type": "SendToBatch",
+                                                            "inputs": {
+                                                                "batchName": "[variables('BatchName')]",
+                                                                "content": "@outputs('Compose_Email-Addr')",
+                                                                "host": {
+                                                                    "triggerName": "Batch_messages",
+                                                                    "workflow": {
                                                                         "id": "[variables('BatchImportPlaybookPath')]"
                                                                     }
                                                                 }
@@ -450,40 +471,39 @@
                                                         }
                                                     }
                                                 },
-                                                "Case_IPv6-Addr":  {
-                                                    "case":  "IPv6-Addr",
-                                                    "actions":  {
-                                                        "Compose_IPv6-Addr":  {
-                                                            "runAfter":  {
-                                                            },
-                                                            "type":  "Compose",
-                                                            "inputs":  {
-                                                                "action":  "alert",
-                                                                "additionalInformation":  "@{body('Parse_JSON_Indicator_Info')?['node']}",
-                                                                "azureTenantId":  "@{variables('azureTenantId')}",
-                                                                "confidence":  "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
-                                                                "description":  "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
-                                                                "expirationDateTime":  "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
-                                                                "ingestedDateTime":  "@{utcNow()}",
-                                                                "networkIPv6":  "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
-                                                                "targetProduct":  "Azure Sentinel",
-                                                                "threatType":  "@{body('Parse_JSON_Indicator_Info')?['node']?['indicator_types']}",
-                                                                "tlpLevel":  "amber"
+                                                "Case_IPv4-Addr": {
+                                                    "case": "IPv4-Addr",
+                                                    "actions": {
+                                                        "Compose_IPv4-Addr": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@{body('Parse_JSON_Indicator_Info')?['node']}",
+                                                                "azureTenantId": "@{variables('azureTenantId')}",
+                                                                "confidence": "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
+                                                                "description": "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
+                                                                "expirationDateTime": "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
+                                                                "ingestedDateTime": "@{utcNow()}",
+                                                                "networkIPv4": "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "amber"
                                                             }
                                                         },
-                                                        "OpenCTI-ImportToSentinel_5":  {
-                                                            "runAfter":  {
-                                                                "Compose_IPv6-Addr":  [
+                                                        "OpenCTI-ImportToSentinel_4": {
+                                                            "runAfter": {
+                                                                "Compose_IPv4-Addr": [
                                                                     "Succeeded"
                                                                 ]
                                                             },
-                                                            "type":  "SendToBatch",
-                                                            "inputs":  {
-                                                                "batchName":  "[variables('BatchName')]",
-                                                                "content":  "@outputs('Compose_IPv6-Addr')",
-                                                                "host":  {
-                                                                    "triggerName":  "Batch_messages",
-                                                                    "workflow":  {
+                                                            "type": "SendToBatch",
+                                                            "inputs": {
+                                                                "batchName": "[variables('BatchName')]",
+                                                                "content": "@outputs('Compose_IPv4-Addr')",
+                                                                "host": {
+                                                                    "triggerName": "Batch_messages",
+                                                                    "workflow": {
                                                                         "id": "[variables('BatchImportPlaybookPath')]"
                                                                     }
                                                                 }
@@ -491,40 +511,39 @@
                                                         }
                                                     }
                                                 },
-                                                "Case_StixFile":  {
-                                                    "case":  "StixFile",
-                                                    "actions":  {
-                                                        "Compose_StixFile":  {
-                                                            "runAfter":  {
-                                                            },
-                                                            "type":  "Compose",
-                                                            "inputs":  {
-                                                                "action":  "alert",
-                                                                "additionalInformation":  "@{body('Parse_JSON_Indicator_Info')?['node']}",
-                                                                "azureTenantId":  "@{variables('azureTenantId')}",
-                                                                "confidence":  "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
-                                                                "description":  "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
-                                                                "expirationDateTime":  "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
-                                                                "fileHashValue":  "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
-                                                                "ingestedDateTime":  "@{utcNow()}",
-                                                                "targetProduct":  "Azure Sentinel",
-                                                                "threatType":  "@{body('Parse_JSON_Indicator_Info')?['node']?['indicator_types']}",
-                                                                "tlpLevel":  "amber"
+                                                "Case_IPv6-Addr": {
+                                                    "case": "IPv6-Addr",
+                                                    "actions": {
+                                                        "Compose_IPv6-Addr": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@{body('Parse_JSON_Indicator_Info')?['node']}",
+                                                                "azureTenantId": "@{variables('azureTenantId')}",
+                                                                "confidence": "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
+                                                                "description": "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
+                                                                "expirationDateTime": "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
+                                                                "ingestedDateTime": "@{utcNow()}",
+                                                                "networkIPv6": "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "amber"
                                                             }
                                                         },
-                                                        "OpenCTI-ImportToSentinel_3":  {
-                                                            "runAfter":  {
-                                                                "Compose_StixFile":  [
+                                                        "OpenCTI-ImportToSentinel_5": {
+                                                            "runAfter": {
+                                                                "Compose_IPv6-Addr": [
                                                                     "Succeeded"
                                                                 ]
                                                             },
-                                                            "type":  "SendToBatch",
-                                                            "inputs":  {
-                                                                "batchName":  "[variables('BatchName')]",
-                                                                "content":  "@outputs('Compose_StixFile')",
-                                                                "host":  {
-                                                                    "triggerName":  "Batch_messages",
-                                                                    "workflow":  {
+                                                            "type": "SendToBatch",
+                                                            "inputs": {
+                                                                "batchName": "[variables('BatchName')]",
+                                                                "content": "@outputs('Compose_IPv6-Addr')",
+                                                                "host": {
+                                                                    "triggerName": "Batch_messages",
+                                                                    "workflow": {
                                                                         "id": "[variables('BatchImportPlaybookPath')]"
                                                                     }
                                                                 }
@@ -532,40 +551,80 @@
                                                         }
                                                     }
                                                 },
-                                                "Case_Url":  {
-                                                    "case":  "Url",
-                                                    "actions":  {
-                                                        "Compose_Url":  {
-                                                            "runAfter":  {
-                                                            },
-                                                            "type":  "Compose",
-                                                            "inputs":  {
-                                                                "action":  "alert",
-                                                                "additionalInformation":  "@{body('Parse_JSON_Indicator_Info')?['node']}",
-                                                                "azureTenantId":  "@{variables('azureTenantId')}",
-                                                                "confidence":  "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
-                                                                "description":  "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
-                                                                "expirationDateTime":  "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
-                                                                "ingestedDateTime":  "@{utcNow()}",
-                                                                "targetProduct":  "Azure Sentinel",
-                                                                "threatType":  "@{body('Parse_JSON_Indicator_Info')?['node']?['indicator_types']}",
-                                                                "tlpLevel":  "amber",
-                                                                "url":  "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}"
+                                                "Case_StixFile": {
+                                                    "case": "StixFile",
+                                                    "actions": {
+                                                        "Compose_StixFile": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@{body('Parse_JSON_Indicator_Info')?['node']}",
+                                                                "azureTenantId": "@{variables('azureTenantId')}",
+                                                                "confidence": "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
+                                                                "description": "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
+                                                                "expirationDateTime": "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
+                                                                "fileHashType": "unknown",
+                                                                "fileHashValue": "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}",
+                                                                "ingestedDateTime": "@{utcNow()}",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "amber"
                                                             }
                                                         },
-                                                        "OpenCTI-ImportToSentinel_6":  {
-                                                            "runAfter":  {
-                                                                "Compose_Url":  [
+                                                        "OpenCTI-ImportToSentinel_3": {
+                                                            "runAfter": {
+                                                                "Compose_StixFile": [
                                                                     "Succeeded"
                                                                 ]
                                                             },
-                                                            "type":  "SendToBatch",
-                                                            "inputs":  {
-                                                                "batchName":  "[variables('BatchName')]",
-                                                                "content":  "@outputs('Compose_Url')",
-                                                                "host":  {
-                                                                    "triggerName":  "Batch_messages",
-                                                                    "workflow":  {
+                                                            "type": "SendToBatch",
+                                                            "inputs": {
+                                                                "batchName": "[variables('BatchName')]",
+                                                                "content": "@outputs('Compose_StixFile')",
+                                                                "host": {
+                                                                    "triggerName": "Batch_messages",
+                                                                    "workflow": {
+                                                                        "id": "[variables('BatchImportPlaybookPath')]"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_Url": {
+                                                    "case": "Url",
+                                                    "actions": {
+                                                        "Compose_Url": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "action": "alert",
+                                                                "additionalInformation": "@{body('Parse_JSON_Indicator_Info')?['node']}",
+                                                                "azureTenantId": "@{variables('azureTenantId')}",
+                                                                "confidence": "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_score']",
+                                                                "description": "OpenCTI Indicator for @{body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']}",
+                                                                "expirationDateTime": "@{body('Parse_JSON_Indicator_Info')?['node']?['valid_until']}",
+                                                                "ingestedDateTime": "@{utcNow()}",
+                                                                "targetProduct": "Azure Sentinel",
+                                                                "threatType": "WatchList",
+                                                                "tlpLevel": "amber",
+                                                                "url": "@{body('Parse_JSON_Indicator_Info')?['node']?['name']}"
+                                                            }
+                                                        },
+                                                        "OpenCTI-ImportToSentinel_6": {
+                                                            "runAfter": {
+                                                                "Compose_Url": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SendToBatch",
+                                                            "inputs": {
+                                                                "batchName": "[variables('BatchName')]",
+                                                                "content": "@outputs('Compose_Url')",
+                                                                "host": {
+                                                                    "triggerName": "Batch_messages",
+                                                                    "workflow": {
                                                                         "id": "[variables('BatchImportPlaybookPath')]"
                                                                     }
                                                                 }
@@ -574,183 +633,178 @@
                                                     }
                                                 }
                                             },
-                                            "default":  {
-                                                "actions":  {
-                                                }
+                                            "default": {
+                                                "actions": {}
                                             },
-                                            "expression":  "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']",
-                                            "type":  "Switch"
+                                            "expression": "@body('Parse_JSON_Indicator_Info')?['node']?['x_opencti_main_observable_type']",
+                                            "type": "Switch"
                                         }
                                     },
-                                    "runAfter":  {
-                                        "Set_variable_Cursor":  [
+                                    "runAfter": {
+                                        "Set_variable_Cursor": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type":  "Foreach"
+                                    "type": "Foreach"
                                 },
-                                "Parse_JSON_Indicators":  {
-                                    "runAfter":  {
-                                        "Run_GraphQL_Query_Get_Indicators":  [
+                                "Parse_JSON_Indicators": {
+                                    "runAfter": {
+                                        "Run_GraphQL_Query_Get_Indicators": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type":  "ParseJson",
-                                    "inputs":  {
-                                        "content":  "@body('Run_GraphQL_Query_Get_Indicators')",
-                                        "schema":  {
-                                            "properties":  {
-                                                "data":  {
-                                                    "properties":  {
-                                                        "indicators":  {
-                                                            "properties":  {
-                                                                "edges":  {
-                                                                    "items":  {
-                                                                        "properties":  {
-                                                                            "node":  {
-                                                                                "properties":  {
-                                                                                    "created":  {
-                                                                                        "type":  "string"
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_GraphQL_Query_Get_Indicators')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "indicators": {
+                                                            "properties": {
+                                                                "edges": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "node": {
+                                                                                "properties": {
+                                                                                    "created": {
+                                                                                        "type": "string"
                                                                                     },
-                                                                                    "createdBy":  {
-                                                                                        "properties":  {
-                                                                                        },
-                                                                                        "type":  "object"
+                                                                                    "createdBy": {
+                                                                                        "properties": {},
+                                                                                        "type": "object"
                                                                                     },
-                                                                                    "created_at":  {
-                                                                                        "type":  "string"
+                                                                                    "created_at": {
+                                                                                        "type": "string"
                                                                                     },
-                                                                                    "creator":  {
-                                                                                        "properties":  {
-                                                                                        },
-                                                                                        "type":  "object"
+                                                                                    "creator": {
+                                                                                        "properties": {},
+                                                                                        "type": "object"
                                                                                     },
-                                                                                    "description":  {
-                                                                                        "type":  [
+                                                                                    "description": {
+                                                                                        "type": [
                                                                                             "string",
                                                                                             "null"
                                                                                         ]
                                                                                     },
-                                                                                    "id":  {
-                                                                                        "type":  "string"
+                                                                                    "id": {
+                                                                                        "type": "string"
                                                                                     },
-                                                                                    "indicator_types":  {
-                                                                                        "items":  {
-                                                                                            "type":  "string"
+                                                                                    "indicator_types": {
+                                                                                        "items": {
+                                                                                            "type": "string"
                                                                                         },
-                                                                                        "type":  "array"
+                                                                                        "type": "array"
                                                                                     },
-                                                                                    "name":  {
-                                                                                        "type":  "string"
+                                                                                    "name": {
+                                                                                        "type": "string"
                                                                                     },
-                                                                                    "status":  {
-                                                                                        "type":  [
+                                                                                    "status": {
+                                                                                        "type": [
                                                                                             "string",
                                                                                             "null"
                                                                                         ]
                                                                                     },
-                                                                                    "valid_from":  {
-                                                                                        "type":  "string"
+                                                                                    "valid_from": {
+                                                                                        "type": "string"
                                                                                     },
-                                                                                    "valid_until":  {
-                                                                                        "type":  "string"
+                                                                                    "valid_until": {
+                                                                                        "type": "string"
                                                                                     },
-                                                                                    "x_opencti_main_observable_type":  {
-                                                                                        "type":  "string"
+                                                                                    "x_opencti_main_observable_type": {
+                                                                                        "type": "string"
                                                                                     },
-                                                                                    "x_opencti_score":  {
-                                                                                        "type":  "integer"
+                                                                                    "x_opencti_score": {
+                                                                                        "type": "integer"
                                                                                     }
                                                                                 },
-                                                                                "type":  "object"
+                                                                                "type": "object"
                                                                             }
                                                                         },
-                                                                        "required":  [
+                                                                        "required": [
                                                                             "node"
                                                                         ],
-                                                                        "type":  "object"
+                                                                        "type": "object"
                                                                     },
-                                                                    "type":  "array"
+                                                                    "type": "array"
                                                                 },
-                                                                "pageInfo":  {
-                                                                    "properties":  {
-                                                                        "endCursor":  {
-                                                                            "type":  "string"
+                                                                "pageInfo": {
+                                                                    "properties": {
+                                                                        "endCursor": {
+                                                                            "type": "string"
                                                                         },
-                                                                        "globalCount":  {
-                                                                            "type":  "integer"
+                                                                        "globalCount": {
+                                                                            "type": "integer"
                                                                         },
-                                                                        "hasNextPage":  {
-                                                                            "type":  "boolean"
+                                                                        "hasNextPage": {
+                                                                            "type": "boolean"
                                                                         },
-                                                                        "hasPreviousPage":  {
-                                                                            "type":  "boolean"
+                                                                        "hasPreviousPage": {
+                                                                            "type": "boolean"
                                                                         },
-                                                                        "startCursor":  {
-                                                                            "type":  "string"
+                                                                        "startCursor": {
+                                                                            "type": "string"
                                                                         }
                                                                     },
-                                                                    "type":  "object"
+                                                                    "type": "object"
                                                                 }
                                                             },
-                                                            "type":  "object"
+                                                            "type": "object"
                                                         }
                                                     },
-                                                    "type":  "object"
+                                                    "type": "object"
                                                 }
                                             },
-                                            "type":  "object"
+                                            "type": "object"
                                         }
                                     }
                                 },
-                                "Run_GraphQL_Query_Get_Indicators":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "ApiConnection",
-                                    "inputs":  {
-                                        "body":  {
-                                            "query":  "query{\n  indicators(first:100 after:\"@{variables('Cursor')}\" orderBy:created orderMode:asc filters: {key: created_at values:\"@{variables('StartTime')}\" operator:\"gte\"})\n    { \n    edges {\n      node {\n        created_at\n        entity_type\n        pattern_type\n        x_opencti_main_observable_type\n        name\n        id\n        created\n        creator {         \n          name\n          firstname\n          lastname\n          id\n        }\n        createdBy {\n          id\n          name\n          confidence\n        }\n        created_at\n        indicator_types\n        description\n        x_opencti_score\n        status{\n          disabled\n          id\n          type\n        }\n        valid_from\n        valid_until\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n      globalCount\n    }\n  }\n}"
+                                "Run_GraphQL_Query_Get_Indicators": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "query": "query{\n  indicators(\nfirst:100\n after:\"@{variables('Cursor')}\"\n orderBy:created\n orderMode:asc\n  filters: \n    [ \n      {key: created_at values:\"@{body('Parse_JSON')?['outputs']?['windowStartTime']}\" operator:\"gte\"},\n      {key: created_at values:\"@{body('Parse_JSON')?['outputs']?['windowEndTime']}\" operator:\"lt\"}\n    ]\n    filterMode:and\n)\n    { \n    edges {\n      node {\n        created_at\n        entity_type\n        pattern_type\n        x_opencti_main_observable_type\n        name\n        id\n        created\n        creator {         \n          name\n          firstname\n          lastname\n          id\n        }\n        createdBy {\n          id\n          name\n          confidence\n        }\n        created_at\n        indicator_types\n        description\n        x_opencti_score\n        status{\n          disabled\n          id\n          type\n        }\n        valid_from\n        valid_until\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n      globalCount\n    }\n  }\n}"
                                         },
-                                        "headers":  {
-                                            "Content-Type":  "application/json"
+                                        "headers": {
+                                            "Content-Type": "application/json"
                                         },
-                                        "host":  {
-                                            "connection":  {
-                                                "name":  "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
                                             }
                                         },
-                                        "method":  "post",
-                                        "path":  "/graphql"
+                                        "method": "post",
+                                        "path": "/graphql"
                                     }
                                 },
-                                "Set_variable_Cursor":  {
-                                    "runAfter":  {
-                                        "Parse_JSON_Indicators":  [
+                                "Set_variable_Cursor": {
+                                    "runAfter": {
+                                        "Parse_JSON_Indicators": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type":  "SetVariable",
-                                    "inputs":  {
-                                        "name":  "Cursor",
-                                        "value":  "@{body('Parse_JSON_Indicators')?['data']?['indicators']?['pageInfo']?['endCursor']}"
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Cursor",
+                                        "value": "@{body('Parse_JSON_Indicators')?['data']?['indicators']?['pageInfo']?['endCursor']}"
                                     }
                                 }
                             },
-                            "runAfter":  {
-                                "Initialize_variable_azureTenantId":  [
+                            "runAfter": {
+                                "Initialize_variable_azureTenantId": [
                                     "Succeeded"
                                 ]
                             },
-                            "expression":  "@equals(body('Parse_JSON_Indicators')?['data']?['indicators']?['pageInfo']?['hasNextPage'], false)",
-                            "limit":  {
-                                "count":  60,
-                                "timeout":  "PT1H"
+                            "expression": "@equals(body('Parse_JSON_Indicators')?['data']?['indicators']?['pageInfo']?['hasNextPage'], false)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
                             },
-                            "type":  "Until"
+                            "type": "Until"
                         }
                     },
-                    "outputs":  {
-                    }
+                    "outputs": {}
                 },
                 "parameters":  {
                     "$connections":  {
