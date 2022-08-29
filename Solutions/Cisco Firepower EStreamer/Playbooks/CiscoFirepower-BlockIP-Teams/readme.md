@@ -6,33 +6,33 @@ This playbook allows blocking of IPs in Cisco Firepower, using a **Network Group
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions.
 1. For the IPs we check if they are already selected for the Network Group object
-2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depdening on it's current status block it by adding it to the Network Group object or unblock it by removing it from the Network Group object
+2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depending on it's current status block it by adding it to the Network Group object or unblock it by removing it from the Network Group object
     ![Teams Adaptive Card preview](./Images/BlockIP-Teams-AdaptiveCard.png)
 3. The chosen changes are applied to the Network Group object
-3. Comment is added to Azure Sentinel incident
-    ![Azure Sentinel comment](./Images/BlockIP-Teams-AzureSentinel-Comments.png)
+4. Comment is added to Microsoft Sentinel incident
+    ![Microsoft Sentinel comment](./Images/BlockIP-Teams-AzureSentinel-Comments.png)
 
 ** IP is added to Cisco Firepower Network Group object:**
 
 ![Cisco Firepower Network Group object](./Images/BlockIP-Teams-CiscoFirepowerAdd.png)
 
-**Plabook overview:**
+**Playbook overview:**
 
 ![Playbook overview](./Images/BlockIP-Teams-LogicApp.png)
 
 
 ### Prerequisites
 1. Cisco Firepower custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc pages.
-1. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)
+2. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)
 
 <a name="deployment-instructions"></a>
 ### Deployment instructions 
-1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCiscoFirepower-BlockIP-Teams%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCiscoFirepower-BlockIP-Teams%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions/Cisco%20Firepower%20EStreamer%2FPlaybooks%2FCiscoFirepower-BlockIP-Teams%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions/Cisco%20Firepower%20EStreamer%2FPlaybooks%2FCiscoFirepower-BlockIP-Teams%2Fazuredeploy.json)
 
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (ex:CiscoFirepower-BlockIP-Teams)
     * Cisco Firepower Connector name: Enter the name of the Cisco Firepower custom connector (default value:CiscoFirepowerConnector)
     * Network Group object name: The name of the Network Group object.
@@ -40,7 +40,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -56,5 +56,5 @@ The Teams channel to which the adaptive card will be posted will need to be conf
 5. Save the Logic App
 
 #### c. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
