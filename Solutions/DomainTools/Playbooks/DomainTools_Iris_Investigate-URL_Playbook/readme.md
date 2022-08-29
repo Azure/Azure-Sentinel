@@ -15,7 +15,7 @@
 ## Overview
 This playbook uses the DomainTools Iris Investigate API. Given a URL or set of URLs associated with an incident, return all DomainTools Iris Investigate data for the extracted domains from the URL as comments in the incident.
  
-Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
+Learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
 When a new Azure Sentinel Incident is created, this playbook gets triggered and performs these actions:
 
