@@ -1,4 +1,4 @@
-# Tanium-GeneralHostInfo
+# Tanium-SCCMClientHealth
 
 ## Overview
 
