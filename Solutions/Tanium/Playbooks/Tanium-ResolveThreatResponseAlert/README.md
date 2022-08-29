@@ -26,7 +26,7 @@ To allow Tanium API Key updates it is advised to use Azure Key Vault to securely
 
 Key Vault references
 
-* [Key Vault | Microsoft Azure](https://azure.microsoft.com/en-us/services/key-vault/)
-* [Azure Key Vault Connector reference | Microsoft Docs](https://docs.microsoft.com/en-us/connectors/keyvault/)
+* [Key Vault | Microsoft Azure](https://azure.microsoft.com/services/key-vault/)
+* [Azure Key Vault Connector reference | Microsoft Docs](https://docs.microsoft.com/connectors/keyvault/)
 * [Secure access and data - Azure Logic Apps | Microsoft Docs](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app?tabs=azure-portal#secure-inputs-and-outputs-in-the-designer).
 
