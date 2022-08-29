@@ -15,7 +15,7 @@
 ## Overview
 This playbook uses the DomainTools Iris Investigate API. Track the activities of malicious actors using the Iris Investigate UI, tagging domains of interest. Given a domain or set of domains associated with an incident, query Iris Investigate for information on those domains, and if a specified set of tags is observed, mark the incident as “severe” in Sentinel and add a comment.
  
-Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
+Learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
 This playbook works as follows:
 - It fetches all the Domain objects in the Incident.
