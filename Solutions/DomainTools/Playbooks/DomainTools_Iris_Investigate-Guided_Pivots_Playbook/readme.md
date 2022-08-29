@@ -15,7 +15,7 @@
 ## Overview
 This playbook uses the DomainTools Iris Investigate API. Given a domain, return whois, mailserver, DNS, SSL and related indicators from Iris Investigate, highlighting, and automatically querying for related domains sharing an attribute with the one in the incident. This can be useful for threat hunting and proactive protection against related indicators of interest. See the related "DomainTools Iris Investigate Domain Playbook" if you don't wish to pull these related indicators automatically.
  
-Learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
+Learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
 This playbook works as follows:
 - It fetches all the Domain objects in the Incident.
