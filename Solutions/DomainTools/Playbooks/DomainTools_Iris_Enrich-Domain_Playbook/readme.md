@@ -17,7 +17,7 @@
 # Overview
 This playbook uses the DomainTools Iris Enrich API, which we recommend over Iris Investigate for high-volume API lookup activities. It is able to provide domain infrastructure information for a domain or set of domains associated with an incident. If your account is provisioned for Iris Enrich, use the Iris Enrich endpoint to return Whois, mailserver, DNS, SSL and related indicators from Iris Enrich for a given domain or set of domains.
  
-You can learn more about the Custom Connector via https://docs.microsoft.com/en-us/connectors/domaintoolsirisenric or visit https://www.domaintools.com/integrations to request an API key.
+You can learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisenric or visit https://www.domaintools.com/integrations to request an API key.
 
 When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
 
