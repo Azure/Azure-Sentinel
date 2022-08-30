@@ -62,7 +62,7 @@ END
 }
 
 clear_existing_build_inputs() {
-	rm -f ./Tools/Create-Azure-Sentinel-Solution/input/*
+  rm -f ./Tools/Create-Azure-Sentinel-Solution/input/*
 }
 
 copy_tanium_build_manifest_into_tooling() {
@@ -94,9 +94,9 @@ pre_build_prep() {
 post_build_cleanup() {
   local tmpdir=$1
   _msg "🚮  Clearing inputs from the solution build tool"
-	rm -f ./Tools/Create-Azure-Sentinel-Solution/input/*
+  rm -f ./Tools/Create-Azure-Sentinel-Solution/input/*
   _msg "🆗  Restoring original inputs in the solution build tool"
-	git checkout ./Tools/Create-Azure-Sentinel-Solution/input
+  git checkout ./Tools/Create-Azure-Sentinel-Solution/input
   _msg "⏪  Copying zip files from temporary location back into Tanium/Package"
   copy_previous_tanium_package_zip_files_from_temporary_location_back_into_package_directory "$tmpdir"
 }
