@@ -10,7 +10,7 @@
 
  ## Pre-requisites for deployment
 1. Playbook leverages the Zscaler API. To use the Zscaler capabilities, you need a Zscaler API key. Refer this link: [API Developers Guide: Getting Started](https://help.zscaler.com/zia/api-getting-started)
-3. Deploy the Zscaler Authentication playbooks before the deployment of this playbook under the same subscription and same resource group. Capture the name of the Authentication playbook during deployment.
+3. Deploy the [Zscaler Authentication playbook](./Authentication/) before the deployment of this playbook under the same subscription and same resource group. Capture the name of the Authentication playbook during deployment.
 
 ### Deploy Authentication Playbook
 
