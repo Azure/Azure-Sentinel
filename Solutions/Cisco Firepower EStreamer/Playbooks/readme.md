@@ -1,6 +1,6 @@
 # Cisco Firepower Logic Apps connector and playbook templates
 
-![Cisco Firepower](./Images/CiscoFirepowerCustomConnector.png)<br>
+![Cisco Firepower](./Images/CiscoFirepowerCustomConnector.png)
 
 ## Table of Contents
 
@@ -13,8 +13,8 @@
 <a name="overview"></a>
 
 # Overview
-The Cisco Firepower Management Center (formerly FireSIGHT Management Center) is the administrative nerve center for select Cisco security products running on a number of different platforms. It provides complete and unified management of firewalls, application control, intrusion prevention, URL filtering, and advanced malware protection.<br><br>
-This integration allows to automate response to Azure Sentinel incidents which contain IPs or URLs. It contains the basic connector component, with which you can create your own playbooks that interact with Cisco Firepower. It also contains 3 playbook templates, ready to quick use, 2 directly modify the Cisco Firepower configuration and 1 allows direct response on Cisco Firepower from Microsoft Teams.
+The Cisco Firepower Management Center (formerly FireSIGHT Management Center) is the administrative nerve center for select Cisco security products running on a number of different platforms. It provides complete and unified management of firewalls, application control, intrusion prevention, URL filtering, and advanced malware protection.
+This integration allows to automate response to Microsoft Sentinel incidents which contain IPs or URLs. It contains the basic connector component, with which you can create your own playbooks that interact with Cisco Firepower. It also contains 3 playbook templates, ready to quick use, 2 directly modify the Cisco Firepower configuration and 1 allows direct response on Cisco Firepower from Microsoft Teams.
 
 <a name="prerequisites"></a>
 
@@ -22,7 +22,7 @@ This integration allows to automate response to Azure Sentinel incidents which c
 
 ### Authentication
 In Cisco Firepower create a user and give it the appropriate user role in the domain you want the playbooks to modify network group objects in.
-<br><br>
+
 
 ### Options to establish a connection with Cisco Firepower
 The connector needs to be able to reach the Cisco Firepower REST API. A few options are:
@@ -65,8 +65,8 @@ Custom connector should be deployed in the Resource Group where the playbooks th
 
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy.json)
 
 ### Connector via on-premises data gateway
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
@@ -74,8 +74,8 @@ Custom connector should be deployed in the Resource Group where the playbooks th
     * Connector name: Please enter the custom connector(ex:Cisco Firepower connector)
     * Service Endpoint: The URL to the Cisco Firepower REST API
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy-gateway.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoFirepower%2FCustomConnector%2Fazuredeploy-gateway.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy-gateway.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCustomConnector%2Fazuredeploy-gateway.json)
 
 <br><br>
 
