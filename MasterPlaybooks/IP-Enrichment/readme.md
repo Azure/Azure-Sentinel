@@ -18,7 +18,7 @@ If a malicious IP is detected from the Azure sentinel, master playbook calls all
 
 
  ## Pre-requisites for deployment
-Atlease one of the below mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
+At least one of the below-mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
 
 - [GeoIP-IP-Enrichment-Nested](./GeoIP-IP-Enrichment/azuredeploy.json) is a nested playbook that handles enrichment for GeoIP.  
 - [HYAS_Insights-IP-Enrichment](./HYAS_Insights-IP-Enrichment/azuredeploy.json) is a nested playbook that handles enrichment for HYAS Insights. 
@@ -26,7 +26,7 @@ Atlease one of the below mentioned nested playbooks must be deployed prior to de
 - [RiskIQ-IP-Enrichment](./RiskIQ-IP-Enrichment/azuredeploy.json) is a nested playbook that handles enrichment for RiskIQ. 
 - [VirusTotal-IP-Enrichment](./VirusTotal-IP-Enrichment/azuredeploy.json) is a nested playbook that handles enrichment for VirusTotal. 
 
-If any one of the above mentioned playbooks are not deployed then default playbook will deploy in its place.
+If any one of the above-mentioned playbooks are not deployed then default playbook will deploy in its place.
 
 ## Nested Playbook Structure
 
@@ -97,7 +97,7 @@ Get the list of IPs as entities from the Incident.
 
 ## For malicious IP addresses received from the incident
  1. The list of IP address is passed as Entity to each of the nested playbook.
- 2. Each nested playbook accepts IP list as entity from master playbook and respectively performs defined automated actions(Block/Unblock IP) for each IP address.
+ 2. Each nested playbook accepts IP list as entity from master playbook and respectively performs defined automated actions for each IP address.
  3. The response from each of the nested playbook is returned to master playbook.
  4. Response from each nested playbook is attached to incident comment and consolidated incident comment is created.
  5. If all the nested playbooks returns success response , the incident will be closed.
