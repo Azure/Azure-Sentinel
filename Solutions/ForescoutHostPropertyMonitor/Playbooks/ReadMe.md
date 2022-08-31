@@ -19,8 +19,8 @@
 This package includes:  
 
 * DNS Sniff Event Playbook   
-This topic describes a sample Logic App/Playbook, "DNS Sniff Event Analysis".
-Analytic Rule checks host properties and generates incidents containing number of times the events happened for any endpoint within the time interval. Based on this information, the Logic App/Playbook will set the Description field of the incident with the following information:   
+This topic describes a sample Logic App/Playbook, "DNS Sniff Event Analysis".  
+Analytic Rule (DNS Sniff Event Monitor) checks host properties and generates incidents containing number of times the events happened for any endpoint within the time interval. Based on this information, the Logic App/Playbook will set the Description field of the incident with the following information:   
 
 <table>
 <tr> <td>action_group </td> <td>Indicates the category of action. Valid values are manage, notify, remediate, and restrict.</td></tr>
@@ -33,7 +33,7 @@ The em_ip and info are optional.
 
 Note that the eyeExtend for Microsoft Sentinel module polls the incidents information periodically and examines the Description field of each incident. Based on the information set in the Description field, the Continuum Platform applies the requested action set by Microsoft Sentinel playbook to the endpoints.  
 The following is a sample description field of an incident set by the playbook:  
-action_group="restrict";disposition="31";endpoint_ip=["10.16.141.130"];em_ip=["10.16.147.96"];info=Generated_by_Dnsniff_event  
+<em>action_group="restrict";disposition="31";endpoint_ip=["10.16.141.130"];em_ip=["10.16.147.96"];info=Generated_by_Dnsniff_event</em>    
 Each action has a unique disposition value. The action name, disposition value, and action group supported by eyeExtend for Microsoft Sentinel are as follows:  
 
 <table>
