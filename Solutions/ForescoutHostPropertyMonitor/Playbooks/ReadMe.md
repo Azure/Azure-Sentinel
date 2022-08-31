@@ -19,7 +19,7 @@
 This package includes:  
 
 * DNS Sniff Event Playbook   
-This topic describes a sample Logic App/Playbook, "DNS Sniff Event Analysis".  
+This topic describes a sample Logic App/Playbook, "DNS Sniff Event Playbook".  
 Analytic Rule (DNS Sniff Event Monitor) checks host properties and generates incidents containing number of times the events happened for any endpoint within the time interval. Based on this information, the Logic App/Playbook will set the Description field of the incident with the following information:   
 
 <table>
