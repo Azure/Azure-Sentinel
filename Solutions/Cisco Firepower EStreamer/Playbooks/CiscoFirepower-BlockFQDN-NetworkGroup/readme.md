@@ -10,17 +10,17 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 3. For the FQDNs not already selected for the Network Group object we check if there is an existing FQDN object in Cisco Firepower, if it does not exist we create it
 4. We add the FQDN object to the Network Group object, so it gets blocked
 5. Comment is added to Microsoft Sentinel incident
-    ![Microsoft Sentinel comment](./Images/BlockFQDN-NetworkGroup-AzureSentinel-Comments.png)
+    ![Microsoft Sentinel comment](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Cisco%20Firepower%20EStreamer/Playbooks/CiscoFirepower-BlockFQDN-NetworkGroup/Images/BlockFQDN-NetworkGroup-AzureSentinel-Comments.png)
 
 ** FQDN is added to Cisco Firepower Network Group object:**
 
-![Cisco Firepower Network Group object](./Images/BlockFQDN-NetworkGroup-CiscoFirepowerAdd.png)
+![Cisco Firepower Network Group object](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Cisco%20Firepower%20EStreamer/Playbooks/CiscoFirepower-BlockFQDN-NetworkGroup/Images/BlockFQDN-NetworkGroup-CiscoFirepowerAdd.png)
 
 **Plabook overview:**
 
 
-![Playbook overview](./Images/designerOverviewLight1.png)
-![Playbook overview](./Images/designerOverviewLight2.png)
+![Playbook overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Cisco%20Firepower%20EStreamer/Playbooks/CiscoFirepower-BlockIP-NetworkGroup/Images/designerOverviewLight1.png)
+![Playbook overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Cisco%20Firepower%20EStreamer/Playbooks/CiscoFirepower-BlockIP-NetworkGroup/Images/designerOverviewLight2.png)
 
 
 ### Prerequisites
@@ -31,8 +31,8 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions/Cisco%20Firepower%20EStreamer%2FPlaybooks%2FCiscoFirepower-BlockFQDN-NetworkGroup%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions/Cisco%20Firepower%20EStreamer%2FPlaybooks%2FCiscoFirepower-BlockFQDN-NetworkGroup%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCiscoFirepower-BlockFQDN-NetworkGroup%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCisco%2520Firepower%2520EStreamer%2FPlaybooks%2FCiscoFirepower-BlockFQDN-NetworkGroup%2Fazuredeploy.json)
 
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (ex:CiscoFirepower-BlockFQDN-NetworkGroup)
