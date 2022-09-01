@@ -1,7 +1,7 @@
 Parser:
   Title: Process Create Event ASIM parser for WEF Security Events 
-  Version: '1.0.1'
-  LastUpdated: Feb 23, 2022
+  Version: '1.0.2'
+  LastUpdated: Sep 1 2022
 Product:
   Name: Security Events
 Normalization:
@@ -21,6 +21,27 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+    let ASIM_GetWindowsUserType = (username:string, sid:string) { 
+        case ( 
+            username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", 
+            isempty(username) or sid in ("S-1-0-0"), "", 
+            "Regular"
+        )
+    };
+    let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
+        T 
+        | extend 
+             type = case (
+                username == "-", "",
+                domain == "-", "Simple",
+                "Windows"
+            ),
+            username = case (
+              username == "-", "",
+              domain == '-', username,
+              strcat(domain, @"\" , username)
+            )
+    };
     let MandatoryLabelLookup = datatable (MandatoryLabel:string,MandatoryLabelRid:string, MandatoryLabelText:string, MandatoryLabelMeaning:string)
     [
         'S-1-16-0', '0x00000000', 'SECURITY_MANDATORY_UNTRUSTED_RID', 'Untrusted',
@@ -49,18 +70,27 @@ ParserQuery: |
         EventEndTime = todatetime(TimeGenerated),
         EventType = 'ProcessCreated',
         EventOriginalType = tostring(EventID),
-        DvcOs = 'Windows',
-        // Users
+        DvcOs = 'Windows'
+    | extend 
+        ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
         ActorUserId = tostring(EventData.SubjectUserSid),
-        ActorUserIdType = 'SID',
-        ActorUsername = tostring(iff (EventData.SubjectDomainName == '-', EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
-        ActorUsernameType = iff(EventData.SubjectDomainName == '-','Simple', 'Windows'),
+        ActorUserIdType = "SID",
+        ActorUsernameType = "Windows",
+        username = tostring(EventData.TargetUserName)
+    | extend
+        TargetUsername = iff(username == "-", ActorUsername, strcat(EventData.SubjectDomainName, @'\', username)),
+        TargetUserId = iff(username == "-", ActorUserId, tostring(EventData.TargetUserSid)),
+        TargetUserIdType = "SID",
+        TargetUsernameType = "Windows"
+    | project-away
+        username
+    | extend 
+        TargetUserSid = TargetUserId,
+        ActorUserSid = ActorUserId,
+        ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId),
+        TargetUserType = ASIM_GetWindowsUserType(TargetUsername, TargetUserId)
+    | extend
         ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
-        // ActorType = AccountType, No such field in WindowsEvent
-        TargetUserId = tostring(EventData.TargetUserSid), 
-        TargetUserIdType = 'SID',
-        TargetUsername = tostring(iff (EventData.TargetDomainName == '-', EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName))),
-        TargetUsernameType = iff (EventData.TargetDomainName == '-', 'Simple', 'Windows'),
         TargetUserSessionId = tostring(toint(EventData.TargetLogonId)),    
         // Processes 
         ActingProcessId = tostring(toint(tolong(EventData.ProcessId))),
