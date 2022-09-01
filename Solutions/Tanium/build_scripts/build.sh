@@ -66,7 +66,7 @@ clear_existing_build_inputs() {
 }
 
 copy_tanium_build_manifest_into_tooling() {
-  cp ./Solutions/Tanium/build_scripts/input.json ./Tools/Create-Azure-Sentinel-Solution/input/Solution_Tanium.json
+  cp ./Solutions/Tanium/Data/Solution_Tanium.json ./Tools/Create-Azure-Sentinel-Solution/input/Solution_Tanium.json
 }
 
 move_tanium_package_directory_to_temporary_location() {
@@ -109,12 +109,12 @@ check-command() {
 
 check-new-version() {
   local declared_version
-  declared_version=$(jq -r ".Version" Solutions/Tanium/build_scripts/input.json)
+  declared_version=$(jq -r ".Version" Solutions/Tanium/Data/Solution_Tanium.json)
   if find Solutions/Tanium/Package -name '*.zip' | grep -q "$declared_version"; then
     _msg
     _msg_error "Found $declared_version.zip already built in Solutions/Tanium/Package"
     _msg
-    _msg "Did you forget to increment the version in Solutions/Tanium/build_scripts/input.json?"
+    _msg "Did you forget to increment the version in Solutions/Tanium/Data/Solution_Tanium.json?"
     _msg "If you want to rebuild $declared_version then delete the zip file first"
     _msg
     exit 1
