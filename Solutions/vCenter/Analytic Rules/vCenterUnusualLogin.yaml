@@ -1,0 +1,38 @@
+id:03e8a895-b5ba-49a0-aed3-f9a997d92fbe
+name: vCenter - Unusual login
+description: |
+  'Detects when user login from uncommon IP address.'
+severity: High
+requiredDataConnectors:
+  - connectorId: vCenter
+    dataTypes:
+      - vCenter
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let p_lookback = 14d;
+  let t_lookback = 1h;
+ let root_ips = vCenter
+  | where TimeGenerated between (ago(p_lookback) .. ago(t_lookback))
+  | where eventtype  has_all ('UserLoginSessionEvent', 'root', 'logged in')
+  //| extend SrcIpAddr = extract(@'root@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, SyslogMessage)
+  | summarize make_set(Ipaddress,128);
+vCenter_updated
+  | where TimeGenerated > ago(t_lookback)
+  | where eventtype  has_all ('UserLoginSessionEvent', 'root', 'logged in')
+  | where Ipaddress  !in (root_ips)
+  | extend IPCustomEntity = Ipaddress
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled
