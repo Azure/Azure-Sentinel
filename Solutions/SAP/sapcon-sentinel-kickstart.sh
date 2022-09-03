@@ -90,6 +90,7 @@ MODE="kvmi"
 CONNECTIONMODE="abap"
 CONFIGPATH="/opt"
 TRUSTEDCA=()
+CLOUD='public'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -238,6 +239,10 @@ while [[ $# -gt 0 ]]; do
 		DEVACRPWD="$2"
 		shift 2
 		;;
+	--cloud)
+		CLOUD="$2"
+		shift 2
+		;;
 	--preview)
 		PREVIEW=1
 		shift 1
@@ -367,6 +372,11 @@ fi
 
 if [ -n "$SDKFILELOC" ] && [ ! -f "$SDKFILELOC" ]; then
 	echo 'Invalid SDK path'
+	exit 1
+fi
+
+if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'mooncake' ]; then
+	echo 'Invalid cloud name, avilable options: public, fairfax, mooncake.'
 	exit 1
 fi
 
@@ -507,12 +517,22 @@ if [ $DEVMODE ]; then
 	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
 else
 	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
-	if [ $PREVIEW ]; then
-		tagver=":latest-preview"
-	else
-		tagver=":latest"
+	if [ $CLOUD == 'public' ]; then
+		tagver=':latest'
+	elif [ $CLOUD == 'fairfax' ]; then
+		tagver=':ffx-latest'
+		az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
+	elif [ $CLOUD == 'mooncake' ]; then
+		tagver=':mc-latest'
+		az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 	fi
+	
+	if [ $PREVIEW ]; then
+		tagver="$tagver-preview"
+	fi
+
 fi
+
 
 # sudo groupadd docker
 echo "Creating group 'docker' and adding current user to 'docker' group"
@@ -672,40 +692,6 @@ if [ $USESNC ]; then
 	sudo chown root:root "$sysfileloc"sec
 fi
 
-containername="$containername-$SID"
-
-sudo docker inspect "$containername" >/dev/null 2>&1
-if [ $? -eq 0 ]; then
-	echo 'Azure Sentinel SAP connector is already installed. The previous connector will be removed and replaced by the new version.'
-	pause 'Press any key to update'
-	sudo docker stop "$containername" >/dev/null
-	sudo docker container rm "$containername" >/dev/null
-fi
-sncline=""
-if [ $USESNC ]; then
-	sncline="-e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
-fi
-
-if [ -n "$HTTPPROXY" ]; then
-	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
-fi
-if [ "$MODE" == "kvmi" ]; then
-	echo "Creating docker container for use with Azure Key vault and managed VM identity"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
-elif [ "$MODE" == "kvsi" ]; then
-	echo "Creating docker container for use with Azure Key vault and application authentication"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
-elif [ "$MODE" == "cfgf" ]; then
-	echo "Creating docker container for use with secrets in config file"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
-fi
-echo 'Azure Sentinel SAP connector was updated for instance '"$SID"
-
-sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.ini "$sysfileloc$sysconf"
-if [ ! $? -eq 0 ]; then
-	echo 'Error accessing the local folder.'
-	exit 1
-fi
 
 if [ ! $USESNC ]; then
 	if [ -z $uservar ]; then
@@ -742,7 +728,7 @@ while [ -z "$logpubkey" ]; do
 	read_password logpubkey 'Log Analytics Public Key'
 done
 
-#try to locate the SDK file in current folder
+# Try to locate the SDK file in current folder
 if [ -z "$SDKFILELOC" ]; then
 	SDKFILELOC=$(ls -1 nwrfc*.zip | head -1)
 	#try to locate the SDK file in home dir
@@ -758,40 +744,56 @@ while [ -z "$SDKFILELOC" ] || [ ! -f "$SDKFILELOC" ]; do
 	SDKFILELOC="${SDKFILELOC/#\~/$HOME}"
 done
 
-unzip >/dev/null 2>&1
-ifunzip=$?
+#Verifying SDK version
 
-if [ $ifunzip -eq 0 ]; then
-	unzip -Z1 "$SDKFILELOC" | grep nwrfcsdk/demo/sso2sample.c >/dev/null 2>&1
-	sdkok=$?
-	sdknum=$(unzip -Z1 "$SDKFILELOC" | wc -l)
-else
-	if [ "$(du "$SDKFILELOC" | awk '{print $1+0}')" -ge 13000 ]; then
-		sdkok=0
-		sdknum=35
-	else
-		sdkok=1
-	fi
+unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
+SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+sdkok=$?
+rm -rf /tmp/nwrfcsdk
+if [ ! $sdkok -eq 0 ]; then
+	echo "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+	echo $SDKLOADRESULT
+	echo "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+	exit 1
 fi
 
-while [ $? -eq 1 ] || [ $sdkok -eq 1 ] || [ ! $sdknum -ge 20 ]; do
-	echo 'Invalid NetWeaver SDK, possibly an incorrect or corrupt file. Download the SDK and try again.'
-	read -r -p 'SDK file location: ' SDKFILELOC
-	if [ $ifunzip -eq 0 ]; then
-		unzip -Z1 "$SDKFILELOC" | grep nwrfcsdk/demo/sso2sample.c >/dev/null
-		sdkok=$?
-		sdknum=$(unzip -Z1 "$SDKFILELOC" | wc -l)
-	else
-		if [ "$(du "$SDKFILELOC" | awk '{print $1+0}')" -ge 13000 ]; then
-			sdkok=0
-			sdknum=34
-		else
-			sdkok=1
-		fi
-	fi
-done
+#Building the container
+containername="$containername-$SID"
 
-## Parameter read complete, defining configuration file
+sudo docker inspect "$containername" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+	echo 'Azure Sentinel SAP connector is already installed. The previous connector will be removed and replaced by the new version.'
+	pause 'Press any key to update'
+	sudo docker stop "$containername" >/dev/null
+	sudo docker container rm "$containername" >/dev/null
+fi
+sncline=""
+if [ $USESNC ]; then
+	sncline="-e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
+fi
+
+if [ -n "$HTTPPROXY" ]; then
+	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
+fi
+if [ "$MODE" == "kvmi" ]; then
+	echo "Creating docker container for use with Azure Key vault and managed VM identity"
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+elif [ "$MODE" == "kvsi" ]; then
+	echo "Creating docker container for use with Azure Key vault and application authentication"
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
+elif [ "$MODE" == "cfgf" ]; then
+	echo "Creating docker container for use with secrets in config file"
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+fi
+echo 'Azure Sentinel SAP connector was updated for instance '"$SID"
+
+sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.ini "$sysfileloc$sysconf"
+if [ ! $? -eq 0 ]; then
+	echo 'Error accessing the local folder.'
+	exit 1
+fi
+
+# Defining configuration file
 
 if [ "$CONNECTIONMODE" == 'abap' ]; then
 	#             '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf
