@@ -18,7 +18,7 @@ If a malicious IP is detected from the Azure sentinel, master playbook calls all
 
 
  ## Pre-requisites for deployment
-Atlease one of the below mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
+At least one of the below-mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
 
 - [AzureFirewall-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/AzureFirewall-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for AzureFirewall.  
 - [Forcepoint-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/ForcepointNGFW-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Forcepoint. 
@@ -32,7 +32,7 @@ Atlease one of the below mentioned nested playbooks must be deployed prior to de
 - [F5-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/F5-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
 - [MDE-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/MDE-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
 
-If any one of the above mentioned playbooks are not deployed then default playbook will deploy in its place.
+If any one of the above-mentioned playbooks are not deployed then default playbook will deploy in its place.
 
 ## Nested Playbook Structure
 
