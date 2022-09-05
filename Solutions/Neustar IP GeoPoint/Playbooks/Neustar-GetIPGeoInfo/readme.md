@@ -42,5 +42,8 @@ Once deployment is complete, authorize each connection.
 1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains IP Addresses. In the *Entity maping* section of the analytics rule creation workflow, IP Address should be mapped to **Address** identitfier of the **IP** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook. Check the [documentation](https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook) to learn more about automation rules.
 
+#### c. Function App Settings Update Instrunction
+Refer to [Neustar IP GeoPoint API Function App Connector](../NeustarIPGeoPoint_FunctionAppConnector/readme.md) documentation for Function App **Application Settings (API Url, Key and Secret)** update instruction.
+
 #  References
  - [Neustar IP GeoPoint API Guide](https://ipintelligence.neustar.biz/portal/pc/portal/docs/doc_rest_api.html)
