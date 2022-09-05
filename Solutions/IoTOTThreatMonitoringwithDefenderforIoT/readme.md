@@ -17,7 +17,7 @@ You can deploy the solution by clicking on the buttons below:
 5️⃣ View the Analytics Rules: Navigate to Microsoft Sentinel > Analytics > Search "IOT"
 
 ## Workbook
-The OT Threat Monitoring with Defender for IoT Workbook features OT filtering for Security Alerts, Incidents, and Asset Inventory. The workbook features a dynamic assessment of the MITRE ATT&CK for ICS matrix across your environment to analyze and respond to OT-based threats. This workbook is designed to enable SecOps Analysts, Security Engineers, and MSSPs to gain situational awareness for IT/OT security posture.
+The OT Threat Monitoring with Defender for IoT Workbook features OT filtering for Security Alerts, Incidents, Vulnerabilities and Asset Inventory. The workbook features a dynamic assessment of the MITRE ATT&CK for ICS matrix across your environment to analyze and respond to OT-based threats. This workbook is designed to enable SecOps Analysts, Security Engineers, and MSSPs to gain situational awareness for IT/OT security posture.
 
 ## Analytics Rules
 ### 1) Denial of Service (Microsoft Defender for IoT)
