@@ -1,0 +1,17 @@
+// Usage Instructions: 
+// This parser extracts EventEndTime field assuming the following(default) value of log_line_prefix = '%m [%p] ' in the postgresql.conf
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as PostgreSQLEvent and specifying Legacy Category.
+// This function maps PostgreSQL events to Azure Sentinel Information Model (ASIM) (https://docs.microsoft.com/azure/sentinel/normalization).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. PostgreSQLEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+PostgreSQL_CL
+| extend EventVendor = 'PostgreSQL'
+        , EventProduct = 'PostgreSQL'
+        , EventCount = int(1)
+        , EventEndTime = todatetime(extract(@'\A(\d{4}-\d{2}-\d{2}\s[0-9:]{8}.\d{3}\s\w+)\s\[\d+\]', 1, RawData))
+        , ProcessId = toreal(extract(@'\[(\d+)\]', 1, RawData))
+        , EventSeverity = tostring(extract(@'\[\d+\]\s([A-Z]+):', 1, RawData))
+        , EventMessage = tostring(extract(@'\[\d+\]\s[A-Z]+:\s(.*)', 1, RawData))
+        , QueryDuration = toreal(extract(@'duration:\s([0-9.]+)\s\w+', 1, RawData))
+        , AdditionalData = extract_all(@"(?P<key>[a-zA-Z0-9-]+=[a-zA-Z0-9-_:/@.#{}''\[\]]+)", tostring(RawData))
+| project-away RawData
