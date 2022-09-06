@@ -84,8 +84,8 @@ function getParserDetails($solutionName)
     $variableExpressionRegex = "\[\s?variables\(\'_([\w\W]+)\'\)\s?\]"
     $parserDisplayDetails = New-Object PSObject
     $parserDisplayDetails | Add-Member -NotePropertyName "functionAlias" -NotePropertyValue $(getFileNameFromPath $file)
-    $parserDisplayDetails | Add-Member -NotePropertyName "displayName" -NotePropertyValue $($fileName)
-    $parserDisplayDetails | Add-Member -NotePropertyName "name" -NotePropertyValue $($fileName)
+    $parserDisplayDetails | Add-Member -NotePropertyName "displayName" -NotePropertyValue "$($fileName)"
+    $parserDisplayDetails | Add-Member -NotePropertyName "name" -NotePropertyValue "$($fileName)"
 
     $currentSolution = $SolutionDataItems | Where-Object { $_.legacyId -eq $solutionName }
     if($currentSolution.length -gt 0)
@@ -96,23 +96,28 @@ function getParserDetails($solutionName)
             $templateVariables = $templateContent.variables
             $parserTemplate = $templateContent.resources | Where-Object { $_.type -eq $parserResourceType.templateSpecParserType -or $_.type -eq $parserResourceType.workspaceType }
 
-            if ($parserTemplate) {
-                if($parserTemplate.resources)
+            if ($null -ne $parserTemplate) {
+                if($null -ne $parserTemplate.resources)
                 {
                     $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
                 }
-                $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
-                $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
-                $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
 
-                $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
-                if ($suppressedOutput -and $matches[1]) {
-                    $parserDisplayDetails.displayName = $templateVariables.$($matches[1])
-                }
+                $parserTemplate = $parserTemplate | Where-Object {$_.properties.functionAlias -eq $(getFileNameFromPath $file)}
 
-                $suppressedOutput = $parserDisplayDetails.name -match $variableExpressionRegex
-                if ($suppressedOutput -and $matches[1]) {
-                    $parserDisplayDetails.name = $templateVariables.$($matches[1])
+                if ($null -ne $parserTemplate) {
+                    $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
+                    $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
+                    $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
+
+                    $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
+                    if ($suppressedOutput -and $matches[1]) {
+                        $parserDisplayDetails.displayName = $templateVariables.$($matches[1])
+                    }
+
+                    $suppressedOutput = $parserDisplayDetails.name -match $variableExpressionRegex
+                    if ($suppressedOutput -and $matches[1]) {
+                        $parserDisplayDetails.name = $templateVariables.$($matches[1])
+                    }
                 }
             }
         }
@@ -398,7 +403,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
-                                    dependencies = $workbookDependencies;
                                 }
                             }
 
@@ -1059,6 +1063,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
 
+                            if ($null -ne $playbookTemplateSpecContent.properties.mainTemplate.metadata.entities -and
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.entities.count -le 0)
+                            {
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.PSObject.Properties.Remove("entities");
+                            }
+
+                            if ($null -ne $playbookTemplateSpecContent.properties.mainTemplate.metadata.tags -and
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.tags.count -le 0)
+                            {
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.PSObject.Properties.Remove("tags");
+                            }
+
+                            if ($null -ne $playbookTemplateSpecContent.properties.mainTemplate.metadata.prerequisites -and
+                            [string]::IsNullOrWhitespace($playbookTemplateSpecContent.properties.mainTemplate.metadata.prerequisites))
+                            {
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.PSObject.Properties.Remove("prerequisites");
+                            }
                             $baseMainTemplate.resources += $playbookTemplateSpecContent;
                         }
                         else
@@ -1300,7 +1321,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
 
                             if($contentToImport.TemplateSpec){
-                                $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_uiConfigId$connectorCounter'))]"
+                                $standardConnectorUiConfig | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_uiConfigId$connectorCounter')]"
 
                             }
 
@@ -1320,6 +1341,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $connectorObj | Add-Member -NotePropertyName "id" -NotePropertyValue "[variables('_connector$connectorCounter-source')]";
                             }
                         }
+                        # This section is for CCP connectors
                         elseif ($connectorData.resources -and
                             $connectorData.resources[0] -and
                             $connectorData.resources[0].properties -and
@@ -1328,9 +1350,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Else check if Polling connector
                             $connectorData = $connectorData.resources[0]
                             $connectorUiConfig = $connectorData.properties.connectorUiConfig
-                            $connectorUiConfig.PSObject.Properties.Remove('id')
+                            # $connectorUiConfig.PSObject.Properties.Remove('id')
+                            $connectorUiConfig.id = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
+
                             $connectorObj = [PSCustomObject]@{
-                                id         = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
+                                # id         = if ($contentToImport.TemplateSpec) { "[variables('_uiConfigId$connectorCounter')]" }else { "[variables('_connector$connectorCounter-source')]" };
                                 name       = if ($contentToImport.TemplateSpec) { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$connectorCounter'))]" }else { "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector$connectorCounter-name'))]" }
                                 apiVersion = "2021-03-01-preview";
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
@@ -1524,7 +1548,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Add Watchlist ID to MainTemplate parameters
                         $watchlistIdParameterName = "watchlist$watchlistCounter-id"
-                        $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
+                        $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "$($watchlistData.properties.watchlistAlias)"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
                         $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $watchlistIdParameterName -Value $watchlistIdParameter
 
                         # Replace watchlist resource id
