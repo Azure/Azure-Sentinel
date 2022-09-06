@@ -6,6 +6,7 @@ import requests
 import json
 from requests.auth import HTTPBasicAuth
 from dateutil.parser import parse as parse_datetime
+from dateutil.parser import ParserError
 from typing import List
 import azure.functions as func
 
@@ -158,11 +159,14 @@ def get_last_event_ts(events: List[dict], last_ts: datetime.datetime, field_name
 
 
 def check_on_future_event_time(events: List[dict], time_field: str) -> None:
-    if events:
-        event_ts = events[0].get(time_field)
+    if not events:
+        return None
+
+    for event in events:
+        event_ts = event.get(time_field)
         try:
             event_ts = parse_datetime(event_ts)
-        except:
+        except ParserError:
             pass
         if isinstance(event_ts, datetime.datetime):
             now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
