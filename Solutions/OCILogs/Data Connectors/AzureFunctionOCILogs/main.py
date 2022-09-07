@@ -106,6 +106,25 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
         for message in get_response.data:
             event = b64decode(message.value.encode()).decode()
             event = json.loads(event)
+
+            for i, data in enumerate(event):
+                if "data" in data:
+                    if "request" in data["data"]:
+                        if "headers" in data["data"]["request"]:
+                            event[i]["data"]["request"]["headers"] = json.dumps(data["data"]["request"]["headers"])
+                        if "parameters" in data["data"]["request"]:
+                            event[i]["data"]["request"]["parameters"] = json.dumps(
+                                data["data"]["request"]["parameters"])
+                    if "response" in data["data"]:
+                        if "headers" in data["data"]["response"]:
+                            event[i]["data"]["response"]["headers"] = json.dumps(data["data"]["response"]["headers"])
+                    if "additionalDetails" in data["data"]:
+                        event[i]["data"]["additionalDetails"] = json.dumps(data["data"]["additionalDetails"])
+                    if "stateChange" in data["data"]:
+                        if "current" in data["data"]["stateChange"]:
+                            event[i]["data"]["stateChange"]["current"] = json.dumps(
+                                data["data"]["stateChange"]["current"])
+
             sentinel.send(event)
 
         sentinel.flush()
