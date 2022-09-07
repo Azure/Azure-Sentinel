@@ -31,6 +31,12 @@ Tanium Sentinel integration packages help you import / visualize Tanium data and
     - Playbook3-Tanium Server Hostname
     - Playbook4-Tanium Api Token
     - Playbook4-Tanium Server Hostname
+    - Playbook5-Tanium Api Token
+    - Playbook5-Tanium Server Hostname
+    - Playbook6-Tanium Api Token
+    - Playbook6-Tanium Server Hostname
+    - Playbook7-Tanium Api Token
+    - Playbook7-Tanium Server Hostname
 7. Click `Review + create`
 8. After validate click `Create`
 
@@ -69,8 +75,8 @@ Building a solution:
 2. `cd` into the repo
 3. Run the build script
    ```
-   ./Solutions/Tanium/build_scripts/build.sh
+   ./Solutions/Tanium/build_solution.sh
    ```
 
-The Tanium solution manifest is located within `./Solutions/Tanium/build_scripts/input.json`
+The Tanium solution manifest is located within `./Solutions/Tanium/Data/Solution_Tanium.json`
 
