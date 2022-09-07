@@ -1,0 +1,53 @@
+id: 87210ca1-49a4-4a7d-bb4a-4988752f978c
+name: Azure Portal Signin from another Azure Tenant
+description: |
+  'This query looks for sign in attempts to the Azure Portal where the user who is signing in from another Azure tenant,
+   and the IP address the login attempt is from is an Azure IP. A threat actor who compromises an Azure tenant may look
+   to pivot to other tenants leveraging cross-tenant delegated access in this manner.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1199
+query: |
+  // Get details of current Azure Ranges (note this URL updates regularly so will need to be manually updated over time)
+  // You may find the name of the new JSON here: https://www.microsoft.com/download/details.aspx?id=56519
+  // On the downloads page, click the 'details' button, and then replace just the filename in the URL below
+  let azure_ranges = externaldata(changeNumber: string, cloud: string, values: dynamic)
+  ["https://download.microsoft.com/download/7/1/D/71D86715-5596-4529-9B13-DA13A5DE5B63/ServiceTags_Public_20220321.json"]
+  with(format='multijson')
+  | mv-expand values
+  | mv-expand values.properties.addressPrefixes
+  | mv-expand values_properties_addressPrefixes
+  | summarize by tostring(values_properties_addressPrefixes);
+  SigninLogs
+  // Limiting to Azure Portal really reduces false positives and helps focus on potential admin activity
+  | where AppDisplayName =~ "Azure Portal"
+  // Only get logons where the IP address is in an Azure range
+  | evaluate ipv4_lookup(azure_ranges, IPAddress, values_properties_addressPrefixes)
+  // Limit to where the user is external to the tenant
+  | where HomeTenantId != ResourceTenantId
+  // Further limit it to just access to the current tenant (you can drop this if you wanted to look elsewhere as well but it helps reduce FPs)
+  | where ResourceTenantId == AADTenantId
+  | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), make_set(ResourceDisplayName) by UserPrincipalName, IPAddress, UserAgent, Location, HomeTenantId, ResourceTenantId
+  | extend AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.1.0
+kind: Scheduled

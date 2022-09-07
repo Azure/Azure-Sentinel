@@ -1,15 +1,15 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
-using System;
 using System.Linq;
 using FluentAssertions;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model;
+using Microsoft.Azure.Sentinel.ApiContracts.ModelValidation;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
 using YamlDotNet.Serialization;
-using Microsoft.Azure.Sentinel.ApiContracts.ModelValidation;
 
 namespace Kqlvalidations.Tests
 {
@@ -66,7 +66,7 @@ namespace Kqlvalidations.Tests
                 .Select(requiredDataConnectors => (string)requiredDataConnectors["connectorId"])
                 .ToList();
 
-            var intersection =  TemplatesSchemaValidationsReader.ValidConnectorIds.Intersect(connectorIds);
+            var intersection = TemplatesSchemaValidationsReader.ValidConnectorIds.Intersect(connectorIds);
             connectorIds.RemoveAll(connectorId => intersection.Contains(connectorId));
             var isValid = connectorIds.Count() == 0;
             Assert.True(isValid, isValid ? string.Empty : $"Template Id:'{id}' doesn't have valid connectorIds:'{string.Join(",", connectorIds)}'. If a new connector is used and already configured in the Portal, please add it's Id to the list in 'ValidConnectorIds.json' file.");
@@ -84,7 +84,8 @@ namespace Kqlvalidations.Tests
                 Exception exception = null;
                 if (yaml.Contains(templateToSkip))
                 {//This file is in the white list
-                    try{
+                    try
+                    {
                         var jObj = JObject.Parse(ConvertYamlToJson(yaml));
 
                         exception = Record.Exception(() =>
@@ -113,29 +114,58 @@ namespace Kqlvalidations.Tests
         {
             List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
             var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList(); // Detection folder
-            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s=>s.Contains("Analytic Rules"))); // Extending detection validation to solution folder
-            var AllFiles = Directory.GetFiles(detectionPath[0],"*", SearchOption.AllDirectories).ToList();
+            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending detection validation to solution folder
+            var AllFiles = Directory.GetFiles(detectionPath[0], "*", SearchOption.AllDirectories).ToList();
             AllFiles.AddRange(Directory.GetFiles(detectionPath[1], "*", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules")));
             var numberOfNotYamlFiles = 1; //This is the readme.md file in the directory
-            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles,  $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
+            Assert.True(AllFiles.Count == yamlFiles.Count + numberOfNotYamlFiles, $"All the files in detections and solution (Analytics rules) folder are supposed to end with .yaml");
         }
 
         [Fact]
         public void Validate_DetectionTemplates_NoSameTemplateIdTwice()
         {
             List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
-            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).Where(s=>!s.Contains("CiscoUmbrella")).ToList(); // Removing duplicate CiscoUmbrella detections. already present in solution folder
+            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).Where(s => !s.Contains("CiscoUmbrella")).ToList(); // Removing duplicate CiscoUmbrella detections. already present in solution folder
             yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending it to solution folder for detection validation
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
-            var duplicationsById = templatesAsObjects.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
+            var templatesAsObjectsAfterSkipping = templatesAsObjects.Where(s => !TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds.Contains(s["id"].Value<string>()));
+            var duplicationsById = templatesAsObjectsAfterSkipping.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
             var duplicatedId = "";
-            if (duplicationsById.Count() > 0){
+            if (duplicationsById.Count() > 0)
+            {
 
                 duplicatedId = duplicationsById.Last().Select(x => x["id"]).First().ToString();
             }
             Assert.True(duplicationsById.Count() == 0, $"There should not be 2 templates with the same ID, but the id {duplicatedId} is duplicated.");
+        }
+
+        [Fact]
+        public void Validate_DetectionTemplates_RuleKindsAreValid()
+        {
+            List<string> detectionPath = DetectionsYamlFilesTestData.GetDetectionPaths();
+            var yamlFiles = Directory.GetFiles(detectionPath[0], "*.yaml", SearchOption.AllDirectories).ToList();
+            yamlFiles.AddRange(Directory.GetFiles(detectionPath[1], "*.yaml", SearchOption.AllDirectories).ToList().Where(s => s.Contains("Analytic Rules"))); // Extending it to solution folder for detection validation
+            var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
+
+            var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
+            var templatesAfterRemovingSkipFiles = templatesAsObjects
+                                                    .Where(template => !TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds.Contains(template["id"].ToString()));
+
+            var invalidTemplateRuleKindsAndIds = templatesAfterRemovingSkipFiles
+                .Where(template => !Enum.TryParse(typeof(AlertRuleKind), template["kind"].ToString(), ignoreCase: false, out _))
+                .Select(template => (templdateId: template["id"].ToString(), templateKind: template["kind"].Value<string>()))
+                .ToList();
+
+            string exceptionMessage = "";
+            var validEnumValues = string.Join(", ", Enum.GetNames(typeof(AlertRuleKind)));
+            if (invalidTemplateRuleKindsAndIds.Any())
+            {
+                exceptionMessage += string.Join(", ", invalidTemplateRuleKindsAndIds.Select(invalidTemplate => $"(id: {invalidTemplate.templdateId}, invalid kind: {invalidTemplate.templateKind})"));
+            }
+
+            Assert.False(invalidTemplateRuleKindsAndIds.Any(), $"Invalid rule kind(s) encountered for the following template(s): {exceptionMessage}. Valid kind values (case sensitively) are: {validEnumValues}");
         }
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
