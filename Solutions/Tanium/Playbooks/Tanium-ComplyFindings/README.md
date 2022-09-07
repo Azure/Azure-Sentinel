@@ -6,6 +6,8 @@ This playbook will use Tanium to retrieve Tanium Comply Findings from hosts asso
 
 The results of the playbook will be added as a comment to the incident.
 
+![Tanium-ComplyFindings screenshot](images/Tanium-ComplyFindings.png)
+
 ## Prerequisites
 
 Sentinel incidents with associated hosts.

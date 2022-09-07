@@ -6,6 +6,8 @@ This playbook will use Tanium to remove a previously applied Tanium quarantine f
 
 The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the un-quarantine actions expire after thirty minutes.
 
+![Tanium-UnquarantineHosts screenshot](images/Tanium-UnquarantineHosts.png)
+
 ## Prerequisites
 
 Your Tanium Server will need the "IR Quarantine" content installed.

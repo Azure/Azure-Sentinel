@@ -4,6 +4,8 @@
 
 This playbook will resolve any associated alerts in Tanium Threat Response associated with a Microsoft Sentinel incident.
 
+![Tanium-ResolveThreatResponseAlert screenshot](images/Tanium-ResolveThreatResponseAlert.png)
+
 ## Prerequisites
 
 Only Microsoft Sentinel Incidents created by the "Tanium Threat Response Alerts" analytic rule will have the required metadata to allow resolving the associated Tanium Threat Response alert.

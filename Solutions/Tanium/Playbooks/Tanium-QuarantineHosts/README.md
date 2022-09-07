@@ -6,6 +6,8 @@ This playbook will use Tanium to quarantine any hosts associated with a Microsof
 
 The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the quarantine actions expire after thirty minutes.
 
+![Tanium-QuarantineHosts screenshot](images/Tanium-QuarantineHosts.png)
+
 ## Prerequisites
 
 Your Tanium Server will need the "IR Quarantine" content installed.

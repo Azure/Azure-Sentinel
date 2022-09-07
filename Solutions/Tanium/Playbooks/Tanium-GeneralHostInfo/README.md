@@ -6,6 +6,8 @@ This playbook will use Tanium to retrieve a set of general endpoint information 
 
 The results of the playbook will be added as a comment to the incident.
 
+![Tanium-GeneralHostInfo screenshot](images/Tanium-GeneralHostInfo.png)
+
 ## Prerequisites
 
 Sentinel incidents with associated hosts.

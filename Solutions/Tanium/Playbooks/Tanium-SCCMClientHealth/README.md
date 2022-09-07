@@ -6,6 +6,8 @@ This playbook will use Tanium to retrieve the SCCM Client health from hosts asso
 
 The results of the playbook will be added as a comment to the incident.
 
+![Tanium-SCCMClientHealth screenshot](images/Tanium-SCCMClientHealth.png)
+
 ## Prerequisites
 
 Sentinel incidents with associated hosts.

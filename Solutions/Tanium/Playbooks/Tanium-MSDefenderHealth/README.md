@@ -6,6 +6,8 @@ This playbook will use Tanium to retrieve the Microsoft Defender health from hos
 
 The results of the playbook will be added as a comment to the incident.
 
+![Tanium-MSDefenderHealth screenshot](images/Tanium-MSDefenderHealth.png)
+
 ## Prerequisites
 
 Sentinel incidents with associated hosts.
