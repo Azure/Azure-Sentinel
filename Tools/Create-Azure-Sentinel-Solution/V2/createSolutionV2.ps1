@@ -403,7 +403,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
-                                    dependencies = $workbookDependencies;
                                 }
                             }
 
@@ -1064,6 +1063,23 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
 
+                            if ($null -ne $playbookTemplateSpecContent.properties.mainTemplate.metadata.entities -and
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.entities.count -le 0)
+                            {
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.PSObject.Properties.Remove("entities");
+                            }
+
+                            if ($null -ne $playbookTemplateSpecContent.properties.mainTemplate.metadata.tags -and
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.tags.count -le 0)
+                            {
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.PSObject.Properties.Remove("tags");
+                            }
+
+                            if ($null -ne $playbookTemplateSpecContent.properties.mainTemplate.metadata.prerequisites -and
+                            [string]::IsNullOrWhitespace($playbookTemplateSpecContent.properties.mainTemplate.metadata.prerequisites))
+                            {
+                                $playbookTemplateSpecContent.properties.mainTemplate.metadata.PSObject.Properties.Remove("prerequisites");
+                            }
                             $baseMainTemplate.resources += $playbookTemplateSpecContent;
                         }
                         else
@@ -1532,7 +1548,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         # Add Watchlist ID to MainTemplate parameters
                         $watchlistIdParameterName = "watchlist$watchlistCounter-id"
-                        $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "[newGuid()]"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
+                        $watchlistIdParameter = [PSCustomObject] @{ type = "string"; defaultValue = "$($watchlistData.properties.watchlistAlias)"; minLength = 1; metadata = [PSCustomObject] @{ description = "Unique id for the watchlist" }; }
                         $baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $watchlistIdParameterName -Value $watchlistIdParameter
 
                         # Replace watchlist resource id
