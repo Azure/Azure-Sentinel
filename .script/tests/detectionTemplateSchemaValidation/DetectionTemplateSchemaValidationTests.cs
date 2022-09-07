@@ -130,7 +130,8 @@ namespace Kqlvalidations.Tests
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
-            var duplicationsById = templatesAsObjects.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
+            var templatesAsObjectsAfterSkipping = templatesAsObjects.Where(s => !TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds.Contains(s["id"].Value<string>()));
+            var duplicationsById = templatesAsObjectsAfterSkipping.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
             var duplicatedId = "";
             if (duplicationsById.Count() > 0)
             {

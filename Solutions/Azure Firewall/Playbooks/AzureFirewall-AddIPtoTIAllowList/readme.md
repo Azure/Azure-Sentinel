@@ -36,8 +36,8 @@ This playbook **Gets** and **Updates** Azure Firewall Policies in the subscripti
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAzureFirewall%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Firewall%2FPlaybooks%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Firewall%2FPlaybooks%2FAzureFirewall-AddIPtoTIAllowList%2Fazuredeploy.json)
 
 
 
@@ -58,7 +58,7 @@ Once deployment is complete, you will need to authorize each connection.
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for other connection such as Teams connection and Virus Total (For authorizing the Virus Total API connection, the API Key needs to be provided)
-7.  Authorize the Azure Firewall custom connector by followint the below mentioned steps.
+7.  Authorize the Azure Firewall custom connector by following the below mentioned steps.
 
 	  a. Navigate to playbook
 
@@ -75,7 +75,7 @@ Once deployment is complete, you will need to authorize each connection.
 ## Playbook steps explained
 ### When Azure Sentinel incident creation rule is triggered
 
-### Varialbes 
+### Variables 
 
    * List - Threat intel IP Address allow list from the Resource Group
 

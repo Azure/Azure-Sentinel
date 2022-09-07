@@ -52,8 +52,8 @@ Prior using this custom connector, it should be deployed in the Resource Group w
 2. Fill in the required paramteres:
     * Connector name: Please enter the custom connector(ex:contoso firewall connector)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAzureFirewall%2FAzureFirewallConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAzureFirewall%2FAzureFirewallConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Firewall%2FPlaybooks%2FAzureFirewallConnector%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Firewall%2FPlaybooks%2FAzureFirewallConnector%2Fazuredeploy.json)
 
 
 <a name="authentication">
@@ -86,7 +86,7 @@ To use your own application with the Azure Sentinel connector, perform the follo
 
     In this step we use the app credentials to authenticate to the Sentinel connector in Logic Apps.
 
-    In the custome connector for Azure Firewall, fill in the required parameters (can be found in the registered application blade)
+    In the custom connector for Azure Firewall, fill in the required parameters (can be found in the registered application blade)
         - Tenant Id: under **Overview**
         - Client Id: under **Overview**
         - Client Secret: under **Certificates & secrets**
