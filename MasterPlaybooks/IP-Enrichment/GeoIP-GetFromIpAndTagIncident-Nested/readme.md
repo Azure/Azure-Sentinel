@@ -1,4 +1,4 @@
-# Get-GeoFromIpAndTagIncident
+# GeoIP-GetFromIpAndTagIncident-Nested
 author: Nicholas DiCola
 
 This playbook will take the IP address entities from the Incident and query a Geo-IP API to geo-locate the IP Address.  It will write the City and Country to a tag on the Incident and more details to the comments.

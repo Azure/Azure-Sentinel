@@ -1,6 +1,5 @@
 
-## Response - IP Enrichment
-
+## Recorded Future - IOC Enrichment IP Nested
 
 
 This playbook leverages the Recorded Future API to automatically enrich the IP found in incidents, with the following Recorded Future context: Risk Score, Risk Rules and Link to Intelligence Card. The enrichment content will be posted as a comment in the Sentinel incident. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/azure/) 
