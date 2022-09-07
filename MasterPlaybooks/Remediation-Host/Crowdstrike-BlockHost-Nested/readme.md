@@ -1,4 +1,4 @@
-# Crowdstrike Remediation Host
+# Crowdstrike Block Host Nested
  ## Summary
  When this playbook gets triggered and it performs below actions:
  1. Gets the list malicious Host information.

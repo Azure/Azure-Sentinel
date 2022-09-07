@@ -1,4 +1,4 @@
-# Isolate-MDEMachine
+# MDE-IsolateMachine
 author: Nicholas DiCola
 
 This playbook will isolate (full) the machine in Microsoft Defender for Endpoint.
