@@ -127,6 +127,7 @@ class PrismaCloudConnector:
         async with self._auth_lock:
             if not self._token:
                 uri = self.api_url + '/login'
+                Write-Host "LogInUri: $uri "
                 headers = {
                     "Accept": "application/json; charset=UTF-8",
                     "Content-Type": "application/json; charset=UTF-8"
@@ -148,6 +149,7 @@ class PrismaCloudConnector:
     async def get_alerts(self, start_time):
         await self._authorize()
         uri = self.api_url + '/v2/alert'
+        Write-Host "AlertUri: $uri "
         headers = {
             'x-redlock-auth': self._token,
             "Accept": "application/json; charset=UTF-8",
