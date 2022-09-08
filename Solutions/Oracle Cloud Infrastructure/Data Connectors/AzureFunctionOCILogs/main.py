@@ -106,7 +106,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
         for message in get_response.data:
             event = b64decode(message.value.encode()).decode()
             event = json.loads(event)
-            sentinel.send(event)
+            sentinel.send(customizedJson(event))
 
         sentinel.flush()
         if check_if_script_runs_too_long(start_ts):
@@ -114,6 +114,19 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             break
         cursor = get_response.headers["opc-next-cursor"]
 
+def customizedJson(eventData):
+    required_fields_data = {}
+    for key, value in eventData.data.items():
+        if(type(value) == type({})):
+            for k, v in value.items():
+                if(type(v) == str):                    
+                    required_fields_data['data_' + key + '_' + k] = v
+                else:
+                    required_fields_data['data_' + key + '_' + k] = json.dumps(v, indent = 4)
+        else:
+            required_fields_data['data_' + key] = value
+
+    return required_fields_data
 
 def check_if_script_runs_too_long(start_ts):
     now = int(time.time())
