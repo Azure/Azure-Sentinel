@@ -127,7 +127,7 @@ class PrismaCloudConnector:
         async with self._auth_lock:
             if not self._token:
                 uri = self.api_url + '/login'
-                logging.info("AlertUri: " + element.get("uri"))
+                logging.info("LogInUri: " + element.get("uri"))
                 headers = {
                     "Accept": "application/json; charset=UTF-8",
                     "Content-Type": "application/json; charset=UTF-8"
