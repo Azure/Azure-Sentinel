@@ -100,12 +100,14 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
     cursor = initial_cursor
     while True:
         get_response = client.get_messages(stream_id, cursor, limit=1000)
+        logging.info(get_response)
         if not get_response.data:
             return
 
         for message in get_response.data:
             event = b64decode(message.value.encode()).decode()
             event = json.loads(event)
+            logging.info(event)
             sentinel.send(customizedJson(event))
 
         sentinel.flush()
@@ -125,7 +127,6 @@ def customizedJson(eventData):
                     required_fields_data['data_' + key + '_' + k] = json.dumps(v, indent = 4)
         else:
             required_fields_data['data_' + key] = value
-
     return required_fields_data
 
 def check_if_script_runs_too_long(start_ts):
