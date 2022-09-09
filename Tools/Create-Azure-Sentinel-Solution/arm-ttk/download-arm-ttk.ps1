@@ -10,7 +10,7 @@ $ttkZip="$tmp/AzTemplateToolKit.zip"
 
 # we download the latest arm-ttk, DARSy uses the same steps
 # the arm-ttk is hosted on the public github here: https://github.com/Azure/arm-ttk
-Invoke-WebRequest -Uri "https://aka.ms/arm-ttk-marketplace" -OutFile $ttkZip -Verbose
+Invoke-WebRequest -Uri "https://aka.ms/arm-ttk-latest" -OutFile $ttkZip -Verbose
 Expand-Archive -Path $ttkZip -DestinationPath $tmp -Force
 
 # try and import the module to see it works

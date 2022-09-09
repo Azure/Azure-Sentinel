@@ -1,0 +1,89 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Microsoft Defender for IoT endpoint logs 
+  Version: '0.1.1'
+  LastUpdated: June 13, 2022
+Product:
+  Name: Microsoft Defender for IoT
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Microsoft Defender for IoT endpoint logs to the ASIM Authentication schema.
+ParserName: vimAuthenticationMD4IoT
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Authentication_MD4IoT=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false)
+    {
+      SecurityIoTRawEvent  | where not(disabled)
+      | where RawEventName == "Login"
+    // ************************************************************************* 
+    //       <Prefilterring>
+    // *************************************************************************
+    | where 
+      (isnull(starttime)   or TimeGenerated >= starttime) 
+      and (isnull(endtime)     or TimeGenerated <= endtime)
+      and (targetusername_has=='*' or EventDetails has targetusername_has)
+    // ************************************************************************* 
+    //       </Prefilterring>
+    // ************************************************************************* 
+      | extend
+        EventDetails = todynamic(EventDetails)
+        //
+      | extend
+        EventOriginalUid = tostring(EventDetails.OriginalEventId), 
+        EventProduct = 'Microsoft Defender for IoT',
+        EventCount=int(1),
+        EventVendor = 'Microsoft', 
+        EventSchemaVersion = '0.1.0', 
+        EventStartTime = todatetime(EventDetails.TimestampUTC), 
+        EventEndTime = todatetime(TimeGenerated), 
+        EventType = iff (EventDetails.Operation == 'Logout', 'Logoff', 'Logon'),  
+        EventResult = iff (EventDetails.Operation == 'LoginFailed', 'Failure', 'Success')  
+        //
+      | extend
+        ActingProcessId = tostring(EventDetails.ProcessId),  
+        ActingProcessName = tostring(EventDetails.Executable),  // -- Linux input device or service used to authenticate, for example pts/1, tty1, pts/0, ssh:notty 
+        DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"),  // -- Intermediate fix
+        TargetUsernameType = "Simple",
+        TargetUsername = tostring(EventDetails.UserName)
+        // ************************************************************************* 
+        //       <Postfilterring>
+        // *************************************************************************
+        | where 
+            (targetusername_has=='*' or TargetUsername has targetusername_has)
+        // ************************************************************************* 
+        //       <Postfilterring>
+        // *************************************************************************
+      | extend  SrcIpAddr = tostring(EventDetails.RemoteAddress) 
+      | project-rename
+        DvcHostname = DeviceId, 
+        EventProductVersion = AgentVersion,  // -- Not available in Windows
+        _ResourceId = AssociatedResourceId, 
+        _SubscriptionId = AzureSubscriptionId 
+        //
+        // -- aliases
+      | extend 
+        User = TargetUsername, 
+        Process = ActingProcessName, 
+        Dvc = DvcHostname,
+        SrcDvcIpAddr = SrcIpAddr,
+        IpAddr = SrcIpAddr
+      };
+      Authentication_MD4IoT(starttime, endtime, targetusername_has, disabled)
