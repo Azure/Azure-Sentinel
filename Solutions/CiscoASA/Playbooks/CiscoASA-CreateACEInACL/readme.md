@@ -8,7 +8,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 1. For the IPs we check if they are already directly blocked by an access control entry in the access control list
 2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depdening on it's current status block it by adding an access control entry or unblock it by removing an access control entry
     ![Adaptive card](./images/CreateACEInACL-AdaptiveCard.png)
-3. Comment is added to microsoft sentinel incident.
+3. Comment is added to Microsoft sentinel incident.
 ![playbook overview](./images/CreateACEInACL-AzureSentinel-Comments.png)
 
 **ACE is added to an ACL in Cisco ASA:**
