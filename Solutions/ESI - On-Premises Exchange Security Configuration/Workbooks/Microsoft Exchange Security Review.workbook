@@ -14,13 +14,39 @@
         "version": "KqlParameterItem/1.0",
         "parameters": [
           {
+            "id": "743317e2-ebcf-4958-861d-4ff97fc7cce1",
+            "version": "KqlParameterItem/1.0",
+            "name": "EnvironmentList",
+            "label": "Environment",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "ESI_ExchConfigAvailableEnvironments(Target=\"On-Premises\") | where ESIEnvironment != \"\"",
+            "value": [
+              "ITFM"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All",
+              "showDefault": false
+            },
+            "defaultValue": "value::all",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
             "id": "a88b4e41-eb2f-41bf-92d8-27c83650a4b8",
             "version": "KqlParameterItem/1.0",
             "name": "DateOfConfiguration",
             "label": "Collection time",
             "type": 2,
             "isRequired": true,
-            "query": "ESIExchangeConfig_CL\r\n| extend Collection = format_datetime(TimeGenerated, 'yyyy-MM-dd')\r\n| summarize Collection = max(Collection)\r\n| project Collection, Selected = true\r\n| join kind= fullouter  ( ESIExchangeConfig_CL\r\n| where TimeGenerated > ago(90d)\r\n| extend Collection = format_datetime(TimeGenerated, 'yyyy-MM-dd')\r\n| summarize by Collection\r\n) on Collection\r\n| project Label = Collection1, Value = Collection1, Selected\r\n| sort by Value desc",
+            "query": "let _configurationEnv = split(iff(isnull({EnvironmentList}) or isempty({EnvironmentList}) or tolower({EnvironmentList}) == \"all\",\"All\",tostring({EnvironmentList})),',');\r\nESIAPIExchangeConfig_CL\r\n| extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize Collection = max(Collection)\r\n| project Collection = \"lastdate\", Selected = true\r\n| join kind= fullouter  ( ESIAPIExchangeConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| where TimeGenerated > ago(90d)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize by Collection\r\n) on Collection\r\n| project Value = iif(Selected,Collection,Collection1), Label = iif(Selected,\"Last Known date\",Collection1), Selected\r\n| sort by Selected, Value desc",
+            "value": "2022-09-07",
             "typeSettings": {
               "additionalResourceOptions": [],
               "showDefault": false
@@ -153,7 +179,7 @@
           {
             "type": 1,
             "content": {
-              "json": "This section display the Exchange version and the CU installed.\r\n\r\nFor the latest build number, check this link : https://docs.microsoft.com/exchange/new-features/build-numbers-and-release-dates?view=exchserver-2019",
+              "json": "This section display the Exchange version and the CU installed.\r\n\r\nFor the latest build number, check this link : https://docs.microsoft.com/en-us/exchange/new-features/build-numbers-and-release-dates?view=exchserver-2019",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -167,7 +193,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let ExchCUSU = _GetWatchlist('ExchCUSU')| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\nExchangeConfiguration(\"ExchangeServers\",\"{DateOfConfiguration}\")\r\n| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\n| join kind= inner  (ExchCUSU) on $left.VersionNumber == $right.BuilCUNb\r\n| distinct Name,VersionNumber,Productname,CU\r\n| extend Name = strcat(\"💻 \",Name)\r\n| sort by Name asc\r\n",
+              "query": "let ExchCUSU = _GetWatchlist('ExchCUSU')| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\nExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\n| join kind= inner  (ExchCUSU) on $left.VersionNumber == $right.BuilCUNb\r\n| distinct Name,VersionNumber,Productname,CU\r\n| extend Name = strcat(\"💻 \",Name)\r\n| sort by Name asc\r\n",
               "size": 0,
               "title": "Exchange servers CU level",
               "queryType": 0,
@@ -180,7 +206,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let ExchCUSU = _GetWatchlist('ExchCUSU')| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\nExchangeConfiguration(\"ExchangeServers\",\"{DateOfConfiguration}\")\r\n| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\n| join kind= inner  (ExchCUSU) on $left.VersionNumber == $right.BuilCUNb\r\n| extend Version =strcat (Productname,\"-\",CU)\r\n| summarize dcount(Name) by Version",
+              "query": "let ExchCUSU = _GetWatchlist('ExchCUSU')| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\nExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\n| join kind= inner  (ExchCUSU) on $left.VersionNumber == $right.BuilCUNb\r\n| extend Version =strcat (Productname,\"-\",CU)\r\n| summarize dcount(Name) by Version",
               "size": 0,
               "title": "Version break down",
               "queryType": 0,
@@ -221,7 +247,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"AdminAuditLog\", \"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| extend AdminAuditLogEnabled = iff(CmdletResultValue.AdminAuditLogEnabled == \"FALSE\", \" ❌ Disabled, High Risk\", \"✅ Enabled\")\r\n| extend AdminAuditLogCmdlets = tostring(CmdletResultValue.AdminAuditLogCmdlets)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,2)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,0,indexof(AdminAuditLogCmdlets, '\"]') )\r\n| extend AdminAuditLogExcludedCmdlets = tostring(CmdletResultValue.AdminAuditLogExcludedCmdlets)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,2)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,0,indexof(AdminAuditLogExcludedCmdlets, ']'))\r\n| extend AdminAuditLogAgeLimit = tostring(CmdletResultValue.AdminAuditLogAgeLimit)\r\n| project-away CmdletResultValue\r\n",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"AdminAuditLog\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend AdminAuditLogEnabled = iff(CmdletResultValue.AdminAuditLogEnabled == \"FALSE\", \" ❌ Disabled, High Risk\", \"✅ Enabled\")\r\n| extend AdminAuditLogCmdlets = tostring(CmdletResultValue.AdminAuditLogCmdlets)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,2)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,0,indexof(AdminAuditLogCmdlets, '\"]') )\r\n| extend AdminAuditLogExcludedCmdlets = tostring(CmdletResultValue.AdminAuditLogExcludedCmdlets)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,2)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,0,indexof(AdminAuditLogExcludedCmdlets, ']'))\r\n| extend AdminAuditLogAgeLimit = tostring(CmdletResultValue.AdminAuditLogAgeLimit)\r\n| project-away CmdletResultValue\r\n",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
@@ -248,7 +274,7 @@
           {
             "type": 1,
             "content": {
-              "json": "\r\nIf the POP Service is started, the LoginType should not set to Plaintext. This means that the password will be sent in clear on the network. As POP is enabled by default on all the mailboxes, this represents a high security risk.\r\n\r\nPOP Authentication\r\n- **PlainText** TLS encryption is not required on port 110.  Usernames and passwords are sent unencrypted unless the underlying connection is encrypted by using TLS or SSL.\r\n- **PlainTextAuthentication** TLS encryption is not required on port 110. However, Basic authentication is permitted only on a port that uses TLS or SSL encryption.\r\n- **SecureLogin** Connection on port 110  must use TLS encryption before authenticating.\r\n\r\nℹ️ Recommendations\r\nDisable POP on all mailboxes except those who need to actually use this protocol.\r\nSet the authentication to SecureLogin or at least to PlainTextAuthentication and configure the application.\r\n\r\nIf the application is not able to perform this type of authentication:\r\n- Ensure that POP is disabled on all the mailboxes except those who really need it \r\n- Monitor the POP connections\r\n- Change the password of the application on a regular basis\r\n\r\nDocumentation\r\nConfiguring Authentication for POP3 and IMAP4 : https://technet.microsoft.com/library/aa997188(v=exchg.141).aspx\r\n\r\nSet-PopSettings\r\nhttps://technet.microsoft.com/library/aa997154(v=exchg.160).aspx\r\n\r\n\r\nIn order to track mailboxes that are currently using POP\r\n- Enable POP logging\r\n- Set-PopSettings -Server SRV1  -ProtocolLogEnabled verbose\r\n- Several weeks later, analyze the log content\r\n- Default location :    - Get-PopSettings -server SRV1 | fl server,*log*\r\n- Check for connection and authentication\r\n",
+              "json": "\r\nIf the POP Service is started, the LoginType should not set to Plaintext. This means that the password will be sent in clear on the network. As POP is enabled by default on all the mailboxes, this represents a high security risk.\r\n\r\nPOP Authentication\r\n- **PlainText** TLS encryption is not required on port 110.  Usernames and passwords are sent unencrypted unless the underlying connection is encrypted by using TLS or SSL.\r\n- **PlainTextAuthentication** TLS encryption is not required on port 110. However, Basic authentication is permitted only on a port that uses TLS or SSL encryption.\r\n- **SecureLogin** Connection on port 110  must use TLS encryption before authenticating.\r\n\r\nℹ️ Recommendations\r\nDisable POP on all mailboxes except those who need to actually use this protocol.\r\nSet the authentication to SecureLogin or at least to PlainTextAuthentication and configure the application.\r\n\r\nIf the application is not able to perform this type of authentication:\r\n- Ensure that POP is disabled on all the mailboxes except those who really need it \r\n- Monitor the POP connections\r\n- Change the password of the application on a regular basis\r\n\r\nDocumentation\r\nConfiguring Authentication for POP3 and IMAP4 : https://technet.microsoft.com/en-us/library/aa997188(v=exchg.141).aspx\r\n\r\nSet-PopSettings\r\nhttps://technet.microsoft.com/en-us/library/aa997154(v=exchg.160).aspx\r\n\r\n\r\nIn order to track mailboxes that are currently using POP\r\n- Enable POP logging\r\n- Set-PopSettings -Server SRV1  -ProtocolLogEnabled verbose\r\n- Several weeks later, analyze the log content\r\n- Default location :    - Get-PopSettings -server SRV1 | fl server,*log*\r\n- Check for connection and authentication\r\n",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -262,7 +288,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ExchangeConfiguration(\"PopSettings\",\"{DateOfConfiguration}\")\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| join kind = leftouter(ExchangeConfiguration(\"POPIMAPServicesStatus\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name contains (\"MSExchangePop3\")\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString\r\n| join (ExchangeConfiguration(\"POPIMAPServicesStatus\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name contains (\"MSExchangePop3BE\" )\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString) on ServerName) on ServerName\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| extend LoginType =  iff(CmdletResultValue.LoginType== 1 , \"⛔ PlainText, High Risk\", \"✅ SecureLogin\")\r\n| extend ProtocolLogEnabled =  tostring(CmdletResultValue.ProtocolLogEnabled)\r\n| extend ServiceName =  iff(tostring(ServiceName)==\"\", \"Service Status not retrieved\",tostring(ServiceName))\r\n| extend Status =  tostring(Status)\r\n| extend BackendEndService=  tostring(ServiceName1)\r\n| extend StartupType =  tostring(StartupType)\r\n| extend BEStatus =  tostring(Status1)\r\n| extend BEStartupType =  tostring(StartupType1)\r\n| project ServerName,LoginType,ServiceName,Status,StartupType,BackendEndService,BEStatus,BEStartupType,ProtocolLogEnabled\r\n| sort by ServerName asc",
+              "query": "ExchangeConfigurationV2(SpecificSectionList=\"PopSettings\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| join kind = leftouter(ExchangeConfigurationV2(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangePop3\")\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString\r\n| join (ExchangeConfigurationV2(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangePop3BE\" )\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString) on ServerName) on ServerName\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| extend LoginType =  iff(CmdletResultValue.LoginType== 1 , \"⛔ PlainText, High Risk\", \"✅ SecureLogin\")\r\n| extend ProtocolLogEnabled =  tostring(CmdletResultValue.ProtocolLogEnabled)\r\n| extend ServiceName =  iff(tostring(ServiceName)==\"\", \"Service Status not retrieved\",tostring(ServiceName))\r\n| extend Status =  tostring(Status)\r\n| extend BackendEndService=  tostring(ServiceName1)\r\n| extend StartupType =  tostring(StartupType)\r\n| extend BEStatus =  tostring(Status1)\r\n| extend BEStartupType =  tostring(StartupType1)\r\n| project ServerName,LoginType,ServiceName,Status,StartupType,BackendEndService,BEStatus,BEStartupType,ProtocolLogEnabled\r\n| sort by ServerName asc",
               "size": 3,
               "title": "Pop Authentication : should not be set as Plaintext",
               "queryType": 0,
@@ -305,7 +331,7 @@
           {
             "type": 1,
             "content": {
-              "json": "If the IMAP Service is started, the LoginType should not set to Plaintext. This means that the passwords will be sent in clear over the network. As IMAP is enabled by default on all the mailboxes, this is a high security risk.\r\n\r\nIMAP Authentication\r\n- **PlainText** TLS encryption is not required on port 110.  User name and password are sent unencrypted unless the underlying connection is encrypted by using TLS or SSL.\r\n- **PlainTextAuthentication** TLS encryption is not required on port 143. However, Basic authentication is permitted only on a port that uses TLS or SSL encryption.\r\n- **SecureLogin** Connection on port 143 must use TLS encryption before authenticating.\r\n\r\nℹ️ Recommendations \r\nDisable IMAP on all mailboxes except those which needs to use this protocol. Set the authentication to SecureLogin or at least to PlainTextAuthentication and configure the application accordingly.\r\n\r\nIf the application is not able to perform this type of authentication:\r\n- Ensure that IMAP is disable on all the mailboxes except those who really need it \r\n- Monitor the connection\r\n- Regularly, change the password of the application\r\n\r\n\r\nRecommended Reading\r\nConfiguring Authentication for IMAP3 and IMAP4 : https://technet.microsoft.com/library/aa997188(v=exchg.141).aspx\r\nSet-ImapSettings : \r\nhttps://technet.microsoft.com/library/aa998252(v=exchg.160).aspx\r\n\r\n\r\n\r\nIn order to track mailboxes that are currently using IMAP\r\n- Enable IMAP logging\r\n- Set-IMAPSettings -Server SRV1  -ProtocolLogEnabled verbose\r\n- Several weeks later, analyze the log content\r\n- Default location :  Get-IMAPSettings -server SRV1 | fl server,*log*\r\n- Check for connection and authentication\r\n",
+              "json": "If the IMAP Service is started, the LoginType should not set to Plaintext. This means that the passwords will be sent in clear over the network. As IMAP is enabled by default on all the mailboxes, this is a high security risk.\r\n\r\nIMAP Authentication\r\n- **PlainText** TLS encryption is not required on port 110.  User name and password are sent unencrypted unless the underlying connection is encrypted by using TLS or SSL.\r\n- **PlainTextAuthentication** TLS encryption is not required on port 143. However, Basic authentication is permitted only on a port that uses TLS or SSL encryption.\r\n- **SecureLogin** Connection on port 143 must use TLS encryption before authenticating.\r\n\r\nℹ️ Recommendations \r\nDisable IMAP on all mailboxes except those which needs to use this protocol. Set the authentication to SecureLogin or at least to PlainTextAuthentication and configure the application accordingly.\r\n\r\nIf the application is not able to perform this type of authentication:\r\n- Ensure that IMAP is disable on all the mailboxes except those who really need it \r\n- Monitor the connection\r\n- Regularly, change the password of the application\r\n\r\n\r\nRecommended Reading\r\nConfiguring Authentication for IMAP3 and IMAP4 : https://technet.microsoft.com/en-us/library/aa997188(v=exchg.141).aspx\r\nSet-ImapSettings : \r\nhttps://technet.microsoft.com/en-us/library/aa998252(v=exchg.160).aspx\r\n\r\n\r\n\r\nIn order to track mailboxes that are currently using IMAP\r\n- Enable IMAP logging\r\n- Set-IMAPSettings -Server SRV1  -ProtocolLogEnabled verbose\r\n- Several weeks later, analyze the log content\r\n- Default location :  Get-IMAPSettings -server SRV1 | fl server,*log*\r\n- Check for connection and authentication\r\n",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -319,7 +345,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ExchangeConfiguration(\"IMAPSettings\",\"{DateOfConfiguration}\")\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| join kind = leftouter(ExchangeConfiguration(\"POPIMAPServicesStatus\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name contains (\"MSExchangeIMAP4\")\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString\r\n| join (ExchangeConfiguration(\"POPIMAPServicesStatus\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name contains (\"MSExchangeIMAP4BE\" )\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString) on ServerName) on ServerName\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| extend LoginType =  iff(CmdletResultValue.LoginType== 1 , \"❌ PlainText, High Risk\", \"✅ SecureLogin\")\r\n| extend ProtocolLogEnabled =  tostring(CmdletResultValue.ProtocolLogEnabled)\r\n| extend ServiceName =  iff(tostring(ServiceName)==\"\", \"Service Status not retrieved\",tostring(ServiceName))\r\n| extend Status =  tostring(Status)\r\n| extend BackendEndService=  tostring(ServiceName1)\r\n| extend StartupType =  tostring(StartupType)\r\n| extend BEStatus =  tostring(Status1)\r\n| extend BEStartupType =  tostring(StartupType1)\r\n| project ServerName,LoginType,ServiceName,Status,StartupType,BackendEndService,BEStatus,BEStartupType,ProtocolLogEnabled\r\n| sort by ServerName asc",
+              "query": "ExchangeConfigurationV2(SpecificSectionList=\"IMAPSettings\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| join kind = leftouter(ExchangeConfigurationV2(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangeIMAP4\")\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString\r\n| join (ExchangeConfigurationV2(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangeIMAP4BE\" )\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString) on ServerName) on ServerName\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| extend LoginType =  iff(CmdletResultValue.LoginType== 1 , \"❌ PlainText, High Risk\", \"✅ SecureLogin\")\r\n| extend ProtocolLogEnabled =  tostring(CmdletResultValue.ProtocolLogEnabled)\r\n| extend ServiceName =  iff(tostring(ServiceName)==\"\", \"Service Status not retrieved\",tostring(ServiceName))\r\n| extend Status =  tostring(Status)\r\n| extend BackendEndService=  tostring(ServiceName1)\r\n| extend StartupType =  tostring(StartupType)\r\n| extend BEStatus =  tostring(Status1)\r\n| extend BEStartupType =  tostring(StartupType1)\r\n| project ServerName,LoginType,ServiceName,Status,StartupType,BackendEndService,BEStatus,BEStartupType,ProtocolLogEnabled\r\n| sort by ServerName asc",
               "size": 3,
               "title": "IMAP Authentication  : should not be set as Plaintext",
               "queryType": 0,
@@ -399,7 +425,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let StandardGroup = dynamic([\"Authenticated Users\", \"Domain Admins\",  \"Enterprise Admins\",\"Schema Admins\", \"Exchange Trusted Subsystem\", \"Exchange Servers\",\"Organization Management\", \"Public Folder Management\",\"Delegated Setup\", \"ANONYMOUS LOGON\", \"NETWORK SERVICE\", \"SYSTEM\", \"Everyone\",\"Managed Availability Servers\"]);\r\nlet Exchsrv =ExchangeConfiguration (\"ExchangeServers\",\"{DateOfConfiguration}\")| summarize make_list(CmdletResultValue.Name);\r\nExchangeConfiguration(\"PartConfPerm\",\"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.Deny !contains \"True\" and CmdletResultValue.IsInherited !contains \"True\"\r\n| where (CmdletResultValue.AccessRights == \"[983551]\") in ({GenericAll})\r\n| where not (CmdletResultValue.UserString has_any (StandardGroup)) in ({NonStandardPermissions})\r\n| where not (CmdletResultValue.UserString has_any (Exchsrv))in ({NonStandardPermissions})\r\n| extend Name =  tostring(CmdletResultValue.Identity.Name)\r\n| extend Account =  tostring(CmdletResultValue.UserString )\r\n| extend AccessRights =  iff (tostring(CmdletResultValue.AccessRightsString) contains \"GenericAll\", strcat (\"❌ \",tostring(CmdletResultValue.AccessRightsString)), tostring(CmdletResultValue.AccessRightsString))\r\n| extend ExtendedRights =   iff (tostring(CmdletResultValue.ExtendedRightsString) contains \"-As\", strcat (\"❌ \",tostring(CmdletResultValue.ExtendedRightsString)), tostring(CmdletResultValue.ExtendedRightsString))\r\n| extend InheritanceType =  tostring(CmdletResultValue.InheritanceType)\r\n| extend DN = tostring(CmdletResultValue.Identity.DistinguishedName)\r\n| project-away CmdletResultValue\r\n| sort by DN desc",
+                    "query": "let StandardGroup = dynamic([\"Authenticated Users\", \"Domain Admins\",  \"Enterprise Admins\",\"Schema Admins\", \"Exchange Trusted Subsystem\", \"Exchange Servers\",\"Organization Management\", \"Public Folder Management\",\"Delegated Setup\", \"ANONYMOUS LOGON\", \"NETWORK SERVICE\", \"SYSTEM\", \"Everyone\",\"Managed Availability Servers\"]);\r\nlet Exchsrv =ExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| summarize make_list(CmdletResultValue.Name);\r\nExchangeConfigurationV2(SpecificSectionList=\"PartConfPerm\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.Deny !contains \"True\" and CmdletResultValue.IsInherited !contains \"True\"\r\n| where (CmdletResultValue.AccessRights == \"[983551]\") in ({GenericAll})\r\n| where not (CmdletResultValue.UserString has_any (StandardGroup)) in ({NonStandardPermissions})\r\n| where not (CmdletResultValue.UserString has_any (Exchsrv))in ({NonStandardPermissions})\r\n| extend Name =  tostring(CmdletResultValue.Identity.Name)\r\n| extend Account =  tostring(CmdletResultValue.UserString )\r\n| extend AccessRights =  iff (tostring(CmdletResultValue.AccessRightsString) contains \"GenericAll\", strcat (\"❌ \",tostring(CmdletResultValue.AccessRightsString)), tostring(CmdletResultValue.AccessRightsString))\r\n| extend ExtendedRights =   iff (tostring(CmdletResultValue.ExtendedRightsString) contains \"-As\", strcat (\"❌ \",tostring(CmdletResultValue.ExtendedRightsString)), tostring(CmdletResultValue.ExtendedRightsString))\r\n| extend InheritanceType =  tostring(CmdletResultValue.InheritanceType)\r\n| extend DN = tostring(CmdletResultValue.Identity.DistinguishedName)\r\n| project-away CmdletResultValue\r\n| sort by DN desc",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -447,7 +473,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ExchangeConfiguration(\"MRA\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name !contains \"Deleg\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and  CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| where CmdletResultValue.Role.Name contains \"Export\" or CmdletResultValue.Role.Name contains \"Impersonation\" or CmdletResultValue.Role.Name contains \"Search\"\r\n| summarize dcount(tostring(CmdletResultValue.RoleAssigneeName)) by role=tostring(CmdletResultValue.Role.Name)",
+              "query": "ExchangeConfigurationV2(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList})\r\n| where CmdletResultValue.Name !contains \"Deleg\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and  CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| where CmdletResultValue.Role.Name contains \"Export\" or CmdletResultValue.Role.Name contains \"Impersonation\" or CmdletResultValue.Role.Name contains \"Search\"\r\n| summarize dcount(tostring(CmdletResultValue.RoleAssigneeName)) by role=tostring(CmdletResultValue.Role.Name)",
               "size": 3,
               "title": "Number of accounts with sensitive RBAC roles",
               "queryType": 0,
@@ -511,7 +537,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"MRA\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Role.Name contains \"Impersonation\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList})\r\n| where CmdletResultValue.Role.Name contains \"Impersonation\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
@@ -526,17 +552,63 @@
             "name": "Application Impersonation Role"
           },
           {
-            "type": 1,
+            "type": 12,
             "content": {
-              "json": "**Mailbox Import Export**  is an RBAC role that allows an account to export the content of any maibox in a PST. It also allows search in all mailboxes.\r\n\r\n⚡ This role is very powerfull.\r\n\r\nBy default, this role is not delegated to any user or group. The members of the group Organization Management by default do not have this role but are able to delegate it.\r\n\r\nℹ️ Recommendations\r\n\r\nIf you temporarily need this delegation, consider the following:\r\n- create an empty group with this delegation\r\n- monitor the group content and  alert when the group modified\r\n- add administrators in this group only for a short period of time",
-              "style": "info"
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Mailbox Import Export Role",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "This delegation allows to export the content all  mailboxes in a scope in PST file.\r\nExcluded from the result as default configuration :\r\nDelegating delegation to Organization Management\r\n"
+                  },
+                  "name": "text - 0"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "**Mailbox Import Export**  is an RBAC role that allows an account to export the content of any maibox in a PST. It also allows search in all mailboxes.\r\n\r\n⚡ This role is very powerfull.\r\n\r\nBy default, this role is not delegated to any user or group. The members of the group Organization Management by default do not have this role but are able to delegate it.\r\n\r\nℹ️ Recommendations\r\n\r\nIf you temporarily need this delegation, consider the following:\r\n- create an empty group with this delegation\r\n- monitor the group content and  alert when the group modified\r\n- add administrators in this group only for a short period of time",
+                    "style": "info"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "ExportRoleHelp"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Role.Name contains \"export\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
+                    "size": 3,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "sortBy": [
+                        {
+                          "itemKey": "ConfigWriteScope",
+                          "sortOrder": 1
+                        }
+                      ]
+                    },
+                    "sortBy": [
+                      {
+                        "itemKey": "ConfigWriteScope",
+                        "sortOrder": 1
+                      }
+                    ]
+                  },
+                  "name": "query - 1",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                }
+              ]
             },
-            "conditionalVisibility": {
-              "parameterName": "Help",
-              "comparison": "isEqualTo",
-              "value": "Yes"
-            },
-            "name": "ExportRoleHelp"
+            "name": "Mailbox Import Export Role"
           },
           {
             "type": 12,
@@ -569,7 +641,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"MRA\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Role.Name contains \"search\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| where CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Role.Name contains \"search\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| where CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -621,7 +693,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"MailboxDatabaseReceiveAs\",\"{DateOfConfiguration}\")\r\n| union ExchangeConfiguration(\"MailboxDatabaseSendAs\",\"{DateOfConfiguration}\")\r\n| summarize dcount(tostring(CmdletResultValue.UserString)) by iff( tostring(Section) contains \"MailboxDatabaseReceiveAs\",\"ReceiveAs Unique Acct\",\"SendAs Unique Acct\")",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MailboxDatabaseReceiveAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| union ExchangeConfigurationV2(SpecificSectionList=\"MailboxDatabaseSendAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| summarize dcount(tostring(CmdletResultValue.UserString)) by iff( tostring(Section) contains \"MailboxDatabaseReceiveAs\",\"ReceiveAs Unique Acct\",\"SendAs Unique Acct\")",
                     "size": 3,
                     "title": "Number of accounts with ReceiveAs/SendAs delegations",
                     "queryType": 0,
@@ -659,7 +731,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"MailboxDatabaseReceiveAs\",\"{DateOfConfiguration}\")\r\n| union ExchangeConfiguration(\"MailboxDatabaseSendAs\",\"{DateOfConfiguration}\")\r\n| summarize dcount(tostring(CmdletResultValue.Identity.Name)) by iff( tostring(Section) contains \"MailboxDatabaseReceiveAs\",\"ReceiveAs Unique DB\",\"SendAs Unique DB\")",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MailboxDatabaseReceiveAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| union ExchangeConfigurationV2(SpecificSectionList=\"MailboxDatabaseSendAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| summarize dcount(tostring(CmdletResultValue.Identity.Name)) by iff( tostring(Section) contains \"MailboxDatabaseReceiveAs\",\"ReceiveAs Unique DB\",\"SendAs Unique DB\")",
                     "size": 3,
                     "title": "ReceiveAs/SendAs database delegations",
                     "color": "purple",
@@ -714,7 +786,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"MailboxDatabaseReceiveAs\",\"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| extend Account = tostring(CmdletResultValue.UserString)\r\n| extend DatabaseName = tostring(CmdletResultValue.Identity.Name)\r\n| summarize Count =count() by Account,DatabaseName\r\n| project Account,Count,DatabaseName\r\n",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MailboxDatabaseReceiveAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Account = tostring(CmdletResultValue.UserString)\r\n| extend DatabaseName = tostring(CmdletResultValue.Identity.Name)\r\n| summarize Count =count() by Account,DatabaseName\r\n| project Account,Count,DatabaseName\r\n",
                     "size": 3,
                     "title": "ReceiveAs Extended Right on databases",
                     "showExportToExcel": true,
@@ -772,7 +844,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"MailboxDatabaseSendAs\",\"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| extend Account = tostring(CmdletResultValue.UserString)\r\n| extend DatabaseName = tostring(CmdletResultValue.Identity.Name)\r\n| summarize Count =count() by Account,DatabaseName\r\n| project Account,Count,DatabaseName",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MailboxDatabaseSendAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Account = tostring(CmdletResultValue.UserString)\r\n| extend DatabaseName = tostring(CmdletResultValue.Identity.Name)\r\n| summarize Count =count() by Account,DatabaseName\r\n| project Account,Count,DatabaseName",
                     "size": 3,
                     "title": "SendAs Extended Right on databases",
                     "showExportToExcel": true,
@@ -879,7 +951,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(\"LocalAminGroup\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Level != 0\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| where CmdletResultValue.MemberPath !contains \"Exchange Trusted Subsystem\"\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| where ObjectClass !contains \"group\"\r\n| summarize Count=count() by MemberPath,Parentgroup\r\n| project Parentgroup=strcat(\"💻 \",Parentgroup),Count,MemberPath\r\n//| sort by MemberPath asc",
+              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfigurationV2(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| where CmdletResultValue.MemberPath !contains \"Exchange Trusted Subsystem\"\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| where ObjectClass !contains \"group\"\r\n| summarize Count=count() by MemberPath,Parentgroup\r\n| project Parentgroup=strcat(\"💻 \",Parentgroup),Count,MemberPath\r\n//| sort by MemberPath asc",
               "size": 3,
               "title": "Total Number of local Administrators per server : Limited = Yes (non standard) shows only User account",
               "queryType": 0,
@@ -925,7 +997,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(\"LocalAminGroup\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Level != 0\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| where ObjectClass !contains \"group\"\r\n| summarize Count=count() by MemberPath,Parentgroup\r\n| project Parentgroup,Count,MemberPath\r\n//| sort by MemberPath asc",
+              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfigurationV2(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| where ObjectClass !contains \"group\"\r\n| summarize Count=count() by MemberPath,Parentgroup\r\n| project Parentgroup,Count,MemberPath\r\n//| sort by MemberPath asc",
               "size": 3,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -951,7 +1023,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(\"LocalAminGroup\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Level != 0 \r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = tostring(CmdletResultValue.LastLogonString)\r\n| extend LastPwdSet = tostring(CmdletResultValue.LastPwdSetString)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| summarize Count=count() by MemberPath,Parentgroup,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| project  Parentgroup = strcat(\"💻  \",Parentgroup),Count,MemberPath,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| sort by Parentgroup asc ",
+              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfigurationV2(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0 \r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = tostring(CmdletResultValue.LastLogonString)\r\n| extend LastPwdSet = tostring(CmdletResultValue.LastPwdSetString)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| summarize Count=count() by MemberPath,Parentgroup,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| project  Parentgroup = strcat(\"💻  \",Parentgroup),Count,MemberPath,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| sort by Parentgroup asc ",
               "size": 3,
               "title": " Total Non standard Groups and accounts including nested groups",
               "queryType": 0,
@@ -1011,7 +1083,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(\"LocalAminGroup\",\"DateOfConfiguration\")\r\n| where CmdletResultValue.Level != 0 \r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = todatetime (CmdletResultValue.LastLogonString)\r\n| extend LastPwdSet = todatetime(CmdletResultValue.LastPwdSetString)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| summarize Count=count() by MemberPath,Parentgroup,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| project  Parentgroup,Count,MemberPath,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| sort by Parentgroup, MemberPath asc",
+              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfigurationV2(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0 \r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = todatetime (CmdletResultValue.LastLogonString)\r\n| extend LastPwdSet = todatetime(CmdletResultValue.LastPwdSetString)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| summarize Count=count() by MemberPath,Parentgroup,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| project  Parentgroup,Count,MemberPath,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| sort by Parentgroup, MemberPath asc",
               "size": 3,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1053,7 +1125,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(\"LocalAminGroup\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Level == 1\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )\r\n| project-away  CmdletResultValue\r\n| summarize Count=count(), Servers=make_set(Parentgroup) by MemberPath\r\n| sort by Count desc",
+              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfigurationV2(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level == 1\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )\r\n| project-away  CmdletResultValue\r\n| summarize Count=count(), Servers=make_set(Parentgroup) by MemberPath\r\n| sort by Count desc",
               "size": 3,
               "title": "Non Standard accounts summary",
               "showExportToExcel": true,
@@ -1090,7 +1162,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(\"LocalAminGroup\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Level == 1\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| project-away  CmdletResultValue\r\n| summarize count (), Servers=make_set(Parentgroup) by MemberPath\r\n| sort by MemberPath asc",
+              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfigurationV2(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level == 1\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| project-away  CmdletResultValue\r\n| summarize count (), Servers=make_set(Parentgroup) by MemberPath\r\n| sort by MemberPath asc",
               "size": 3,
               "title": "  ",
               "queryType": 0,
@@ -1120,8 +1192,8 @@
                   "version": "KqlParameterItem/1.0",
                   "name": "Server",
                   "type": 2,
-                  "query": "ExchangeConfiguration(\"ExchangeServers\",\"DateOfConfiguration\")\r\n| project CmdletResultValue\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
-                  "value": "IT-X2010-01",
+                  "query": "ExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
+                  "value": null,
                   "typeSettings": {
                     "additionalResourceOptions": [],
                     "showDefault": false
@@ -1154,7 +1226,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(\"LocalAminGroup\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Level != 0 \r\n| where CmdletResultValue.Parentgroup contains \"{Server}\"\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend ParentId = iif( MemberPath contains \"\\\\\", strcat(split(MemberPath,\"\\\\\")[0] ,toint(Level)-1 ), \"\")\r\n| extend Id = strcat(MemberPath, Level )\r\n| project-away  CmdletResultValue\r\n| sort by MemberPath asc\r\n| project-reorder ParentId, Id\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )",
+              "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfigurationV2(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0 \r\n| where CmdletResultValue.Parentgroup contains \"{Server}\"\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend ParentId = iif( MemberPath contains \"\\\\\", strcat(split(MemberPath,\"\\\\\")[0] ,toint(Level)-1 ), \"\")\r\n| extend Id = strcat(MemberPath, Level )\r\n| project-away  CmdletResultValue\r\n| sort by MemberPath asc\r\n| project-reorder ParentId, Id\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )",
               "size": 3,
               "title": "Local Administrators group content",
               "queryType": 0,
@@ -1257,7 +1329,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let ETSValidcontnet = union kind=outer (ExchangeConfiguration(\"ExchangeServers\",\"{DateOfConfiguration}\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfiguration(\"DAG\",\"{DateOfConfiguration}\")| project Name = tostring(Identity));\r\nExchangeConfiguration(\"ETS\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet)\r\n| summarize count(), makeset(tostring(CmdletResultValue.Name)) //by  tostring(CmdletResultValue.Name)",
+              "query": "let ETSValidcontnet = union kind=outer (ExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfigurationV2(SpecificSectionList=\"DAG\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(Identity));\r\nExchangeConfigurationV2(SpecificSectionList=\"ETS\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet)\r\n| summarize count(), makeset(tostring(CmdletResultValue.Name)) //by  tostring(CmdletResultValue.Name)",
               "size": 3,
               "title": "Exchange Trusted SubSystem group nonstandard member count",
               "noDataMessage": "Content of group as Expected",
@@ -1295,7 +1367,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let ETSValidcontnet = union kind=outer (ExchangeConfiguration(\"ExchangeServers\",\"{DateOfConfiguration}\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfiguration(\"DAG\",\"{DateOfConfiguration}\")| project Name = tostring(Identity));\r\nExchangeConfiguration(\"EWP\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet) and CmdletResultValue.Name != \"Exchange Trusted Subsystem\"\r\n| summarize count() by  tostring(CmdletResultValue.Name)",
+              "query": "let ETSValidcontnet = union kind=outer (ExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfigurationV2(SpecificSectionList=\"DAG\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(Identity));\r\nExchangeConfigurationV2(SpecificSectionList=\"EWP\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet) and CmdletResultValue.Name != \"Exchange Trusted Subsystem\"\r\n| summarize count() by  tostring(CmdletResultValue.Name)",
               "size": 3,
               "title": "Exchange Windows Permissions group direct nonstandard members",
               "noDataMessage": "Content of group as expected",
@@ -1340,7 +1412,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let ETSValidcontnet = union kind=outer (ExchangeConfiguration(\"ExchangeServers\",\"{DateOfConfiguration}\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfiguration(\"DAG\",\"{DateOfConfiguration}\")| project Name = tostring(Identity));\r\nExchangeConfiguration(\"ETS\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet)\r\n| extend Name = strcat (\"⛔\",tostring(CmdletResultValue.Name))\r\n| project Name ",
+                    "query": "let ETSValidcontnet = union kind=outer (ExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfigurationV2(SpecificSectionList=\"DAG\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(Identity));\r\nExchangeConfigurationV2(SpecificSectionList=\"ETS\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet)\r\n| extend Name = strcat (\"⛔\",tostring(CmdletResultValue.Name))\r\n| project Name ",
                     "size": 3,
                     "title": "Exchange Trusted SubSystem nonstandard content - Critical risk",
                     "noDataMessage": "Content of Exchange Trusted SubSystem as Expected",
@@ -1358,7 +1430,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let ETSValidcontnet = union kind=outer (ExchangeConfiguration(\"ExchangeServers\",\"lastdate\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfiguration(\"DAG\",\"lastdate\")| project Name = tostring(Identity));\r\nExchangeConfiguration(\"EWP\",\"lastdate\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet) and CmdletResultValue.Name != \"Exchange Trusted Subsystem\"\r\n| extend Name = strcat (\"⛔\",tostring(CmdletResultValue.Name))\r\n| project Name ",
+                    "query": "let ETSValidcontnet = union kind=outer (ExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfigurationV2(SpecificSectionList=\"DAG\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(Identity));\r\nExchangeConfigurationV2(SpecificSectionList=\"EWP\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet) and CmdletResultValue.Name != \"Exchange Trusted Subsystem\"\r\n| extend Name = strcat (\"⛔\",tostring(CmdletResultValue.Name))\r\n| project Name ",
                     "size": 3,
                     "title": "Exchange Windows Permissions direct nonstandard content",
                     "noDataMessage": "Content of Exchange Windows Permissions as Expected",
@@ -1402,7 +1474,7 @@
                         "type": 3,
                         "content": {
                           "version": "KqlItem/1.0",
-                          "query": "ExchangeConfiguration(\"ExGroup\",\"DateOfConfiguration\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.Level != 0 and CmdletResultValue.ObjectClass !contains \"group\"\r\n| extend MemberPath= tostring(split(tostring(CmdletResultValue.MemberPath),\"\\\\\")[countof(tostring(CmdletResultValue.MemberPath),\"\\\\\")])\r\n| summarize dcount(tostring(MemberPath)) by Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n",
+                          "query": "ExchangeConfigurationV2(SpecificSectionList=\"ExGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.Level != 0 and CmdletResultValue.ObjectClass !contains \"group\"\r\n| extend MemberPath= tostring(split(tostring(CmdletResultValue.MemberPath),\"\\\\\")[countof(tostring(CmdletResultValue.MemberPath),\"\\\\\")])\r\n| summarize dcount(tostring(MemberPath)) by Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n",
                           "size": 3,
                           "queryType": 0,
                           "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1445,8 +1517,8 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "Group",
                         "type": 2,
-                        "query": "ExchangeConfiguration(\"ExGroup\",\"{DateOfConfiguration}\")\r\n//| where CmdletResultValue.Parentgroup != \"Exchange Trusted Subsystem\"\r\n//| where CmdletResultValue.Parentgroup != \"Exchange Windows Permissions\"\r\n| project CmdletResultValue\r\n| extend GroupName = tostring(CmdletResultValue.Parentgroup)\r\n| distinct GroupName\r\n| sort by GroupName asc\r\n",
-                        "value": "Exchange Servers",
+                        "query": "ExchangeConfigurationV2(SpecificSectionList=\"ExGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n//| where CmdletResultValue.Parentgroup != \"Exchange Trusted Subsystem\"\r\n//| where CmdletResultValue.Parentgroup != \"Exchange Windows Permissions\"\r\n| project CmdletResultValue\r\n| extend GroupName = tostring(CmdletResultValue.Parentgroup)\r\n| distinct GroupName\r\n| sort by GroupName asc\r\n",
+                        "value": null,
                         "typeSettings": {
                           "additionalResourceOptions": [],
                           "showDefault": false
@@ -1465,7 +1537,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"ExGroup\",\"{DateOfConfiguration}\")\r\n| search CmdletResultValue.Parentgroup == \"{Group}\"\r\n| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n//| extend LastLogon = iif ( todatetime (CmdletResultValue.LastLogonString) < ago(-366d), CmdletResultValue.LastLogonString,strcat(\"💥\",CmdletResultValue.LastLogonString))\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"ExGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| search CmdletResultValue.Parentgroup == \"{Group}\"\r\n| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n//| extend LastLogon = iif ( todatetime (CmdletResultValue.LastLogonString) < ago(-366d), CmdletResultValue.LastLogonString,strcat(\"💥\",CmdletResultValue.LastLogonString))\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1546,8 +1618,8 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "Group",
                         "type": 2,
-                        "query": "ExchangeConfiguration(\"ADGroup\",\"DateOfConfiguration\")\r\n| project CmdletResultValue\r\n| extend GroupName = tostring(CmdletResultValue.Parentgroup)\r\n| distinct GroupName\r\n| sort by GroupName asc\r\n",
-                        "value": "Administrators",
+                        "query": "ExchangeConfigurationV2(SpecificSectionList=\"ADGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend GroupName = tostring(CmdletResultValue.Parentgroup)\r\n| distinct GroupName\r\n| sort by GroupName asc\r\n",
+                        "value": null,
                         "typeSettings": {
                           "additionalResourceOptions": [],
                           "showDefault": false
@@ -1566,7 +1638,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"ADGroup\",\"{DateOfConfiguration}\")\r\n| search CmdletResultValue.Parentgroup == \"{Group}\"\r\n| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )\r\n",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"ADGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| search CmdletResultValue.Parentgroup == \"{Group}\"\r\n| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )\r\n",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1618,7 +1690,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"ReceiveConnector\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.PermissionGroupsString contains \"Anonymous\"\r\n| summarize Count = countif (CmdletResultValue.PermissionGroupsString contains \"Anonymous\")  by Name,tostring(CmdletResultValue.Server.Name)\r\n",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.PermissionGroupsString contains \"Anonymous\"\r\n| summarize Count = countif (CmdletResultValue.PermissionGroupsString contains \"Anonymous\")  by Name,tostring(CmdletResultValue.Server.Name)\r\n",
                     "size": 0,
                     "title": "Receive Connectors with Anonymous",
                     "queryType": 0,
@@ -1648,7 +1720,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"RCAnonymous\",\"{DateOfConfiguration}\")\r\n| extend Identity = tostring(Identity)\r\n|summarize count() by Identity",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"RCAnonymous\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend Identity = tostring(Identity)\r\n|summarize count() by Identity",
                     "size": 0,
                     "title": "Receive Connectors OpenRelay with \"ms-Exch-SMTP-Accept-Any-Recipient\" for Anonymous",
                     "queryType": 0,
@@ -1662,7 +1734,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"ReceiveConnector\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.AuthMechanismString contains (\"ExternalAuthoritative\")\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| summarize count() by Name,Server\r\n",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.AuthMechanismString contains (\"ExternalAuthoritative\")\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| summarize count() by Name,Server\r\n",
                     "size": 0,
                     "title": "Receive Connector Open Relay using with Externally Secure",
                     "queryType": 0,
@@ -1706,10 +1778,11 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "Server",
                         "type": 2,
-                        "query": "ExchangeConfiguration(\"ExchangeServers\",\"DateOfConfiguration\")\r\n| project CmdletResultValue\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
-                        "value": "IT-X2010-01",
+                        "query": "ExchangeConfigurationV2(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
+                        "value": null,
                         "typeSettings": {
-                          "additionalResourceOptions": []
+                          "additionalResourceOptions": [],
+                          "showDefault": false
                         },
                         "queryType": 0,
                         "resourceType": "microsoft.operationalinsights/workspaces"
@@ -1725,7 +1798,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"ReceiveConnector\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.Server.Name contains \"{Server}\"\r\n| where CmdletResultValue.PermissionGroupsString contains \"Anonymous\" //> 12 and CmdletResultValue.PermissionGroups != 14 and CmdletResultValue.PermissionGroups != 16\r\n| project CmdletResultValue\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend TransportRole = iff(CmdletResultValue.TransportRole== \"32\" , \"HubTransport\", \"FrontendTransport\")\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend PermissionGroups = tostring(CmdletResultValue.PermissionGroupsString) \r\n//| extend Bindings = iif(tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port )!=\"\",tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port),\",\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port))),tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port))))\r\n//| extend RemoteIPRanges = tostring(CmdletResultValue.RemoteIPRanges)\r\n| extend AuthMechanism = tostring(CmdletResultValue.AuthMechanismString)\r\n| mv-expand RemoteIPall=CmdletResultValue.RemoteIPRanges\r\n| mv-expand BindingAllall=CmdletResultValue.Bindings\r\n| extend RemoteIP= RemoteIPall.Expression\r\n| extend IP= strcat (BindingAllall.Address,\"-\",BindingAllall.Port)\r\n| summarize Bindings = make_set(tostring(IP)),RemoteIPRange = make_set(tostring(RemoteIP)) by Server,Name,TransportRole,Enabled,PermissionGroups,AuthMechanism\r\n| sort  by Server asc\r\n",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Server.Name contains \"{Server}\"\r\n| where CmdletResultValue.PermissionGroupsString contains \"Anonymous\" //> 12 and CmdletResultValue.PermissionGroups != 14 and CmdletResultValue.PermissionGroups != 16\r\n| project CmdletResultValue\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend TransportRole = iff(CmdletResultValue.TransportRole== \"32\" , \"HubTransport\", \"FrontendTransport\")\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend PermissionGroups = tostring(CmdletResultValue.PermissionGroupsString) \r\n//| extend Bindings = iif(tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port )!=\"\",tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port),\",\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port))),tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port))))\r\n//| extend RemoteIPRanges = tostring(CmdletResultValue.RemoteIPRanges)\r\n| extend AuthMechanism = tostring(CmdletResultValue.AuthMechanismString)\r\n| mv-expand RemoteIPall=CmdletResultValue.RemoteIPRanges\r\n| mv-expand BindingAllall=CmdletResultValue.Bindings\r\n| extend RemoteIP= RemoteIPall.Expression\r\n| extend IP= strcat (BindingAllall.Address,\"-\",BindingAllall.Port)\r\n| summarize Bindings = make_set(tostring(IP)),RemoteIPRange = make_set(tostring(RemoteIP)) by Server,Name,TransportRole,Enabled,PermissionGroups,AuthMechanism\r\n| sort  by Server asc\r\n",
                     "size": 1,
                     "title": "Receive Connectors configure with Anonymous Permission",
                     "queryType": 0,
@@ -1778,7 +1851,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"RCAnonymous\",\"{DateOfConfiguration}\")\r\n| project Identity,CmdletResultValue\r\n| extend Identity = tostring(Identity)\r\n| extend DistinguishedName = tostring(CmdletResultValue.Identity.DistinguishedName)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc ",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"RCAnonymous\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project Identity,CmdletResultValue\r\n| extend Identity = tostring(Identity)\r\n| extend DistinguishedName = tostring(CmdletResultValue.Identity.DistinguishedName)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc ",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
@@ -1816,7 +1889,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"TransportRule\",\"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| extend Identity = iif( CmdletResultValue.Identity contains \"OrgHierarchyToIgnore\",tostring(CmdletResultValue.Identity.Name),tostring(CmdletResultValue.Identity))\r\n| extend State = tostring(CmdletResultValue.State)\r\n| extend BlindCopyTo = tostring(CmdletResultValue.BlindCopyToString)\r\n| extend CopyTo = tostring(CmdletResultValue.CopyToString)\r\n| extend RedirectMessageTo = tostring(CmdletResultValue.RedirectMessageToString)\r\n| extend SentTo = tostring(CmdletResultValue.SentToString)\r\n| extend Mode = tostring(CmdletResultValue.Identity.Mode)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"TransportRule\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Identity = iif( CmdletResultValue.Identity contains \"OrgHierarchyToIgnore\",tostring(CmdletResultValue.Identity.Name),tostring(CmdletResultValue.Identity))\r\n| extend State = tostring(CmdletResultValue.State)\r\n| extend BlindCopyTo = tostring(CmdletResultValue.BlindCopyToString)\r\n| extend CopyTo = tostring(CmdletResultValue.CopyToString)\r\n| extend RedirectMessageTo = tostring(CmdletResultValue.RedirectMessageToString)\r\n| extend SentTo = tostring(CmdletResultValue.SentToString)\r\n| extend Mode = tostring(CmdletResultValue.Identity.Mode)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc",
                     "size": 1,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
@@ -1840,7 +1913,7 @@
           {
             "type": 1,
             "content": {
-              "json": "The **Journal Mailboxes** contain emails sent and received by specific or all users. The content of these mailboxes is very sensitives.\r\n\r\nJournal Rules should be reviewed to check if they are still needed. Mailbox audit should be set on these mailboxes. Also by default, no one should access to these mailboxes.\r\n\r\nThen, it is recommended to regularly check who have Full Access mailbox or Receive As on these mailboxes.\r\nhttps://technet.microsoft.com/library/ff459237(v=exchg.141).aspx\r\n",
+              "json": "The **Journal Mailboxes** contain emails sent and received by specific or all users. The content of these mailboxes is very sensitives.\r\n\r\nJournal Rules should be reviewed to check if they are still needed. Mailbox audit should be set on these mailboxes. Also by default, no one should access to these mailboxes.\r\n\r\nThen, it is recommended to regularly check who have Full Access mailbox or Receive As on these mailboxes.\r\nhttps://technet.microsoft.com/fr-fr/library/ff459237(v=exchg.141).aspx\r\n",
               "style": "info"
             },
             "conditionalVisibility": {
@@ -1854,7 +1927,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "ExchangeConfiguration(\"JournalRule\",\"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| extend Identity = tostring(CmdletResultValue.Identity)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend JournalEmailAddress = tostring(CmdletResultValue.JournalEmailAddress)\r\n| extend Recipient = tostring(CmdletResultValue.Recipient)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc\r\n",
+              "query": "ExchangeConfigurationV2(SpecificSectionList=\"JournalRule\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Identity = tostring(CmdletResultValue.Identity)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend JournalEmailAddress = tostring(CmdletResultValue.JournalEmailAddress)\r\n| extend Recipient = tostring(CmdletResultValue.Recipient)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc\r\n",
               "size": 3,
               "title": "Journal Rules configured in your environment",
               "queryType": 0,
@@ -1875,7 +1948,7 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "As Journal Recipient on databases send all the mail send to users in this database to a specific mailbox. The content of these mailboxes is very sensitive.\r\n\r\nJournal Recipients configuration should be reviewed to check if they are still needed. Mailbox audit should be set on these mailboxes. No one should have access to these mailboxes by default.\r\n\r\nIt is recommended to regularly check who have Full Access or Receive As on these mailboxes.\r\nhttps://technet.microsoft.com/library/ff459237(v=exchg.141).aspx\r\n",
+                    "json": "As Journal Recipient on databases send all the mail send to users in this database to a specific mailbox. The content of these mailboxes is very sensitive.\r\n\r\nJournal Recipients configuration should be reviewed to check if they are still needed. Mailbox audit should be set on these mailboxes. No one should have access to these mailboxes by default.\r\n\r\nIt is recommended to regularly check who have Full Access or Receive As on these mailboxes.\r\nhttps://technet.microsoft.com/fr-fr/library/ff459237(v=exchg.141).aspx\r\n",
                     "style": "info"
                   },
                   "conditionalVisibility": {
@@ -1889,7 +1962,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"MbxDBJournaling\",\"{DateOfConfiguration}\")\r\n| where CmdletResultValue.JournalRecipient !=\"\"\r\n| project CmdletResultValue\r\n| extend Identity = tostring(CmdletResultValue.Identity.Name)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend JournalRecipient = tostring(CmdletResultValue.JournalRecipient)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc\r\n",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"MbxDBJournaling\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.JournalRecipient !=\"\"\r\n| project CmdletResultValue\r\n| extend Identity = tostring(CmdletResultValue.Identity.Name)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend JournalRecipient = tostring(CmdletResultValue.JournalRecipient)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc\r\n",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
@@ -1927,7 +2000,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"RemoteDomain\",\"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| extend Name =  tostring(CmdletResultValue.Name)\r\n| extend Address =  tostring(CmdletResultValue.DomainName.Address)\r\n| extend AutoForwardEnabled =  iff (CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.Address == \"*\", strcat (\"❌\",tostring(CmdletResultValue.AutoForwardEnabled)),iff(CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.Address != \"*\", strcat (\"⚠️\",tostring(CmdletResultValue.AutoForwardEnabled)),strcat (\"✅\",tostring(CmdletResultValue.AutoForwardEnabled))))\r\n| project-away CmdletResultValue\r\n| sort  by Address asc ",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"RemoteDomain\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Name =  tostring(CmdletResultValue.Name)\r\n| extend Address =  tostring(CmdletResultValue.DomainName.Address)\r\n| extend AutoForwardEnabled =  iff (CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.Address == \"*\", strcat (\"❌\",tostring(CmdletResultValue.AutoForwardEnabled)),iff(CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.Address != \"*\", strcat (\"⚠️\",tostring(CmdletResultValue.AutoForwardEnabled)),strcat (\"✅\",tostring(CmdletResultValue.AutoForwardEnabled))))\r\n| project-away CmdletResultValue\r\n| sort  by Address asc ",
                     "size": 1,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
@@ -1941,7 +2014,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(\"AcceptedDomain\",\"{DateOfConfiguration}\")\r\n| project CmdletResultValue\r\n| extend Name =  tostring(CmdletResultValue.Name)\r\n| extend Address =  tostring(CmdletResultValue.DomainName.Address)\r\n| extend Address =  iff (CmdletResultValue.DomainName.Address== \"*\" , strcat (\"❌ : OpenRelay configuration\",tostring(CmdletResultValue.AutoForwardEnabled)),\"Accepted Domains not configured as OpenRelay\")\r\n| extend DomainType =  case(CmdletResultValue.DomainType==\"0\",\"Authoritative Domain\",CmdletResultValue.DomainType==\"1\",\"ExternalRelay\",CmdletResultValue.DomainType==\"2\",\"InternalRelay\",\"NotApplicable\")\r\n| project-away CmdletResultValue\r\n| sort  by Address desc ",
+                    "query": "ExchangeConfigurationV2(SpecificSectionList=\"AcceptedDomain\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Name =  tostring(CmdletResultValue.Name)\r\n| extend Address =  tostring(CmdletResultValue.DomainName.Address)\r\n| extend Address =  iff (CmdletResultValue.DomainName.Address== \"*\" , strcat (\"❌ : OpenRelay configuration\",tostring(CmdletResultValue.AutoForwardEnabled)),\"Accepted Domains not configured as OpenRelay\")\r\n| extend DomainType =  case(CmdletResultValue.DomainType==\"0\",\"Authoritative Domain\",CmdletResultValue.DomainType==\"1\",\"ExternalRelay\",CmdletResultValue.DomainType==\"2\",\"InternalRelay\",\"NotApplicable\")\r\n| project-away CmdletResultValue\r\n| sort  by Address desc ",
                     "size": 1,
                     "title": "Accepted domain with *",
                     "queryType": 0,
