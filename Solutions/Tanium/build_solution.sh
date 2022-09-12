@@ -2,6 +2,12 @@
 
 set -Eeuo pipefail
 
+# globals
+_TOOL_DIRECTORY="Tools/Create-Azure-Sentinel-Solution/V2"
+_SH_TOOL_DIRECTORY="./$_TOOL_DIRECTORY"
+_INPUT_DIRECTORY="$_SH_TOOL_DIRECTORY/input"
+_REBUILD=0
+
 _msg() {
   echo >&2 -e "${1-}"
 }
@@ -41,7 +47,7 @@ report_failure() {
 
 build_solution() {
   _msg "🏗  Building Tanium Sentinel solution"
-  pwsh -Command 'Tools/Create-Azure-Sentinel-Solution/createSolution.ps1'
+  pwsh -Command "$_TOOL_DIRECTORY/createSolutionV2.ps1"
 }
 
 build_failed() {
@@ -62,11 +68,11 @@ END
 }
 
 clear_existing_build_inputs() {
-  rm -f ./Tools/Create-Azure-Sentinel-Solution/input/*
+  rm -f "$_INPUT_DIRECTORY"/*
 }
 
 copy_tanium_build_manifest_into_tooling() {
-  cp ./Solutions/Tanium/Data/Solution_Tanium.json ./Tools/Create-Azure-Sentinel-Solution/input/Solution_Tanium.json
+  cp ./Solutions/Tanium/Data/Solution_Tanium.json "$_INPUT_DIRECTORY/Solution_Tanium.json"
 }
 
 move_tanium_package_directory_to_temporary_location() {
@@ -94,9 +100,9 @@ pre_build_prep() {
 post_build_cleanup() {
   local tmpdir=$1
   _msg "🚮  Clearing inputs from the solution build tool"
-  rm -f ./Tools/Create-Azure-Sentinel-Solution/input/*
+  rm -f "$_INPUT_DIRECTORY"/*
   _msg "🆗  Restoring original inputs in the solution build tool"
-  git checkout ./Tools/Create-Azure-Sentinel-Solution/input
+  git checkout "$_INPUT_DIRECTORY"
   _msg "⏪  Copying zip files from temporary location back into Tanium/Package"
   copy_previous_tanium_package_zip_files_from_temporary_location_back_into_package_directory "$tmpdir"
 }
@@ -110,12 +116,17 @@ check-command() {
 check-new-version() {
   local declared_version
   declared_version=$(jq -r ".Version" Solutions/Tanium/Data/Solution_Tanium.json)
+
+  if [[ "$_REBUILD" -eq 1 ]]; then
+    rm "Solutions/Tanium/Package/$declared_version.zip"
+  fi
+
   if find Solutions/Tanium/Package -name '*.zip' | grep -q "$declared_version"; then
     _msg
     _msg_error "Found $declared_version.zip already built in Solutions/Tanium/Package"
     _msg
     _msg "Did you forget to increment the version in Solutions/Tanium/Data/Solution_Tanium.json?"
-    _msg "If you want to rebuild $declared_version then delete the zip file first"
+    _msg "If you want to rebuild $declared_version then delete the zip file first or use --rebuild"
     _msg
     exit 1
   fi
@@ -128,10 +139,27 @@ check-prerequisites() {
   check-new-version
 }
 
+usage() {
+  _msg "build_solution.sh to build Solutions/Tanium"
+  _msg "Will build according to metadata from Solutions/Tanium/Data/Solution_Tanium.json"
+  _msg "Use --rebuild to rebuild the same version again"
+  exit 0
+}
 
 main() {
   (cd "$(git rev-parse --show-toplevel)" || _die "Unable to cd to top level repo directory"
+    while :; do
+      case "${1-}" in
+      -h | --help) usage ;;
+      -r | --rebuild) _REBUILD=1 ;;
+      -?*) _die "Unknown option: $1" ;;
+      *) break ;;
+      esac
+      shift
+    done
+
     check-prerequisites
+    _shout "Building Solutions/Tanium using $_TOOL_DIRECTORY"
     declare logfile="/tmp/tanium_sentinel_create_package.log"
     declare tmpdir
     tmpdir=$(mktemp -d)
