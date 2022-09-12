@@ -21,46 +21,67 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |    
-        let ProcessEvents=(){
-        WindowsEvent 
-        | where not(disabled)
-        | where EventID == 4689
-            // -- Filter
-            // -- Map
-              | extend
-            // Event
-          EventCount = int(1),
-          EventVendor = "Microsoft",
-          EventProduct = "Security Events",
-          EventSchemaVersion = "0.1.0",
-          EventSchema = 'ProcessEvent',
-          EventStartTime = todatetime(TimeGenerated),
-          EventEndTime = todatetime(TimeGenerated),
-          EventType = "ProcessTerminated",
-          EventResult = 'Success',
-          EventOriginalType = tostring(EventID),
-          EventOriginalUid = EventOriginId,
-          EventResultDetails = tostring(EventData.Status),
-          EventOriginalResultDetails = tostring(EventData.Status), 
-        // Device
-          DvcId = tostring(EventData.SourceComputerId),
-          DvcHostname = Computer,
-          DvcOs = "Windows",
-        // Users
-          ActorUserId = tostring(EventData.SubjectUserSid),
-          ActorUserIdType = "SID",
-          ActorUsername = tostring(iff (EventData.SubjectDomainName in ('', '-'), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
-          ActorUsernameType = iff(EventData.SubjectDomainName in ('', '-'),'Simple', 'Windows'),
-          ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
+    let ASIM_GetWindowsUserType = (username:string, sid:string) { 
+        case ( 
+            username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", 
+            isempty(username) or sid in ("S-1-0-0"), "", 
+            "Regular"
+        )
+    };
+    let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\')[-1]) };
+    let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
+        T 
+        | extend 
+             type = case (
+                username == "-", "",
+                domain == "-", "Simple",
+                "Windows"
+            ),
+            username = case (
+              username == "-", "",
+              domain == '-', username,
+              strcat(domain, @"\" , username)
+            )
+    };
+    let parser=(disabled:boolean=false){
+    WindowsEvent
+    | where not(disabled)
+    | where EventID == 4689
+    | project-rename
+        DvcHostname = Computer
+    | extend
+        EventCount = int(1),
+        EventVendor = 'Microsoft',
+        EventProduct = 'Security Events',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'ProcessEvent',
+        EventResult = 'Success',
+        EventStartTime = todatetime(TimeGenerated),
+        EventEndTime = todatetime(TimeGenerated),
+        EventType = 'ProcessTerminated',
+        EventOriginalType = tostring(EventID),
+        DvcOs = 'Windows'
+    | extend 
+        ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
+        ActorUserId = tostring(EventData.SubjectUserSid),
+        ActorUserIdType = "SID",
+        ActorUsernameType = "Windows"
+    | extend 
+        ActorUserSid = ActorUserId,
+        ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
+    | extend
+        ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
         // Processes 
-          TargetProcessId = tostring(toint(tostring(EventData.ProcessId))),
-          TargetProcessName = tostring(EventData.ProcessName),
-          TargetProcessCommandLine = tostring(EventData.CommandLine),
-          TargetProcessTokenElevation = tostring(EventData.TokenElevationType)
-        // Aliases
-            | extend 
-          User = ActorUsername,
-          Dvc = DvcHostname,
-          Process = TargetProcessName
-           | project-away EventData
-          }; ProcessEvents
+        TargetProcessId = tostring(toint(tolong(EventData.NewProcessId))),
+        TargetProcessName = tostring(EventData.NewProcessName),
+        TargetProcessStatusCode = tostring(EventData.Status)
+    | extend 
+        TargetProcessFilename = ASIM_GetFilenamePart(TargetProcessName)
+    // -- Aliases
+    | extend
+        User = ActorUsername,
+        Dvc = DvcHostname,
+        Process = TargetProcessName
+    | project-away Channel, EventData, Data, EventID, EventLevelName, EventLevel, Provider, RawEventData, Task, TenantId, ManagementGroupName, SourceSystem, EventOriginId
+    }; 
+    parser(disabled=disabled)

@@ -142,11 +142,14 @@ ParserQuery: |
       254, 'None',
       255, 'Any'];
   let parser=(
-    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    starttime:datetime=datetime(null)
+    , endtime:datetime=datetime(null)
     , srcipaddr:string='*'
     , domain_has_any:dynamic=dynamic([]) 
-    , responsecodename:string='*', response_has_ipv4:string='*'
-    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
+    , responsecodename:string='*'
+    , response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([])
+    , eventtype:string='Query'
     , disabled:bool=false
     ){
     Corelight_CL | where not(disabled)
@@ -162,60 +165,90 @@ ParserQuery: |
       and (response_has_ipv4=='*' or has_ipv4(Message,response_has_ipv4) )
       and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(Message, response_has_any_prefix))
     // --
-    | extend data = todynamic(Message)
+   | parse-kv Message as (
+        ['"_system_name"']:string,
+        ['"_write_ts"']:datetime,
+        ['"ts"']:datetime,
+        ['"uid"']:string,
+        ['"id.orig_h"']:string,
+        ['"id.orig_p"']:int,
+        ['"id.resp_h"']:string,
+        ['"id.resp_p"']:int,
+        ['"proto"']:string,
+        ['"trans_id"']:int,
+        ['"query"']:string,
+        ['"qclass"']:int,
+        ['"qtype"']:int,
+        ['"AA"']:bool,
+        ['"TC"']:bool,
+        ['"CD"']:bool,
+        ['"RD"']:bool,
+        ['"RA"']:bool,
+        ['"Z"']:int,
+        ['"rejected"']:bool,
+        ['"rcode"']:int,
+        ['"rcode_name"']:string,
+        ['"rtt"']:real,
+    ) 
+    with (quote = '"')
+    | parse Message with * '"answers":' answers:string ',"TTLs":' TTLs:string ',"rejected"' *
     // -- Post-filtering accurately now that message is parsed
     | where
-         (srcipaddr=="*" or srcipaddr==data.["id.orig_h"])
-          and (array_length(domain_has_any) ==0 or data.query has_any (domain_has_any))
-          and (responsecodename=="*" or data.rcode_name has responsecodename)
-          and (response_has_ipv4=='*' or has_ipv4(data.answers,response_has_ipv4) )
-          and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(data.answers, response_has_any_prefix))
+         (srcipaddr=="*" or srcipaddr==['"id.orig_h"'])
+          and (array_length(domain_has_any) ==0 or ['"query"'] has_any (domain_has_any))
+          and (responsecodename=="*" or ['"rcode_name"'] has responsecodename)
+          and (response_has_ipv4=='*' or has_ipv4(answers,response_has_ipv4) )
+          and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(answers, response_has_any_prefix))
     | extend 
         EventCount=int(1),
         EventProduct="Zeek",
         EventVendor="Corelight",
         EventSchema = "Dns",
         EventSchemaVersion="0.1.4",
-        EventType="Query",
-        EventSubType=iff(isnull(data.rcode),'request','response'),
-        EventEndTime= todatetime(data.ts),
-        EventOriginalUid = tostring(data.uid),
-        SrcIpAddr = tostring (data.["id.orig_h"]),
-        SrcPortNumber = toint (data.["id.orig_p"]),
-        DstIpAddr = tostring (data.["id.dest_h"]),
-        DstPortNumber = toint (data.["id.dest_p"]),
-        NetworkProtocol = tostring(data.proto),
-        TransactionIdHex = tohex(toint(data.trans_id)), 
-        DnsQuery = tostring(data.query),
-        DnsResponseCode = toint(data.rcode),
-        EventResultDetails = tostring (data.rcode_name),
-        DnsFlagsAuthoritative = tobool(data.AA),
-        DnsFlagsTruncated = tobool(data.TC),
-        DnsFlagsRecursionDesired = tobool(data.RD),
-        DnsFlagsZ = tobool(data.Z),
-        //DnsQueryClassName =tostring(data.qclass_name), 
-        DnsQueryClass = toint(data.qclass),
-        //DnsQueryTypeName =tostring(data.qtype_name), 
-        DnsQueryType = toint(data.qtype),
-        DnsNetworkDuration = toint(data.rtt),
-        DnsResponseName = tostring(pack ('answers', data.answers, 'ttls', data.TTLs, 'authoritative ', data.auth, 'additional', data.addl))
+        EventType="Query"
+    | project-rename
+        EventStartTime= ['"ts"'],
+        EventEndTime = ['"_write_ts"'],
+        EventOriginalUid = ['"uid"'],
+        SrcIpAddr = ['"id.orig_h"'],
+        SrcPortNumber = ['"id.orig_p"'],
+        DstIpAddr = ['"id.resp_h"'],
+        DstPortNumber = ['"id.resp_p"'],
+        NetworkProtocol = ['"proto"'],
+        DnsQuery = ['"query"'],
+        DnsResponseCode = ['"rcode"'],
+        EventResultDetails = ['"rcode_name"'],
+        DnsFlagsAuthoritative = ['"AA"'],
+        DnsFlagsTruncated = ['"TC"'],
+        DnsFlagsRecursionDesired = ['"RD"'],
+        DnsFlagsCheckingDisabled = ['"CD"'],
+        DnsFlagsRecursionAvailable = ['"RA"'],
+        DnsQueryClass = ['"qclass"'],
+        DnsQueryType = ['"qtype"'],
+        rtt = ['"rtt"'],
+        Z = ['"Z"'],
+        trans_id = ['"trans_id"'],
+        rejected = ['"rejected"'],
+        Dvc = ['"_system_name"']
     | lookup query_type_lookup on DnsQueryType
     | lookup class_lookup on DnsQueryClass
     | extend
-        EventStartTime = EventEndTime,
-        EventResult = iff (EventResultDetails=~'NOERROR','Success','Failure'),
+        EventSubType=iff(isnull(DnsResponseCode),'request','response'),
+        DnsNetworkDuration = toint(rtt*1000),
+        EventResult = iff (EventResultDetails!~'NOERROR' or rejected,'Failure','Success'),
         DnsQueryTypeName = case (DnsQueryTypeName == "" and not(isnull(DnsQueryType)), strcat("TYPE", DnsQueryType), DnsQueryTypeName),
-        DnsQueryClassName = case (DnsQueryClassName == "" and not(isnull(DnsQueryClass)), strcat("CLASS", DnsQueryClass), DnsQueryClassName)
-    | project-rename 
-        Dvc = hostname_s
+        DnsQueryClassName = case (DnsQueryClassName == "" and not(isnull(DnsQueryClass)), strcat("CLASS", DnsQueryClass), DnsQueryClassName),
+        TransactionIdHex = tohex(toint(trans_id)),
+        DnsFlagsZ = (Z != 0),
+        DnsResponseName = tostring(pack ('answers', answers, 'ttls', TTLs)) // support of auth & addl to be added.
     // Aliases
     | extend 
         DnsResponseCodeName=EventResultDetails, 
         Domain=DnsQuery,
         IpAddr=SrcIpAddr,
         Src=SrcIpAddr,
-        Dst=DstIpAddr,
-        Duration=DnsNetworkDuration
-    | project-away ['data'], Message, MG, ManagementGroupName, RawData, SourceSystem, Computer
+        //Duration=DnsNetworkDuration,
+        Dst=DstIpAddr
+    | project-away Z, Message, MG, ManagementGroupName, RawData, SourceSystem, Computer, TTLs, answers, trans_id, rejected, hostname_s
   };
-  parser (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr=srcipaddr, domain_has_any=domain_has_any, responsecodename=responsecodename, response_has_ipv4=response_has_ipv4, response_has_any_prefix=response_has_any_prefix, disabled=disabled)
