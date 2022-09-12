@@ -24,7 +24,6 @@ Analytic Rule (DNS Sniff Event Monitor) checks host properties and generates inc
 
 <table>
 <tr> <td>action_group </td> <td>Indicates the category of action. Valid values are manage, notify, remediate, and restrict.</td></tr>
-<tr> <td>disposition</td> <td>Represents the actual action in 2-digit format. For example, 00 for Recheck Host, 10 for HTTP Notification.</td></tr>
 <tr> <td>endpoint_ip</td> <td>Indicates the IP address of the endpoint, which can be an IPv4 or IPv6 address.</td></tr>
 <tr> <td>em_ip</td> <td>Indicates the IP address of the Enterprise Manager to which the endpoint belongs.</td></tr>
 <tr> <td>info</td> <td> Indicates additional information</td></tr>
@@ -33,143 +32,9 @@ The em_ip and info are optional.
 
 Note that the eyeExtend for Microsoft Sentinel module polls the incidents information periodically and examines the Description field of each incident. Based on the information set in the Description field, the Continuum Platform applies the requested action set by Microsoft Sentinel playbook to the endpoints.  
 The following is a sample description field of an incident set by the playbook:  
-<em>action_group="restrict";disposition="31";endpoint_ip=["10.16.141.130"];em_ip=["10.16.147.96"];info=Generated_by_Dnsniff_event</em>    
-Each action has a unique disposition value. The action name, disposition value, and action group supported by eyeExtend for Microsoft Sentinel are as follows:  
-
-<table>
-  <tr>
-    <th>Action Name</th>
-    <th>Disposition Value</th>
-    <th>Action Group</th>
-  </tr>
-  <tr>
-    <td>Recheck Host</td>
-    <td>00</td>
-    <td>manage</td>
-  </tr>
-  <tr>
-    <td>HTTP Notification</td>
-    <td>10</td>
-    <td>notify</td>
-  </tr>
-  <tr>
-    <td>HTTP Redirection to URL</td>
-    <td>11</td>
-    <td>notify</td>
-  </tr>
-  <tr>
-    <td>Send Balloon Notification</td>
-    <td>12</td>
-    <td>notify</td>
-  </tr>
-  <tr>
-    <td>Send Email</td>
-    <td>13</td>
-    <td>notify</td>
-  </tr>
-  <tr>
-    <td>Send Email to User</td>
-    <td>14</td>
-    <td>notify</td>
-  </tr>
-  <tr>
-    <td>MAC User Notification</td>
-    <td>15</td>
-    <td>notify</td>
-  </tr>
-  <tr>
-    <td>Disable Dual Homed</td>
-    <td>20</td>
-    <td>remediate</td>
-  </tr>
-  <tr>
-    <td>Kill Cloud Storage</td>
-    <td>21</td>
-    <td>remediate</td>
-  </tr>
-  <tr>
-    <td>Kill Instant Messaging</td>
-    <td>22</td>
-    <td>remediate</td>
-  </tr>
-  <tr>
-    <td>Kill Peer-to-peer</td>
-    <td>23</td>
-    <td>remediate</td>
-  </tr>
-  <tr>
-    <td>Switch Block</td>
-    <td>30</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Endpoint Address ACL</td>
-    <td>31</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Disable External Device</td>
-    <td>32</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Expedite IP Discovery</td>
-    <td>33</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Get Microsoft SMS/SCCM Updates</td>
-    <td>34</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Start Windows Updates</td>
-    <td>35</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Start Macintosh Updates</td>
-    <td>36</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Windows Self Remediation</td>
-    <td>37</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Block Network Access</td>
-    <td>38</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Block Suspected MAC Spoofing</td>
-    <td>39</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>RADIUS Authorize</td>
-    <td>40</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>VPN Block</td>
-    <td>41</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>WLAN Block</td>
-    <td>42</td>
-    <td>restrict</td>
-  </tr>
-  <tr>
-    <td>Whitelist Network Access</td>
-    <td>43</td>
-    <td>restrict</td>
-  </tr>
-</table>  
+<em>action_group="restrict";endpoint_ip=["10.16.141.130"];em_ip=["10.16.147.96"];info=Generated_by_Dnsniff_event</em>    
   
-
+  
 Use the Microsoft Apps Designer to view or edit the playbook as needed to fulfil security requirements. The code is prepared by using the visual editor, which can be easily viewed and modified.  
 
 You can choose to deploy the playbook:
