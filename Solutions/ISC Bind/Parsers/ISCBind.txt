@@ -1,0 +1,74 @@
+// Title:           ISC Bind
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    09/07/2022
+// Comment:         Inital Release
+//  
+// DESCRIPTION:
+// This parser takes raw ISC Bind logs from a Syslog stream and parses the logs into a normalized schema.
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
+//    It is recommended to name the Function Alias, as ISCBind
+// 4. Kusto Functions can typically take up to 15 minutes to activate. You can then use Function Alias for other queries.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// <190>Jun 30 16:15:59 204.136.241.42 named[22442]: client @0a0a00000a0a00 203.0.113.2#35705 (abc-exam.d.example.com): view 7: query: test123.example.com IN A -E(0)DCK (204.136.241.42)
+// <190>Jun 30 16:15:59 204.136.241.42 named[22442]: 30-Jun-2022 16:15:59.366 client @0a0a00000a0a00 203.0.113.2#35705 (abc-exam.d.example.com): view 7: UDP: query: test.example.com IN A response: NXDOMAIN -AE
+
+let request = Syslog 
+| where SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
+    // -- trim_start needed to remove optional @xxxx identifier.
+| extend SyslogMessage = trim_start (@'^(?:[\w\: ]+)?client (?:@.*? )?', SyslogMessage)
+    // -- trim_end needed to remove optional repetative IP address at the end.
+| extend SyslogMessage = trim_end (@' \([\d\.]+\)', SyslogMessage)
+| extend SyslogMessage = replace_string (SyslogMessage, '\\ ', '@@@')
+| parse SyslogMessage with
+        * "client " * " "
+        SrcIpAddr:string "#" 
+        SrcPortNumber:int *
+        "query: "
+        DnsQuery:string " "
+        DnsQueryClassName:string " "
+        DnsQueryTypeName:string " "
+        DnsFlags:string
+| extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
+| extend 
+        EventSubType = "request",
+        DnsResponseCodeName = "NA"
+| project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName;
+
+
+let response =Syslog 
+| where SyslogMessage has_all ("client", "query:", "response:")
+| extend SyslogMessage = trim_start (@'^(?:[\w\: ]+)?client (?:@.*? )?', SyslogMessage)
+| parse SyslogMessage with
+        * "client " * " "
+        SrcIpAddr:string "#" 
+        SrcPortNumber:int " " * "view " * ": "
+        NetworkProtocol:string ": query: "
+        DnsQuery:string " "
+        DnsQueryClassName:string " "
+        DnsQueryTypeName:string " "
+        "response: "
+        rest_of_string:string
+| extend
+        // -- multi-line mode (?m) needed in regex since samples included new lines. Might not exist in real logs
+        extract = extract_all(@"^(\w+) ([\w\+\-]+?)(?: |$)(?m)(.*?$)?", rest_of_string)[0]
+| extend 
+        DnsResponseCodeName = tostring(extract[0]),
+        DnsFlags = tostring(extract[1]),
+        DnsResponseName = tostring(extract[2])
+| extend 
+        EventSubType = "response"
+| project-away extract, rest_of_string,SyslogMessage;
+
+union request,response
+		
+
