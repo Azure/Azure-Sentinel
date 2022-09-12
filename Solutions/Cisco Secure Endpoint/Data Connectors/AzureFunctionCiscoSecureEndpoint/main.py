@@ -167,7 +167,8 @@ def check_on_future_event_time(events: List[dict], time_field: str) -> None:
         try:
             event_ts = parse_datetime(event_ts)
         except ParserError:
-            raise Exception("Can't parse event datetime.")
+            logging.error(f"Can't parse event datetime - {event_ts}.")
+            raise Exception(f"Can't parse event datetime - {event_ts}.")
         if isinstance(event_ts, datetime.datetime):
             now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
             if event_ts > now + datetime.timedelta(days=1):
