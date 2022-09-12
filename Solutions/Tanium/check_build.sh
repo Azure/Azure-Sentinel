@@ -41,6 +41,7 @@ check-command() {
 
 check-prerequisites() {
   check-command "git"
+  check-command "unzip"
 }
 
 top_level_repo_directory() {
