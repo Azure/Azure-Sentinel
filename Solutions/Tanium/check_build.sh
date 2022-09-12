@@ -84,6 +84,38 @@ show_diff_commands() {
   _msg "\nNOTE: you'll need to cd to the top level of the repo for the paths to work"
 }
 
+show_manual_check_steps() {
+  _msg ''
+  _msg 'Next, you should manually check the createUiDefinition.json file and the mainTemplate.json file'
+  _msg ''
+  _msg '
+  1. Validate createUiDefinition.json:
+
+  • Open CreateUISandbox https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade.
+  • Copy json content from createUiDefinition.json (in the recent version).
+  • Clear that content in the editor and replace with copied content in step #2.
+  • Click on preview
+  • You should see the User Interface preview of data connector, workbook, etc., and descriptions you provided in
+  input file.
+  • Check the description and User Interface of solution preview.
+
+  2. Validate maintemplate.json:
+
+  Validate  mainTemplate.json  by deploying the template in portal. Follow these steps to deploy in portal:
+
+  • Open up https://aka.ms/AzureSentinelPrP which launches the Azure portal with the needed private preview flags.
+  • Go to "Deploy a Custom Template" on the portal
+  • Select "Build your own template in Editor".
+  • Copy json content from  mainTemplate.json  (in the recent version).
+  • Clear that content in the editor and replace with copied content in step #3.
+  • Click Save and then progress to selecting subscription, Sentinel-enabled resource group, and corresponding
+  workspace, etc., to complete the deployment.
+  • Click Review + Create to trigger deployment.
+  • Check if the deployment successfully completes.
+  • You should see the data connector, workbook, etc., deployed in the respective galleries and validate
+  '
+}
+
 main() {
   check-prerequisites
 
@@ -102,6 +134,7 @@ main() {
     check_expected_files "$current"
     compare_contents "$previous" "$current"
     show_diff_commands "$previous" "$current"
+    show_manual_check_steps
   )
 }
 
