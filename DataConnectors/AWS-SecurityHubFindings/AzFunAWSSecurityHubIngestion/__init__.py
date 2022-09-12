@@ -15,7 +15,6 @@ import hmac
 import base64
 import re
 from threading import Thread
-from io import StringIO
 import asn1
 import cffi
 from boto3.session import Session
