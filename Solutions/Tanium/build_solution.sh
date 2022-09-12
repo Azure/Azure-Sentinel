@@ -64,7 +64,7 @@ report_success() {
   - build log: $log"
 END
 
-  _msg "\nYou can now run build_scripts/check.sh to compare this build with the previous build"
+  _msg "\nYou should next run Solutions/Tanium/check_build.sh to compare this build with the previous build"
 }
 
 clear_existing_build_inputs() {
