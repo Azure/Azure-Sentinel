@@ -20,9 +20,13 @@ The playbook require the following in order to connect and use the playbook:
 To add the Security Admin role to the Azure subscription where the playbook is installed:
 
 1.Open the playbook from the Microsoft Sentinel Automation page.
+
 2.With the playbook opened as a Logic app, select Identity > System assigned, and then in the Permissions area, select the Azure role assignments button.
-3. In the Azure role assignments page, select Add role assignment.
-4. In the Add role assignment pane:
+
+3.In the Azure role assignments page, select Add role assignment.
+
+4.In the Add role assignment pane:
+
   - Define the Scope as Subscription \ resource group
   - From the Subscription dropdown, select the subscription where your playbook is installed.
   - From the Role dropdown, select the Security Admin role, and then select Save.
