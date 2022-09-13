@@ -16,9 +16,36 @@ References:
     Link: https://aka.ms/ciscoasamessagecodes
 Description: |
   This ASIM parser supports normalizing commonly used Cisco ASA messages collected using the CEF Data Connector to the ASIM Network Session normalized schema.
-ParserName: ASimNetworkSessionCiscoASA
-EquivalentBuiltInParser: _ASim_NetworkSession_CiscoASA
+ParserName: vimNetworkSessionCiscoASA                               
+EquivalentBuiltInParser: _Im_NetworkSession_CiscoASA                                  
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
@@ -239,16 +266,42 @@ ParserQuery: |
             "710004", "Drop", "Failure",
             "710005", "Drop", "Failure",
       ];
-      let NWParser = (disabled:bool=false)
+      let NWParser = (
+            starttime:datetime=datetime(null), 
+            endtime:datetime=datetime(null),
+            srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+            dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+            ipaddr_has_any_prefix:dynamic=dynamic([]),
+            dstportnumber:int=int(null), 
+            hostname_has_any:dynamic=dynamic([]), 
+            dvcaction:dynamic=dynamic([]), 
+            eventresult:string='*', 
+            disabled:bool=false)
         { 
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
       let allLogs = CommonSecurityLog
                 | where not(disabled)
+                | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
                 | where DeviceVendor == "Cisco" and DeviceProduct == "ASA"
                 | where DeviceEventClassID in ("106001","106006","106015","106016","106021","106022","106010","106014","106018","106023","302013","302015","302014","302016","302020","302021","710002","710003","710004","710005","106007","106017","106100","106002","106012","106013","106020")
                 | lookup ActionResultLookup on DeviceEventClassID
+                | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction) or DvcAction == "")
+                | where ((eventresult == "*") or EventResult == eventresult or EventResult == "")
                 | project DeviceVendor, DeviceProduct, DeviceEventClassID, LogSeverity, OriginalLogSeverity, Computer, CommunicationDirection, DestinationIP, DestinationPort, DeviceAddress, DeviceName, Message, Protocol, SourceIP, SourcePort, DeviceVersion, DeviceCustomString2, DvcAction, EventResult, TimeGenerated, DeviceAction;
       let parsedData = allLogs
                 | where isnotempty(SourceIP)
+                | where (isnull(dstportnumber) or (DestinationPort == dstportnumber))
+                | extend temp_isSrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any), 
+                                temp_isDstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
+                | extend ASimMatchingIpAddr = case(
+                                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                                                (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                                                temp_isSrcMatch, "SrcIpAddr",
+                                                temp_isDstMatch, "DstIpAddr",
+                                                "No match"
+                                            )
+                | where ASimMatchingIpAddr != "No match"
                 | project-rename NetworkRuleName = DeviceCustomString2,
                                  SrcIpAddr = SourceIP,
                                  SrcPortNumber = SourcePort,
@@ -256,6 +309,9 @@ ParserQuery: |
                                  DstPortNumber = DestinationPort;
       let unparsedData = allLogs
                 | where isempty(SourceIP)
+                | where Message has tostring(dstportnumber)
+                        and ((array_length(src_or_any) == 0 or has_any_ipv4_prefix(Message,src_or_any)) 
+                            or (array_length(dst_or_any) == 0 or has_any_ipv4_prefix(Message,dst_or_any)))
                 | project DeviceVendor, DeviceProduct, DeviceEventClassID, LogSeverity, OriginalLogSeverity, Computer, DeviceAddress, DeviceName, Message, DeviceVersion, Protocol, DvcAction, EventResult, TimeGenerated, DeviceAction;
       let all_106001_alike = parsedData
                 | where DeviceEventClassID in ("106001", "106006", "106015", "106016", "106021", "106022") 
@@ -279,6 +335,17 @@ ParserQuery: |
                         SrcPortNumber = toint(SrcIpAddrAndPort[1]),
                         DstIpAddr = tostring(DstIpAddrAndPort[0]),
                         DstPortNumber = toint(DstIpAddrAndPort[1])
+                | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+                | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), 
+                                temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+                | extend ASimMatchingIpAddr = case(
+                                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                                                (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                                                temp_isSrcMatch, "SrcIpAddr",
+                                                temp_isDstMatch, "DstIpAddr",
+                                                "No match"
+                                            )
+                | where ASimMatchingIpAddr != "No match"
                 | project-away SrcIpAddrAndPort, DstIpAddrAndPort, NetworkIcmpInfo;
       let all_106023_41 = unparsedData
                 | where DeviceEventClassID == "106023" and Message has "protocol 41"
@@ -288,6 +355,16 @@ ParserQuery: |
                                         ProtocolFromLog endswith "41", "41",
                                         ""),
                         NetworkRuleName = trim_start(@"\s*",NetworkRuleName)
+                | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), 
+                                temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+                | extend ASimMatchingIpAddr = case(
+                                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                                                (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                                                temp_isSrcMatch, "SrcIpAddr",
+                                                temp_isDstMatch, "DstIpAddr",
+                                                "No match"
+                                            )
+                | where ASimMatchingIpAddr != "No match"
                 | project-away ProtocolFromLog;
       let all_302013_302015_parsed = parsedData
                 | where DeviceEventClassID in ("302013","302015")
@@ -299,6 +376,17 @@ ParserQuery: |
       let all_302013_302015_unparsed = unparsedData
                 | where DeviceEventClassID in ("302013","302015")
                 | parse Message with * ":" DeviceAction " " NetworkDirection " " Protocol " connection " NetworkSessionId " for " SrcInterfaceName ":" SrcIpAddr "/" SrcPortNumber:int " (" SrcNatIpAddr "/" SrcNatPortNumber:int ")" SrcUsername "to " DstInterfaceName ":" DstIpAddr "/" DstPortNumber:int " (" DstNatIpAddr "/" DstNatPortNumber:int ")" DstUsername
+                | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+                | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), 
+                                temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+                | extend ASimMatchingIpAddr = case(
+                                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                                                (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                                                temp_isSrcMatch, "SrcIpAddr",
+                                                temp_isDstMatch, "DstIpAddr",
+                                                "No match"
+                                            )
+                | where ASimMatchingIpAddr != "No match"
                 | extend SrcUsername = trim(@"\s?\(?\)?\s?", SrcUsername),
                         DstUsername = trim(@"\s?\(?\)?\s?", DstUsername),
                         NetworkDirection = case(NetworkDirection == "inbound", "Inbound",
@@ -314,6 +402,17 @@ ParserQuery: |
                 | parse kind=regex SrcInfoString with SrcInterfaceName ":" SrcIpAddr "/" SrcPortNumber:int @"\(?\s?" SrcUsername @"\)?\s?"
                 // DstInfoString is extracted from the Message and not the direct values of IP, Port, Interface and User because Username is optional here
                 | parse kind=regex DstInfoString with DstInterfaceName ":" DstIpAddr "/" DstPortNumber:int @"\(?\s?" DstUsername @"\)?\s?"
+                | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+                | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), 
+                                temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+                | extend ASimMatchingIpAddr = case(
+                                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                                                (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                                                temp_isSrcMatch, "SrcIpAddr",
+                                                temp_isDstMatch, "DstIpAddr",
+                                                "No match"
+                                            )
+                | where ASimMatchingIpAddr != "No match"
                 // Remaining string can have multiple formats. Mapping of all of them is as follows:
                 // 1. empty --> no mapping required, RemainingString will be empty                
                 | parse Message with * " bytes " * " " RemainingString
@@ -327,6 +426,8 @@ ParserQuery: |
                 | extend Reason = case(isempty(Reason), ReasonString,
                                        Reason)
                 | lookup EventResultMapping on Reason
+                | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+                | where ((eventresult == "*") or EventResult == eventresult)
                 | extend 
                             SrcUsername = trim(@"\s?\(?\)?\s?", SrcUsername),
                             DstUsername = case(isempty(DstUsername),DstUsernameSimple,
@@ -345,6 +446,8 @@ ParserQuery: |
                 | extend Reason = case(isempty(Reason), ReasonString,
                                        Reason)
                 | lookup EventResultMapping on Reason
+                | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+                | where ((eventresult == "*") or EventResult == eventresult)
                 | extend 
                             NetworkDuration = toint(24 * 60 * totimespan(NetworkDuration) / time(1s)),
                             SessionId = NetworkSessionId,
@@ -362,6 +465,17 @@ ParserQuery: |
                 | parse Message with * ":" DeviceAction " " Protocol " connection " NetworkSessionId " for " SrcInfoString " to " DstInfoString " duration " NetworkDuration " bytes " NetworkBytes:long *
                 | parse kind=regex SrcInfoString with SrcInterfaceName ":" SrcIpAddr "/" SrcPortNumber:int @"\(?\s?" SrcUsername @"\)?\s?"
                 | parse kind=regex DstInfoString with DstInterfaceName ":" DstIpAddr "/" DstPortNumber:int @"\(?\s?" DstUsername @"\)?\s?"
+                | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+                | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), 
+                                temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+                | extend ASimMatchingIpAddr = case(
+                                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                                                (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                                                temp_isSrcMatch, "SrcIpAddr",
+                                                temp_isDstMatch, "DstIpAddr",
+                                                "No match"
+                                            )
+                | where ASimMatchingIpAddr != "No match"
                 | parse Message with * " bytes " * " (" DstUsernameSimple ")"
                 | extend 
                             SrcUsername = trim(@"\s?\(?\)?\s?", SrcUsername),
@@ -394,6 +508,8 @@ ParserQuery: |
                                           "Allow")
                 | extend EventResult = case(DvcAction == "Deny", "Failure",
                                             "Success")
+                | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+                | where ((eventresult == "*") or EventResult == eventresult)
                 | parse Message with * "access-list " * " " * " " * " " SrcInterfaceName "/" * ") -> " DstInterfaceName "/" * ") hit-cnt " EventCount:int *;
       let all_106100_unparsed = unparsedData
                 | where DeviceEventClassID == "106100"
@@ -401,7 +517,20 @@ ParserQuery: |
                                           "Allow")
                 | extend EventResult = case(DvcAction == "Deny", "Failure",
                                             "Success")
-                | parse Message with * "access-list " NetworkRuleName " " DeviceAction " " Protocol " " SrcInterfaceName "/" SrcIpAddr "(" SrcPortNumber:int ") -> " DstInterfaceName "/" DstIpAddr "(" DstPortNumber:int ") hit-cnt " EventCount:int * ;
+                | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+                | where ((eventresult == "*") or EventResult == eventresult)
+                | parse Message with * "access-list " NetworkRuleName " " DeviceAction " " Protocol " " SrcInterfaceName "/" SrcIpAddr "(" SrcPortNumber:int ") -> " DstInterfaceName "/" DstIpAddr "(" DstPortNumber:int ") hit-cnt " EventCount:int * 
+                | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+                | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), 
+                                temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+                | extend ASimMatchingIpAddr = case(
+                                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested
+                                                (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual 
+                                                temp_isSrcMatch, "SrcIpAddr",
+                                                temp_isDstMatch, "DstIpAddr",
+                                                "No match"
+                                            )
+                | where ASimMatchingIpAddr != "No match";
       let remainingLogs = parsedData
                 | where DeviceEventClassID in ("106002", "106012", "106013", "106020");
       let networkaddressWatchlistData = materialize (_ASIM_GetWatchlistRaw("NetworkAddresses"));
@@ -453,6 +582,6 @@ ParserQuery: |
                         IpAddr = SrcIpAddr,
                         Rule = NetworkRuleName,
                         User = DstUsername
-                | project-away CommunicationDirection, LogSeverity, Protocol, Device*
+                | project-away CommunicationDirection, LogSeverity, Protocol, temp_*, Device*
                 };
-      NWParser (disabled=disabled)
+      NWParser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)
