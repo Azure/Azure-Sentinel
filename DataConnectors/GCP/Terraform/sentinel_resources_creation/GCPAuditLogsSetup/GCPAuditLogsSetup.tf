@@ -32,7 +32,7 @@ resource "google_pubsub_subscription" "sentinel-subscription" {
 
 resource "google_logging_project_sink" "sentinel-sink" {
   name = "audit-logs-sentinel-sink"
-  destination = "pubsub.googleapis.com/projects/${data.google_project.project.project_id}/topics/var.topic-name"
+  destination = "pubsub.googleapis.com/projects/${data.google_project.project.project_id}/topics/${var.topic-name}"
   depends_on = [google_pubsub_topic.sentinel-topic]
 }
 
