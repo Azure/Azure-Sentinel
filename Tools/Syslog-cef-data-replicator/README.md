@@ -59,10 +59,10 @@ We have 2 flavors
 - Step 4: You can try with the following commands
  	
 	```
-	1.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype 'syslog' --cust_file fortigate_customizations.json syslog_meraki_raw.log     
-	2.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype 'syslog' syslog_meraki_raw.log
-	3.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype 'cef' --cust_file fortigate_customizations.json cef_microsoft_ata.log   
-	4.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype 'cef'  cef_microsoft_ata.log        
+	1.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype "syslog" --cust_file fortigate_customizations.json syslog_meraki_raw.log     
+	2.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype "syslog" syslog_meraki_raw.log
+	3.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype "cef" --cust_file fortigate_customizations.json cef_microsoft_ata.log   
+	4.	python syslogfromraw.py --host "13.87.202.58" --port 514 --eventtype "cef"  cef_microsoft_ata.log        
 	
 
      arguments:
@@ -111,8 +111,8 @@ We have 2 flavors
 		- ![image](https://user-images.githubusercontent.com/10404181/186095413-6bb22cb0-2e64-4b3a-a2c8-0e1c6dadeb20.png)
 	
 	```
-	python syslogfromraw.py --host "10.4.87.1" --port 514 --eventtype 'syslog' --cust_file fortigate_customizations.json syslog_meraki_raw.log
-	python syslogfromraw.py --host "localhost" --port 514 --eventtype 'syslog' --cust_file fortigate_customizations.json syslog_meraki_raw.log 
+	python syslogfromraw.py --host "10.4.87.1" --port 514 --eventtype "syslog" --cust_file fortigate_customizations.json syslog_meraki_raw.log
+	python syslogfromraw.py --host "localhost" --port 514 --eventtype "syslog" --cust_file fortigate_customizations.json syslog_meraki_raw.log 
 	```
 	
 	- If possible have agent installed locally on the batch account nodes
@@ -142,8 +142,8 @@ We have 2 flavors
 - Step 4: You can try with the following commands
 
 	```
-	1. python syslogfromcsv.py --host "13.87.202.58" --port 514 --eventtype 'syslog' --cust_file 'fortigate_customizations.json' syslog_fortigate_sample_data.csv 
-	2. python syslogfromcsv.py --host "13.87.202.58" --port 514 --eventtype 'syslog' syslog_fortigate_sample_data.csv 
+	1. python syslogfromcsv.py --host "13.87.202.58" --port 514 --eventtype "syslog" --cust_file 'fortigate_customizations.json' syslog_fortigate_sample_data.csv 
+	2. python syslogfromcsv.py --host "13.87.202.58" --port 514 --eventtype "syslog" syslog_fortigate_sample_data.csv 
 	3. python syslogfromcsv.py --host "13.87.202.58" --port 514 --eventtype ‘cef’ --cust_file 'fortigate_customizations.json' cef_fortigate_sample_data.csv 
 	4. python syslogfromcsv.py --host "13.87.202.58" --port 514 --eventtype ‘cef’  cef_fortigate_sample_data.csv
 
