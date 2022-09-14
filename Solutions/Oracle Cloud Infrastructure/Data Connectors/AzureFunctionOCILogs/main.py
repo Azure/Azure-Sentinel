@@ -118,7 +118,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
 
 def customizedJson(eventData):
     required_fields_data = {}
-    for key, value in eventData.data.items():
+    for key, value in eventData["data"].items():
         if(type(value) == type({})):
             for k, v in value.items():
                 if(type(v) == str):                    
