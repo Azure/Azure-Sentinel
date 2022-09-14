@@ -8,7 +8,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 2. Search the Qualys platform and get the asset count with open port.
 3. Search the Qualys platform and get the asset details as well. (Asset details limited to 50 assets, since incident comment has limitaion of 30000 characters.)
 4. Combine both the results.
-3. Add the info as comment to the incident.
+5. Add the info as comment to the incident.
 
 <img src="./images/Playbook_QualysVM-GetAssets-ByOpenPort.jpg" width="50%"/><br>
 <img src="./images/Playbook_Incident_Comment.jpg" width="50%"/><br>
@@ -43,7 +43,7 @@ Once deployment is complete, authorize each connection.
 
 1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains Netowrk Port. Since there is no entity for Ports for now, Network Ports need to be passed as key value pair in *Custom details* section. **[Important]** In the *Custom details* section of the analytics rule creation workflow, Assign **NetworkPort** as key and choose appropriate column as value.
 
-    Check the [documnetation](https://docs.microsoft.com/en-us/azure/sentinel/surface-custom-details-in-alerts) to know more about custom details in alerts.
+    Check the [documnetation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to know more about custom details in alerts.
     
     Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook. Check the [documentation](https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook) to learn more about automation rules.

@@ -8,7 +8,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 2. Scan IP Addresses with Qualys Scanner.
 3. Generate the Scan Report.
 4. Download the report and store it to a blob storage.
-3. Add the link of report as a comment to the incident.
+5. Add the link of report as a comment to the incident.
 
 <img src="./images/Playbook_QualysVM-LaunchVMScan-GenerateReport.jpg" width="50%"/><br>
 <img src="./images/Playbook_Incident_Comment.jpg" width="50%"/><br>
