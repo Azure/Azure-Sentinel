@@ -41,13 +41,13 @@ ParserParams:
   - Name: parentprocess_has_any
     Type: dynamic
     Default: dynamic([])
-  - Name: targetusername
+  - Name: targetusername_has
     Type: string
     Default: '*'
   - Name: dvcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: dvcname_has_any
+  - Name: dvchostname_has_any
     Type: dynamic
     Default: dynamic([])
   - Name: eventtype
@@ -58,177 +58,243 @@ ParserParams:
     Default: false
 
 ParserQuery: | 
-    // =======================================================================================================================================
-    //    Sysmon from Event table
-    // =======================================================================================================================================
-    let Sysmon11_Event=(){
-    Event
-    | where Source == "Microsoft-Windows-Sysmon" and EventID==1
-    // --------------------------------------------------------------------------------------
-    | where
-    (isnull(starttime)   or TimeGenerated >= starttime )
-    and (isnull(endtime) or TimeGenerated <= endtime )
-    and (disabled)
-    and (eventtype=='*' or eventtype=='ProcessCreated')
-    and (array_length(commandline_has_all)==0 or EventData has_all (commandline_has_all)) 
-    and (array_length(commandline_has_any)==0 or EventData has_any (commandline_has_any)) 
-    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventData, commandline_has_any_ip_prefix) ) 
-    and (array_length(actingprocess_has_any)==0 or EventData has_any (actingprocess_has_any)) 
-    and (array_length(targetprocess_has_any)==0 or EventData has_any (targetprocess_has_any)) 
-    and (array_length(parentprocess_has_any)==0)  /// ????
-    and (targetusername=='*' or EventData has targetusername)  
-    and (array_length(dvcipaddr_has_any_prefix)==0)
-    and (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   
-    // --------------------------------------------------------------------------------------
-    | parse EventData with * '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readibliy 
-                        '</Data><Data Name="UtcTime">'UtcTime
-                        '</Data><Data Name="ProcessGuid">{'ProcessGuid
-                        '}</Data><Data Name="ProcessId">'ProcessId:string
-                        '</Data><Data Name="Image">'Image
-                        '</Data><Data Name="FileVersion">'FileVersion
-                        '</Data><Data Name="Description">'Description
-                        '</Data><Data Name="Product">'Product
-                        '</Data><Data Name="Company">'Company'</Data>' *
-    // --------------------------------------------------------------------------------------
-    | where (array_length(targetprocess_has_any)==0 or Image has_any (targetprocess_has_any)) 
-    // --------------------------------------------------------------------------------------
-    | extend  OriginalFileName = extract (@'"OriginalFileName">([^<]+)<',1,EventData) // this field exists in sysmon version 10.42 and above - using extact to avoid parsing failure
-    | parse EventData with *
-                        '<Data Name="CommandLine">'CommandLine'</Data>'
-                        '<Data Name="CurrentDirectory">'CurrentDirectory
-                        '</Data><Data Name="User">'User
-                        '</Data><Data Name="LogonGuid">{'LogonGuid
-                        '}</Data><Data Name="LogonId">'LogonId
-                        '</Data><Data Name="TerminalSessionId">'TerminalSessionId
-                        '</Data><Data Name="IntegrityLevel">'IntegrityLevel
-                        '</Data><Data Name="Hashes">'Hashes
-                        '</Data><Data Name="ParentProcessGuid">{'ParentProcessGuid
-                        '}</Data><Data Name="ParentProcessId">'ParentProcessId:string
-                        '</Data><Data Name="ParentImage">'ParentImage
-                          '</Data><Data Name="ParentCommandLine">'ParentCommandLine '</Data>'*
-    // --------------------------------------------------------------------------------------
-    | where (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any)) 
-          and (array_length(commandline_has_all)==0 or CommandLine has_all (commandline_has_all)) 
-          and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix) ) 
-          and (array_length(actingprocess_has_any)==0 or ParentImage has_any (actingprocess_has_any)) 
-          and (targetusername=='*' or User has targetusername) 
-    // --------------------------------------------------------------------------------------
-    | parse EventData with * '<Data Name="ParentUser">' ActorUsername '</Data>' * // this field exists in new versions of Sysmon
-    | extend    TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
-                TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
-                TargetProcessIMPHASH=extract(@'IMPHASH=(\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file
-                TargetProcessMD5=extract(@'MD5=(\w+)',1, tostring(Hashes))
-        // End of XML parse
-    | project-away Hashes
-    | extend 
-                EventType = "ProcessCreated",
-                EventStartTime = todatetime(TimeGenerated),
-                EventEndTime = todatetime(TimeGenerated),
-                EventCount = int(1),
-                EventVendor = "Microsoft",
-                EventSchemaVersion = "0.1.0",
-                EventSchema = 'ProcessEvent',
-                EventProduct = "Sysmon",
-                EventResult = 'Success',
-                EventOriginalType = tostring(EventID),
-                DvcOs = "Windows",
-                TargetUserSessionId = tostring(LogonId),           
+  let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      targetusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      disabled:bool=false
+    ) {
+    // this is the parser for sysmon from Event table
+        let parser_Event = (
+        starttime:datetime=datetime(null),
+        endtime:datetime=datetime(null),
+        commandline_has_any:dynamic=dynamic([]),
+        commandline_has_all:dynamic=dynamic([]),
+        commandline_has_any_ip_prefix:dynamic=dynamic([]),
+        actingprocess_has_any:dynamic=dynamic([]),
+        targetprocess_has_any:dynamic=dynamic([]),
+        parentprocess_has_any:dynamic=dynamic([]),
+        targetusername_has:string='*',
+        dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+        dvchostname_has_any:dynamic=dynamic([]),
+        eventtype:string='*',
+        disabled:bool=false
+        ) {
+        Event 
+            // pre-filtering
+        | where (isnull(starttime) or TimeGenerated >= starttime )
+            and (isnull(endtime) or TimeGenerated <= endtime )
+            and not (disabled)
+            and (eventtype=='*' or eventtype=='ProcessCreated')
+            and (Source == "Microsoft-Windows-Sysmon" and EventID==1)
+            and (array_length(dvcipaddr_has_any_prefix)==0)
+            and (array_length(commandline_has_all)==0 or EventData has_all (commandline_has_all)) 
+            and (array_length(commandline_has_any)==0 or EventData has_any (commandline_has_any)) 
+            and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventData, commandline_has_any_ip_prefix) ) 
+            and (array_length(actingprocess_has_any)==0 or EventData has_any (actingprocess_has_any)) 
+            and (array_length(targetprocess_has_any)==0 or EventData has_any (targetprocess_has_any)) 
+            and (array_length(parentprocess_has_any)==0)
+            and (targetusername_has=='*' or EventData has targetusername_has)  
+            and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))  
+        // -- 
+        | parse-kv EventData as (
+                ProcessGuid:string, 
+                ProcessId:string,
+                Image:string,
+                FileVersion:string,
+                Description:string,
+                Product:string,
+                Company:string,
+                OriginalFileName:string,
+                CommandLine:string,
+                CurrentDirectory:string,
+                User:string,
+                LogonGuid:string, 
+                LogonId:string,
+                IntegrityLevel:string,
+                Hashes:string,
+                ParentProcessGuid:string, 
+                ParentProcessId:string,
+                ParentImage:string,
+                ParentCommandLine:string,
+                ParentUser:string
+            ) 
+            with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')
+            // -- post-filtering
+            | where (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any)) 
+                and (array_length(commandline_has_all)==0 or CommandLine has_all (commandline_has_all)) 
+                and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix) ) 
+                and (array_length(actingprocess_has_any)==0 or ParentImage has_any (actingprocess_has_any)) 
+                and (targetusername_has=='*' or User has targetusername_has) 
+                and (array_length(targetprocess_has_any)==0 or Image has_any (targetprocess_has_any))
+            // --
+            | parse-kv Hashes as (MD5:string, SHA1:string, SHA256:string, IMPHASH:string) with (quote='"')
+            | extend
+                Hash = coalesce (SHA256, SHA1, IMPHASH, MD5, "")
+            | extend
+                HashType = tostring(dynamic(["SHA256", "SHA1", "IMPHASH", "MD5"])[array_index_of(pack_array(SHA256, SHA1, IMPHASH, MD5),Hash)])
+            | project-rename
+                TargetProcessMD5 = MD5,
+                TargetProcessSHA1 = SHA1,
+                TargetProcessSHA256 = SHA256,
+                TargetProcessIMPHASH = IMPHASH
+            | project-away Hashes
+            | extend         
                 TargetUsername = User,
-                TargetProcessCommandLine = CommandLine,
-                TargetProcessCurrentDirectory = CurrentDirectory
-    | project-rename 
-                EventMessage = RenderedDescription,
+                TargetProcessCommandLine = CommandLine
+            | project-rename 
                 DvcHostname = Computer,
-                TargetUserSessionGuid = LogonGuid, 
+                TargetUserSessionGuid = LogonGuid,
                 TargetProcessId = ProcessId,
+                TargetUserSessionId = LogonId,  
                 TargetProcessGuid = ProcessGuid,
                 TargetProcessName = Image,
+                TargetProcessFilename = OriginalFileName,
+                TargetProcessCurrentDirectory = CurrentDirectory,
                 TargetProcessIntegrityLevel = IntegrityLevel,    
-                TargetProcessCompany = Company,
+                TargetProcessFileCompany = Company,
                 TargetProcessFileDescription = Description,
                 TargetProcessFileVersion = FileVersion,
                 TargetProcessFileProduct = Product,   
                 ActingProcessId = ParentProcessId,
                 ActingProcessGuid = ParentProcessGuid,                          
                 ActingProcessCommandLine = ParentCommandLine,
-                ActingProcessName = ParentImage
-    | extend 
+                ActingProcessName = ParentImage,
+                ActorUsername = ParentUser
+            | extend 
                 TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
                 ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+                EventProduct = "Sysmon",
                 // aliases
                 Process = TargetProcessName,
-                Dvc = DvcHostname,
-                Hash = coalesce(TargetProcessSHA256, TargetProcessSHA1, TargetProcessMD5) // which appears first - will be aliases to "Hash"
-    | project-away EventData, RuleName, ParameterXml
-    };
-    // =======================================================================================================================================
-    //    Sysmon from WindowsEvent table
-    // =======================================================================================================================================
-    let ParsedProcessEvent_WindowsEvent=(){
-    WindowsEvent
-    | where Provider == "Microsoft-Windows-Sysmon" and EventID==1
-    // --------------------------------------------------------------------------------------
-    | where
-    (isnull(starttime)   or TimeGenerated >= starttime )
-    and (isnull(endtime) or TimeGenerated <= endtime )
-    and not(disabled)
-    and (eventtype=='*' or eventtype=='ProcessCreated')
-    and (array_length(commandline_has_all)==0 or EventData.CommandLine has_all (commandline_has_all)) 
-    and (array_length(commandline_has_any)==0 or EventData.CommandLine has_any (commandline_has_any)) 
-    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventData.CommandLine, commandline_has_any_ip_prefix) ) 
-    and (array_length(actingprocess_has_any)==0 or EventData.ParentImage has_any (actingprocess_has_any)) 
-    and (array_length(targetprocess_has_any)==0 or EventData.Image has_any (targetprocess_has_any)) 
-    and (array_length(parentprocess_has_any)==0)  /// ????
-    and (targetusername=='*' or EventData.User has targetusername)  
-    and (array_length(dvcipaddr_has_any_prefix)==0)
-    and (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   
-    // --------------------------------------------------------------------------------------
-    | extend hash = split(EventData.Hashes,'=')
-    | extend hash_algorithm = tostring(hash[0]),
-                hash_value = tostring(hash[1])
-    | extend TargetProcessMD5 = iff(hash_algorithm == "MD5", hash_value, ""),
-            TargetProcessSHA1 =  iff(hash_algorithm == "SHA1", hash_value, ""),
-            TargetProcessSHA256 = iff(hash_algorithm == "SHA256", hash_value, ""),
-            TargetProcessIMPHASH = iff(hash_algorithm == "IMPHASH", hash_value, "")
-    | project-away hash, hash_algorithm
-    | extend 
+                Dvc = DvcHostname
+            | project-away EventData, ParameterXml, AzureDeploymentID, EventCategory, EventID, EventLevel, EventLevelName, TenantId, EventLog, MG, ManagementGroupName, Message, Role, SourceSystem, Source, UserName, RenderedDescription
+      };
+    // this is the parser for sysmon from WindowsEvent table
+        let parser_WindowsEvent=(
+        starttime:datetime=datetime(null),
+        endtime:datetime=datetime(null),
+        commandline_has_any:dynamic=dynamic([]),
+        commandline_has_all:dynamic=dynamic([]),
+        commandline_has_any_ip_prefix:dynamic=dynamic([]),
+        actingprocess_has_any:dynamic=dynamic([]),
+        targetprocess_has_any:dynamic=dynamic([]),
+        parentprocess_has_any:dynamic=dynamic([]),
+        targetusername_has:string='*',
+        dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+        dvchostname_has_any:dynamic=dynamic([]),
+        eventtype:string='*',
+        disabled:bool=false
+        ){
+        WindowsEvent
+        | where
+            // -- pre-filtering
+            (isnull(starttime)   or TimeGenerated >= starttime )
+            and (isnull(endtime) or TimeGenerated <= endtime )
+            and not(disabled)
+            and (eventtype=='*' or eventtype=='ProcessCreated')
+            and Provider == "Microsoft-Windows-Sysmon" and EventID==1
+            and (array_length(commandline_has_all)==0 or EventData.CommandLine has_all (commandline_has_all)) 
+            and (array_length(commandline_has_any)==0 or EventData.CommandLine has_any (commandline_has_any)) 
+            and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventData.CommandLine, commandline_has_any_ip_prefix) ) 
+            and (array_length(actingprocess_has_any)==0 or EventData.ParentImage has_any (actingprocess_has_any)) 
+            and (array_length(targetprocess_has_any)==0 or EventData.Image has_any (targetprocess_has_any)) 
+            and (array_length(parentprocess_has_any)==0)
+            and (targetusername_has=='*' or EventData.User has targetusername_has)  
+            and (array_length(dvcipaddr_has_any_prefix)==0)
+            and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))   
+            // --
+        | parse-kv tostring(EventData.Hashes) as (MD5:string, SHA1:string, SHA256:string, IMPHASH:string) with (quote='"')
+        | extend
+            Hash = coalesce (SHA256, SHA1, IMPHASH, MD5, "")
+        | extend
+            HashType = tostring(dynamic(["SHA256", "SHA1", "IMPHASH", "MD5"])[array_index_of(pack_array(SHA256, SHA1, IMPHASH, MD5),Hash)])
+        | project-rename
+            TargetProcessMD5 = MD5,
+            TargetProcessSHA1 = SHA1,
+            TargetProcessSHA256 = SHA256,
+            TargetProcessIMPHASH = IMPHASH
+        | extend 
+                EventOriginalType = tostring(EventID),
+                TargetUserSessionId = tostring(EventData.LogonId),           
+                TargetUsername = tostring(EventData.User),
+                TargetProcessCommandLine = tostring(EventData.CommandLine),
+                TargetProcessCurrentDirectory = tostring(EventData.CurrentDirectory),
+                TargetUserSessionGuid = tostring(EventData.LogonGuid), 
+                TargetProcessId = tostring(EventData.ProcessId),
+                TargetProcessGuid = tostring(EventData.ProcessGuid),
+                TargetProcessName = tostring(EventData.Image),
+                TargetProcessFilename = tostring(EventData.OriginalFileName),
+                TargetProcessIntegrityLevel = tostring(EventData.IntegrityLevel),
+                TargetProcessFileCompany = tostring(EventData.Company),
+                TargetProcessFileDescription = tostring(EventData.Description),
+                TargetProcessFileVersion = tostring(EventData.FileVersion),
+                TargetProcessFileProduct = tostring(EventData.Product),
+                ActingProcessId = tostring(EventData.ParentProcessId),
+                ActingProcessGuid = tostring(EventData.ParentProcessGuid),                          
+                ActingProcessCommandLine = tostring(EventData.ParentCommandLine),
+                ActingProcessName = tostring(EventData.ParentImage),
+                ActorUsername = tostring(EventData.ParentUser)
+         // -- post-filtering
+         | where (array_length(commandline_has_any)==0 or TargetProcessCommandLine has_any (commandline_has_any)) 
+            and (array_length(commandline_has_all)==0 or TargetProcessCommandLine has_all (commandline_has_all)) 
+            and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(TargetProcessCommandLine, commandline_has_any_ip_prefix) ) 
+            and (array_length(actingprocess_has_any)==0 or ActingProcessName has_any (actingprocess_has_any)) 
+            and (targetusername_has=='*' or TargetUsername has targetusername_has) 
+            and (array_length(targetprocess_has_any)==0 or TargetProcessName has_any (targetprocess_has_any)) 
+            // --
+         | extend 
+            TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
+            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+            EventProduct = "Security Events"
+        | project-rename
+            DvcHostname = Computer,
+            EventOriginalUid = EventOriginId
+        | extend // aliases 
+            Dvc = DvcHostname,
+            User = TargetUsername,
+            CommandLine = TargetProcessCommandLine,
+            Process = TargetProcessName
+        | project-away EventData, Provider, ManagementGroupName, RawEventData, SourceSystem, Task, TenantId,  EventID, Data, Channel, EventLevel, EventLevelName
+        }; 
+        union isfuzzy=true 
+            parser_Event(starttime=starttime, endtime=endtime, commandline_has_any=commandline_has_any,commandline_has_all=commandline_has_all, commandline_has_any_ip_prefix=commandline_has_any_ip_prefix, actingprocess_has_any=actingprocess_has_any, targetprocess_has_any=targetprocess_has_any, parentprocess_has_any=parentprocess_has_any, targetusername_has=targetusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, eventtype=eventtype, disabled=disabled),
+            parser_WindowsEvent(starttime=starttime, endtime=endtime, commandline_has_any=commandline_has_any,commandline_has_all=commandline_has_all, commandline_has_any_ip_prefix=commandline_has_any_ip_prefix, actingprocess_has_any=actingprocess_has_any, targetprocess_has_any=targetprocess_has_any, parentprocess_has_any=parentprocess_has_any, targetusername_has=targetusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, eventtype=eventtype, disabled=disabled)
+        | extend 
             EventType = "ProcessCreated",
+            EventOriginalType = "1",
             EventStartTime = todatetime(TimeGenerated),
             EventEndTime = todatetime(TimeGenerated),
             EventCount = int(1),
             EventVendor = "Microsoft",
             EventSchemaVersion = "0.1.0",
-            EventProduct = "Sysmon",
+            EventSchema = 'ProcessEvent',
             EventResult = 'Success',
-            EventOriginalType = tostring(EventID),
             DvcOs = "Windows",
-            TargetUserSessionId = tostring(EventData.LogonId),           
             TargetUsernameType = "Windows",
-            ActorUsernameType = "Windows",
-            TargetUsername = tostring(EventData.User),
-            TargetProcessCommandLine = tostring(EventData.CommandLine),
-            TargetProcessCurrentDirectory = tostring(EventData.CurrentDirectory),
-            EventMessage = tostring(EventData.RenderedDescription),
-            TargetUserSessionGuid = tostring(EventData.LogonGuid), 
-            TargetProcessId = tostring(EventData.ProcessId),
-            TargetProcessGuid = tostring(EventData.ProcessGuid),
-            TargetProcessName = tostring(EventData.Image),
-            TargetProcessIntegrityLevel = tostring(EventData.IntegrityLevel),
-            TargetProcessCompany = tostring(EventData.Company),
-            TargetProcessFileDescription = tostring(EventData.Description),
-            TargetProcessFileVersion = tostring(EventData.FileVersion),
-            TargetProcessFileProduct = tostring(EventData.Product),
-            ActingProcessId = tostring(EventData.ParentProcessId),
-            ActingProcessGuid = tostring(EventData.ParentProcessGuid),                          
-            ActingProcessCommandLine = tostring(EventData.ParentCommandLine),
-            ActingProcessName = tostring(EventData.ParentImage),
-            ActorUsername = tostring(EventData.ParentUser)
-    | extend TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
-              ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
-              // aliases 
-            DvcHostname = Computer,
-            Hash = hash_value,
-            User = TargetUsername
-    | project-away EventData
-            };
-    union isfuzzy=true ParsedProcessEvent_WindowsEvent, Sysmon11_Event
+            ActorUsernameType = "Windows"
+    };
+    parser (
+      starttime=starttime,
+      endtime=endtime,
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      targetusername_has=targetusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      disabled=disabled
+    ) 
