@@ -32,7 +32,7 @@ body = ""
 
 
 class ArmisAlert:
-    """This class will process the Alert data and post it into the Azure sentinel."""
+    """This class will process the Alert data and post it into the Microsoft sentinel."""
 
     def __init__(self):
         """__init__ method will initialize object of class."""
@@ -198,7 +198,7 @@ class ArmisAlert:
             self: Armis object.
             type_data (json): will contain the json data to use in the _get_links function.
             state (object): StateManager object.
-            table_name (String): table name to store the data in azure sentinel.
+            table_name (String): table name to store the data in microsoft sentinel.
             is_table_not_exist (bool): it is a flag that contains the value if table exists or not.
             last_time (String): it will contain latest time stamp.
         """
@@ -233,7 +233,7 @@ class ArmisAlert:
                 logging.info("Armis Alert Connector:  Data collection is done successfully.")
                 azuresentinel.post_data(customer_id, body, table_name)
                 logging.info(
-                    "Armis Alert Connector: Collected %s alert data into azure sentinel.",
+                    "Armis Alert Connector: Collected %s alert data into microsoft sentinel.",
                     count_per_frame_data,
                 )
                 state.post(str(current_time))
@@ -397,7 +397,7 @@ class AzureSentinel:
             response = requests.post(uri, data=body, headers=headers)
             if response.status_code >= 200 and response.status_code <= 299:
                 logging.info(
-                    "Armis Alert Connector: Data posted successfully to azure sentinel."
+                    "Armis Alert Connector: Data posted successfully to microsoft sentinel."
                 )
             else:
                 raise ArmisException(
@@ -409,7 +409,7 @@ class AzureSentinel:
         except ArmisException as err:
             logging.error(err)
             raise ArmisException(
-                "Armis Alert Connector: Error while posting data to azure sentinel."
+                "Armis Alert Connector: Error while posting data to microsoft sentinel."
             )
 
 

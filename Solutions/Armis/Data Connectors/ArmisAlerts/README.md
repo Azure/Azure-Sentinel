@@ -1,8 +1,8 @@
-# ArmisAlerts Integration for Azure Sentinel
+# ArmisAlerts Integration for Microsoft Sentinel
 
 ## Introduction
 
-This folder contains the Azure function time trigger code for ArmisAlerts-Azure Sentinel connector. The connector will run periodically and ingest the ArmisAlerts data into the Azure Sentinel logs custom table `Armis_Alerts_CL`.
+This folder contains the Azure function time trigger code for ArmisAlerts-Microsoft Sentinel connector. The connector will run periodically and ingest the ArmisAlerts data into the Microsoft Sentinel logs custom table `Armis_Alerts_CL`.
 ## Folders
 
 1. `ArmisAlerts/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies.
@@ -11,9 +11,9 @@ This folder contains the Azure function time trigger code for ArmisAlerts-Azure 
 
 ## Installing for the users
 
-After the solution is published, we can find the connector in the connector gallery of Azure Sentinel among other connectors in Data connectors section of Sentinel.
+After the solution is published, we can find the connector in the connector gallery of Microsoft Sentinel among other connectors in Data connectors section of Sentinel.
 
-i. Go to Azure Sentinel -> Data Connectors
+i. Go to Microsoft Sentinel -> Data Connectors
 
 ii. Click on the ArmisAlerts connector, connector page will open.
 
@@ -41,14 +41,14 @@ The connector should start ingesting the data into the logs at every time interv
 
 i. Log in to Azure portal using the URL - [https://preview.portal.azure.com/?feature.BringYourOwnConnector=true](https://preview.portal.azure.com/?feature.BringYourOwnConnector=true).
 
-ii. Go to Azure Sentinel -> Data Connectors
+ii. Go to Microsoft Sentinel -> Data Connectors
 
 iii. Click the “import” button at the top and select the json file `Armis_Alert_API_FunctionApp.json` downloaded on your local machine from Github.
 
 iv. This will load the connector page and rest of the process will be same as the Installing for users guideline above.
 
 
-Each invocation and its logs of the function can be seen in Function App service of Azure, available in the Azure Portal outside the Azure Sentinel.
+Each invocation and its logs of the function can be seen in Function App service of Azure, available in the Azure Portal outside the Microsoft Sentinel.
 
 i. Go to Function App and click on the function which you have deployed, identified with the given name at the deployment stage.
 
