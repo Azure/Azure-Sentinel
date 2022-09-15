@@ -43,7 +43,7 @@ Once deployment is complete, authorize each connection.
 
 1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains CVE ID. Since there is no entity for CVE for now, CVEID need to be passed as key value pair in *Custom details* section. **[Important]** In the *Custom details* section of the analytics rule creation workflow, Assign **CVEID** as key and choose appropriate column as value.
 
-    Check the [documnetation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to know more about custom details in alerts.
+    Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to know more about custom details in alerts.
 
     Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook. Check the [documentation](https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook) to learn more about automation rules.
