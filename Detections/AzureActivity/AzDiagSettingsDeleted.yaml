@@ -1,0 +1,43 @@
+id: 6e95aef3-a1e0-4063-8e74-cd59aa59f245
+name: Azure Diagnostic settings removed from a resource
+description: |
+  'This query looks for diagnostic settings that are removed from a resource.
+  This could indicate an attacker or malicious internal trying to evade detection before malicious act is performed.
+  If the diagnostic settings are being deleted as part of a parent resource deletion, the event is ignores.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.008
+query: |
+  AzureActivity
+    | where OperationNameValue == 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and ActivityStatusValue == "Start"
+    | extend ParentResource_a = split(_ResourceId,"/")
+    | extend ParentResourceLength = array_length(ParentResource_a)-4
+    | extend ParentResourceSplit = array_split(ParentResource_a,ParentResourceLength)
+    | extend resource = strcat_array(ParentResourceSplit[0],"/")
+    | project Diagdelete = TimeGenerated, Caller, ResourceProviderValue, _ResourceId, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated, resource, CallerIpAddress
+    | join kind=leftanti  ( AzureActivity
+    | where OperationNameValue != 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and OperationNameValue endswith "/DELETE"
+    | where ActivityStatusValue == 'Start'
+    | project Caller, ResourceProviderValue, resource = tostring(parse_json(Properties).resource), SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated) on $left.resource == $right.resource
+    | project Caller, ResourceProviderValue, resource, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start, CallerIpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 1.0.0
+kind: Scheduled
