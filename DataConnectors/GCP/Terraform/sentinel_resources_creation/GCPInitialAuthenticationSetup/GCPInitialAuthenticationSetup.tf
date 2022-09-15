@@ -9,6 +9,11 @@ terraform {
   required_version = ">= 0.15.0"
 }
 
+locals{
+  sentinel_app_id = "2041288c-b303-4ca0-9076-9612db3beeb2"
+  sentinel_tenant_id = "33e019214d644f8ca0555bdaffd5e33d"
+}
+
 data "google_project" "project" {}
 
 resource "google_project_service" "enable-api" {
@@ -19,7 +24,7 @@ resource "google_project_service" "enable-api" {
 resource "google_iam_workload_identity_pool" "sentinel-workload-identity-pool" {
   provider                           = google-beta
   project = data.google_project.project.project_id
-  workload_identity_pool_id = "33e019214d644f8ca0555bdaffd5e33d"
+  workload_identity_pool_id = sentinel_tenant_id
   display_name              = "sentinel-workload-identity-pool"
 }
 
@@ -33,8 +38,8 @@ resource "google_iam_workload_identity_pool_provider" "sentinel-workload-identit
   }
 
   oidc {
-    allowed_audiences = ["api://f9245cc7-ba46-4568-bc0e-fdbf4aa42e80"]
-    issuer_uri        = "https://sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d"
+    allowed_audiences = ["api://${locals.sentinel_app_id}"]
+    issuer_uri        = "https://sts.windows.net/${locals.sentinel_tenant_id}"
   }
 }
 
