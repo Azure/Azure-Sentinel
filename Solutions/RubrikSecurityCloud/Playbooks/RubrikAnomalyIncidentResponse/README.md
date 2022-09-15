@@ -26,14 +26,14 @@ This playbook provides an end to end example of the collection of Ransomware Ano
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
 5. Click Save
 6. Repeat steps for other connections
 
-#### b. Configurations in Sentinel
+#### b. Configurations in Microsoft Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident. An incident should have the *ClusterId* - custom entity that contains clusterId of an event generated in rubrik, *ObjectId* - custom entity that contains objectId of an event generated in rubrik, *ObjectType* - custom entity that contains objectType of an event generated in rubrik, *ObjectName* -custom entity that contains objectName of an event generated in rubrik . It can be obtained from the corresponding field in Rubrik Anomaly Event logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
+1. In Microsoft Sentinel, analytical rules should be configured to trigger an incident. An incident should have the *ClusterId* - custom entity that contains clusterId of an event generated in rubrik, *ObjectId* - custom entity that contains objectId of an event generated in rubrik, *ObjectType* - custom entity that contains objectType of an event generated in rubrik, *ObjectName* -custom entity that contains objectName of an event generated in rubrik . It can be obtained from the corresponding field in Rubrik Anomaly Event logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
 2. Configure the automation rules to trigger the playbook.

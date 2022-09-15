@@ -91,7 +91,7 @@ class AzureSentinel:
             response = requests.post(uri, data=body, headers=headers)
             if response.status_code >= 200 and response.status_code <= 299:
                 logging.info(response.status_code)
-                logging.info("Accepted: Data Posted Successfully to azure sentinel.")
+                logging.info("Accepted: Data Posted Successfully to microsoft sentinel.")
             else:
                 raise RubrikException(
                     "Response code: {} from posting data to log analytics.\nError: {}".format(
