@@ -1,6 +1,6 @@
 # Qualys VM Logic App Custom Connector
 
-This custom connector connects to Qualys API endpoint to execute actions supported by Qualys and returns back responce in xml/json format.
+This custom connector connects to Qualys API endpoint to execute actions supported by Qualys and returns back response in xml/json format.
 
 ### Authentication methods supported by this connector
 
