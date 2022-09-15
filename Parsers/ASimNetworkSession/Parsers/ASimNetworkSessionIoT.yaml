@@ -21,41 +21,32 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let disabled=false;
   let parser = (disabled:bool=false) 
   {
-    SecurityIoTRawEvent
-    | where RawEventName == "ConnectionData"
+    DefenderIoTRawEvent
+    | where RawEventName == "NetworkConnectionData" // Was "NetworkConnectionDataEvent"
     | project-rename 
-        DvcId = DeviceId
-    | parse EventDetails with 
-        *
-        '"SchemaVersion":"' EventProductVersion:string '",' *
-        '"ClientDevice"' *
-        '"ipAddress":"' SrcIpAddr:string '",' *
-        '"deviceId":' SrcDvcId:string ',' *
-        '"deviceName":"' SrcDescription:string '",' *
-        '"deviceType":"' SrcDvcType:string '",' * // what are the possible values?
-        '"isExternal":' SrcIsExternal:bool '}' *
-        '"ServerDevice"' *
-        '"ipAddress":"' DstIpAddr:string '",' *
-        '"deviceId":' DstDvcId:string ',' *
-        '"deviceName":"' DstDescription:string '",' *
-        '"deviceType":"' DstDvcType:string '",' * // what are the possible values?
-        '"isExternal":' DstIsExternal:bool '}' *
-        '"ServerPort":'  DstPortNumber:int ',' *
-        '"Protocol":"'  NetworkProtocol:string '",' *
+        DvcId = DeviceId,
+        DvcSubscription = AzureSubscriptionId
+    | extend 
+        IsInternal = EventDetails.IsInternal,
+        DstDvcId = EventDetails.Destination.DeviceId,
+        DstMacAddr = EventDetails.Destination.MacAddress,
+        SrcDvcId = EventDetails.Source.DeviceId,
+        SrcMacAddr = EventDetails.Source.MacAddress
+    //    '"additionalProperties":{' additionalProperties:string '}' *
     | extend
         EventProduct = 'Defender for IoT',
         EventResult = 'Success',
         EventSchema = 'NetworkSession',
         EventSchemaVersion='0.2.3',
         EventSeverity = 'Informational',
-        EventType = 'NetworkSession',
+        EventType = 'L2NetworkSession',
         EventVendor = 'Microsoft'
     | extend // -- Aliases
-        IpAddr = SrcIpAddr,
-        Src = SrcIpAddr,
         Dvc = DvcId 
-    | project-away EventDetails
+    //| project-away EventDetails, AssociatedResourceId
   };
   parser (disabled)
+
