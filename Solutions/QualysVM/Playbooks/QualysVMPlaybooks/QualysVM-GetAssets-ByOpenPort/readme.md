@@ -15,8 +15,8 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../QualysCustomConnector/) needs to be deployed under the same subscription.
-2. Refer to [Qualys Logic App Custom Connector](../QualysCustomConnector/readme.md) documentation for deployment instructions. 
+1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/) needs to be deployed under the same subscription.
+2. Refer to [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/readme.md) documentation for deployment instructions. 
 
 ### Deployment instructions
 

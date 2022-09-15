@@ -1,20 +1,22 @@
-# QualysVM-GetAssetDetails
+# QualysVM-LaunchVMScan-GenerateReport
 
 ## Summary
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
 1. Get IP Addresses from incident.
-2. Get Asset Details for all IP Addresses.
-3. Add asset details as a comment to the incident.
+2. Scan IP Addresses with Qualys Scanner.
+3. Generate the Scan Report.
+4. Download the report and store it to a blob storage.
+5. Add the link of report as a comment to the incident.
 
-<img src="./images/Playbook_QualysVM-GetAssetDetails.jpg" width="50%"/><br>
+<img src="./images/Playbook_QualysVM-LaunchVMScan-GenerateReport.jpg" width="50%"/><br>
 <img src="./images/Playbook_Incident_Comment.jpg" width="50%"/><br>
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../QualysCustomConnector/) needs to be deployed under the same subscription.
-2. Refer to [Qualys Logic App Custom Connector](../QualysCustomConnector/readme.md) documentation for deployment instructions. 
+1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/) needs to be deployed under the same subscription.
+2. Refer to [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/readme.md) documentation for deployment instructions. 
 
 ### Deployment instructions
 
@@ -23,7 +25,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Playbook Name
     * Custom Connector Name
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-LaunchVMScan-GenerateReport%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-LaunchVMScan-GenerateReport%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 

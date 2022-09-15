@@ -1,22 +1,22 @@
-# QualysVM-LaunchVMScan-GenerateReport
+# QualysVM-GetAssets-ByCVEID
 
 ## Summary
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
-1. Get IP Addresses from incident.
-2. Scan IP Addresses with Qualys Scanner.
-3. Generate the Scan Report.
-4. Download the report and store it to a blob storage.
+1. Get CVE IDs from incident.
+2. Create a Dynamic Search List with CVE IDs as filter criteria.
+3. Generate the Vulnerability Report based on Dynamic Search List.
+4. Download the report and store it to a blob storage. This report has details about assets which are vulnerable to CVE.
 5. Add the link of report as a comment to the incident.
 
-<img src="./images/Playbook_QualysVM-LaunchVMScan-GenerateReport.jpg" width="50%"/><br>
+<img src="./images/Playbook_QualysVM-GetAssets-ByCVEID.jpg" width="50%"/><br>
 <img src="./images/Playbook_Incident_Comment.jpg" width="50%"/><br>
 
 ### Prerequisites
 
-1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../QualysCustomConnector/) needs to be deployed under the same subscription.
-2. Refer to [Qualys Logic App Custom Connector](../QualysCustomConnector/readme.md) documentation for deployment instructions. 
+1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/) needs to be deployed under the same subscription.
+2. Refer to [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/readme.md) documentation for deployment instructions. 
 
 ### Deployment instructions
 
@@ -25,7 +25,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Playbook Name
     * Custom Connector Name
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-LaunchVMScan-GenerateReport%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-LaunchVMScan-GenerateReport%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssets-ByCVEID%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssets-ByCVEID%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
@@ -41,7 +41,9 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains IP Addresses. In the *Entity maping* section of the analytics rule creation workflow, IP Address should be mapped to **Address** identitfier of the **IP** entity type. 
+1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains CVE ID. Since there is no entity for CVE for now, CVEID need to be passed as key value pair in *Custom details* section. **[Important]** In the *Custom details* section of the analytics rule creation workflow, Assign **CVEID** as key and choose appropriate column as value.
+
+    Check the [documnetation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to know more about custom details in alerts.
 
     Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook. Check the [documentation](https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook) to learn more about automation rules.
