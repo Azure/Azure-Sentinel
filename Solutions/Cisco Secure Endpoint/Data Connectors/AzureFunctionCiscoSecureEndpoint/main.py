@@ -161,7 +161,7 @@ def get_last_event_ts(events: List[dict], last_ts: datetime.datetime, field_name
     return last_ts
 
 
-def check_on_future_event_time(time_field: str):
+def check_on_future_event_time(time_field: datetime):
     event_ts = time_field
     try:
         event_ts = parse_datetime(event_ts)
