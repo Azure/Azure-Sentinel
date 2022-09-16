@@ -1,7 +1,7 @@
 # ThreatX-BlockIP-URL Info Playbook
  ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
- 1. Fetches the list of earlier blocked or allowed URL's and IP's .
+ 1. Fetches the list of earlier blocked or allowed URLs and IPs .
  2. Fetches the new IP's and URL's from incidents and compare them with existing one and update the blacklist . 
 
 
@@ -10,7 +10,7 @@
 2. API key. To get API Key, login into your ThreatX cloud instance dashboard and navigate to Settings --> API Key --> Add Api Key.
 
 ### Deployment instructions 
-1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FThreatXPlaybooks%2FThreatX-BlockIP-URL%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2F%2FThreatXPlaybooks%2FThreatX-BlockIP-URL%2Fazuredeploy.json)
