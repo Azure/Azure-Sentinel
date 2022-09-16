@@ -1,7 +1,7 @@
 // Title:           ISC Bind
 // Author:          Microsoft
 // Version:         1.0
-// Last Updated:    09/14/2022
+// Last Updated:    09/16/2022
 // Comment:         Inital Release
 //  
 // DESCRIPTION:
@@ -59,16 +59,12 @@ let response =Syslog
         DnsQuery:string " "
         DnsQueryClassName:string " "
         DnsQueryTypeName:string " "
-        "response: "
-        rest_of_string:string
-| extend
-        // -- multi-line mode (?m) needed in regex since samples included new lines. Might not exist in real logs
-        extract = extract_all(@"^(\w+) ([\w\+\-]+?)(?: |$)(?m)(.*?$)?", rest_of_string)[0]
-| extend 
-        DnsResponseCodeName = tostring(extract[0]),
-        DnsFlags = tostring(extract[1]),
-        DnsResponseName = tostring(extract[2])
+        "response: " DnsResponseCodeName: string
+        " " DnsFlags: string
+| extend DNSResourceRecordIndex= indexof(DnsFlags, " ")
+| extend DnsResponseName =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, DNSResourceRecordIndex), "")
+| extend DnsFlags =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, 0, DNSResourceRecordIndex), DnsFlags)
 | extend 
         EventSubType = "response"
-| project-away extract,rest_of_string,SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName;
+| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,DNSResourceRecordIndex;
 union request,requestcache,response
