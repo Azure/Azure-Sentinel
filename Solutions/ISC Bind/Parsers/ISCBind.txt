@@ -22,31 +22,32 @@ let request = Syslog
 | parse SyslogMessage with
         * "client " * " "
         SrcIpAddr:string "#" 
-        SrcPortNumber:int *
+        SrcPortNumber:string " " *
         "query: "
         DnsQuery:string " "
         DnsQueryClassName:string " "
         DnsQueryTypeName:string " "
-        DnsFlags:string " (" ServerIpAddr:string ")"
-| extend 
-        EventSubType = "request",
-        DnsResponseCodeName = "NA"
-| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName;
+        DnsFlags:string
+| extend ServerIPAddressIndex= indexof(DnsFlags, " ")
+| extend ServerIPAddress = iif(ServerIPAddressIndex != "-1", substring(DnsFlags, ServerIPAddressIndex),"")
+| extend ServerIPAddress = replace_regex(ServerIPAddress,@"[()]","")
+| extend DnsFlags =iif(ServerIPAddressIndex != "-1", substring(DnsFlags, 0, ServerIPAddressIndex), DnsFlags)
+| extend SrcPortNumber = replace_regex(SrcPortNumber,@"[^\d]","")
+| extend EventSubType = "request",DnsResponseCodeName = "NA"
+| project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,ServerIPAddressIndex;
 //request (cache) events
 let requestcache = Syslog 
 | where SyslogMessage has_all ("client", "query (cache)") and SyslogMessage !has "response:"
 | parse SyslogMessage with
         * "client " * " "
         SrcIpAddr:string "#" 
-        SrcPortNumber:int *
+        SrcPortNumber:string " " *
         "query (cache) '"
         DnsQuery:string "/"
         DnsQueryTypeName:string "/"
         DnsQueryClassName:string "' "
         Action
-| extend 
-        EventSubType = "requestcache",
-        DnsResponseCodeName = "NA"
+| extend EventSubType = "requestcache",DnsResponseCodeName = "NA"
 | project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName;
 // response events
 let response =Syslog 
@@ -54,7 +55,7 @@ let response =Syslog
 | parse SyslogMessage with
         * "client " * " "
         SrcIpAddr:string "#" 
-        SrcPortNumber:int " " * "view " * ": "
+        SrcPortNumber:string " " * "view " * ": "
         NetworkProtocol:string ": query: "
         DnsQuery:string " "
         DnsQueryClassName:string " "
@@ -64,7 +65,6 @@ let response =Syslog
 | extend DNSResourceRecordIndex= indexof(DnsFlags, " ")
 | extend DnsResponseName =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, DNSResourceRecordIndex), "")
 | extend DnsFlags =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, 0, DNSResourceRecordIndex), DnsFlags)
-| extend 
-        EventSubType = "response"
+| extend EventSubType = "response"
 | project-away SyslogMessage,ProcessName,ProcessID,Facility,SeverityLevel,HostName,DNSResourceRecordIndex;
 union request,requestcache,response
