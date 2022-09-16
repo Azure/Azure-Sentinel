@@ -1,0 +1,74 @@
+Parser:
+  Title: Authentication ASIM parser for Salesforce Service Cloud
+  Version: '0.1.0'
+  LastUpdated: August 26, 2022
+Product:
+  Name: Salesforce
+Normalization:
+  Schema: Authentication
+  Version: '0.1.1'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Salesforce sign in logs, stored in the  SalesforceServiceCloud_CL table, to the ASIM Authentication schema.
+ParserName: ASimAuthenticationSalesforceSC
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let SalesforceSignin=(disabled:bool=false){
+    let SalesforceEventType = dynamic(['Login','Logout']);
+    let SalesforceSuccessfulOutcome = dynamic(['LOGIN_NO_ERROR']);
+    let SalesforceFailedOutcome = dynamic(['No such user or password', 'Incorrect password', 'Account expired','Password expired', 'User locked', 'User disabled', 'Logon violates policy','Session expired','Other'] );
+    SalesforceServiceCloud_CL | where not(disabled)
+    | where event_type_s  in (SalesforceEventType)
+    | project TimeGenerated,event_type_s,login_status_s, login_key_s, user_name_s, user_type_s, user_id_s, source_ip_s,client_ip_s,browser_type_s
+    | extend 
+          EventProduct='Service Cloud'
+        , EventSchema = 'Authentication'
+        , EventVendor='Salesforce'
+        , EventCount=int(1)
+        , EventSchemaVersion='0.1.0'
+        , EventResult = case (login_status_s  in (SalesforceSuccessfulOutcome), 'Success',login_status_s in (SalesforceFailedOutcome),'Failure', 'Partial')
+        , EventStartTime=TimeGenerated
+        , EventEndTime=TimeGenerated
+        , EventType = case(event_type_s == 'Login','Logon',
+								event_type_s == 'Logout','Logoff', "")
+        , TargetUserIdType='UID'
+        , TargetUsernameType='UPN'
+    | project-rename 
+        EventOriginalResultDetails=login_status_s
+        , TargetSessionId=login_key_s
+        , TargetUserId= user_id_s
+        , TargetUsername=user_name_s
+        , OriginalUserType=user_type_s
+        , EventOriginalUid = request_id_s
+        , SrcIpAddr = source_ip_s
+        , TargetIpAddr = client_ip_s
+        , HttpUserAgent= browser_type_s
+    | project-reorder
+        EventProduct
+        , EventOriginalUid
+        , TimeGenerated
+        , EventResult
+        , EventOriginalResultDetails
+        , EventStartTime
+        , EventEndTime
+        , EventType
+        , TargetSessionId
+        , TargetUserId
+        , TargetUsername
+        , OriginalUserType
+        , HttpUserAgent
+        , SrcIpAddr
+        , TargetIpAddr
+        // ** Aliases
+        | extend 
+          User=TargetUsername
+          , Dvc=EventVendor
+    };
+  SalesforceSignin(disabled=disabled)
