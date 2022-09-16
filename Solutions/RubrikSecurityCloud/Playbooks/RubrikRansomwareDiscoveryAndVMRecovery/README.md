@@ -11,6 +11,8 @@ TThis playbook interacts with Rubrik Security Cloud to (1) optionally preserve e
 3. To perform an IOC scan the IOC YARA rule should be available as a URL.
 4. Obtain Teams group id and channel id.
 5. Store Service account credentials in Key Vault and obtain keyvault name and tenantId
+    a. Create a Key Vault with unique name
+    b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively
 
 ### Deployment instructions
 
@@ -28,9 +30,9 @@ TThis playbook interacts with Rubrik Security Cloud to (1) optionally preserve e
 
 #### a. Authorize connections
 
-Once deployment is complete, authorize each connection.
+Once deployment is complete, authorize each connection like teams, keyvault.
 
-1. Click the Custom connector connection resource
+1. Click the connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in

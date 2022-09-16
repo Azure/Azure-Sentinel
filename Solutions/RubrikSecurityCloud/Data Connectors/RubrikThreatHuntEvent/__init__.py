@@ -39,28 +39,32 @@ def main(request: func.HttpRequest) -> func.HttpResponse:
     except Exception as error:
         logging.error("Error in RubrikThreatHuntEvent: {}".format(error))
         return func.HttpResponse("Error in RubrikThreatHuntEvent: {}".format(error))
-    if webhook_data:
-        body = json.dumps(webhook_data)
-        logging.info("Got data of ThreatHunt event via webhook.")
-        try:
-            logging.info(
-                "({}) Try to post the webhook data from RubrikThreatHuntEvent.".format(
-                    datetime.now()
+    else:
+        if webhook_data:
+            body = json.dumps(webhook_data)
+            logging.info("Got data of ThreatHunt event via webhook.")
+            try:
+                logging.info(
+                    "({}) Try to post the webhook data from RubrikThreatHuntEvent.".format(
+                        datetime.now()
+                    )
                 )
-            )
-            azuresentinel = AzureSentinel()
-            status_code = azuresentinel.post_data(
-                body,
-                sentinel_log_type,
-            )
-        except RubrikException as error:
-            logging.error(error)
-            return func.HttpResponse(error)
-        else:
-            if status_code >= 200 and status_code <= 299:
+                azuresentinel = AzureSentinel()
+                status_code = azuresentinel.post_data(
+                    body,
+                    sentinel_log_type,
+                )
+            except RubrikException as error:
+                logging.error(error)
+                return func.HttpResponse(error)
+            else:
+                if status_code >= 200 and status_code <= 299:
+                    return func.HttpResponse(
+                        "Data posted successfully to log analytics from RubrikThreatHuntEvent."
+                    )
                 return func.HttpResponse(
-                    "Data posted successfully to log analytics from RubrikThreatHuntEvent."
+                    "Failed to post data from RubrikThreatHuntEvent into sentinel"
                 )
-            return func.HttpResponse(
-                "Failed to post data from RubrikThreatHuntEvent into sentinel"
-            )
+        else:
+            logging.info("No required data found.")
+            return func.HttpResponse("No required data found for this trigger.")

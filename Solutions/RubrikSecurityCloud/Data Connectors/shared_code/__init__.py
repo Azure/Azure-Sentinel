@@ -1,1 +1,1 @@
-"""This is init file to consider Shared_code as package."""
+"""This is init file to consider shared_code as package."""

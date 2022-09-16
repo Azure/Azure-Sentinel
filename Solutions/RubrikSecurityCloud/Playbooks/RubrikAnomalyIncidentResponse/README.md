@@ -24,7 +24,7 @@ This playbook provides an end to end example of the collection of Ransomware Ano
 
 #### a. Authorize connections
 
-Once deployment is complete, authorize each connection.
+Once deployment is complete, authorize each connection like teams, microsoft sentinel.
 
 1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection

@@ -62,3 +62,6 @@ def main(request: func.HttpRequest) -> func.HttpResponse:
                 return func.HttpResponse(
                     "Failed to post data from RubrikAnomalyEvent into sentinel."
                 )
+        else:
+            logging.info("No required data found.")
+            return func.HttpResponse("No required data found for this trigger.")
