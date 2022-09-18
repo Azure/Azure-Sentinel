@@ -24,7 +24,7 @@ resource "google_project_service" "enable-api" {
 resource "google_iam_workload_identity_pool" "sentinel-workload-identity-pool" {
   provider                           = google-beta
   project = data.google_project.project.project_id
-  workload_identity_pool_id = sentinel_tenant_id
+  workload_identity_pool_id = locals.sentinel_tenant_id
   display_name              = "sentinel-workload-identity-pool"
 }
 
