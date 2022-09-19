@@ -1,12 +1,12 @@
-# Tanium-QuarantineHosts
+# Tanium-UnquarantineHosts
 
 ## Overview
 
-This playbook will use Tanium to quarantine any hosts associated with a Microsoft Sentinel incident.
+This playbook will use Tanium to remove a previously applied Tanium quarantine from hosts associated with a Microsoft Sentinel incident.
 
-The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the quarantine actions expire after thirty minutes.
+The results of the playbook will be added as comments to the incident: targeting results, action deployment status, and finally action results. The action results comment will wait for the action to expire and then check its results. By default the un-quarantine actions expire after thirty minutes.
 
-![Tanium-QuarantineHosts screenshot](images/Tanium-QuarantineHosts.png)
+![Tanium-UnquarantineHosts screenshot](images/Tanium-UnquarantineHosts.png)
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ You must authorize the API Connections used by this playbook after deployment.
 2. Under "Development Tools" (located on the sidebar), click "API Connections".
 3. Ensure each connection has been authorized.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-QuarantineHosts%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-QuarantineHosts%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-UnquarantineHosts%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-UnquarantineHosts%2Fazuredeploy.json)
 
 ## Note
 
