@@ -134,7 +134,7 @@
                     "actions": {
                         "Entities_-_Get_IPs": {
                             "runAfter": {
-                                "Initialize_Entity_variable": [
+                                "Initialize_ARG_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -173,7 +173,7 @@
                                                             "query": "iotsecurityresources  | where type==\"microsoft.iotsecurity/locations/devicegroups/vulnerabilities\" | extend DeviceID = tostring(properties.deviceId) | join  (iotsecurityresources | where type=='microsoft.iotsecurity/locations/devicegroups/devices' | extend DeviceName = tostring(properties.deviceName) | where DeviceName == \"@{body('Run_query_and_list_results')?['value']?[0]?['deviceName']}\"  and \"@{body('Run_query_and_list_results')?['value']?[0]?['sensorName']}\" contains tostring(properties.sensor.name) | project DeviceSiteName=tostring(properties.sensor.site), name, DeviceName) on $left.DeviceID == $right.name | project DeviceID, DeviceName, CVE=tostring(properties.vulnerabilityId), Severity=tostring(properties.severityScore),CVEDescription=tostring(properties.description)"
                                                         },
                                                         "method": "POST",
-                                                        "uri": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+                                                        "uri": "@variables('ARGEndPoint')"
                                                     }
                                                 },
                                                 "Run_query_and_list_results": {
@@ -376,14 +376,10 @@
                                     "type": "If"
                                 },
                                 "Parse_JSON": {
-                                    "runAfter": {
-                                        "Set_Entity_variable": [
-                                            "Succeeded"
-                                        ]
-                                    },
+                                    "runAfter": {},
                                     "type": "ParseJson",
                                     "inputs": {
-                                        "content": "@variables('EntityID')",
+                                        "content": "@{items('For_each')['properties']}",
                                         "schema": {
                                             "properties": {
                                                 "additionalData": {
@@ -434,14 +430,6 @@
                                             "type": "object"
                                         }
                                     }
-                                },
-                                "Set_Entity_variable": {
-                                    "runAfter": {},
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "EntityID",
-                                        "value": "@{items('For_each')['properties']}"
-                                    }
                                 }
                             },
                             "runAfter": {
@@ -454,6 +442,23 @@
                                 "concurrency": {
                                     "repetitions": 1
                                 }
+                            }
+                        },
+                        "Initialize_ARG_variable": {
+                            "runAfter": {
+                                "Initialize_Email_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ARGEndPoint",
+                                        "type": "string",
+                                        "value": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+                                    }
+                                ]
                             }
                         },
                         "Initialize_ContinueLoop": {
@@ -484,27 +489,11 @@
                                     }
                                 ]
                             }
-                        },
-                        "Initialize_Entity_variable": {
-                            "runAfter": {
-                                "Initialize_Email_variable": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "EntityID",
-                                        "type": "string"
-                                    }
-                                ]
-                            }
                         }
                     },
                     "outputs": {}
                 },
-                "parameters": {
+ 		"parameters": {
                     "$connections": {
                         "value": {
                             "azuremonitorlogs": {
