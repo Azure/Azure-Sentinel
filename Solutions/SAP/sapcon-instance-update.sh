@@ -139,7 +139,7 @@ while IFS= read -r contid; do
 		contname="${contname:1}"
 		if [[ -z ${CONTAINERNAMES[*]} ]] || [[ ${CONTAINERNAMES[*]} =~ $contname ]]; then
 			echo "Checking if upgrade is necessary for container $contname"
-			if [ ! "$contimg" = "$repoimageid" ] || [ $FORCE = 1 ]; then
+			if [[ ! "$contimg" == "$repoimageid" ]] || [[ $FORCE == 1 ]]; then
 				echo "Updating $contname"
 				if [ -n "$contid" ]; then
 					sysfileloc=$(docker inspect -f '{{ .Mounts }}' $contname | awk 'NR==1 {print $2}')
