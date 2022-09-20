@@ -31,7 +31,7 @@
 
 param(
     [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")] [string] $TenantID,
-    [Parameter(Mandatory = $false, HelpMessage = "Enter Environment [AzureCloud | AzureUSGovernment]")] [string] $AzEnvironment
+    [Parameter(Mandatory = $false, HelpMessage = "Enter Environment [AzureCloud | AzureUSGovernment]")] [string] $AzEnvironment = "AzureCloud"
 ) 
 
 #endregion UserInputs
