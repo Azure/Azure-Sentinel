@@ -1,6 +1,6 @@
 # Microsoft Defender for IoT ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Microsoft Defender for IoT.
+ARM template for ASIM NetworkSession schema parser for Microsoft Defender for IoT.
 
 This ASIM parser supports normalizing Microsoft Defender for IoT logs to the ASIM Network Session normalized schema.
 

@@ -29,6 +29,11 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
                     Schema= "ASimNetworkSession",
                     SampleFunctionName= "_Im_NetworkSession",
                 },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimProcessEvent",
+                    SampleFunctionName= "_Im_ProcessEvent",
+                },
             };
     }
 

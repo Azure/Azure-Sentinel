@@ -9,6 +9,10 @@ CommonSecurityLog
 | extend EventProduct = 'Claroty'
 | extend EventSchemaVersion = 0.2
 | extend EventCount = 1
+| extend DeviceCustomNumber1 = coalesce(column_ifexists("FieldDeviceCustomNumber1", int(null)),DeviceCustomNumber1),
+         DeviceCustomNumber2 = coalesce(column_ifexists("FieldDeviceCustomNumber2", int(null)),DeviceCustomNumber2),
+         DeviceCustomNumber3 = coalesce(column_ifexists("FieldDeviceCustomNumber3", int(null)),DeviceCustomNumber3),
+         ExternalID = coalesce(column_ifexists("ExtID", ""),tostring(ExternalID))
 | extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1
                      , DeviceCustomNumber2Label, DeviceCustomNumber2
                      , DeviceCustomNumber3Label, DeviceCustomNumber3
@@ -21,17 +25,14 @@ CommonSecurityLog
                      , DeviceCustomDate1Label, DeviceCustomDate1
                      , DeviceCustomDate2Label, DeviceCustomDate2)
 | evaluate bag_unpack(packed)
-| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><" ]+)', dynamic(["key","value"]), AdditionalExtensions) on (
-    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))
-    | summarize bag = make_bag(packed1)
-)
-| evaluate bag_unpack(bag)
+| parse-kv AdditionalExtensions as (cs7Label:string, cs7:string, cs8Label:string, cs8:string, cs9Label:string, cs9:string, cs10Label:string, cs10:string, cat:string) with (pair_delimiter=';', kv_delimiter='=')
 | extend packed2 = pack(cs7Label, cs7
                      , cs8Label, cs8
                      , cs9Label, cs9
                      , cs10Label, cs10)
 | evaluate bag_unpack(packed2)
-| extend EventEndTime = todatetime(ReceiptTime)
+| extend EventEndTime = todatetime(ReceiptTime),
+         cat = coalesce(column_ifexists("DeviceEventCategory", ""),cat)
 | project-rename EventProductVersion=DeviceVersion
                 , EventSubType=cat
                 , EventOriginalType=DeviceEventClassID

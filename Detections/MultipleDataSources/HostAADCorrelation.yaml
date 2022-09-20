@@ -59,7 +59,7 @@ query: |
   //Make a list of IPs with failed *nix host logins above threshold
   let nix_fails = 
   Syslog
-  | where Facility contains 'auth' and ProcessName != 'sudo'
+  | where Facility contains 'auth' and ProcessName != 'sudo' and SyslogMessage has 'from' and not(SyslogMessage has_any ('Disconnecting', 'Disconnected', 'Accepted', 'disconnect', @'[preauth]'))
   | extend SourceIP = extract("(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))",1,SyslogMessage)
   | where SourceIP != "" and SourceIP != "127.0.0.1"
   | summarize count() by SourceIP
@@ -68,10 +68,10 @@ query: |
   //See if any of the IPs with failed host logins hve had a sucessful Azure AD login
   let aadFunc = (tableName:string){
   table(tableName)
-  | where ResultType !in ("0", "50125", "50140")
+  | where ResultType in ("0", "50125", "50140")
   | where IPAddress in (win_fails) or IPAddress in (nix_fails) or IPAddress in (wef_fails)
   | extend Reason=  "Multiple failed host logins from IP address with successful Azure AD login"
-  | extend timstamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, Type = Type
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, Type = Type
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
@@ -85,5 +85,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.1.1
+version: 1.1.2
 kind: Scheduled

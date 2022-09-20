@@ -1,6 +1,6 @@
 # Windows Firewall ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Windows Firewall.
+ARM template for ASIM NetworkSession schema parser for Windows Firewall.
 
 This ASIM parser supports normalizing Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) to the ASIM Network Session schema. Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
 

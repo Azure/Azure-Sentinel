@@ -1,0 +1,595 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Salesforce Service Cloud"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-salesforceservicecloud",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "SalesforceServiceCloud",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "SalesforceServiceCloud",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "SalesforceServiceCloud-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "SalesforceServiceCloud",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-Parser-',variables('_parserContentId1'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Salesforce Service Cloud data connector with template",
+        "displayName": "Salesforce Service Cloud template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Salesforce Service Cloud data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Salesforce Service Cloud (using Azure Function)",
+                  "publisher": "Salesforce",
+                  "descriptionMarkdown": "The Salesforce Service Cloud data connector provides the capability to ingest information about your Salesforce operational events into Azure Sentinel through the REST API. The connector provides ability to review events in your org on an accelerated basis, get [event log files](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/event_log_file_hourly_overview.htm) in hourly increments for recent activity.",
+                  "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on Kusto to work as expected. Follow the steps to use this Kusto functions alias **SalesforceServiceCloud** in queries and workbooks. [Follow steps to get this Kusto functions>](https://aka.ms/sentinel-SalesforceServiceCloud-parser) ",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "SalesforceServiceCloud_CL",
+                      "baseQuery": "SalesforceServiceCloud_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Last Salesforce Service Cloud EventLogFile Events",
+                      "query": "SalesforceServiceCloud\n | sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "SalesforceServiceCloud_CL",
+                      "lastDataReceivedQuery": "SalesforceServiceCloud_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "SalesforceServiceCloud_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "REST API Credentials/permissions",
+                        "description": "**Salesforce API Username**, **Salesforce API Password**, **Salesforce Security Token**, **Salesforce Consumer Key**, **Salesforce Consumer Secret** is required for REST API. [See the documentation to learn more about API](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/quickstart.htm)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to the Salesforce Lightning Platform REST API to pull its logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://aka.ms/sentinel-SalesforceServiceCloud-parser) to create the Kusto functions alias **SalesforceServiceCloud**"
+                    },
+                    {
+                      "description": "**STEP 1 - Configuration steps for the Salesforce Lightning Platform REST API**\n\n1. See the [link](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/quickstart.htm) and follow the instructions for obtaining Salesforce API Authorization credentials. \n2. On the **Set Up Authorization** step choose **Session ID Authorization** method.\n3. You must provide your client id, client secret, username, and password with user security token."
+                    },
+                    {
+                      "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Salesforce Service Cloud data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Salesforce API Authorization credentials, readily available.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "Use this method for automated deployment of the Salesforce Service Cloud data connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-SalesforceServiceCloud-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **Salesforce API Username**, **Salesforce API Password**, **Salesforce Security Token**, **Salesforce Consumer Key**, **Salesforce Consumer Secret** and deploy. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+                      "title": "Option 1 - Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": "Use the following step-by-step instructions to deploy the Salesforce Service Cloud data connector manually with Azure Functions (Deployment via Visual Studio Code).",
+                      "title": "Option 2 - Manual Deployment of Azure Functions"
+                    },
+                    {
+                      "description": "**1. Deploy a Function App**\n\n> NOTE:You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.\n\n1. Download the [Azure Function App](https://aka.ms/sentinel-SalesforceServiceCloud-functionapp) file. Extract archive to your local development computer.\n2. Start VS Code. Choose File in the main menu and select Open Folder.\n3. Select the top level folder from extracted files.\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\nIf you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**\nIf you're already signed in, go to the next step.\n5. Provide the following information at the prompts:\n\n\ta. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n\tb. **Select Subscription:** Choose the subscription to use.\n\n\tc. Select **Create new Function App in Azure** (Don't choose the Advanced option)\n\n\td. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. SalesforceXXXXX).\n\n\te. **Select a runtime:** Choose Python 3.8.\n\n\tf. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Azure Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n7. Go to Azure Portal for the Function App configuration."
+                    },
+                    {
+                      "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tSalesforceUser\n\t\tSalesforcePass\n\t\tSalesforceSecurityToken\n\t\tSalesforceConsumerKey\n\t\tSalesforceConsumerSecret\n\t\tWorkspaceID\n\t\tWorkspaceKey\n\t\tlogAnalyticsUri (optional)\n - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`\n3. Once all application settings have been entered, click **Save**."
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Salesforce Service Cloud",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Salesforce Service Cloud",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Salesforce Service Cloud (using Azure Function)",
+          "publisher": "Salesforce",
+          "descriptionMarkdown": "The Salesforce Service Cloud data connector provides the capability to ingest information about your Salesforce operational events into Azure Sentinel through the REST API. The connector provides ability to review events in your org on an accelerated basis, get [event log files](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/event_log_file_hourly_overview.htm) in hourly increments for recent activity.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "SalesforceServiceCloud_CL",
+              "baseQuery": "SalesforceServiceCloud_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "SalesforceServiceCloud_CL",
+              "lastDataReceivedQuery": "SalesforceServiceCloud_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "SalesforceServiceCloud_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Last Salesforce Service Cloud EventLogFile Events",
+              "query": "SalesforceServiceCloud\n | sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "REST API Credentials/permissions",
+                "description": "**Salesforce API Username**, **Salesforce API Password**, **Salesforce Security Token**, **Salesforce Consumer Key**, **Salesforce Consumer Secret** is required for REST API. [See the documentation to learn more about API](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/quickstart.htm)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to the Salesforce Lightning Platform REST API to pull its logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://aka.ms/sentinel-SalesforceServiceCloud-parser) to create the Kusto functions alias **SalesforceServiceCloud**"
+            },
+            {
+              "description": "**STEP 1 - Configuration steps for the Salesforce Lightning Platform REST API**\n\n1. See the [link](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/quickstart.htm) and follow the instructions for obtaining Salesforce API Authorization credentials. \n2. On the **Set Up Authorization** step choose **Session ID Authorization** method.\n3. You must provide your client id, client secret, username, and password with user security token."
+            },
+            {
+              "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Salesforce Service Cloud data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Salesforce API Authorization credentials, readily available.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            },
+            {
+              "description": "Use this method for automated deployment of the Salesforce Service Cloud data connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-SalesforceServiceCloud-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **Salesforce API Username**, **Salesforce API Password**, **Salesforce Security Token**, **Salesforce Consumer Key**, **Salesforce Consumer Secret** and deploy. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+              "title": "Option 1 - Azure Resource Manager (ARM) Template"
+            },
+            {
+              "description": "Use the following step-by-step instructions to deploy the Salesforce Service Cloud data connector manually with Azure Functions (Deployment via Visual Studio Code).",
+              "title": "Option 2 - Manual Deployment of Azure Functions"
+            },
+            {
+              "description": "**1. Deploy a Function App**\n\n> NOTE:You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.\n\n1. Download the [Azure Function App](https://aka.ms/sentinel-SalesforceServiceCloud-functionapp) file. Extract archive to your local development computer.\n2. Start VS Code. Choose File in the main menu and select Open Folder.\n3. Select the top level folder from extracted files.\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\nIf you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**\nIf you're already signed in, go to the next step.\n5. Provide the following information at the prompts:\n\n\ta. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n\tb. **Select Subscription:** Choose the subscription to use.\n\n\tc. Select **Create new Function App in Azure** (Don't choose the Advanced option)\n\n\td. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. SalesforceXXXXX).\n\n\te. **Select a runtime:** Choose Python 3.8.\n\n\tf. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Azure Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n7. Go to Azure Portal for the Function App configuration."
+            },
+            {
+              "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tSalesforceUser\n\t\tSalesforcePass\n\t\tSalesforceSecurityToken\n\t\tSalesforceConsumerKey\n\t\tSalesforceConsumerSecret\n\t\tWorkspaceID\n\t\tWorkspaceKey\n\t\tlogAnalyticsUri (optional)\n - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`\n3. Once all application settings have been entered, click **Save**."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on Kusto to work as expected. Follow the steps to use this Kusto functions alias **SalesforceServiceCloud** in queries and workbooks. [Follow steps to get this Kusto functions>](https://aka.ms/sentinel-SalesforceServiceCloud-parser) "
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "SalesforceServiceCloud Data Parser with template",
+        "displayName": "SalesforceServiceCloud Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "SalesforceServiceCloud Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "SalesforceServiceCloud",
+                "category": "Samples",
+                "functionAlias": "SalesforceServiceCloud",
+                "query": "\n\r\nSalesforceServiceCloud_CL \r\n| project-rename\r\n\t\tRequestSize=request_size_s,\r\n\t\tDelegatedUserName=delegated_user_name_s,\r\n\t\tDelegatedUserId=delegated_user_id_s,\r\n\t\tDelegatedUserIdDerived=delegated_user_id_derived_s,\r\n\t\tExecTime=exec_time_s,\r\n\t\tAction=action_s,\r\n\t\tPlatformType=platform_type_s,\r\n\t\tOsName=os_name_s,\r\n\t\tOsVersion=os_version_s,\r\n\t\tNumberOfRecords=number_of_records_s,\r\n\t\tTimestamp=timestamp_s,\r\n\t\tStatusCode=status_code_s,\r\n\t\tEventType=event_type_s,\r\n\t\tSizeBytes=size_bytes_s,\r\n\t\tReferrerUri=referrer_uri_s,\r\n\t\tUserAgent=user_agent_s,\r\n\t\tBrowserType=browser_type_s,\r\n\t\tTime=time_s,\r\n\t\tResponseSize=response_size_s,\r\n\t\tDeviceId=device_id_s,\r\n\t\tDeviceModel=device_model_s,\r\n\t\tSourceIp=source_ip_s,\r\n\t\tClientIp=client_ip_s,\r\n\t\tSuccess=success_s,\r\n\t\tUri=uri_s,\r\n\t\tUrl=url_s,\r\n\t\tClientName=client_name_s,\r\n\t\tWaveTimestamp=wave_timestamp_s,\r\n\t\tWaveSessionId=wave_session_id_g,\r\n\t\tViewStateSize=view_state_size_s,\r\n\t\tVersionIdDerived=version_id_derived_s,\r\n\t\tVersionId=version_id_s,\r\n\t\tUserType=user_type_s,\r\n\t\tUserInitiatedLogout=user_initiated_logout_s,\r\n\t\tUserIdDerived=user_id_derived_s,\r\n\t\tUserId=user_id_s,\r\n\t\tUserEmail=user_email_s,\r\n\t\tUser=user_name_s,\r\n\t\tUriIdDerived=uri_id_derived_s,\r\n\t\tUiEventType=ui_event_type_s,\r\n\t\tUiEventTimestamp=ui_event_timestamp_s,\r\n\t\tUiEventSource=ui_event_source_s,\r\n\t\tUiEventSequenceNum=ui_event_sequence_num_s,\r\n\t\tUiEventId=ui_event_id_s,\r\n\t\tTriggerType=trigger_type_s,\r\n\t\tTriggerName=trigger_name_s,\r\n\t\tTriggerId=trigger_id_s,\r\n\t\tTransactionType=transaction_type_s,\r\n\t\tTotalTime=total_time_s,\r\n\t\tTlsProtocol=tls_protocol_s,\r\n\t\tTimestampDerived=timestamp_derived_t,\r\n\t\tTargetUiElement=target_ui_element_s,\r\n\t\tTabId=tab_id_s,\r\n\t\tStackTrace=stack_trace_s,\r\n\t\tSort=sort_s,\r\n\t\tSiteId=site_id_s,\r\n\t\tSharingPermission=sharing_permission_s,\r\n\t\tSharingOperation=sharing_operation_s,\r\n\t\tSharedWithEntityId=shared_with_entity_id_s,\r\n\t\tSessionType=session_type_s,\r\n\t\tSessionLevel=session_level_s,\r\n\t\tSessionKey=session_key_s,\r\n\t\tSessionId=session_id_s,\r\n\t\tSearchQuery=search_query_s,\r\n\t\tSdkVersion=sdk_version_s,\r\n\t\tSdkAppVersion=sdk_app_version_s,\r\n\t\tSdkAppType=sdk_app_type_s,\r\n\t\tRunTime=run_time_s,\r\n\t\tRowsProcessed=rows_processed_s,\r\n\t\tRowCount=row_count_s,\r\n\t\tResolutionType=resolution_type_s,\r\n\t\tRequestType=request_type_s,\r\n\t\tRequestStatus=request_status_s,\r\n\t\tRequestId=request_id_s,\r\n\t\tReportIdDerived=report_id_derived_s,\r\n\t\tReportId=report_id_s,\r\n\t\tReportDescription=report_description_s,\r\n\t\tReopenCount=reopen_count_s,\r\n\t\tRenderingType=rendering_type_s,\r\n\t\tRelatedList=related_list_s,\r\n\t\tRelatedEntityId=related_entity_id_s,\r\n\t\tRecordType=record_type_s,\r\n\t\tRecordIdDerived=record_id_derived_s,\r\n\t\tRecordId=record_id_s,\r\n\t\tReadTime=read_time_s,\r\n\t\tRank=rank_s,\r\n\t\tQuiddity=quiddity_s,\r\n\t\tQueryId=query_id_s,\r\n\t\tQuery=query_s,\r\n\t\tPrevpageUrl=prevpage_url_s,\r\n\t\tPrevpageEntityType=prevpage_entity_type_s,\r\n\t\tPrevpageEntityId=prevpage_entity_id_s,\r\n\t\tPrevpageContext=prevpage_context_s,\r\n\t\tPrevpageAppName=prevpage_app_name_s,\r\n\t\tPrefixesSearched=prefixes_searched_s,\r\n\t\tParentUiElement=parent_ui_element_s,\r\n\t\tPageUrl=page_url_s,\r\n\t\tPageStartTime=page_start_time_s,\r\n\t\tPageName=page_name_s,\r\n\t\tPageEntityType=page_entity_type_s,\r\n\t\tPageEntityId=page_entity_id_s,\r\n\t\tPageContext=page_context_s,\r\n\t\tPageAppName=page_app_name_s,\r\n\t\tOrigin=origin_s,\r\n\t\tOrganizationId=organization_id_s,\r\n\t\tOperationType=operation_type_s,\r\n\t\tNumSessions=num_sessions_s,\r\n\t\tNumResults=num_results_s,\r\n\t\tNumClicks=num_clicks_s,\r\n\t\tNumberSoqlQueries=number_soql_queries_s,\r\n\t\tNumberFields=number_fields_s,\r\n\t\tNumberFailures=number_failures_s,\r\n\t\tNumberExceptionFilters=number_exception_filters_s,\r\n\t\tNumberColumns=number_columns_s,\r\n\t\tNumberBuckets=number_buckets_s,\r\n\t\tName=name_s,\r\n\t\tMethodName=method_name_s,\r\n\t\tMethod=method_s,\r\n\t\tMediaType=media_type_s,\r\n\t\tManagedPackageNamespace=managed_package_namespace_s,\r\n\t\tLoginStatus=login_status_s,\r\n\t\tLoginKey=login_key_s,\r\n\t\tLogGroupId=log_group_id_s,\r\n\t\tLimitUsagePercent=limit_usage_percent_s,\r\n\t\tLicenseContext=license_context_s,\r\n\t\tLastVersion=last_version_s,\r\n\t\tLanguage=language_s,\r\n\t\tJobId=job_id_s,\r\n\t\tIsSuccess=is_success_s,\r\n\t\tIsSecure=is_secure_s,\r\n\t\tIsScheduled=is_scheduled_s,\r\n\t\tIsNew=is_new_s,\r\n\t\tIsMobile=is_mobile_s,\r\n\t\tIsLongRunningRequest=is_long_running_request_s,\r\n\t\tIsGuest=is_guest_s,\r\n\t\tIsFirstRequest=is_first_request_s,\r\n\t\tIsError=is_error_s,\r\n\t\tIsApi=is_api_s,\r\n\t\tIsAjaxRequest=is_ajax_request_s,\r\n\t\tHttpMethod=http_method_s,\r\n\t\tHttpHeaders=http_headers_s,\r\n\t\tGrandparentUiElement=grandparent_ui_element_s,\r\n\t\tFileType=file_type_s,\r\n\t\tFilePreviewType=file_preview_type_s,\r\n\t\tExceptionType=exception_type_s,\r\n\t\tExceptionMessage=exception_message_s,\r\n\t\tEpt=ept_s,\r\n\t\tEntryPoint=entry_point_s,\r\n\t\tEntityType=entity_type_s,\r\n\t\tEntityName=entity_name_s,\r\n\t\tEntityId=entity_id_s,\r\n\t\tEntity=entity_s,\r\n\t\tEffectivePageTime=effective_page_time_s,\r\n\t\tDuration=duration_s,\r\n\t\tDocumentIdDerived=document_id_derived_s,\r\n\t\tDocumentId=document_id_s,\r\n\t\tDisplayType=display_type_s,\r\n\t\tDeviceSessionId=device_session_id_s,\r\n\t\tDevicePlatform=device_platform_s,\r\n\t\tDeliveryLocation=delivery_location_s,\r\n\t\tDeliveryId=delivery_id_s,\r\n\t\tDbTotalTime=db_total_time_s,\r\n\t\tDbCpuTime=db_cpu_time_s,\r\n\t\tDbBlocks=db_blocks_s,\r\n\t\tData=data_s,\r\n\t\tDashboardType=dashboard_type_s,\r\n\t\tDashboardIdDerived=dashboard_id_derived_s,\r\n\t\tDashboardId=dashboard_id_s,\r\n\t\tDashboardComponentId=dashboard_component_id_s,\r\n\t\tCpuTime=cpu_time_s,\r\n\t\tControllerType=controller_type_s,\r\n\t\tContext=context_s,\r\n\t\tConsoleIdDerived=console_id_derived_s,\r\n\t\tConsoleId=console_id_s,\r\n\t\tConnectionType=connection_type_s,\r\n\t\tComponentName=component_name_s,\r\n\t\tComponentIdDerived=component_id_derived_s,\r\n\t\tComponentId=component_id_s,\r\n\t\tClientVersion=client_version_s,\r\n\t\tClientInfo=client_info_s,\r\n\t\tClientId=client_id_s,\r\n\t\tClickedRecordId=clicked_record_id_s,\r\n\t\tClassName=class_name_s,\r\n\t\tCipherSuite=cipher_suite_s,\r\n\t\tCalloutTime=callout_time_s,\r\n\t\tBrowserVersion=browser_version_s,\r\n\t\tBrowserName=browser_name_s,\r\n\t\tBatchId=batch_id_s,\r\n\t\tAverageRowSize=average_row_size_s,\r\n\t\tArticleVersionId=article_version_id_s,\r\n\t\tArticleVersion=article_version_s,\r\n\t\tArticleStatus=article_status_s,\r\n\t\tArticleId=article_id_s,\r\n\t\tAppType=app_type_s,\r\n\t\tAppName=app_name_s,\r\n\t\tApiVersion=api_version_s,\r\n\t\tApiType=api_type_s,\r\n\t\tAnalyticsMode=analytics_mode_s\r\n| extend \r\n\t\tDstBytes=RequestSize,\r\n\t\tDstUser=DelegatedUserName,\r\n\t\tDstUserSid=DelegatedUserId,\r\n\t\tDstUserSidDerived=DelegatedUserIdDerived,\r\n\t\tDuration=ExecTime,\r\n\t\tDvcAction=Action,\r\n\t\tDvcOS=PlatformType,\r\n\t\tDvcOSName=OsName,\r\n\t\tDvcOSVersion=OsVersion,\r\n\t\tEventCount=NumberOfRecords,\r\n\t\tEventEndTime=Timestamp,\r\n\t\tEventResult=StatusCode,\r\n\t\tEventType=EventType,\r\n\t\tFileSize=SizeBytes,\r\n\t\tHttpReferrerOriginal=ReferrerUri,\r\n\t\tHttpUserAgentOriginal=UserAgent,\r\n\t\tHttpUserAgent=BrowserType,\r\n\t\tNetworkDuration=Time,\r\n\t\tSrcBytes=ResponseSize,\r\n\t\tSrcDvcId=DeviceId,\r\n\t\tSrcDvcModelName=DeviceModel,\r\n\t\tSrcIpAddr=SourceIp,\r\n\t\tSrcNatIpAddr=ClientIp,\r\n\t\tSuccess=Success,\r\n\t\tUrlOriginal=Url,\r\n\t\tUser=ClientName",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "SalesforceServiceCloud"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Salesforce Service Cloud",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "SalesforceServiceCloud",
+        "category": "Samples",
+        "functionAlias": "SalesforceServiceCloud",
+        "query": "\n\r\nSalesforceServiceCloud_CL \r\n| project-rename\r\n\t\tRequestSize=request_size_s,\r\n\t\tDelegatedUserName=delegated_user_name_s,\r\n\t\tDelegatedUserId=delegated_user_id_s,\r\n\t\tDelegatedUserIdDerived=delegated_user_id_derived_s,\r\n\t\tExecTime=exec_time_s,\r\n\t\tAction=action_s,\r\n\t\tPlatformType=platform_type_s,\r\n\t\tOsName=os_name_s,\r\n\t\tOsVersion=os_version_s,\r\n\t\tNumberOfRecords=number_of_records_s,\r\n\t\tTimestamp=timestamp_s,\r\n\t\tStatusCode=status_code_s,\r\n\t\tEventType=event_type_s,\r\n\t\tSizeBytes=size_bytes_s,\r\n\t\tReferrerUri=referrer_uri_s,\r\n\t\tUserAgent=user_agent_s,\r\n\t\tBrowserType=browser_type_s,\r\n\t\tTime=time_s,\r\n\t\tResponseSize=response_size_s,\r\n\t\tDeviceId=device_id_s,\r\n\t\tDeviceModel=device_model_s,\r\n\t\tSourceIp=source_ip_s,\r\n\t\tClientIp=client_ip_s,\r\n\t\tSuccess=success_s,\r\n\t\tUri=uri_s,\r\n\t\tUrl=url_s,\r\n\t\tClientName=client_name_s,\r\n\t\tWaveTimestamp=wave_timestamp_s,\r\n\t\tWaveSessionId=wave_session_id_g,\r\n\t\tViewStateSize=view_state_size_s,\r\n\t\tVersionIdDerived=version_id_derived_s,\r\n\t\tVersionId=version_id_s,\r\n\t\tUserType=user_type_s,\r\n\t\tUserInitiatedLogout=user_initiated_logout_s,\r\n\t\tUserIdDerived=user_id_derived_s,\r\n\t\tUserId=user_id_s,\r\n\t\tUserEmail=user_email_s,\r\n\t\tUser=user_name_s,\r\n\t\tUriIdDerived=uri_id_derived_s,\r\n\t\tUiEventType=ui_event_type_s,\r\n\t\tUiEventTimestamp=ui_event_timestamp_s,\r\n\t\tUiEventSource=ui_event_source_s,\r\n\t\tUiEventSequenceNum=ui_event_sequence_num_s,\r\n\t\tUiEventId=ui_event_id_s,\r\n\t\tTriggerType=trigger_type_s,\r\n\t\tTriggerName=trigger_name_s,\r\n\t\tTriggerId=trigger_id_s,\r\n\t\tTransactionType=transaction_type_s,\r\n\t\tTotalTime=total_time_s,\r\n\t\tTlsProtocol=tls_protocol_s,\r\n\t\tTimestampDerived=timestamp_derived_t,\r\n\t\tTargetUiElement=target_ui_element_s,\r\n\t\tTabId=tab_id_s,\r\n\t\tStackTrace=stack_trace_s,\r\n\t\tSort=sort_s,\r\n\t\tSiteId=site_id_s,\r\n\t\tSharingPermission=sharing_permission_s,\r\n\t\tSharingOperation=sharing_operation_s,\r\n\t\tSharedWithEntityId=shared_with_entity_id_s,\r\n\t\tSessionType=session_type_s,\r\n\t\tSessionLevel=session_level_s,\r\n\t\tSessionKey=session_key_s,\r\n\t\tSessionId=session_id_s,\r\n\t\tSearchQuery=search_query_s,\r\n\t\tSdkVersion=sdk_version_s,\r\n\t\tSdkAppVersion=sdk_app_version_s,\r\n\t\tSdkAppType=sdk_app_type_s,\r\n\t\tRunTime=run_time_s,\r\n\t\tRowsProcessed=rows_processed_s,\r\n\t\tRowCount=row_count_s,\r\n\t\tResolutionType=resolution_type_s,\r\n\t\tRequestType=request_type_s,\r\n\t\tRequestStatus=request_status_s,\r\n\t\tRequestId=request_id_s,\r\n\t\tReportIdDerived=report_id_derived_s,\r\n\t\tReportId=report_id_s,\r\n\t\tReportDescription=report_description_s,\r\n\t\tReopenCount=reopen_count_s,\r\n\t\tRenderingType=rendering_type_s,\r\n\t\tRelatedList=related_list_s,\r\n\t\tRelatedEntityId=related_entity_id_s,\r\n\t\tRecordType=record_type_s,\r\n\t\tRecordIdDerived=record_id_derived_s,\r\n\t\tRecordId=record_id_s,\r\n\t\tReadTime=read_time_s,\r\n\t\tRank=rank_s,\r\n\t\tQuiddity=quiddity_s,\r\n\t\tQueryId=query_id_s,\r\n\t\tQuery=query_s,\r\n\t\tPrevpageUrl=prevpage_url_s,\r\n\t\tPrevpageEntityType=prevpage_entity_type_s,\r\n\t\tPrevpageEntityId=prevpage_entity_id_s,\r\n\t\tPrevpageContext=prevpage_context_s,\r\n\t\tPrevpageAppName=prevpage_app_name_s,\r\n\t\tPrefixesSearched=prefixes_searched_s,\r\n\t\tParentUiElement=parent_ui_element_s,\r\n\t\tPageUrl=page_url_s,\r\n\t\tPageStartTime=page_start_time_s,\r\n\t\tPageName=page_name_s,\r\n\t\tPageEntityType=page_entity_type_s,\r\n\t\tPageEntityId=page_entity_id_s,\r\n\t\tPageContext=page_context_s,\r\n\t\tPageAppName=page_app_name_s,\r\n\t\tOrigin=origin_s,\r\n\t\tOrganizationId=organization_id_s,\r\n\t\tOperationType=operation_type_s,\r\n\t\tNumSessions=num_sessions_s,\r\n\t\tNumResults=num_results_s,\r\n\t\tNumClicks=num_clicks_s,\r\n\t\tNumberSoqlQueries=number_soql_queries_s,\r\n\t\tNumberFields=number_fields_s,\r\n\t\tNumberFailures=number_failures_s,\r\n\t\tNumberExceptionFilters=number_exception_filters_s,\r\n\t\tNumberColumns=number_columns_s,\r\n\t\tNumberBuckets=number_buckets_s,\r\n\t\tName=name_s,\r\n\t\tMethodName=method_name_s,\r\n\t\tMethod=method_s,\r\n\t\tMediaType=media_type_s,\r\n\t\tManagedPackageNamespace=managed_package_namespace_s,\r\n\t\tLoginStatus=login_status_s,\r\n\t\tLoginKey=login_key_s,\r\n\t\tLogGroupId=log_group_id_s,\r\n\t\tLimitUsagePercent=limit_usage_percent_s,\r\n\t\tLicenseContext=license_context_s,\r\n\t\tLastVersion=last_version_s,\r\n\t\tLanguage=language_s,\r\n\t\tJobId=job_id_s,\r\n\t\tIsSuccess=is_success_s,\r\n\t\tIsSecure=is_secure_s,\r\n\t\tIsScheduled=is_scheduled_s,\r\n\t\tIsNew=is_new_s,\r\n\t\tIsMobile=is_mobile_s,\r\n\t\tIsLongRunningRequest=is_long_running_request_s,\r\n\t\tIsGuest=is_guest_s,\r\n\t\tIsFirstRequest=is_first_request_s,\r\n\t\tIsError=is_error_s,\r\n\t\tIsApi=is_api_s,\r\n\t\tIsAjaxRequest=is_ajax_request_s,\r\n\t\tHttpMethod=http_method_s,\r\n\t\tHttpHeaders=http_headers_s,\r\n\t\tGrandparentUiElement=grandparent_ui_element_s,\r\n\t\tFileType=file_type_s,\r\n\t\tFilePreviewType=file_preview_type_s,\r\n\t\tExceptionType=exception_type_s,\r\n\t\tExceptionMessage=exception_message_s,\r\n\t\tEpt=ept_s,\r\n\t\tEntryPoint=entry_point_s,\r\n\t\tEntityType=entity_type_s,\r\n\t\tEntityName=entity_name_s,\r\n\t\tEntityId=entity_id_s,\r\n\t\tEntity=entity_s,\r\n\t\tEffectivePageTime=effective_page_time_s,\r\n\t\tDuration=duration_s,\r\n\t\tDocumentIdDerived=document_id_derived_s,\r\n\t\tDocumentId=document_id_s,\r\n\t\tDisplayType=display_type_s,\r\n\t\tDeviceSessionId=device_session_id_s,\r\n\t\tDevicePlatform=device_platform_s,\r\n\t\tDeliveryLocation=delivery_location_s,\r\n\t\tDeliveryId=delivery_id_s,\r\n\t\tDbTotalTime=db_total_time_s,\r\n\t\tDbCpuTime=db_cpu_time_s,\r\n\t\tDbBlocks=db_blocks_s,\r\n\t\tData=data_s,\r\n\t\tDashboardType=dashboard_type_s,\r\n\t\tDashboardIdDerived=dashboard_id_derived_s,\r\n\t\tDashboardId=dashboard_id_s,\r\n\t\tDashboardComponentId=dashboard_component_id_s,\r\n\t\tCpuTime=cpu_time_s,\r\n\t\tControllerType=controller_type_s,\r\n\t\tContext=context_s,\r\n\t\tConsoleIdDerived=console_id_derived_s,\r\n\t\tConsoleId=console_id_s,\r\n\t\tConnectionType=connection_type_s,\r\n\t\tComponentName=component_name_s,\r\n\t\tComponentIdDerived=component_id_derived_s,\r\n\t\tComponentId=component_id_s,\r\n\t\tClientVersion=client_version_s,\r\n\t\tClientInfo=client_info_s,\r\n\t\tClientId=client_id_s,\r\n\t\tClickedRecordId=clicked_record_id_s,\r\n\t\tClassName=class_name_s,\r\n\t\tCipherSuite=cipher_suite_s,\r\n\t\tCalloutTime=callout_time_s,\r\n\t\tBrowserVersion=browser_version_s,\r\n\t\tBrowserName=browser_name_s,\r\n\t\tBatchId=batch_id_s,\r\n\t\tAverageRowSize=average_row_size_s,\r\n\t\tArticleVersionId=article_version_id_s,\r\n\t\tArticleVersion=article_version_s,\r\n\t\tArticleStatus=article_status_s,\r\n\t\tArticleId=article_id_s,\r\n\t\tAppType=app_type_s,\r\n\t\tAppName=app_name_s,\r\n\t\tApiVersion=api_version_s,\r\n\t\tApiType=api_type_s,\r\n\t\tAnalyticsMode=analytics_mode_s\r\n| extend \r\n\t\tDstBytes=RequestSize,\r\n\t\tDstUser=DelegatedUserName,\r\n\t\tDstUserSid=DelegatedUserId,\r\n\t\tDstUserSidDerived=DelegatedUserIdDerived,\r\n\t\tDuration=ExecTime,\r\n\t\tDvcAction=Action,\r\n\t\tDvcOS=PlatformType,\r\n\t\tDvcOSName=OsName,\r\n\t\tDvcOSVersion=OsVersion,\r\n\t\tEventCount=NumberOfRecords,\r\n\t\tEventEndTime=Timestamp,\r\n\t\tEventResult=StatusCode,\r\n\t\tEventType=EventType,\r\n\t\tFileSize=SizeBytes,\r\n\t\tHttpReferrerOriginal=ReferrerUri,\r\n\t\tHttpUserAgentOriginal=UserAgent,\r\n\t\tHttpUserAgent=BrowserType,\r\n\t\tNetworkDuration=Time,\r\n\t\tSrcBytes=ResponseSize,\r\n\t\tSrcDvcId=DeviceId,\r\n\t\tSrcDvcModelName=DeviceModel,\r\n\t\tSrcIpAddr=SourceIp,\r\n\t\tSrcNatIpAddr=ClientIp,\r\n\t\tSuccess=Success,\r\n\t\tUrlOriginal=Url,\r\n\t\tUser=ClientName",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Salesforce Service Cloud",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Salesforce Service Cloud",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-16",
+        "providers": [
+          "Salesforce"
+        ],
+        "categories": {
+          "domains": [
+            "Cloud Provider"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
