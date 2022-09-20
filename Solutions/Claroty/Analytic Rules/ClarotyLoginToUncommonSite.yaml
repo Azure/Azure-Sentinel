@@ -18,24 +18,27 @@ relevantTechniques:
   - T1190
   - T1133
 query: |
-  let usr_sites =
-  ClarotyEvent
+  let usr_sites = ClarotyEvent
   | where TimeGenerated > ago(14d)
   | where EventType has 'Login to SRA succeeded'
+  | extend Site = column_ifexists("site_name","")
+  | where isnotempty(Site)
   | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
-  | summarize all_loc = makeset(tostring(site_name)) by SrcUsername
+  | summarize all_loc = makeset(tostring(Site)) by SrcUsername
   | extend k = 1;
   ClarotyEvent
   | where EventType has 'Login to SRA succeeded'
+  | extend Site = column_ifexists("site_name","")
+  | where isnotempty(Site)
   | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
   | extend k = 1
   | join kind=innerunique (usr_sites) on k
-  | where all_loc !contains site_name
-  | extend IPCustomEntity = SrcIpAddr
+  | where all_loc !contains Site
+  | extend SrcIpAddr
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SrcIpAddr
 version: 1.0.0
 kind: Scheduled
