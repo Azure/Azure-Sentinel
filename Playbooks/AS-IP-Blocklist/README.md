@@ -5,9 +5,9 @@ Author: Accelerynt
 For any technical questions, please contact info@accelerynt.com  
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)       
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)
 
-This playbook is intended to be run from Microsoft Sentinel. Based upon desired Alert Rule Criteria, it will grab the IP address from Microsoft Sentinel Alerts and add them to a Microsoft Azure Conditional Access Named Locations list, indicating compromised IP addresses.
+This playbook is intended to be run from a Microsoft Sentinel Incident. It will add the IP address from Microsoft Sentinel Incidents to a Microsoft Azure Conditional Access Named Locations list, indicating compromised IP addresses.
                                                                                                                                      
 ![NamedLocations_Demo](Images/NamedLocations_Demo.png)
  
@@ -72,6 +72,9 @@ Under "**Application permissions**", search for "**Policy**", then select the "*
 
 ![NamedLocations_Create_App_Registration_4](Images/NamedLocations_Create_App_Registration_4.png)
 
+In order for these permissions to be applied, admin consent must also be granted. Click the indicated "**Grant admin consent**" button on the "**API permissions**" page.
+![NamedLocations_Create_App_Registration_5_consent](Images/NamedLocations_Create_App_Registration_5_consent.png)
+
 Navigate back to the "**Overview**" section on the menu and take note of the "**Application (client) ID**" and "**Directory (tenant) ID**, as each will be needed for the deployment of this playbook. Click "**Add a certificate or secret**".
 
 ![NamedLocations_Create_App_Registration_5](Images/NamedLocations_Create_App_Registration_5.png)
@@ -112,7 +115,7 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 https://github.com/Accelerynt-Security/AS-IP-Blocklist
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)                                             
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)                                        
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
@@ -153,7 +156,7 @@ Click on the “**Edit**” button. This will bring us into the Logic Apps Desig
 
 ![NamedLocations_Deploy_4](Images/NamedLocations_Deploy_4.png)
 
-The first and sixth steps labeled "**Connections**" use connections created during the deployment of this playbook. Before the playbook can be run, these connections will either need to be authorized in the indicated steps, or existing authorized connections may be alternatively selected.  
+The first, second, and sixth steps labeled "**Connections**" use connections created during the deployment of this playbook. Before the playbook can be run, these connections will either need to be authorized in the indicated steps, or existing authorized connections may be alternatively selected.  
 
 ![NamedLocations_Deploy_5](Images/NamedLocations_Deploy_5.png)
 
@@ -164,14 +167,15 @@ To validate the connections created for this playbook, expand the "**Connections
 When prompted, sign in to validate the connection.                                                                                                
                                                                                                 
 ![NamedLocations_Deploy_7](Images/NamedLocations_Deploy_7.png)                                                                                                                                                                                                                                                   
-Once both connection steps have been updated, click the "**Save**" button.
+Once all connection steps have been updated, click the "**Save**" button.
 
 ![NamedLocations_Deploy_8](Images/NamedLocations_Deploy_8.png)  
+
 
 #
 ### Granting Access to Azure Key Vault
 
-Before the Logic App can run successfully, the keyvault connection created during deployment must be granted access to the Key Vault storing your App Registration Secret.
+Before the Logic App can run successfully, the Key Vault connection created during deployment must be granted access to the Key Vault storing your App Registration Secret.
 
 From the Key Vault "**Access policies**" page, click "**Add Access Policy**".
 
