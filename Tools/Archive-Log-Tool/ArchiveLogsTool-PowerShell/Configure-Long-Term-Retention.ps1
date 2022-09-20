@@ -31,7 +31,7 @@
 
 param(
     [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")] [string] $TenantID,
-    [Parameter(Mandatory = $true, HelpMessage = "Enter Environment [AzureCloud | AzureUSGovernment]")] [string] $AzEnvironment
+    [Parameter(Mandatory = $false, HelpMessage = "Enter Environment [AzureCloud | AzureUSGovernment]")] [string] $AzEnvironment
 ) 
 
 #endregion UserInputs
@@ -476,6 +476,7 @@ if ($AzEnvironment -eq "AzureUSGovernment") {
 }
 else {
     $APIEndpoint = "management.azure.com"
+    $AzEnvironment = "AzureCloud"
 }
 
 if ($AzModulesQuestionDecision -eq 0) {
