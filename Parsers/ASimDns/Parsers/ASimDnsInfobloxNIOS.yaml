@@ -26,49 +26,47 @@ ParserQuery: |
     Syslog
     | where not(disabled)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
-    | parse SyslogMessage with
-        "client "
-        SrcIpAddr:string "#" 
-        SrcPortNumber:int " "
-        NetworkProtocol:string ": query: "
-        DnsQuery:string " "
-        DnsQueryClassName:string " "
-        DnsQueryTypeName:string " "
-        "response: "
-        rest_of_string:string
-    | extend
-        // -- multi-line mode (?m) needed in regex since samples included new lines. Might not exist in real logs
-        extract = extract_all(@"^(\w+) ([\w\+]+?)(?: |$)(?m)(.*?$)?", rest_of_string)[0]
-    | extend 
-        DnsResponseCodeName = tostring(extract[0]),
-        DnsFlags = tostring(extract[1]),
-        DnsResponseName = tostring(extract[2])
-    | extend 
-        EventSubType = "response"
-    | project-away extract, rest_of_string,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | parse SyslogMessage with *
+        "client " SrcIpAddr: string
+        "#" SrcPortNumber: string
+        " " NetworkProtocol: string
+        ": query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " response: " DnsResponseCodeName: string
+        " " DnsFlags: string
+    | extend DNSResourceRecordIndex= indexof(DnsFlags, " ")
+    | extend DNSResourceRecord =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, DNSResourceRecordIndex), "")
+    | extend DnsFlags =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, 0, DNSResourceRecordIndex), DnsFlags)
+    | extend EventSubType = "response"
+    | project-away DNSResourceRecordIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
   };
   let request = (disabled: boolean=false) {
     Syslog 
     | where not(disabled)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
-    // -- trim_start needed to remove optional @xxxx identifier.
-    | extend SyslogMessage = trim_start (@'^(?:[\w\: ]+)?client (?:@.*? )?', SyslogMessage)
-    // -- trim_end needed to remove optional repetative IP address at the end.
-    | extend SyslogMessage = trim_end (@' \([\d\.]+\)', SyslogMessage)
-    | extend SyslogMessage = replace_string (SyslogMessage, '\\ ', '@@@')
-    | parse SyslogMessage with
-        SrcIpAddr:string "#" 
-        SrcPortNumber:int *
-        "query: "
-        DnsQuery:string " "
-        DnsQueryClassName:string " "
-        DnsQueryTypeName:string " "
-        DnsFlags:string
+    | parse SyslogMessage with *
+        "client " restData: string
+    | extend restData = iif(restData startswith "@", (substring(restData, indexof(restData, " "))), restData)
+    | extend restData = replace_string(restData,"\\ ","@@@")
+    | parse restData with 
+        SrcIpAddr: string
+        "#" SrcPortNumber: string
+        " " *
+        "query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " " DnsFlags: string
     | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
+    | extend ServerIPAddressIndex= indexof(DnsFlags, " ")
+    | extend ServerIPAddress = iif(ServerIPAddressIndex != "-1", substring(DnsFlags, ServerIPAddressIndex), "")
+    | extend ServerIPAddress = replace_regex(ServerIPAddress,@"[()]","")
+    | extend DnsFlags =iif(ServerIPAddressIndex != "-1", substring(DnsFlags, 0, ServerIPAddressIndex), DnsFlags)
+    | extend SrcPortNumber = replace_regex(SrcPortNumber,@"[^\d]","")
     | extend 
         EventSubType = "request",
         DnsResponseCodeName = "NA"
-    | project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away ServerIPAddressIndex,SyslogMessage,restData, ProcessName, ProcessID, Facility, SeverityLevel, HostName
   };
   let parser = (disabled:boolean=false) {
     union response (disabled), request (disabled)
