@@ -28,28 +28,27 @@ ParserQuery: |
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
     | parse SyslogMessage with *
         "client " SrcIpAddr: string
-        "#" SrcPortNumber: string
+        "#" SrcPortNumber: int
         " " NetworkProtocol: string
         ": query: " DnsQuery: string
         " " DnsQueryClassName: string
         " " DnsQueryTypeName: string
         " response: " DnsResponseCodeName: string
         " " DnsFlags: string
-    | extend DNSResourceRecordIndex= indexof(DnsFlags, " ")
-    | extend DNSResourceRecord =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, DNSResourceRecordIndex), "")
-    | extend DnsFlags =iif(DNSResourceRecordIndex != "-1", substring(DnsFlags, 0, DNSResourceRecordIndex), DnsFlags)
+    | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
+    | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
+    | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
     | extend EventSubType = "response"
-    | project-away DNSResourceRecordIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away DnsResponseNameIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
   };
   let request = (disabled: boolean=false) {
     Syslog 
     | where not(disabled)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
-    | parse SyslogMessage with *
-        "client " restData: string
-    | extend restData = iif(restData startswith "@", (substring(restData, indexof(restData, " "))), restData)
-    | extend restData = replace_string(restData,"\\ ","@@@")
-    | parse restData with 
+    | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
+    | extend SyslogMessage = iif(SyslogMessage startswith "@", (substring(SyslogMessage, indexof(SyslogMessage, " ")+1)), SyslogMessage)
+    | extend SyslogMessage = replace_string(SyslogMessage,"\\ ","@@@")
+    | parse SyslogMessage with 
         SrcIpAddr: string
         "#" SrcPortNumber: string
         " " *
@@ -57,16 +56,17 @@ ParserQuery: |
         " " DnsQueryClassName: string
         " " DnsQueryTypeName: string
         " " DnsFlags: string
+    | extend SrcPortNumber = toint(replace_string(SrcPortNumber,":",""))
     | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
-    | extend ServerIPAddressIndex= indexof(DnsFlags, " ")
-    | extend ServerIPAddress = iif(ServerIPAddressIndex != "-1", substring(DnsFlags, ServerIPAddressIndex), "")
-    | extend ServerIPAddress = replace_regex(ServerIPAddress,@"[()]","")
-    | extend DnsFlags =iif(ServerIPAddressIndex != "-1", substring(DnsFlags, 0, ServerIPAddressIndex), DnsFlags)
-    | extend SrcPortNumber = replace_regex(SrcPortNumber,@"[^\d]","")
+    | extend DvcIpAddrIndex= indexof(DnsFlags, " ")
+    | extend DvcIpAddr = iif(DvcIpAddrIndex != "-1", substring(DnsFlags, DvcIpAddrIndex+1), "")
+    | extend DvcIpAddr = trim_start("[(]",DvcIpAddr)
+    | extend DvcIpAddr = trim_end("[)]",DvcIpAddr)
+    | extend DnsFlags =iif(DvcIpAddrIndex != "-1", substring(DnsFlags, 0, DvcIpAddrIndex), DnsFlags)
     | extend 
         EventSubType = "request",
         DnsResponseCodeName = "NA"
-    | project-away ServerIPAddressIndex,SyslogMessage,restData, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away DvcIpAddrIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
   };
   let parser = (disabled:boolean=false) {
     union response (disabled), request (disabled)
