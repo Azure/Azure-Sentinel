@@ -560,7 +560,8 @@
                                 "variables":  [
                                     {
                                         "name":  "isLatestInfected",
-                                        "type":  "boolean"
+                                        "type":  "boolean",
+                                        "value":  "@false"
                                     }
                                 ]
                             }
@@ -1750,35 +1751,6 @@
                                                                 "value":  "@{div(sub(ticks(variables('CurrentFieldDate')),ticks('1970-01-01Z00:00:00')),10000000)\r\n}"
                                                             }
                                                         },
-                                                        "check_for_latest_snapshot_ID":  {
-                                                            "actions":  {
-                                                                "set_recoverable_snapshot_ID":  {
-                                                                    "runAfter":  {
-                                                                    },
-                                                                    "type":  "SetVariable",
-                                                                    "inputs":  {
-                                                                        "name":  "RecoverableSnapshotId",
-                                                                        "value":  "@items('For_each_5')?['snapshotId']"
-                                                                    }
-                                                                }
-                                                            },
-                                                            "runAfter":  {
-                                                                "check_matches_is_empty_or_not":  [
-                                                                    "Succeeded"
-                                                                ]
-                                                            },
-                                                            "expression":  {
-                                                                "and":  [
-                                                                    {
-                                                                        "greater":  [
-                                                                            "@div(sub(ticks(items('For_each_5')?['snapshotDate']),ticks('1970-01-01Z00:00:00')),10000000)",
-                                                                            "@variables('LastFieldDate')"
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            },
-                                                            "type":  "If"
-                                                        },
                                                         "check_matches_is_empty_or_not":  {
                                                             "actions":  {
                                                                 "Append_snapshot_Id":  {
@@ -1801,6 +1773,47 @@
                                                                         "name":  "CurrentFieldDate",
                                                                         "value":  "    @{items('For_each_5')?['snapshotDate']}"
                                                                     }
+                                                                },
+                                                                "check_for_latest_snapshot_ID":  {
+                                                                    "actions":  {
+                                                                        "Set_isLastInfected_to_True":  {
+                                                                            "runAfter":  {
+                                                                                "set_recoverable_snapshot_ID":  [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "isLatestInfected",
+                                                                                "value":  "@true"
+                                                                            }
+                                                                        },
+                                                                        "set_recoverable_snapshot_ID":  {
+                                                                            "runAfter":  {
+                                                                            },
+                                                                            "type":  "SetVariable",
+                                                                            "inputs":  {
+                                                                                "name":  "RecoverableSnapshotId",
+                                                                                "value":  "@items('For_each_5')?['snapshotId']"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter":  {
+                                                                        "Set_current_field_date":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "expression":  {
+                                                                        "and":  [
+                                                                            {
+                                                                                "greater":  [
+                                                                                    "@div(sub(ticks(items('For_each_5')?['snapshotDate']),ticks('1970-01-01Z00:00:00')),10000000)",
+                                                                                    "@int(variables('LastFieldDate'))"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type":  "If"
                                                                 }
                                                             },
                                                             "runAfter":  {
@@ -1832,9 +1845,18 @@
                                         },
                                         "Are_there_any_recoverable_snapshots":  {
                                             "actions":  {
+                                                "Set_variable":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "Limit",
+                                                        "value":  0
+                                                    }
+                                                }
                                             },
                                             "runAfter":  {
-                                                "Is_this_the_first_playbook_run":  [
+                                                "Are_recoverable_snapshot_ID(s)_obtained_-_if_yes_set_the_recoverable_snapshot":  [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -1861,20 +1883,46 @@
                                                             "value":  "@{div(sub(ticks(variables('StartDate')),ticks('1970-01-01Z00:00:00')),10000000)}"
                                                         }
                                                     },
+                                                    "Decrement_variable":  {
+                                                        "runAfter":  {
+                                                            "Is_time_delta_available":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "DecrementVariable",
+                                                        "inputs":  {
+                                                            "name":  "Limit",
+                                                            "value":  1
+                                                        }
+                                                    },
                                                     "Is_time_delta_available":  {
                                                         "actions":  {
-                                                            "Update_the_start_date_using_time_delta":  {
+                                                            "Set_variable_2":  {
                                                                 "runAfter":  {
+                                                                    "Update_the_start_date_using_time_delta":  [
+                                                                        "Succeeded"
+                                                                    ]
                                                                 },
                                                                 "type":  "SetVariable",
                                                                 "inputs":  {
                                                                     "name":  "StartDate",
-                                                                    "value":  "@{sub(int(variables('EpochStartDate')),int(triggerBody()?['TimeDelta']))}"
+                                                                    "value":  "@body('Update_the_start_date_using_time_delta')"
+                                                                }
+                                                            },
+                                                            "Update_the_start_date_using_time_delta":  {
+                                                                "runAfter":  {
+                                                                },
+                                                                "type":  "Expression",
+                                                                "kind":  "SubtractFromTime",
+                                                                "inputs":  {
+                                                                    "baseTime":  "@variables('StartDate')",
+                                                                    "interval":  "@triggerBody()?['TimeDelta']",
+                                                                    "timeUnit":  "Day"
                                                                 }
                                                             }
                                                         },
                                                         "runAfter":  {
-                                                            "Convert_end_date_to_epochs":  [
+                                                            "Update_the_end_date":  [
                                                                 "Succeeded"
                                                             ]
                                                         },
@@ -1886,7 +1934,7 @@
                                                                     "type":  "SetVariable",
                                                                     "inputs":  {
                                                                         "name":  "StartDate",
-                                                                        "value":  " @{sub(mul(int(variables('EpochStartDate')), 2), int(variables('EpochEndDate')))}"
+                                                                        "value":  " @{addToTime('1970-01-01T00:00:00Z', sub(mul(int(variables('EpochStartDate')), 2), int(variables('EpochEndDate'))), 'second')}"
                                                                     }
                                                                 }
                                                             }
@@ -1914,7 +1962,7 @@
                                                         "type":  "SetVariable",
                                                         "inputs":  {
                                                             "name":  "EndDate",
-                                                            "value":  "@{addToTime('1970-01-01T00:00:00Z', int(variables('EpochStartDate')), 'second')}"
+                                                            "value":  "@variables('StartDate')"
                                                         }
                                                     }
                                                 }
@@ -1928,105 +1976,6 @@
                                                                 0
                                                             ]
                                                         }
-                                                    }
-                                                ]
-                                            },
-                                            "type":  "If"
-                                        },
-                                        "Decrease_limit":  {
-                                            "runAfter":  {
-                                                "Are_there_any_recoverable_snapshots":  [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type":  "DecrementVariable",
-                                            "inputs":  {
-                                                "name":  "Limit",
-                                                "value":  1
-                                            }
-                                        },
-                                        "Is_this_the_first_playbook_run":  {
-                                            "actions":  {
-                                                "Until_isLatestInfected_variable_set":  {
-                                                    "actions":  {
-                                                        "Is_the_latest_snapshot_infected":  {
-                                                            "foreach":  "@body('Parse_Get_scan_results_response')?['data']?['threatHuntResult']?['results']",
-                                                            "actions":  {
-                                                                "For_each":  {
-                                                                    "foreach":  "@items('Is_the_latest_snapshot_infected')?['snapshotResults']",
-                                                                    "actions":  {
-                                                                        "Condition":  {
-                                                                            "actions":  {
-                                                                                "Set_isLatestInfected_to_true":  {
-                                                                                    "runAfter":  {
-                                                                                    },
-                                                                                    "type":  "SetVariable",
-                                                                                    "inputs":  {
-                                                                                        "name":  "isLatestInfected",
-                                                                                        "value":  "@true"
-                                                                                    }
-                                                                                }
-                                                                            },
-                                                                            "runAfter":  {
-                                                                            },
-                                                                            "else":  {
-                                                                                "actions":  {
-                                                                                    "Set_isLatestInfected_to_false":  {
-                                                                                        "runAfter":  {
-                                                                                        },
-                                                                                        "type":  "SetVariable",
-                                                                                        "inputs":  {
-                                                                                            "name":  "isLatestInfected",
-                                                                                            "value":  "@false"
-                                                                                        }
-                                                                                    }
-                                                                                }
-                                                                            },
-                                                                            "expression":  {
-                                                                                "and":  [
-                                                                                    {
-                                                                                        "equals":  [
-                                                                                            "@items('For_each')?['matches']",
-                                                                                            "@null"
-                                                                                        ]
-                                                                                    }
-                                                                                ]
-                                                                            },
-                                                                            "type":  "If"
-                                                                        }
-                                                                    },
-                                                                    "runAfter":  {
-                                                                    },
-                                                                    "type":  "Foreach"
-                                                                }
-                                                            },
-                                                            "runAfter":  {
-                                                            },
-                                                            "type":  "Foreach"
-                                                        }
-                                                    },
-                                                    "runAfter":  {
-                                                    },
-                                                    "expression":  "@equals(variables('isLatestInfected'), null)",
-                                                    "limit":  {
-                                                        "count":  60,
-                                                        "timeout":  "PT1H"
-                                                    },
-                                                    "type":  "Until"
-                                                }
-                                            },
-                                            "runAfter":  {
-                                                "Are_recoverable_snapshot_ID(s)_obtained_-_if_yes_set_the_recoverable_snapshot":  [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "expression":  {
-                                                "and":  [
-                                                    {
-                                                        "equals":  [
-                                                            "@variables('InputLimit')",
-                                                            "@variables('Limit')"
-                                                        ]
                                                     }
                                                 ]
                                             },
@@ -2217,7 +2166,7 @@
                                     "Succeeded"
                                 ]
                             },
-                            "expression":  "@greaterOrEquals(variables('Limit'), 0)",
+                            "expression":  "@equals(variables('Limit'), 0)",
                             "limit":  {
                                 "timeout":  "PT900M"
                             },
