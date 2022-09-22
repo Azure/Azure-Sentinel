@@ -11,6 +11,7 @@ import logging
 import re
 from .state_manager import StateManager
 
+#test2
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 confluence_token = os.environ['ConfluenceAccessToken']
@@ -67,7 +68,7 @@ def get_result_request(offset,limit,from_time,to_time):
         elif r.status_code == 403:
             logging.error("The user does not have the required permissions or Confluence products are on free plans. Audit logs are available when at least one Confluence product is on a paid plan. Error code: {}".format(r.status_code))
         else:
-            logging.error("Something wrong. Error code: {}".format(r.status_code))
+            logging.error("Something wrong. Error code: {}, err: {}".format(r.status_code, r.content))
     except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
 
