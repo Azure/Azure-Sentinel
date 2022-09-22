@@ -11,12 +11,6 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 
-### Prerequisites
-
-1. Prior to the deployment of this playbook, [Tenable Platform API Connector](../../TenablePlatformConnector/) needs to be deployed under the same subscription.
-2. Prior to the deployment of this playbook, [Tenable Vulnerability Management API Connector](../../TenableVulnerabilityManagementConnector/) needs to be deployed under the same subscription.
-3. Obtain Tenable API credentials. Follow the instructions in the [documentation](https://developer.tenable.com/docs/authorization).
-
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
@@ -36,14 +30,6 @@ Once deployment is complete, authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Click the Tenable Platform connection resource
-7. Click edit API connection
-8. Provide API key
-9. Click Save
-10. Click the Tenable Vulnerability Management connection resource
-11. Click edit API connection
-12. Provide API key
-13. Click Save
 
 #### b. Configurations in Sentinel
 
