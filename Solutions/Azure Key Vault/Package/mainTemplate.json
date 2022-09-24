@@ -48,7 +48,7 @@
     "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
     "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
     "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]",
-    "analyticRuleVersion2": "1.0.3",
+    "analyticRuleVersion2": "1.0.4",
     "analyticRulecontentId2": "24f8c234-d1ff-40ec-8b73-96b17a3a9c1c",
     "_analyticRulecontentId2": "[variables('analyticRulecontentId2')]",
     "analyticRuleId2": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId2'))]",
@@ -92,7 +92,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Azure Key Vault data connector with template version 2.0.1",
+        "description": "Azure Key Vault data connector with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -258,7 +258,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "KeyVaultSensitiveOperations_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "KeyVaultSensitiveOperations_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion1')]",
@@ -286,10 +286,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureKeyVault",
                     "dataTypes": [
                       "KeyVaultData"
-                    ],
-                    "connectorId": "AzureKeyVault"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -297,22 +297,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AccountCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AccountCustomEntity"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPCustomEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPCustomEntity"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -375,7 +375,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "KeyvaultMassSecretRetrieval_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "KeyvaultMassSecretRetrieval_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion2')]",
@@ -392,7 +392,7 @@
                 "description": "Identifies mass secret retrieval from Azure Key Vault observed by a single user. \nMass secret retrival crossing a certain threshold is an indication of credential dump operations or mis-configured applications. \nYou can tweak the EventCountThreshold based on average count seen in your environment \nand also filter any known sources (IP/Account) and useragent combinations based on historical analysis to further reduce noise",
                 "displayName": "Mass secret retrieval from Azure Key Vault",
                 "enabled": false,
-                "query": "\nlet EventCountThreshold = 25;\n// To avoid any False Positives, filtering using AppId is recommended.\n// For example the AppId 509e4652-da8d-478d-a730-e9d4a1996ca4 has been added in the query as it corresponds \n// to Azure Resource Graph performing VaultGet operations for indexing and syncing all tracked resources across Azure.\n// The AppId 8cae6e77-e04e-42ce-b5cb-50d82bce26b1 has been added as it correspond to Microsoft Policy Insights Provider Data Plane performing VaultGet operations for policies checks.\nlet Allowedappid = dynamic([\"509e4652-da8d-478d-a730-e9d4a1996ca4\",\"8cae6e77-e04e-42ce-b5cb-50d82bce26b1\"]);\nlet OperationList = dynamic(\n[\"SecretGet\", \"KeyGet\", \"VaultGet\"]);\nAzureDiagnostics\n| where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')\n| extend ResultType = columnifexists(\"ResultType\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = columnifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\n| where ResultType !~ \"None\" and isnotempty(ResultType)\n| where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\n| where ResourceType =~ \"VAULTS\" and ResultType =~ \"Success\"\n| where OperationName in (OperationList) \n| summarize count() by identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, OperationName\n| where count_ > EventCountThreshold  \n| join (\nAzureDiagnostics\n| where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')\n| extend ResultType = columnifexists(\"ResultType\", \"NoResultType\")\n| extend requestUri_s = columnifexists(\"requestUri_s\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = columnifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\n| extend id_s = columnifexists(\"id_s\", \"None\"), CallerIPAddress = columnifexists(\"CallerIPAddress\", \"None\"), clientInfo_s = columnifexists(\"clientInfo_s\", \"None\")\n| where ResultType !~ \"None\" and isnotempty(ResultType)\n| where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\n| where id_s !~ \"None\" and isnotempty(id_s)\n| where CallerIPAddress !~ \"None\" and isnotempty(CallerIPAddress)\n| where clientInfo_s !~ \"None\" and isnotempty(clientInfo_s)\n| where requestUri_s !~ \"None\" and isnotempty(requestUri_s)\n| where OperationName in~ (OperationList)   \n) on identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g \n| summarize EventCount=sum(count_), StartTimeUtc=min(TimeGenerated), EndTimeUtc=max(TimeGenerated), TimeTriggered=makelist(TimeGenerated),OperationNameList=make_set(OperationName), RequestURLList=make_set(requestUri_s), CallerIPList = make_set(CallerIPAddress),  CallerIPMax= arg_max(CallerIPAddress,*) by ResourceType, ResultType, Resource, id_s, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, clientInfo_s\n| extend timestamp = EndTimeUtc, IPCustomEntity = CallerIPMax, AccountCustomEntity = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n",
+                "query": "let EventCountThreshold = 25;\n// To avoid any False Positives, filtering using AppId is recommended.\n// The AppId 509e4652-da8d-478d-a730-e9d4a1996ca4 has been added in the query as it corresponds to Azure Resource Graph performing VaultGet operations for indexing and syncing all tracked resources across Azure.\n// The AppId 8cae6e77-e04e-42ce-b5cb-50d82bce26b1 has been added as it correspond to Microsoft Policy Insights Provider Data Plane performing VaultGet operations for policies checks.\nlet AllowedAppId = dynamic([\"509e4652-da8d-478d-a730-e9d4a1996ca4\",\"8cae6e77-e04e-42ce-b5cb-50d82bce26b1\"]);\nlet OperationList = dynamic([\"SecretGet\", \"KeyGet\", \"VaultGet\"]);\nAzureDiagnostics\n| where OperationName in (OperationList) and ResourceType =~ \"VAULTS\"\n| where not(identity_claim_appid_g in (AllowedAppId) and OperationName == 'VaultGet')\n| extend\n    ResultType = column_ifexists(\"ResultType\", \"\"),\n    identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = column_ifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"\"),\n    identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s = column_ifexists(\"identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\", \"\"),\n    identity_claim_oid_g = column_ifexists(\"identity_claim_oid_g\", \"\"),\n    identity_claim_upn_s = column_ifexists(\"identity_claim_upn_s\", \"\")\n| extend\n    CallerObjectId = iff(isempty(identity_claim_oid_g), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g),\n    CallerObjectUPN = iff(isempty(identity_claim_upn_s), identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_upn_s)\n| as _Retrievals\n| where CallerObjectId in (toscalar(\n    _Retrievals\n    | where ResultType == \"Success\"\n    | summarize Count = count() by OperationName, CallerObjectId\n    | where Count > EventCountThreshold\n    | summarize make_set(CallerObjectId)\n))\n| extend\n    requestUri_s = column_ifexists(\"requestUri_s\", \"\"),\n    id_s = column_ifexists(\"id_s\", \"\"),\n    CallerIPAddress = column_ifexists(\"CallerIPAddress\", \"\"),\n    clientInfo_s = column_ifexists(\"clientInfo_s\", \"\")\n| summarize\n    EventCount = count(),\n    StartTime = min(TimeGenerated),\n    EndTime = max(TimeGenerated),\n    //TimeTriggered = make_list(TimeGenerated, 50),\n    OperationNameList = make_set(OperationName, 50),\n    RequestURLList = make_set(requestUri_s, 50),\n    CallerIPList = make_set(CallerIPAddress, 50),\n    clientInfo_sList = make_set(clientInfo_s, 50),\n    CallerIPMax = max(CallerIPAddress)\n    //CallerIPMax = arg_max(CallerIPAddress,*)\n    by ResourceType, ResultType, Resource, id_s, identity_claim_appid_g, CallerObjectId, CallerObjectUPN\n| project-reorder StartTime, EndTime, EventCount, ResourceType, Resource, id_s, identity_claim_appid_g, CallerObjectId, CallerObjectUPN, ResultType, OperationNameList, RequestURLList, CallerIPList, clientInfo_sList\n| extend timestamp = EndTime, IPCustomEntity = CallerIPMax, AccountCustomEntity = CallerObjectId\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P1D",
                 "severity": "Low",
@@ -403,10 +403,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureKeyVault",
                     "dataTypes": [
                       "KeyVaultData"
-                    ],
-                    "connectorId": "AzureKeyVault"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -414,22 +414,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AccountCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AccountCustomEntity"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPCustomEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPCustomEntity"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -492,7 +492,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName3'))]"
       ],
       "properties": {
-        "description": "TimeSeriesKeyvaultAccessAnomaly_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "TimeSeriesKeyvaultAccessAnomaly_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion3')]",
@@ -520,10 +520,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureKeyVault",
                     "dataTypes": [
                       "KeyVaultData"
-                    ],
-                    "connectorId": "AzureKeyVault"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -531,22 +531,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AccountCustomEntity",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AccountCustomEntity"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPCustomEntity",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPCustomEntity"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -609,7 +609,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName4'))]"
       ],
       "properties": {
-        "description": "NRT_KeyVaultSensitiveOperations_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "NRT_KeyVaultSensitiveOperations_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion4')]",
@@ -633,10 +633,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "AzureKeyVault",
                     "dataTypes": [
                       "KeyVaultData"
-                    ],
-                    "connectorId": "AzureKeyVault"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -644,22 +644,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "CallerIPMax",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "CallerIPMax"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -700,7 +700,7 @@
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "2.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
