@@ -1,17 +1,17 @@
-# OpenCTI-Enrich Incident With OpenCTI Indicators Info Playbook
+# ElasticSearch-EnrichIncident Playbook
  ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
- 1. For each Entity (Accounts, Host, IP Address, FileHash, URL) available in Sentinel incident, it searches for a match in in OpenCTI indicators list
+ 1. For each Entity (Accounts, Host, IP Address, FileHash, URL) available in Sentinel incident, it searches for a match in Elastic Search
  2. If it finds the match, this playbook adds a rich comment to the incident with all the collected information
-    ![Comment example](./images/CommentGetIndicatorInfofromOpenCTI.png)
+    ![Comment example](./images/CommentElasticSearch_EnrichIncident.png)
 
 
 
-![Playbook Designer view](./images/GetIndicatorInfoOpenCTI.png)<br>
+![Playbook Designer view](./images/EnrichIndicentElasticSearchWorkflow.png)<br>
 
 ### Prerequisites 
-1. OpenCTI Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
-2. API key. To get API Key, login into your OpenCTI instance dashboard and navigate to User profile page --> API Access.
+1. Elastic Search Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
+2. API key. To get API Key, login into your Elastic Search instance / Kibana  and navigate to API Keys and generated key.To get Elastic Search API key, follow the instructions in the [documentation](https://www.elastic.co/guide/en/kibana/master/api-keys.html).
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
@@ -19,8 +19,8 @@
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FOpenCTI%2FPlaybooks%2F%2FOpenCTIPlaybooks%2FOpenCTI-EnrichIncident%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
-    * Playbook Name: Enter the playbook name here (Ex: OpenCTI-GetIndicatorInfo)
-    * Custom Connector Name: Enter the OpenCTI custom connector name here (Ex: OpenCTICustomConnector)
+    * Playbook Name: Enter the playbook name here (Ex: ElasticSearch-EnrichIncident)
+    * Custom Connector Name: Enter the Elastic Search custom connector name here (Ex: ElasticSearchCustomConnector)
     
 ### Post-Deployment instructions 
 #### a. Authorize connections
@@ -30,7 +30,7 @@ Once deployment is complete, you will need to authorize each connection.
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for OpenCTI Api  Connection (For authorizing the OpenCTI API connection, API Key needs to be provided)
+6.	Repeat steps for Elastic Search Api  Connection (For authorizing the Elastic Search API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account or host or URL or FileHash or IP Address. 
 2. Configure the automation rules to trigger this playbook
