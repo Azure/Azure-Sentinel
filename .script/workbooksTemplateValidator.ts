@@ -41,7 +41,7 @@ let CheckOptions = {
     return IsValidWorkbookTemplate(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
-    console.log(`WorkbooksTemplate Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
+    console.log(`WorkbooksTemplate Validation Failed with test. File path: ${filePath}. Error message: ${e.message}`);
   },
   onFinalFailed: async () => {
     logger.logError("An error occurred, please open an issue");
