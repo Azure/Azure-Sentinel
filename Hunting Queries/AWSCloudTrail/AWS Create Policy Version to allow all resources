@@ -1,0 +1,40 @@
+id: 3c7eb86b-5b3b-4ef2-acc8-6de2490f0857
+name: AWS Create Policy Version to allow all resources
+description: |
+  'This query creation of policy version that allows them to access any resource in their account,
+   This search has no known false positives,  it is possible that an AWS admin has legitimately created a policy to allow a user to access all resources. but AWS strongly advises against granting full control to all AWS resources,
+  Reference - 
+  https://bishopfox.com/blog/privilege-escalation-in-aws,
+  https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation-part-2/
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Privilege Escalation
+relevantTechniques:
+  - T1078
+query: |
+
+ AWSCloudTrail
+ | where EventSource == "iam.amazonaws.com" and EventName == "CreatePolicyVersion" and isempty(ErrorMessage) and UserAgent !has "Terraform" 
+ | extend PolicyDocument = tostring(parse_json(RequestParameters).policyDocument),UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+ | where isnotempty(PolicyDocument)
+ | mv-expand todynamic(PolicyDocument)
+ | evaluate bag_unpack(PolicyDocument)
+ | mv-expand todynamic(Statement)
+ | evaluate bag_unpack(Statement)
+ | where isnotempty(Action) and Effect == "Allow" and Resource == "*"
+ | summarize EventCount = count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Policy_added = make_set(Action) by UserIdentityUserName, EventSource, EventName,UserAgent,AWSRegion,SourceIpAddress
+ | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
