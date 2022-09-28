@@ -1,0 +1,38 @@
+id: 9d6731b8-bbed-4846-b934-6702fb8b2t82
+name: AKS find cluster-admin clusterrolebinding
+description: |
+  'detects: kubectl create clusterrolebinding my-svc-acct-admin --clusterrole=cluster-admin.
+severity: Medium
+requiredDataConnectors: [AzureKubernetes]
+  - connectorId: AzureKubernetes
+    dataTypes:
+      - AzureActivity
+queryFrequency: 20m
+queryPeriod: 20m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+   AzureDiagnostics
+    | where Category == "kube-audit"
+    | where parse_json(log_s).verb == "create"
+    | where parse_json(tostring(parse_json(tostring(parse_json(log_s).requestObject)).roleRef)).name == "cluster-admin"
+    | where parse_json(tostring(parse_json(log_s).requestObject)).kind == "ClusterRoleBinding"
+    | extend k8skind = parse_json(tostring(parse_json(log_s).requestObject)).kind
+    | extend k8sroleref = parse_json(tostring(parse_json(tostring(parse_json(log_s).requestObject)).roleRef)).name
+    | extend k8suser = parse_json(tostring(parse_json(log_s).user)).username
+    | extend k8sipaddress = parse_json(tostring(parse_json(log_s).sourceIPs))[0]
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: k8suser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: k8sipaddress
+version: 1.0.0
+kind: Scheduled
