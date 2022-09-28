@@ -194,5 +194,6 @@ export enum ConnectorCategory {
   Event="Event",
   RestAPI="REST_API",
   AzureFunction="Azure_Function",
-  AzureDiagnostics="AzureDiagnostics"
+  AzureDiagnostics="AzureDiagnostics",
+  AzureDevOpsAuditing="AzureDevOpsAuditing"
 }

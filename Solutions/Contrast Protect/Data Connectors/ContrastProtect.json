@@ -1,0 +1,135 @@
+{
+  "id": "ContrastProtect",
+  "title": "Contrast Protect",
+  "publisher": "Contrast Security",
+  "descriptionMarkdown": "Contrast Protect mitigates security threats in production applications with runtime protection and observability.  Attack event results (blocked, probed, suspicious...) and other information can be sent to Microsoft Microsoft Sentinel to blend with security information from other systems.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "ContrastProtect",
+      "baseQuery": "CommonSecurityLog\n| where DeviceVendor == \"Contrast Security\""
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All attacks",
+      "query": "let extract_data=(a:string, k:string) {\r\n  parse_urlquery(replace(@';', @'&', a))[\"Query Parameters\"][k]\r\n};\r\nCommonSecurityLog \r\n| where DeviceVendor == 'Contrast Security'\r\n| extend Outcome = replace(@'INEFFECTIVE', @'PROBED', tostring(coalesce(column_ifexists(\"EventOutcome\", \"\"), extract_data(AdditionalExtensions, 'outcome'), \"\")))\r\n| where Outcome != 'success'\r\n| extend Rule = extract_data(AdditionalExtensions, 'pri')\r\n| project TimeGenerated, ApplicationProtocol, Rule, Activity, Outcome, RequestURL, SourceIP\r\n| order by TimeGenerated desc\r\n"
+    },
+    {
+      "description": "Effective attacks",
+      "query": "let extract_data=(a:string, k:string) {\n  parse_urlquery(replace(@';', @'&', a))[\"Query Parameters\"][k]\n};\nCommonSecurityLog \n| where DeviceVendor == 'Contrast Security'\n| extend Outcome = tostring(coalesce(column_ifexists(\"EventOutcome\", \"\"), extract_data(AdditionalExtensions, 'outcome'), \"\"))\n| where Outcome in ('EXPLOITED','BLOCKED','SUSPICIOUS')\n| extend Rule = extract_data(AdditionalExtensions, 'pri')\n| project TimeGenerated, ApplicationProtocol, Rule, Activity, Outcome, RequestURL, SourceIP\n| order by TimeGenerated desc\n"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "CommonSecurityLog (ContrastProtect)",
+      "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor == \"Contrast Security\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "CommonSecurityLog\n| where DeviceVendor == \"Contrast Security\"\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "read": true,
+          "write": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "1. Linux Syslog agent configuration",
+      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+      "innerSteps": [
+        {
+          "title": "1.1 Select or create a Linux machine",
+          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+        },
+        {
+          "title": "1.2 Install the CEF collector on the Linux machine",
+          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+          "instructions": [
+            {
+              "parameters": {
+                "fillWith": [
+                  "WorkspaceId",
+                  "PrimaryKey"
+                ],
+                "label": "Run the following command to install and apply the CEF collector:",
+                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+              },
+              "type": "CopyableLabel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "2. Forward Common Event Format (CEF) logs to Syslog agent",
+      "description": "Configure the Contrast Protect agent to forward events to syslog as described here: https://docs.contrastsecurity.com/en/output-to-syslog.html. Generate some attack events for your application."
+    },
+    {
+      "title": "3. Validate connection",
+      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": [
+              "WorkspaceId"
+            ],
+            "label": "Run the following command to validate your connectivity:",
+            "value": "sudo wget  -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "title": "4. Secure your machine ",
+      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+    }
+  ],
+  "metadata": {
+    "id": "838441a0-8138-4ff4-8a2f-aa86696ceaa4",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": {
+      "kind": "community"
+    },
+    "author": {
+      "name": "Contrast Security"
+    },
+    "support": {
+      "tier": "community",
+      "name": "Contrast Security",
+      "email": "support@contrastsecurity.com",
+      "link": "https://docs.contrastsecurity.com/"
+    }
+  }
+}
