@@ -1,0 +1,181 @@
+name: CreatePackageForSolution
+
+on:
+  pull_request:
+    paths:
+    - "Solutions/**"
+
+jobs:
+  build-project:
+    runs-on: ubuntu-latest  # windows-latest | macos-latest
+    name: PowershellFiles
+    steps:
+      - uses: actions/checkout@v2
+
+      # - name: Read package.json
+      #   id: package
+      #   uses: juliangruber/read-file-action@v1
+      #   with:
+      #     path: "./Solutions/Alibaba Cloud/Data/Solution_Alibaba Cloud.json"
+
+      # - name: Echo package.json
+      #   run: |
+      #     $result1 = ${{ steps.package.outputs.content }}
+      #     echo $result1.GetType()
+      #     $filtered1 = $result1 | ConvertTo-Json 
+      #     echo $filtered1
+
+      - name: Checkout code
+        uses: actions/checkout@v1
+
+      - name: Read data file contents
+        id: read_data_file
+        uses: andstor/file-reader-action@v1
+        with:
+          path: "./Solutions/Alibaba Cloud/Data/Solution_Alibaba_Cloud.json"
+          encoding: utf8
+
+      - name: Read parser file contents
+        id: read_parser_file
+        uses: andstor/file-reader-action@v1
+        with:
+          path: "./Solutions/Alibaba Cloud/Parsers/AliCloud.txt"
+          encoding: utf8
+
+      #- name: File contents
+        # run: |
+        #   $result = '${{steps.read_data_file.outputs.contents }}'
+        #   echo $result.GetType()
+        #   $filtered = $result | ConvertTo-Json 
+        #   echo $filtered
+
+      - shell: pwsh
+        # Give an id to the step, so we can reference it later
+        id: runcreatsolutionv3
+        run: |
+          $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+          Write-Host "List of files added/modified/changed/deleted: $diff"
+
+          $SourceDiff = $diff | ForEach-Object {
+          Write-Output "Processing line $_"
+          $file = Get-ChildItem -Path $_ -File
+
+          $fileValue = (($file.DirectoryName).Split("\")[-1])
+          Write-Host "FileValue: $fileValue"
+
+          $indexOfSolutionFolderName = $fileValue.LastIndexOf("Solutions")
+
+          if ($indexOfSolutionFolderName -gt 0)
+          {
+            $getsolutionFolderName = $fileValue.SubString($indexOfSolutionFolderName  + 10)
+            Write-Host "Get Solution Name : $getsolutionFolderName"
+            $lastIndex = $getsolutionFolderName.indexOf("/")
+
+            $finalValueSolutionName = $getsolutionFolderName.SubString(0, $lastIndex)
+            Write-Host "first value $finalValue"
+          }
+          }
+
+          echo "folder base path: ${{ github.WORKSPACE }}"
+          echo "Solution Name: $($finalValueSolutionName)"
+          $solutionNamedataFolderPath = "$($finalValueSolutionName)/data"
+          echo "data folder path: $($solutionNamedataFolderPath)"
+
+          #$filesList = git ls-files
+
+
+          # echo "https://raw.githubusercontent.com/v-amolpatil/packagingrepo/test1/Solutions/$($solutionNamedataFolderPath)/Solution_Alibaba%20Cloud.json?token=GHSAT0AAAAAABWIAWMTEHYLSNUEWT7ODSISYZMKIWA"
+          # $API = 'https://raw.githubusercontent.com/v-amolpatil/packagingrepo/test1/Solutions/$($solutionNamedataFolderPath)/Solution_Alibaba%20Cloud.json?token=GHSAT0AAAAAABWIAWMTEHYLSNUEWT7ODSISYZMKIWA'
+          # $dd = $(Invoke-WebRequest -URI $API | ConvertFrom-Json)
+          # Write-Host "api response: $dd"
+          Write-Host "============AA==============="
+          Get-PSProvider
+          Write-Host "===========BB================"
+          lsblk
+          Write-Host "===========CC================"
+          df -h
+          Write-Host "===========DD================"
+          echo "this is test"
+          ./Tools/Create-Azure-Sentinel-Solution/V2/test.ps1 amol patil
+          $filePath = "./Solutions/Alibaba Cloud/Data/Solution_Alibaba Cloud.json"
+          echo $filePath
+          $solutionName = "Alibaba Cloud"
+          $dataFileName = "Solution_Alibaba_Cloud.json"
+          $baseProjectPath = "\\home\\runner\\work\\packagingrepo\\packagingrepo"
+
+          $listAllFiles = ls ${{ github.workspace }}
+          echo "list of files: $listAllFiles"
+          #./Tools/Create-Azure-Sentinel-Solution/V2/createSolutionV3.ps1 "$solutionName" $filePath '${{steps.read_file.outputs.contents }}' "$baseProjectPath" "${{ secrets.GITHUB_TOKEN }}"
+          ./Tools/Create-Azure-Sentinel-Solution/V2/createSolutionV4.ps1 "$baseProjectPath", "$solutionName" "${{steps.read_file.outputs.contents }}" "${{steps.read_parser_file.outputs.contents }} "$dataFileName""
+        
+      - name: Use the Upload Artifact GitHub Action
+        uses: actions/upload-artifact@v2
+        with: 
+          name: zip-package
+          path: "/home/runner/work/packagingrepo/packagingrepo/Solutions/Alibaba Cloud/Package"
+
+  release-project:
+    name: Release Project
+    runs-on: ubuntu-latest
+    needs: build-project
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: zip-package
+    - name: Test artifact download
+      run: ls -R
+
+  test_arm_templates:
+    runs-on: ubuntu-latest
+    name: Run ARM TTK
+    needs: release-project
+    steps:
+      # To use this repository's private action, you must check out the repository
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run ARM TTK
+        uses: ./.github/actions
+        id: action
+        
+    # - name: Run-Linkter
+    #   uses: github/super-linter/slim@v4
+    #   env:
+    #     VALIDATE_ARM: true
+    #     DEFAULT_BRANCH: test1
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+ 
+  # lint:
+  #   name: running-linter-test
+  #   runs-on: ubuntu-latest
+  #   needs: release-project
+  #   steps:
+  #   - uses: actions/checkout@v1
+    
+  #   - name: Checkout Code for branch
+  #     uses: actions/checkout@v3
+  #     with:
+  #       fetch-depth: 0
+
+  #   - name: Super-Linter
+  #     uses: github/super-linter@v4.9.5
+  #     env:
+  #       DEFAULT_BRANCH: test1
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       #FILTER_REGEX_INCLUDE: .*Alibaba Cloud.*    
+  #       FILTER_REGEX_INCLUDE: {{steps.download-path}}
+  #       #FILTER_REGEX_EXCLUDE: .*(/CODEOWNERS/|/ASIM/|/BYOML/|/DataConnectors/|/Detections/|/Exploration Queries/|/Functions/|/Hunting Queries/|/LICENSE/|/Logos/|/MasterPlaybooks/|/Notebooks/|/Parsers/|/Playbooks/|/QueryLanguageSamples/|/Sample Data/|/Tools/|/Tutorials/|/Watchlists/|/Workbooks/|/.azure-pipelines/|/.script/|/.vs/|/.vscode/|/.github/|/.vscode/|/pull_request_template).*
+  #       VALIDATE_ALL_CODEBASE: false  # only run on new changes in pr else it will run for all repo
+  #       VALIDATE_ARM: true
+
+    # - name: displaypath
+    #   run: |
+    #     echo '${{ github.workspace }}/Solutions/Alibaba Cloud/Package/.*'
+
+
+
+
+
+
+
+
