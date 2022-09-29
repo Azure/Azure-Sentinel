@@ -20,6 +20,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
     * Scan Id: Scan Id to be launched
+    * Tenable Vulnerability Management Connector Name: name of the custom Logic App connector
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTenableIO%2FPlaybooks%2FPlaybooks%2FTenable-LaunchScan%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTenableIO%2FPlaybooks%2FPlaybooks%2FTenable-LaunchScan%2Fazuredeploy.json)
 

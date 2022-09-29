@@ -34,6 +34,7 @@ Once deployment is complete, authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
+6. Repeat 1-5 steps for Azure Monitor Logs connection
 
 #### b. Configurations in Sentinel
 

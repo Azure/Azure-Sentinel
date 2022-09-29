@@ -59,6 +59,9 @@ To get Tenable API key, follow the instructions in the [documentation](https://d
 
 | Parameters | Description |
 |----------------|--------------|
+|**For Connectors**|
+|**TenablePlatformConnectorName**| Name of Tenable Platform Connector|
+|**TenableVulnerabilityManagementConnectorName**| Name of Tenable Vulnerability Management Connector|
 |**For Playbooks**|
 |**Tenable-EnrichIncidentWithAssetsInfo Playbook Name** | Name of the Playbook |
 |**Tenable-EnrichIncidentWithVulnInfo Playbook Name** | Name of the Playbook |
