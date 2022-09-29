@@ -1,373 +1,192 @@
-{
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "metadata": {
-        "title": "AS-IP-Blocklist", 
-        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will add the IP address from Microsoft Sentinel Incidents to a Microssoft Azure Conditional Access Named Locations list, signifying compromised IP addresses.",
-        "prerequisites": "1. A Microsoft Azure Named Locations list id is needed. 2. An Microsoft Azure App Registration is also needed for the Microwsoft Graph API. 3. A Microsoft Azure key vault containing the app registration secret must also be set up. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-IP-Blocklist",
-        "lastUpdateTime": "2022-09-29T18:18:05Z",
-        "entities": ["IP"], 
-        "tags": ["Microsoft Sentinel", "Incident", "Conditional Access", "Named Locations"], 
-        "support": {
-            "tier": "developer"
-        },
-        "author": {
-            "name": "Accelerynt"
-        }
-    },
-    "parameters": {
-        "PlaybookName": {
-            "defaultValue": "AS-IP-Blocklist",
-            "type": "string"
-        },
-        "NamedLocationsListName": {
-            "type": "string",
-            "metadata": {
-                "description": "Name of the Microsoft Azure Named Locations list that will hold the ips"
-            }
-        },
-        "NamedLocationsListID": {
-            "type": "string",
-            "metadata": {
-                "description": "ID of the Microsoft Azure Named Locations list that will hold the ips"
-            }
-        },
-        "AppRegistrationID": {
-            "type": "string",
-            "metadata" : {
-                "description" : "Application (client) ID of the App Registration"
-            }
-        },
-        "AppRegistrationTenant": {
-            "type": "string",
-            "metadata" : {
-                "description" : "Directory (tenant) ID of the App Registration"
-            }
-        },
-        "KeyVaultName": {
-            "type": "string",
-            "metadata" : {
-                "description" : "Name of the Key Vault that stores the App Registration Secret"
-            }
-        },
-        "SecretName": {
-            "type": "string",
-            "metadata": {
-                "description": "Name of Key Vault Secret that contains the value of the App Registration Secret"
-            }
-        }
-    },
-    "variables": {
-        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
-    },
-    "resources": [
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('azuresentinel')]",
-            "location": "[resourceGroup().location]",
-            "kind": "V1",
-            "properties": {
-                "displayName": "[parameters('PlaybookName')]",
-                "customParameterValues": {},
-                "parameterValueType": "Alternative",
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-                }
-            }
-        },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('keyvault')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "displayName": "[parameters('PlaybookName')]",
-                "parameterValueType": "Alternative",
-                "alternativeParameterValues": {
-                    "vaultName": "[parameters('KeyVaultName')]"
-                },
-                "customParameterValues": {
-                },
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
-                }
-            }
-        },
-        {
-            "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2017-07-01",
-            "name": "[parameters('PlaybookName')]",
-            "location": "[resourceGroup().location]",
-            "tags": {
-                "LogicAppsCategory": "security"
-            },
-            "identity": {
-                "type": "SystemAssigned"
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
-                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
-            ],
-            "properties": {
-                "state": "Enabled",
-                "definition": {
-                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-                    "contentVersion": "1.0.0.0",
-                    "parameters": {
-                        "$connections": {
-                            "defaultValue": {},
-                            "type": "Object"
-                        }
-                    },
-                    "triggers": {
-                        "Microsoft_Sentinel_incident": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/incident-creation"
-                            }
-                        }
-                    },
-                    "actions": {
-                        "Condition_-_Incident_Contains_IPs": {
-                            "actions": {
-                                "For_Each_-_Incident_IP": {
-                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
-                                    "actions": {
-                                        "Append_to_String_Variable_-_JSON_Body": {
-                                            "runAfter": {},
-                                            "type": "AppendToStringVariable",
-                                            "inputs": {
-                                                "name": "Json Body",
-                                                "value": " \n{\n         \"@odata.type\": \"#microsoft.graph.iPv4CidrRange\",\n          \"cidrAddress\": \"@{concat(items('For_Each_-_Incident_IP')?['Address'], '/32')}\"\n },"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {},
-                                    "type": "Foreach"
-                                },
-                                "HTTP-_Add_IP_to_Named_Locations_List": {
-                                    "runAfter": {
-                                        "For_Each_-_Incident_IP": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "authentication": {
-                                            "audience": "https://graph.microsoft.com",
-                                            "clientId": "[parameters('AppRegistrationID')]",
-                                            "secret": "@body('Get_Secret')?['value']",
-                                            "tenant": "[parameters('AppRegistrationTenant')]",
-                                            "type": "ActiveDirectoryOAuth"
-                                        },
-                                        "body": "@concat(substring(variables('Json Body'), 0, lastIndexOf(variables('Json Body'), ',')), decodeUriComponent('%0A'),']', decodeUriComponent('%0A'), '}')",
-                                        "headers": {
-                                            "Content-type": "application/json"
-                                        },
-                                        "method": "PATCH",
-                                        "uri": "[concat('https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations/', parameters('NamedLocationsListID'))]"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Entities_-_Get_IPs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "greater": [
-                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
-                                            0
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "Entities_-_Get_IPs": {
-                            "runAfter": {
-                                "For_Each_-_Existing_IP": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/entities/ip"
-                            }
-                        },
-                        "For_Each_-_Existing_IP": {
-                            "foreach": "@body('Parse_JSON')?['ipRanges']",
-                            "actions": {
-                                "Append_to_string_variable": {
-                                    "runAfter": {},
-                                    "type": "AppendToStringVariable",
-                                    "inputs": {
-                                        "name": "Json Body",
-                                        "value": "\n@{items('For_Each_-_Existing_IP')},\n"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Initialize_Variable_-_JSON_Body": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
-                        "Get_Secret": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName'), ''')}/value')]"
-                            }
-                        },
-                        "HTTP_-_Get_Previous_List_Values": {
-                            "runAfter": {
-                                "Get_Secret": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "authentication": {
-                                    "audience": "https://graph.microsoft.com",
-                                    "clientId": "[parameters('AppRegistrationID')]",
-                                    "secret": "@body('Get_Secret')?['value']",
-                                    "tenant": "[parameters('AppRegistrationTenant')]",
-                                    "type": "ActiveDirectoryOAuth"
-                                },
-                                "method": "GET",
-                                "uri": "[concat('https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations/', parameters('NamedLocationsListID'))]"
-                            },
-                            "description": "PATCH (and also PUT) method has been observed to overwrite an entire existing list with new values, and POST is not accepted at this endpoint. This GET step is necessary top preserve the preexisting values."
-                        },
-                        "Initialize_Variable_-_JSON_Body": {
-                            "runAfter": {
-                                "Parse_JSON": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "Json Body",
-                                        "type": "string",
-                                        "value": "[concat('{\n\"@odata.type\": \"#microsoft.graph.ipNamedLocation\",\n\"displayName\": \"', parameters('NamedLocationsListName'), '\",\n\"isTrusted\": false,\n \"ipRanges\": [')]"
-                                    }
-                                ]
-                            }
-                        },
-                        "Parse_JSON": {
-                            "runAfter": {
-                                "HTTP_-_Get_Previous_List_Values": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@body('HTTP_-_Get_Previous_List_Values')",
-                                "schema": {
-                                    "properties": {
-                                        "@@odata.context": {
-                                            "type": "string"
-                                        },
-                                        "@@odata.type": {
-                                            "type": "string"
-                                        },
-                                        "createdDateTime": {
-                                            "type": "string"
-                                        },
-                                        "displayName": {
-                                            "type": "string"
-                                        },
-                                        "id": {
-                                            "type": "string"
-                                        },
-                                        "ipRanges": {
-                                            "items": {
-                                                "properties": {
-                                                    "@@odata.type": {
-                                                        "type": "string"
-                                                    },
-                                                    "cidrAddress": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "@@odata.type",
-                                                    "cidrAddress"
-                                                ],
-                                                "type": "object"
-                                            },
-                                            "type": "array"
-                                        },
-                                        "isTrusted": {
-                                            "type": "boolean"
-                                        },
-                                        "modifiedDateTime": {
-                                            "type": "string"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "outputs": {}
-                },
-                "parameters": {
-                    "$connections": {
-                        "value": {
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
-                                "connectionName": "[variables('azuresentinel')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
-                                "connectionProperties": {
-                                    "authentication": {
-                                        "type": "ManagedServiceIdentity"
-                                    }
-                                }
-                            },
-                            "keyvault": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
-                                "connectionName": "[variables('keyvault')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
-                                "connectionProperties": {
-                                    "authentication": {
-                                        "type": "ManagedServiceIdentity"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    ]
-}
+# AS-IP-Blocklist
+
+Author: Accelerynt
+
+For any technical questions, please contact info@accelerynt.com  
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)
+
+This playbook is intended to be run from a Microsoft Sentinel Incident. It will add the IP address from Microsoft Sentinel Incidents to a Microsoft Azure Conditional Access Named Locations list, indicating compromised IP addresses.
+
+![NamedLocations_Demo](Images/NamedLocations_Demo.png)
+
+
+#
+### Requirements
+
+The following items are required under the template settings during deployment: 
+
+* A Microsoft Azure [Named Locations List](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-a-named-locations-list)
+* An [App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-an-app-registration) for using the Microsoft Graph API
+* An [Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-an-azure-key-vault-secret) containing your App Registration Secret 
+
+
+# 
+### Setup
+
+#### Create a Named Locations list:
+
+Navigate to the Microsoft Azure Active Directory Menu:
+
+https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview
+
+From there, click the "**Security**" menu option.
+
+![NamedLocations_Create_List_1](Images/NamedLocations_Create_List_1.png)
+
+Navigate to the "**Named locations**" menu option and then click "**IP ranges location**".
+
+![NamedLocations_Create_List_2](Images/NamedLocations_Create_List_2.png)
+
+Create a name for your Named Locations list. The list cannot be saved without an initiating value. It should be noted IPs are only accepted in a CIDR range notation. Individual IPs processed by this playbook will have a "**/32**" appended to them to fit this format.
+
+![NamedLocations_Create_List_3](Images/NamedLocations_Create_List_3.png)
+
+The name of your Named Locations list, along with its ID, should be noted, as these will be required for the deployment of this playbook. 
+
+The list ID may be more difficult to track down, as it is currently not displayed in the URL upon selection. Our solution for this was to send a GET request from https://developer.microsoft.com/en-us/graph/graph-explorer to the following endpoint: https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations.
+
+The JSON response body includes all Named Location lists, along with their IDs.
+
+
+#### Create an App Registration:
+
+Navigate to the Navigate to the Microsoft Azure Active Directory App Registrations page:
+
+https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
+
+From there, click "**New registration**".
+
+![NamedLocations_Create_App_Registration_1](Images/NamedLocations_Create_App_Registration_1.png)
+
+Select a name for your App Registration, such as "**AS-IP-Blocklist**", then click "**Register**".
+
+![NamedLocations_Create_App_Registration_2](Images/NamedLocations_Create_App_Registration_2.png)
+
+From the application menu blade, select "**API permissions**" and then click "**Add a permission**". Click the "**Microsoft Graph**" category.
+
+![NamedLocations_Create_App_Registration_3](Images/NamedLocations_Create_App_Registration_3.png)
+
+Under "**Application permissions**", search for "**Policy**", then select the "**Policy.Read.All**" and ""**Policy.ReadWrite.ConditionalAccess**" checkboxes. Click "**Add permissions**".
+
+![NamedLocations_Create_App_Registration_4](Images/NamedLocations_Create_App_Registration_4.png)
+
+In order for these permissions to be applied, admin consent must also be granted. Click the indicated "**Grant admin consent**" button on the "**API permissions**" page.
+![NamedLocations_Create_App_Registration_5_consent](Images/NamedLocations_Create_App_Registration_5_consent.png)
+
+Navigate back to the "**Overview**" section on the menu and take note of the "**Application (client) ID**" and "**Directory (tenant) ID**, as each will be needed for the deployment of this playbook. Click "**Add a certificate or secret**".
+
+![NamedLocations_Create_App_Registration_5](Images/NamedLocations_Create_App_Registration_5.png)
+
+Click "**New client secret"**". After adding a description and selecting an expiration date, click "**Add**".
+
+![NamedLocations_Create_App_Registration_6](Images/NamedLocations_Create_App_Registration_6.png)
+
+Copy the generated "**Value**" and save it for the next step, [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-an-azure-key-vault-secret).
+
+![NamedLocations_Create_App_Registration_7](Images/NamedLocations_Create_App_Registration_7.png)
+
+
+#### Create an Azure Key Vault Secret:
+
+Navigate to the Azure Key Vaults page: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults
+
+Navigate to an existing Key Vault or create a new one. From the Key Vault overview page, click the "**Secrets**" menu option, found under the "**Settings**" section. Click "**Generate/Import**".
+
+![NamedLocations_Key_Vault_1](Images/NamedLocations_Key_Vault_1.png)
+
+Choose a name for the secret, such as "**AS-IP-Blocklist-App-Registration-Secret**", and enter the App Registration Secret copied previously in the "**Value**" field. All other settings can be left as is. Click "**Create**". 
+
+![NamedLocations_Key_Vault_2](Images/NamedLocations_Key_Vault_2.png)
+
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#granting-access-to-azure-key-vault).
+
+![NamedLocations_Key_Vault_3](Images/NamedLocations_Key_Vault_3.png)
+
+
+#
+### Deployment                                                                                                         
+
+To configure and deploy this playbook:
+
+Open your browser and ensure you are logged into your Microsoft Sentinel workspace. In a separate tab, open the link to our playbook on the Accelerynt Security GitHub Repository:
+
+https://github.com/Accelerynt-Security/AS-IP-Blocklist
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-IP-Blocklist%2Fazuredeploy.json)                                        
+
+Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
+
+In the **Project Details** section:
+
+* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.  
+
+In the **Instance Details** section:   
+
+* **Playbook Name**: This can be left as "**AS-IP-Blocklist**" or you may change it.  
+
+* **Named Locations List Name**: Enter the value of the Named Locations list created in [Create a Named Locations list](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-a-named-locations-list).
+
+* **Named Locations List ID**: Enter the value of the Named Locations list ID referenced in [Create a Named Locations list](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-a-named-locations-list).
+
+* **App Registration ID**: Enter the value of the Application (client) ID referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-an-app-registration).
+
+* **App Registration Tenant**: Enter the value of the Directory (tenant) ID referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-an-app-registration).
+
+* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-an-azure-key-vault-secret).
+
+* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IP-Blocklist#create-an-azure-key-vault-secret).
+
+Towards the bottom, click on “**Review + create**”. 
+
+![NamedLocations_Deploy_1](Images/NamedLocations_Deploy_1.png)
+
+Once the resources have validated, click on "**Create**".
+
+![NamedLocations_Deploy_2](Images/NamedLocations_Deploy_2.png)
+
+The resources should take around a minute to deploy. Once the deployment is complete, you can expand the "**Deployment details**" section to view them.
+Click the one corresponding to the Logic App.
+
+![NamedLocations_Deploy_3](Images/NamedLocations_Deploy_3.png)
+
+Click on the “**Edit**” button. This will bring us into the Logic Apps Designer.
+
+![NamedLocations_Deploy_4](Images/NamedLocations_Deploy_4.png)
+
+The first, second, and sixth steps labeled "**Connections**" use connections created during the deployment of this playbook. Before the playbook can be run, these connections will either need to be authorized in the indicated steps, or existing authorized connections may be alternatively selected.  
+
+![NamedLocations_Deploy_5](Images/NamedLocations_Deploy_5.png)
+
+To validate the connections created for this playbook, expand the "**Connections**" step and click the exclamation point icon next to the name matching the playbook.
+
+![NamedLocations_Deploy_6](Images/NamedLocations_Deploy_6.png)
+
+When prompted, sign in to validate the connection.                                                                                                
+
+![NamedLocations_Deploy_7](Images/NamedLocations_Deploy_7.png)                                                                                                                                                                                                                                                   
+Once all connection steps have been updated, click the "**Save**" button.
+
+![NamedLocations_Deploy_8](Images/NamedLocations_Deploy_8.png)  
+
+
+#
+### Granting Access to Azure Key Vault
+
+Before the Logic App can run successfully, the Key Vault connection created during deployment must be granted access to the Key Vault storing your App Registration Secret.
+
+From the Key Vault "**Access policies**" page, click "**Add Access Policy**".
+
+![NamedLocations_Access_1](Images/NamedLocations_Access_1.png)
+
+Select the "**Get**" checkbox in the "**Secret permissions**" list field. Then click the blue "**None selected**" text next to the "**Select principal**" field.
+
+Paste "**AS-IP-Blocklist**" into the principal search box and click the option that appears. Click "**Select**" towards the bottom of the page.
+
+![NamedLocations_Access_2](Images/NamedLocations_Access_2.png)
+
+Click "**Add**".
+
+![NamedLocations_Access_3](Images/NamedLocations_Access_3.png)
