@@ -1,0 +1,71 @@
+// Title:           OneIdentity Safeguard CEF Parser
+// Author:          Roger Fleming
+// Version:         1.0
+// Last Updated:    05/05/2021
+// Comment:         
+//  
+// DESCRIPTION:
+// This parser takes raw OneIdentity Safeguard's Common Event Format logs from a Syslog data stream and parses the data into a normalized schema for
+// OneIdentity Safeguard version 6.9.0.15361 or newer. Becasue of the use of so many custom values most of the data that is populating
+// the addionalExtension table is not normalized.
+//
+// USAGE:
+// 1. Open Log Analytics/Azure Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
+// 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter a Function Name.
+//    In order for the OneIdentity Safeguard logs to work with pre-built queries and workbooks the Function Alias must be set to - IdentitySafeguard
+// 3. Function Apps usually take 10-15 minutes to activate. You can then use the Function Alias for other queries.
+//
+//
+// REFERENCE: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Identity Safeguard Data Connector: https://docs.microsoft.com/azure/sentinel/connect-one-identity
+//
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+// 
+//      05 05 2021 11:38:08 10.71.160.39 <SLOG:INFO> May  5 11:38:08 JINF-1-0-SGD01 SPP[5560]: CEF:0|OneIdentity|Safeguard|6.9.0.15361|3002|AccessRequestApproved|1|cn1label=EventUserId cn1=38 
+//      cs1label=EventUserDisplayName cs1=ADM_TOconno cs2label=EventUserDomainName cs2=testou..com cs3label=AccessRequestType cs3=Password cs4label=AccountDistinguishedName cs4= cs5label=AccountDomainName 
+//      cs5= cn2label=AccountId cn2=507 cs6label=AccountName cs6=test account cs7label=ApproverAccessRequestUri cs7=https://10.10.10.10/approvals?id\=507-79-38-8826-1-AC1F6B720404-1090 cn3label=AssetId 
+//      cn3=79 cs8label=AssetName cs8=SFTP cs9label=AssetNetworkAddress cs9= cs10label=AssetPlatformType cs10=Other cs11label=Comment cs11= cn4label=DurationInMinutes cn4=120 cs12label=OfflineWorkflowMode 
+//      cs12=False cs13label=Reason cs13=test cs14label=ReasonCode cs14= cs15label=Requester cs15=ADM_TOconno cs16label=RequesterAccessRequestUri 
+//      cs16=https://10.71.160.39/my-requests?id\=507-79-38-8826-1-AC1F6B720404-1090 cn5label=RequesterId cn5=38 cs17label=RequesterUsername 
+//      cs17=ADM_TOconno cs18label=RequestId cs18=507-79-38-8826-1-AC1F6B720404-1090 cs19label=RequiredDate cs19=2021-05-05T11:38:07Z cs20label=ReviewerAccessRequestUri 
+//      cs20=https://10.10.10.10/reviews?id\=507-79-38-8826-1-AC1F6B720404-1090 cs21label=SessionSpsNodeIpAddress cs21= cs22label=TicketNumber cs22= cs23label=WasCheckedOut cs23=False
+//
+//
+CommonSecurityLog 
+| where DeviceVendor == "OneIdentity"
+| extend extensionData = split(AdditionalExtensions,";")
+| extend EventUserId = coalesce(
+                            column_ifexists("FieldDeviceCustomNumber1", long(null)),
+                            DeviceCustomNumber1
+                        )
+| extend EventUserDisplayName = DeviceCustomString1
+| extend EventUserDomainName = DeviceCustomString2
+| extend AccessRequestType = DeviceCustomString3
+| extend AccountDistinguishedName = DeviceCustomString4
+| extend AccountDomainName = DeviceCustomString5
+| extend AccountId = coalesce(
+                            column_ifexists("FieldDeviceCustomNumber2", long(null)),
+                            DeviceCustomNumber2
+                        )
+| extend AccountName = DeviceCustomString6
+| extend ApproverAccessRequestUri = extract(@"(=)(\S*)",2,tostring(extensionData[9]))
+| extend AssetId = coalesce(
+                            column_ifexists("FieldDeviceCustomNumber3", long(null)),
+                            DeviceCustomNumber3
+                        )
+| extend AssetName = extract(@"(=)(\S*)",2,tostring(extensionData[12]))
+| extend AssetNetworkAddress = extract(@"(=)(\S*)",2,tostring(extensionData[14]))
+| extend AssetPlatformType = extract(@"(=)(\S*)",2,tostring(extensionData[16]))
+| extend Comment = extract(@"(=)(\S*)",2,tostring(extensionData[18]))
+| extend DurationInMinutes = extract(@"(=)(\S*)",2,tostring(extensionData[20]))
+| extend OfflineWorkflowMode = extract(@"(=)(\S*)",2,tostring(extensionData[22]))
+| extend Reason =  coalesce(
+                            extract(@"(=)(\S*)",2,tostring(extensionData[24])),                            
+                            column_ifexists("Reason", "")
+                        )
+| extend ReasonCode = extract(@"(=)(\S*)",2,tostring(extensionData[26]))
+| extend Requester = extract(@"(=)(\S*)",2,tostring(extensionData[28]))
+| extend RequesterAccessRequestUri = extract(@"(=)(\S*)",2,tostring(extensionData[30]))
+| project-away extensionData,AdditionalExtensions
