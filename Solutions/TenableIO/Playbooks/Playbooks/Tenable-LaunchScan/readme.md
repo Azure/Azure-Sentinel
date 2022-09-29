@@ -5,7 +5,7 @@
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
 1. Launches scan by scan id provided during the playbook deployment.
-4. Adds information about launched scan as a comment to the incident.
+2. Adds information about launched scan as a comment to the incident.
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 

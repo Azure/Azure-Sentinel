@@ -11,6 +11,10 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 <img src="./playbook_screenshot.png" width="50%"/><br>
 
+### Prerequisites
+
+1. Prior to the deployment of this playbook, [TenableIO Data Connector](../../../Data%20Connectors/) should be deployed.
+
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
