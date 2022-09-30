@@ -1,6 +1,6 @@
 # Cisco Umbrella ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Cisco Umbrella.
+ARM template for ASIM Dns schema parser for Cisco Umbrella.
 
 This ASIM parser supports normalizing Cisco Umbrella DNS logs to the ASIM Dns normalized schema.
 

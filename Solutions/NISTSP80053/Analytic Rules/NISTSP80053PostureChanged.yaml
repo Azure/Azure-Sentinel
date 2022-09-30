@@ -1,0 +1,41 @@
+id: dd834c97-4638-4bb3-a4e3-807e8b0580dc
+name: NIST SP 800-53 Posture Changed
+description: |
+  'This alert is desinged to monitor Azure policies aligned with the NIST SP 800-53 Regulatory Compliance initative. The alert triggers when policy compliance falls below 70% within a 1 week timeframe.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: 
+  let Last_Evaluated=SecurityRecommendation
+  | join kind=fullouter(SecurityRegulatoryCompliance| where ComplianceStandard == "NIST-SP-800-53-R4") on RecommendationName
+  | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationName
+  | extend ComplianceDomain=iff(ComplianceControl contains "AC.", "Access Control", iff(ComplianceControl contains "AT.", "Security Awareness & Training", iff(ComplianceControl contains "AU.", "Audit & Accountability", iff(ComplianceControl contains "CA.", "Security Assessment", iff(ComplianceControl contains "CM.", "Configuration Management", iff(ComplianceControl contains "CP.", "Contingency Planning", iff(ComplianceControl contains "IA.", "Identification & Authentication", iff(ComplianceControl contains "IR.", "Incident Response", iff(ComplianceControl contains "MA.", "System Maintenance", iff(ComplianceControl contains "MP.", "Media Protection", iff(ComplianceControl contains "PE.", "Physical Protection", iff(ComplianceControl contains "PL.", "Security Planning", iff(ComplianceControl contains "PS.", "Personnel Security",iff(ComplianceControl contains "RA.", "Risk Assessment",iff(ComplianceControl contains "SA.", "System & Services Acquisition",iff(ComplianceControl contains "SC.", "System & Communications Protection",iff(ComplianceControl contains "SI.", "System & Information Integrity","Other")))))))))))))))))
+  | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by ComplianceDomain, TimeGenerated;
+  SecurityRecommendation
+  | join kind=fullouter(SecurityRegulatoryCompliance| where ComplianceStandard == "NIST-SP-800-53-R4") on RecommendationName
+  | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationName
+  | extend ComplianceDomain=iff(ComplianceControl contains "AC.", "Access Control", iff(ComplianceControl contains "AT.", "Security Awareness & Training", iff(ComplianceControl contains "AU.", "Audit & Accountability", iff(ComplianceControl contains "CA.", "Security Assessment", iff(ComplianceControl contains "CM.", "Configuration Management", iff(ComplianceControl contains "CP.", "Contingency Planning", iff(ComplianceControl contains "IA.", "Identification & Authentication", iff(ComplianceControl contains "IR.", "Incident Response", iff(ComplianceControl contains "MA.", "System Maintenance", iff(ComplianceControl contains "MP.", "Media Protection", iff(ComplianceControl contains "PE.", "Physical Protection", iff(ComplianceControl contains "PL.", "Security Planning", iff(ComplianceControl contains "PS.", "Personnel Security",iff(ComplianceControl contains "RA.", "Risk Assessment",iff(ComplianceControl contains "SA.", "System & Services Acquisition",iff(ComplianceControl contains "SC.", "System & Communications Protection",iff(ComplianceControl contains "SI.", "System & Information Integrity","Other")))))))))))))))))
+  | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by ComplianceDomain
+  | extend PassedControlsPercentage = (Passed/todouble(Total))*100
+  | join (Last_Evaluated) on ComplianceDomain
+  | project ComplianceDomain, Total, PassedControlsPercentage, Passed, Failed, LastEvaluated=TimeGenerated
+  | summarize arg_max(LastEvaluated, *) by ComplianceDomain, Total, PassedControlsPercentage, Passed, Failed
+  | where PassedControlsPercentage < 70 
+  | sort by PassedControlsPercentage, Passed desc
+  | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+  | extend URLCustomEntity = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

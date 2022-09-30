@@ -1,6 +1,6 @@
 # GCP Cloud DNS ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for GCP Cloud DNS.
+ARM template for ASIM Dns schema parser for GCP Cloud DNS.
 
 This ASIM parser supports filtering and normalizing Google cloud platform (GCP) DNS logs to the ASIM Dns normalized schema.
 

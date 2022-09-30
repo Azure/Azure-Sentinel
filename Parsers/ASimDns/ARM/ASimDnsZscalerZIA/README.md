@@ -1,6 +1,6 @@
 # Zscaler ZIA DNS ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Zscaler ZIA DNS.
+ARM template for ASIM Dns schema parser for Zscaler ZIA DNS.
 
 This ASIM parser supports normalizing Zscaler ZIA DNS logs to the ASIM Dns normalized schema.
 

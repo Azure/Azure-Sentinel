@@ -1,0 +1,579 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Squadra Technologies",
+    "comments": "Solution template for Squadra Technologies SecRmm"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Squadra Technologies SecRMM - USB removable storage security",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "squadratechnologies.Squadra_Technologies_SecRmm_MSS",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "SquadraTechnologiesSecRMM",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "SquadraTechnologiesSecRMM",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorVersion1": "1.0.0",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "SquadraTechnologiesSecRMMWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId1'))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Squadra Technologies SecRmm data connector with template",
+        "displayName": "Squadra Technologies SecRmm template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Squadra Technologies SecRmm data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Squadra Technologies secRMM",
+                  "publisher": "Squadra Technologies",
+                  "descriptionMarkdown": "Use the Squadra Technologies secRMM Data Connector to push USB removable storage security event data into Azure Sentinel Log Analytics.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "secRMM_CL",
+                      "baseQuery": "secRMM_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Alert on USB removable storage devices ONLINE events",
+                      "query": "secRMM_CL | where Event_s == 'ONLINE'"
+                    },
+                    {
+                      "description": "Which users are writing files to removable storage devices",
+                      "query": "secRMM_CL | where Event_s == 'WRITE COMPLETED' | summarize count() by User_s"
+                    },
+                    {
+                      "description": "Microsoft BitLocker Activity for removable storage devices",
+                      "query": "secRMM_CL | where DeviceDescription_s contains 'ENCRYPTED BitLocker'"
+                    },
+                    {
+                      "description": "Microsoft Windows Defender Activity for removable storage devices",
+                      "query": "secRMM_CL | where ((Event_s == 'EXTERNAL') and (Message contains 'Microsoft Defender'))"
+                    },
+                    {
+                      "description": "Hardware Encrypted Device Activity",
+                      "query": "secRMM_CL | where DeviceDescription_s contains ' ENCRYPTED Removable Media'"
+                    },
+                    {
+                      "description": "Users who have tried to execute macros or programs from a removable storage device",
+                      "query": "secRMM_CL | where ((Event_s == 'BLOCK MACROS ON DEVICE ACTIVE') or (Event_s == 'BLOCK PROGRAMS ON DEVICE ACTIVE')) | summarize count() by User_s"
+                    },
+                    {
+                      "description": "Removable storage devices that are not encrypted (hardware or software)",
+                      "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (DeviceDescription_s !contains 'ENCRYPTED'))"
+                    },
+                    {
+                      "description": "Removable storage devices that are mounted into a Virtual Machine (from physical)",
+                      "query": "secRMM_CL | where ((Event_s == 'EXTERNAL') and (Message contains 'ONLINE') and (Message contains 'Virtual Machine'))"
+                    },
+                    {
+                      "description": "Removable storage devices that are mounted into a Virtual Machine (from virtual)",
+                      "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (Drive_s contains '^'))"
+                    },
+                    {
+                      "description": "Show mobile devices that are being USB mounted",
+                      "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (DeviceDescription_s contains 'MOBILE'))"
+                    },
+                    {
+                      "description": "Show mobile devices that are being USB mounted but are not MDM (Microsoft Intune) enrolled",
+                      "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (AdditionalProgramInfo_s contains 'Mobile device is not MDM enrolled'))"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "secRMM_CL",
+                      "lastDataReceivedQuery": "secRMM_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "secRMM_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                   },
+                  "instructionSteps": [
+                    {
+                      "description": "Follow the step-by-step instructions provided in the [Squadra Technologies configuration guide for Azure Sentinel](http://www.squadratechnologies.com/StaticContent/ProductDownload/secRMM/9.9.0.0/secRMMAzureSentinelAdministratorGuide.pdf)",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ],
+                  "metadata": {
+                    "id": "5040166e-9344-4b4a-b260-8f2e3539ae45",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Squadra Technologies"
+                    },
+                    "support": {
+                      "name": "Squadra Technologies",
+                      "link": "https://www.squadratechnologies.com/Contact.aspx",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Squadra Technologies SecRmm",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Squadra Technologies"
+                },
+                "support": {
+                  "name": "Squadra Technologies",
+                  "tier": "Partner",
+                  "link": "https://www.squadratechnologies.com/Contact.aspx"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Squadra Technologies SecRmm",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Squadra Technologies"
+        },
+        "support": {
+          "name": "Squadra Technologies",
+          "tier": "Partner",
+          "link": "https://www.squadratechnologies.com/Contact.aspx"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Squadra Technologies secRMM",
+          "publisher": "Squadra Technologies",
+          "descriptionMarkdown": "Use the Squadra Technologies secRMM Data Connector to push USB removable storage security event data into Azure Sentinel Log Analytics.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "secRMM_CL",
+              "baseQuery": "secRMM_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "secRMM_CL",
+              "lastDataReceivedQuery": "secRMM_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "secRMM_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Alert on USB removable storage devices ONLINE events",
+              "query": "secRMM_CL | where Event_s == 'ONLINE'"
+            },
+            {
+              "description": "Which users are writing files to removable storage devices",
+              "query": "secRMM_CL | where Event_s == 'WRITE COMPLETED' | summarize count() by User_s"
+            },
+            {
+              "description": "Microsoft BitLocker Activity for removable storage devices",
+              "query": "secRMM_CL | where DeviceDescription_s contains 'ENCRYPTED BitLocker'"
+            },
+            {
+              "description": "Microsoft Windows Defender Activity for removable storage devices",
+              "query": "secRMM_CL | where ((Event_s == 'EXTERNAL') and (Message contains 'Microsoft Defender'))"
+            },
+            {
+              "description": "Hardware Encrypted Device Activity",
+              "query": "secRMM_CL | where DeviceDescription_s contains ' ENCRYPTED Removable Media'"
+            },
+            {
+              "description": "Users who have tried to execute macros or programs from a removable storage device",
+              "query": "secRMM_CL | where ((Event_s == 'BLOCK MACROS ON DEVICE ACTIVE') or (Event_s == 'BLOCK PROGRAMS ON DEVICE ACTIVE')) | summarize count() by User_s"
+            },
+            {
+              "description": "Removable storage devices that are not encrypted (hardware or software)",
+              "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (DeviceDescription_s !contains 'ENCRYPTED'))"
+            },
+            {
+              "description": "Removable storage devices that are mounted into a Virtual Machine (from physical)",
+              "query": "secRMM_CL | where ((Event_s == 'EXTERNAL') and (Message contains 'ONLINE') and (Message contains 'Virtual Machine'))"
+            },
+            {
+              "description": "Removable storage devices that are mounted into a Virtual Machine (from virtual)",
+              "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (Drive_s contains '^'))"
+            },
+            {
+              "description": "Show mobile devices that are being USB mounted",
+              "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (DeviceDescription_s contains 'MOBILE'))"
+            },
+            {
+              "description": "Show mobile devices that are being USB mounted but are not MDM (Microsoft Intune) enrolled",
+              "query": "secRMM_CL | where ((Event_s == 'ONLINE') and (AdditionalProgramInfo_s contains 'Mobile device is not MDM enrolled'))"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+            },
+          "instructionSteps": [
+            {
+              "description": "Follow the step-by-step instructions provided in the [Squadra Technologies configuration guide for Azure Sentinel](http://www.squadratechnologies.com/StaticContent/ProductDownload/secRMM/9.9.0.0/secRMMAzureSentinelAdministratorGuide.pdf)",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Squadra Technologies SecRmm Workbook with template",
+        "displayName": "Squadra Technologies SecRmm workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "SquadraTechnologiesSecRMMWorkbook Workbook with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "This workbook gives an overview of security data for removable storage activity such as USB thumb drives and USB connected mobile devices."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Removable storage security via Squadra Technologies secRMM\\n---\\nFile writes to removable storage by User\\n\\n\"},\"name\":\"text - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"secRMM_CL | where Event_s == \\\"WRITE COMPLETED\\\" | summarize count() by User_s | render barchart\",\"size\":1,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"User_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"count_\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}}]}},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"File writes to removable storage by Computer\"},\"name\":\"text - 2\",\"styleSettings\":{\"showBorder\":true}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"secRMM_CL \\r\\n| where TimeGenerated > ago(1d)\\r\\n| where Event_s == \\\"WRITE COMPLETED\\\"\\r\\n| summarize count() by Computer, bin(TimeGenerated, 1h)\\r\\n| render piechart\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 3\"},{\"type\":1,\"content\":{\"json\":\"Removable storage devices used\\r\\n\"},\"name\":\"text - 6\",\"styleSettings\":{\"showBorder\":true}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"secRMM_CL\\r\\n| where SerialNumber_s <> \\\"\\\"\\r\\n| summarize count() by strcat(SerialNumber_s, \\\", \\\", Model_s)\\r\\n| render piechart\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 7\"},{\"type\":1,\"content\":{\"json\":\"Microsoft BitLocker Activity\"},\"name\":\"text - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"secRMM_CL \\r\\n| where DeviceDescription_s contains \\\"ENCRYPTED BitLocker\\\" \\r\\n| summarize count() by User_s \\r\\n| render piechart\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 9\"},{\"type\":1,\"content\":{\"json\":\"Microsoft Windows Defender Activity\"},\"name\":\"text - 10\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"secRMM_CL\\r\\n| where ((Event_s == \\\"EXTERNAL\\\") and (Message contains \\\"Microsoft Defender\\\"))\\r\\n| project Message\\r\\n\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 11\"},{\"type\":1,\"content\":{\"json\":\"Mobile devices that are being USB mounted\"},\"name\":\"text - 12\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"secRMM_CL\\r\\n| where ((Event_s == \\\"ONLINE\\\") and (DeviceDescription_s contains \\\"MOBILE\\\"))\\r\\n| project SerialNumber_s, User_s, DeviceDescription_s\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 13\"},{\"type\":1,\"content\":{\"json\":\"Removable storage security events\\r\\n\"},\"name\":\"text - 4\",\"styleSettings\":{\"showBorder\":true}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"secRMM_CL \\r\\n| where isnotempty(Event_s) \\r\\n| summarize count() by Event_s \\r\\n| render piechart\",\"size\":0,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 5\"}],\"fromTemplateId\":\"sentinel-SquadraTechnologiesSecRMM\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=SquadraTechnologiesSecRMMWorkbook; logoFileName=SquadraTechnologiesLogo.svg; description=This workbook gives an overview of security data for removable storage activity such as USB thumb drives and USB connected mobile devices.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Squadra Technologies SecRMM - USB removable storage security; templateRelativePath=SquadraTechnologiesSecRMM.json; subtitle=; provider=Squadra Technologies}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Squadra Technologies SecRmm",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Squadra Technologies"
+                },
+                "support": {
+                  "name": "Squadra Technologies",
+                  "tier": "Partner",
+                  "link": "https://www.squadratechnologies.com/Contact.aspx"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "secRMM_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "SquadraTechnologiesSecRmm",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Squadra Technologies SecRmm",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Squadra Technologies"
+        },
+        "support": {
+          "name": "Squadra Technologies",
+          "tier": "Partner",
+          "link": "https://www.squadratechnologies.com/Contact.aspx"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-09",
+        "providers": [
+          "Squadra Technologies"
+        ],
+        "categories": {
+          "domains": [
+            "Security – Information Protection",
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

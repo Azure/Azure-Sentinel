@@ -21,7 +21,30 @@ Once deployment is complete, you will need to authorize each connection.
  * For Azure Log Analytics Data Collector,  you will need to add the workspace ID and Key
 You can now edit the playbook in Logic apps.
 
-## Instructions for templatizing a playbook
+## Instructions for templatizing a playbook  
+## Option 1: Azure Logic App/Playbook ARM Template Generator  
+1. Download tool and run the PowerShell script  
+   [![Download](./Download.png)](https://aka.ms/Playbook-ARM-Template-Generator)  
+   
+2. Extract the folder and open "Playbook_ARM_Template_Generator.ps1" either in Visual Studio Code/Windows PowerShell/PowerShell Core
+
+   **Note**  
+   The script runs from the user's machine. You must allow PowerShell script execution. To do so, run the following command:
+   
+   ```PowerShell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass  
+   ```  
+3. Script prompts you to enter your Azure Tenant Id
+
+4. You are prompted to authenticate with credentials, once the user is authenticated, you will be prompted to choose 
+	- Subscription	
+	- Playbooks
+
+5.	After selecting playbooks, script prompts to select location on your local drive to save ARM Template  
+   > Note: Tool converts microsoftsentinel connections to MSI during export  
+
+## Option 2: Manual  
+
 Once you have created a playbook that you want to export to share, go to the Logic App resource in Azure.
 > Note: this is the generic instructions there may be other steps depending how complex or what connectors are used for the playbook.
 1. Click **Export Template** from the resource menu in Azure Portal.

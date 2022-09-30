@@ -1,0 +1,123 @@
+Parser:
+  Title: Process Terminate Event ASIM parser for Microsoft Defender for IoT
+  Version: '0.2.0'
+  LastUpdated: Apr 30, 2022
+Product:
+  Name: Microsoft Defender for IoT
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+    This ASIM parser supports filtering and normalizing Microsoft Defender for IoT events to the ASIM Process Event normalized schema. 
+ParserName: vimProcessTerminateMD4IoT
+EquivalentBuiltInParser: _Im_ProcessTerminate_MD4IoT
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let ProcessEvents_MD4IoT=()
+    {
+      SecurityIoTRawEvent 
+      | where RawEventName == "Process" and EventDetails has_cs 'EXIT'
+      // --------------------------------------------------------------------------------------
+        | where
+        (isnull(starttime)   or TimeGenerated >= starttime )
+        and (isnull(endtime) or TimeGenerated <= endtime )
+        and not(disabled)
+        and (array_length(dvcipaddr_has_any_prefix)==0)
+        and (array_length(actingprocess_has_any)==0 ) 
+        and (array_length(parentprocess_has_any)==0)  
+        and (eventtype=='*' or eventtype=='ProcessTerminated')
+        and (array_length(commandline_has_any)==0 or EventDetails has_any (commandline_has_any)) 
+        and (array_length(commandline_has_all)==0 or EventDetails has_all (commandline_has_all)) 
+        and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventDetails, commandline_has_any_ip_prefix) ) 
+        and (array_length(targetprocess_has_any)==0 or EventDetails has_any (targetprocess_has_any)) 
+        and (actorusername=='*' or EventDetails has actorusername)  
+        and (array_length(dvcname_has_any)==0 or DeviceId has_any (dvcname_has_any))   
+      // --------------------------------------------------------------------------------------
+      | extend
+        EventDetails = todynamic(EventDetails)
+      | where tostring(EventDetails.EventType) == 'EXIT'
+      | extend // required for postfilterring
+        DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"), // Intermediate fix
+        TargetProcessCommandLine = coalesce (tostring(EventDetails.Commandline), tostring(EventDetails.Executable)), 
+        TargetProcessName = coalesce (tostring(EventDetails.Executable), split(EventDetails.Commandline," ")[0])
+      | extend // required for postfilterring
+        ActorUsername = iff (DvcOs == "Windows", tostring(EventDetails.UserName), "")
+      // --------------------------------------------------------------------------------------
+      | where (array_length(commandline_has_any)==0 or TargetProcessCommandLine has_any (commandline_has_any)) 
+        and (array_length(commandline_has_all)==0 or TargetProcessCommandLine has_all (commandline_has_all)) 
+        and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(TargetProcessCommandLine, commandline_has_any_ip_prefix) ) 
+        and (array_length(targetprocess_has_any)==0 or TargetProcessName has_any (targetprocess_has_any)) 
+        and (actorusername=='*' or ActorUsername has actorusername)  
+      // --------------------------------------------------------------------------------------
+      | extend
+        EventOriginalUid = tostring(EventDetails.OriginalEventId), 
+        EventCount = toint(EventDetails.HitCount), 
+        EventProduct = 'Azure Defender for IoT', 
+        EventVendor = 'Microsoft', 
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'ProcessEvent', 
+        EventStartTime = todatetime(EventDetails.TimestampUTC), 
+        EventEndTime = todatetime(TimeGenerated), 
+        EventType = 'ProcessTerminated', 
+        EventSubType = tostring(EventDetails.EventType),
+        EventResult = 'Success', 
+        TargetProcessId = tostring(EventDetails.ProcessId), 
+        ActorUsernameType = iif (DvcOs == "Windows", "Windows", "Simple"), 
+        ActingProcessId = iff (DvcOs == "Windows", tostring(EventDetails.ParentProcessId), "") 
+      | project-rename
+          DvcHostname = DeviceId,
+          EventProductVersion = AgentVersion, // Not available in Windows
+        _ResourceId = AssociatedResourceId, 
+        _SubscriptionId = AzureSubscriptionId 
+      | extend 
+          // -- aliases
+        User = ActorUsername, 
+        CommandLine = TargetProcessCommandLine, 
+        Process = TargetProcessName, 
+        Dvc = DvcHostname 
+      };
+      ProcessEvents_MD4IoT

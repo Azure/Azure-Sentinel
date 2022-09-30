@@ -1,7 +1,7 @@
 Parser:
-  Title: Process Create Event ASIM parser for Sysmon for Linux
-  Version: '0.2.1'
-  LastUpdated: Feb 23, 2022
+  Title: Process Create Event ASIM filtering parser for Sysmon for Linux
+  Version: '0.3.0'
+  LastUpdated: Apr 30, 2022
 Product:
   Name: Sysmon for Linux
 Normalization:
@@ -11,13 +11,70 @@ References:
 - Title: ASIM Process Schema
   Link: https://aka.ms/ASimProcessEventDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 Description: | 
-  This ASIM parser supports normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema. 
+  This ASIM parser supports filtering and normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema. 
 ParserName: vimProcessCreateLinuxSysmon
+EquivalentBuiltInParser: _Im_ProcessCreate_LinuxSysmon
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: | 
     let ParsedProcessEvent=(){
-        Syslog 
+        Syslog
+        // --------------------------------------------------------------------------------------
+        | where
+        (isnull(starttime)   or TimeGenerated >= starttime )
+        and (isnull(endtime) or TimeGenerated <= endtime )
+        and not(disabled)
+        and (eventtype=='*' or eventtype=='ProcessCreated')
+        and (array_length(commandline_has_all)==0 or SyslogMessage has_all (commandline_has_all)) 
+        and (array_length(commandline_has_any)==0 or SyslogMessage has_any (commandline_has_any)) 
+        and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, commandline_has_any_ip_prefix) ) 
+        and (array_length(actingprocess_has_any)==0 or SyslogMessage has_any (actingprocess_has_any)) 
+        and (array_length(targetprocess_has_any)==0 or SyslogMessage has_any (targetprocess_has_any)) 
+        and (array_length(parentprocess_has_any)==0)  /// ????
+        and (targetusername=='*' or SyslogMessage has targetusername)  
+        and (array_length(dvcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(HostIP,dvcipaddr_has_any_prefix) )
+        and (array_length(dvcname_has_any)==0 or SyslogMessage has_any (dvcname_has_any))   
+        // --------------------------------------------------------------------------------------
         | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>1</EventID>')
         | parse SyslogMessage with 
                 *
@@ -34,6 +91,11 @@ ParserQuery: |
                 '</Data><Data Name="Description">'Description
                 '</Data><Data Name="Product">'Product
                 '</Data><Data Name="Company">'Company'</Data>' *
+        // --------------------------------------------------------------------------------------
+        | where 
+            (array_length(dvcname_has_any)==0 or SysmonComputer has_any (dvcname_has_any))
+            and (array_length(targetprocess_has_any)==0 or Image has_any (targetprocess_has_any))
+        // --------------------------------------------------------------------------------------
         | extend  OriginalFileName = extract (@'"OriginalFileName">([^<]+)<',1,SyslogMessage) // this field exists in sysmon version 10.42 and above - using extact to avoid parsing failure
         | parse SyslogMessage with *
                 '<Data Name="CommandLine">'CommandLine'</Data>'
@@ -48,6 +110,14 @@ ParserQuery: |
                 '}</Data><Data Name="ParentProcessId">'ParentProcessId:string
                 '</Data><Data Name="ParentImage">'ParentImage
                 '</Data><Data Name="ParentCommandLine">'ParentCommandLine '</Data>'*
+        // --------------------------------------------------------------------------------------
+        | where 
+            (array_length(commandline_has_all)==0 or CommandLine has_all (commandline_has_all))
+        and (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any)) // 
+        and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix) )
+        and (array_length(actingprocess_has_any)==0 or ParentImage has_any (actingprocess_has_any))
+        and (targetusername=='*' or User has targetusername)
+        // --------------------------------------------------------------------------------------
         | parse SyslogMessage with *'<Data Name="ParentUser">'ActorUsername '</Data>' *// this field appears in newer versions of Sysmon 
         | extend    TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
                     TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
@@ -62,6 +132,7 @@ ParserQuery: |
                     EventCount = int(1),
                     EventVendor = "Microsoft",
                     EventSchemaVersion = "0.1.0",
+                    EventSchema = 'ProcessEvent',
                     EventProduct = "Sysmon for Linux",
                     EventResult = 'Success',
                     EventOriginalUid = tostring(EventRecordId),

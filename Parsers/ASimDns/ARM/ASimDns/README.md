@@ -1,6 +1,6 @@
 # Source agnostic ASIM Dns Normalization Parser
 
-This template deploys the ASIM Dns schema parser for Source agnostic.
+ARM template for ASIM Dns schema parser for Source agnostic.
 
 This ASIM parser supports normalizing DNS activity logs from all supported sources to the ASIM DNS activity normalized schema.
 
