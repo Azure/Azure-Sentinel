@@ -4,10 +4,13 @@ description: |
   'Identifies a match across various data feeds for domains IOCs related to the Barium activity group.
    References: https://www.justice.gov/opa/pr/seven-international-cyber-defendants-including-apt41-actors-charged-connection-computer'
 severity: High 
-requiredDataConnectors: 
-  - connectorId: DNS 
-    dataTypes: 
-      - DnsEvents 
+requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
   - connectorId: AzureMonitor(VMInsights)  
     dataTypes: 
       - VMConnection 
@@ -19,7 +22,32 @@ requiredDataConnectors:
       - CommonSecurityLog 
   - connectorId: MicrosoftThreatProtection
     dataTypes: 
-      - DeviceNetworkEvents 
+      - DeviceNetworkEvents
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
+tags:
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 queryFrequency: 1d 
 queryPeriod: 1d 
 triggerOperator: gt 
@@ -98,11 +126,13 @@ query:  |
   | where DNSName in~ (DomainNames) 
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress =  DestinationIP 
   ), 
-  (DnsEvents  
-  | extend DNSName = Name 
-  | where isnotempty(DNSName) 
-  | where DNSName  in~ (DomainNames) 
-  | extend IPAddress =  ClientIP 
+  (_Im_Dns (domain_has_any=DomainNames)
+  | extend DNSName = DnsQuery 
+  | extend IPAddress =  SrcIpAddr, Computer = Dvc
+  ), 
+  (_Im_WebSession (url_has_any=DomainNames)
+  | extend DNSName = tostring(parse_url(Url)["Host"])
+  | extend IPAddress =  SrcIpAddr, Computer = Dvc
   ), 
   (VMConnection  
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' * 
@@ -116,6 +146,15 @@ query:  |
   | where RemoteUrl  in~ (DomainNames)  
   | extend IPAddress = RemoteIP 
   | extend Computer = DeviceName 
+  ),
+  (AzureDiagnostics 
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallApplicationRule"
+  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+  | where isnotempty(DestinationHost)
+  | where DestinationHost has_any (DomainNames)  
+  | extend DNSName = DestinationHost 
+  | extend IPAddress = SourceHost
   ) 
   ) 
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress 
@@ -132,3 +171,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
+version: 1.6.1
+kind: Scheduled

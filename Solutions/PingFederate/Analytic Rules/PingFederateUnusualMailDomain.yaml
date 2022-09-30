@@ -1,0 +1,44 @@
+id: dc79de7d-2590-4852-95fb-f8e02b34f4da
+name: Ping Federate - Unusual mail domain.
+description: |
+  'Detects unusual mail domain in authentication requests.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: PingFederate
+    dataTypes:
+      - PingFederateEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let known_domains = 
+  PingFederateEvent
+  | where TimeGenerated between (ago(14d) .. (1d))
+  | extend email = extract(@'email=(.*?),.*', 1, AdditionalExtensions)
+  | extend m_domain = extract(@'@(.*)', 1, email)
+  | where isnotempty(m_domain)
+  | summarize makeset(m_domain);
+  PingFederateEvent
+  | extend email = extract(@'email=(.*?),.*', 1, AdditionalExtensions)
+  | extend m_domain = extract(@'@(.*)', 1, email)
+  | where isnotempty(m_domain)
+  | where m_domain !in (known_domains)
+  | extend AccountCustomEntity = DstUserName
+  | extend IpCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpCustomEntity
+version: 1.0.0
+kind: Scheduled

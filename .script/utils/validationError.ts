@@ -30,3 +30,17 @@ export class WorkbookTemplatesValidationError extends Error implements Validatio
     super(message);
   }
 }
+
+export class PlaybookValidationError extends Error implements ValidationError {
+  public name = "PlaybookValidationError";
+
+  constructor(message?: string) {
+    super(message);
+  }
+}
+export class SampleDataValidationError extends Error implements ValidationError {
+  public name = "SampleDataValidationError";
+  constructor(message?: string) {
+    super(message);
+  }
+}

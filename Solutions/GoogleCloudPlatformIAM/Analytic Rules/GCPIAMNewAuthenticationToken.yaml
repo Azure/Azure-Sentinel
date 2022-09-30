@@ -1,0 +1,37 @@
+id: 80e4db30-5636-4fbd-8816-24c3ded8d243
+name: GCP IAM - New Authentication Token for Service Account
+description: |
+  'Detects when new authentication token is created for service account.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPIAMDataConnector
+    dataTypes:
+      - GCP_IAM
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1550
+query: |
+  GCP_IAM
+  | where PayloadMethodname =~ 'google.iam.admin.v1.GenerateAccessToken'
+  | extend result = parse_json(todynamic(PayloadAuthorizationinfo))[0]['granted']
+  | where result =~ 'true'
+  | extend service_account = extract(@'serviceAccounts\/(.*?)@', 1, PayloadResponseName)
+  | project-away result
+  | extend timestamp = TimeGenerated, AccountCustomEntity = service_account, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

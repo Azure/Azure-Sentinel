@@ -1,0 +1,982 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP Nested Remediation - Master Playbook",
+        "description": "This playbook checks if malicious IP address is blocked or unblocked by Security Policy Rule for each of its nested playbooks.",
+        "mainSteps": [
+            "1. Fetches a list of potentially malicious IP addresses.",
+            "2. Each nested playbook receives the list of IP addresses and performs respective defined automated actions on it.",
+            "3. Response from individual playbooks are returned to master playbook for incident comment. "
+        ],
+        "prerequisites": [
+            "At least one of the below mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group. Capture the name of all deployed playbooks during deployment.",
+            "- AzureFirewall-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for Azure Firewall.",
+            "- Forcepoint-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for Forcepoint.",
+            "- Fortinet-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for Fortinet.",
+            "- Meraki-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for Meraki.",
+            "- PaloAlto-PAN-OS-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for Palo Alto PAN-OS.",
+            "- CiscoASA-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for PaloAlto.",
+            "- CiscoFirepower-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for PaloAlto.",
+            "- CiscoUmbrella-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for PaloAlto.",
+            "- F5-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for PaloAlto.",
+            "- MDE-BlockIP-Nested-Remediation is a nested playbook that handles remidiation for PaloAlto."
+        ],
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": [ "IP" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "MasterPlaybookName": {
+            "defaultValue": "MasterPlaybook_IP_Remidiation",
+            "type": "String",
+            "metadata": {
+                "description": "Enter name for master playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "AzureFirewallPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for Azure Firewall playbook without spaces"
+            }
+        },
+        "FortinetPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for Fortinet playbook without spaces"
+            }
+        },
+        "ForcepointPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for Forcepoint playbook without spaces"
+            }
+        },
+        "CiscoMerakiPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for Cisco Meraki playbook without spaces"
+            }
+        },
+        "PaloAltoPAN-OSPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for PaloAlto PAN-OS playbook without spaces"
+            }
+        },
+        "CiscoASAPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for CiscoASA playbook without spaces"
+            }
+        },
+        "CiscoFirepowerPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for Cisco Firepower playbook without spaces"
+            }
+        },
+        "CiscoUmbrellaPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for Cisco Umbrella playbook without spaces"
+            }
+        },
+        "F5-BigIPPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for F5-BigIP playbook without spaces"
+            }
+        },
+        "MDEPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for MDE playbook without spaces"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentienl-',parameters('MasterPlaybookName'))]",
+        "Defaultplaybookname": "MSDefaultNestedPlaybook",
+        "ForcepointID": "[if(not(empty(parameters('ForcepointPlaybookName'))),parameters('ForcepointPlaybookName'),variables('Defaultplaybookname'))]",
+        "FortinetID": "[if(not(empty(parameters('FortinetPlaybookName'))),parameters('Fortine`tPlaybookName'),variables('Defaultplaybookname'))]",
+        "AzureFirewallID": "[if(not(empty(parameters('AzureFirewallPlaybookName'))),parameters('AzureFirewallPlaybookName'),variables('Defaultplaybookname'))]",
+        "MerakiID": "[if(not(empty(parameters('CiscoMerakiPlaybookName'))),parameters('CiscoMerakiPlaybookName'),variables('Defaultplaybookname'))]",
+        "PANOSID": "[if(not(empty(parameters('PaloAltoPAN-OSPlaybookName'))),parameters('PaloAltoPAN-OSPlaybookName'),variables('Defaultplaybookname'))]",
+        "CiscoASAID": "[if(not(empty(parameters('CiscoASAPlaybookName'))),parameters('CiscoASAPlaybookName'),variables('Defaultplaybookname'))]",
+        "CiscoFirepowerID": "[if(not(empty(parameters('CiscoFirepowerPlaybookName'))),parameters('CiscoFirepowerPlaybookName'),variables('Defaultplaybookname'))]",
+        "CiscoUmbrellaID": "[if(not(empty(parameters('CiscoUmbrellaPlaybookName'))),parameters('CiscoUmbrellaPlaybookName'),variables('Defaultplaybookname'))]",
+        "F5-BigIPID": "[if(not(empty(parameters('F5-BigIPPlaybookName'))),parameters('F5-BigIPPlaybookName'),variables('Defaultplaybookname'))]",
+        "MDEID": "[if(not(empty(parameters('MDEPlaybookName'))),parameters('MDEPlaybookName'),variables('Defaultplaybookname'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2017-07-01",
+            "condition": "[or(empty(parameters('ForcepointPlaybookName')),empty(parameters('AzureFirewallPlaybookName')),empty(parameters('CiscoMerakiPlaybookName')),empty(parameters('FortinetPlaybookName')),empty(parameters('PaloAltoPAN-OSPlaybookName')))]",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('Defaultplaybookname')]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Response": {
+                            "runAfter": {},
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            },
+            "type": "Microsoft.Logic/workflows"
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('MasterPlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Logic/workflows', variables('Defaultplaybookname'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Azure_Firewall_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_Azure_Firewall": {
+                                    "runAfter": {
+                                        "Azure-Firewall-Block-IP-to-IP-Group": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Azure-Firewall-Block-IP-to-IP-Group')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_Azure_Firewall_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_Azure_Firewall": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('Azure-Firewall-Block-IP-to-IP-Group')['statusCode']"
+                                    }
+                                },
+                                "Azure-Firewall-Block-IP-to-IP-Group": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('AzureFirewallID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Condition_to_check_any_one_of_the_playbook_failed_before_closing_the_incident": {
+                            "actions": {
+                                "Update_incident": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "classification": {
+                                                "ClassificationAndReason": "TruePositive - SuspiciousActivity"
+                                            },
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "status": "Closed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_success_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "or": [
+                                    {
+                                        "lessOrEquals": [
+                                            "@length(body('Filter_success_status_code'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Condition to check playbook status variable has value"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Filter_success_status_code": {
+                            "runAfter": {
+                                "Azure_Firewall_Scope": [
+                                    "Succeeded"
+                                ],
+                                "Forcepoint_Scope": [
+                                    "Succeeded"
+                                ],
+                                "Fortinet_FortiGate_Scope": [
+                                    "Succeeded"
+                                ],
+                                "Meraki_Scope": [
+                                    "Succeeded"
+                                ],
+                                "PAN-OS_Scope": [
+                                    "Succeeded"
+                                ],
+                                "CiscoASA_Scope": [
+                                    "Succeeded"
+                                ],
+                                "CiscoFirepower_Scope": [
+                                    "Succeeded"
+                                ],
+                                "CiscoUmbrella_Scope": [
+                                    "Succeeded"
+                                ],
+                                "F5-BigIP_Scope": [
+                                    "Succeeded"
+                                ],
+                                "MDE_Scope": [
+                                    "Succeeded"
+                                ]
+
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@variables('StatusCodes')",
+                                "where": "@not(equals(item(), 200))"
+                            }
+                        },
+                        "Forcepoint_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_Forcepoint": {
+                                    "runAfter": {
+                                        "Forcepoint-Block-IP-Address": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Forcepoint-Block-IP-Address')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_Forcepoint_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_Forcepoint": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('Forcepoint-Block-IP-Address')['statusCode']"
+                                    }
+                                },
+                                "Forcepoint-Block-IP-Address": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('ForcepointID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Fortinet_FortiGate_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_Fortinet": {
+                                    "runAfter": {
+                                        "Fortinet-FortiGate-Block-IP-Address": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Fortinet-FortiGate-Block-IP-Address')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_Fortinet_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_Fortinet": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('Fortinet-FortiGate-Block-IP-Address')['statusCode']"
+                                    }
+                                },
+                                "Fortinet-FortiGate-Block-IP-Address": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('FortinetID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Initialize_variable_for_playbook_status_code": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "StatusCodes",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To store playbook status"
+                        },
+                        "Meraki_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_Meraki": {
+                                    "runAfter": {
+                                        "Meraki-Block-IP-Address": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Meraki-Block-IP-Address')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_Meraki_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_Meraki": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('Meraki-Block-IP-Address')['statusCode']"
+                                    }
+                                },
+                                "Meraki-Block-IP-Address": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('MerakiID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "PAN-OS_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_PaloAlto_PAN-OS": {
+                                    "runAfter": {
+                                        "PaloAlto-PAN-OS-Block-IP-Address": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('PaloAlto-PAN-OS-Block-IP-Address')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_PAN-OS_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_PaloAlto_PAN-OS": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('PaloAlto-PAN-OS-Block-IP-Address')['statusCode']"
+                                    }
+                                },
+                                "PaloAlto-PAN-OS-Block-IP-Address": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('PANOSID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "CiscoASA_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_CiscoASA": {
+                                    "runAfter": {
+                                        "CiscoASA": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('CiscoASA')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_CiscoASA_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_CiscoASA": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('CiscoASA')['statusCode']"
+                                    }
+                                },
+                                "CiscoASA": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('CiscoASAID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "CiscoFirepower_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_CiscoFirepower": {
+                                    "runAfter": {
+                                        "CiscoFirepower": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('CiscoFirepower')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_CiscoFirepower_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_CiscoFirepower": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('CiscoFirepower')['statusCode']"
+                                    }
+                                },
+                                "CiscoFirepower": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('CiscoFirepowerID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "CiscoUmbrella_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_CiscoUmbrella": {
+                                    "runAfter": {
+                                        "CiscoUmbrella": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('CiscoUmbrella')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_CiscoUmbrella_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_CiscoUmbrella": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('CiscoUmbrella')['statusCode']"
+                                    }
+                                },
+                                "CiscoUmbrella": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('CiscoUmbrellaID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "F5-BigIP_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_F5-BigIP": {
+                                    "runAfter": {
+                                        "F5-BigIP": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('F5-BigIP')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_F5-BigIP_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_F5-BigIP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('F5-BigIP')['statusCode']"
+                                    }
+                                },
+                                "F5-BigIP": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('F5-BigIPID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "MDE_Scope": {
+                            "actions": {
+                                "Add_comment_to_incident_for_MDE": {
+                                    "runAfter": {
+                                        "MDE": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('MDE')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Append_MDE_status_code": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_for_MDE": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "StatusCodes",
+                                        "value": "@outputs('MDE')['statusCode']"
+                                    }
+                                },
+                                "MDE": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('MDEID'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_playbook_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

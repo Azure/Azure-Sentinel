@@ -1,7 +1,7 @@
 <img src="logic_app_logo.png" alt="LogicApps Logo" width="350" height="200">
 
 ## About
-This repo contains sample security playbooks for security automation, orchestration and response (SOAR). Each folder contains a security playbook ARM template that uses Microsoft Azure Sentinel trigger.
+This repo contains sample security playbooks for security automation, orchestration and response (SOAR). Each folder contains a security playbook ARM template that uses Microsoft Sentinel trigger.
 
 ## Instructions for deploying a custom template
 After selecting a playbook, in the Azure portal:
@@ -12,7 +12,7 @@ After selecting a playbook, in the Azure portal:
 5. Fill in needed data and click **Purchase**
 
 Once deployment is complete, you will need to authorize each connection.
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
@@ -21,7 +21,30 @@ Once deployment is complete, you will need to authorize each connection.
  * For Azure Log Analytics Data Collector,  you will need to add the workspace ID and Key
 You can now edit the playbook in Logic apps.
 
-## Instructions for templatizing a playbook
+## Instructions for templatizing a playbook  
+## Option 1: Azure Logic App/Playbook ARM Template Generator  
+1. Download tool and run the PowerShell script  
+   [![Download](./Download.png)](https://aka.ms/Playbook-ARM-Template-Generator)  
+   
+2. Extract the folder and open "Playbook_ARM_Template_Generator.ps1" either in Visual Studio Code/Windows PowerShell/PowerShell Core
+
+   **Note**  
+   The script runs from the user's machine. You must allow PowerShell script execution. To do so, run the following command:
+   
+   ```PowerShell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass  
+   ```  
+3. Script prompts you to enter your Azure Tenant Id
+
+4. You are prompted to authenticate with credentials, once the user is authenticated, you will be prompted to choose 
+	- Subscription	
+	- Playbooks
+
+5.	After selecting playbooks, script prompts to select location on your local drive to save ARM Template  
+   > Note: Tool converts microsoftsentinel connections to MSI during export  
+
+## Option 2: Manual  
+
 Once you have created a playbook that you want to export to share, go to the Logic App resource in Azure.
 > Note: this is the generic instructions there may be other steps depending how complex or what connectors are used for the playbook.
 1. Click **Export Template** from the resource menu in Azure Portal.
@@ -49,7 +72,7 @@ Once you have created a playbook that you want to export to share, go to the Log
     [concat('<connectorname>-', parameters('PlaybookName'))]
 ```
 
-* For example, if you are using Azure Active Directory and Azure Sentinel connections in the playbook, then create two variables with actual connection names. The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
+* For example, if you are using Azure Active Directory and Microsoft Sentinel connections in the playbook, then create two variables with actual connection names. The variables will be the connection names.  Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
 
 ```json
     "variables": {

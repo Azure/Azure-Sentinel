@@ -1,0 +1,54 @@
+id: 40a98355-0e52-479f-8c91-4ab659cba878
+name: Zscaler - Shared ZPA session
+description: |
+  'Detects shared ZPA session.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: ZscalerPrivateAccess
+    dataTypes:
+      - ZPAEvent
+queryFrequency: 1h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1133
+query: |
+  let open_sessions =
+  ZPAEvent
+  | where DvcAction == 'open'
+  | summarize timestampstart = min(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId
+  | sort by timestampstart asc;
+  let closed_sessions =
+  ZPAEvent
+  | where TimeGenerated > ago(1h)
+  | where DvcAction == 'close'
+  | summarize timestampend = max(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId
+  | sort by timestampend asc;
+  open_sessions
+  | join (closed_sessions) on DstUserName
+  | sort by DstUserName, timestampstart
+  | extend prev_session_closetime = prev(timestampend,1)
+  | extend prev_session_starttime = prev(timestampstart,1)
+  | extend PreviousSrcIpAddr = prev(SrcIpAddr, 1)
+  | extend prev_sessionuser = prev(DstUserName, 1) 
+  | where DstUserName == prev_sessionuser
+  | where SrcIpAddr != PreviousSrcIpAddr
+  | where prev_session_closetime > timestampstart
+  | project DstUserName, SrcIpAddr, PreviousSrcIpAddr
+  | extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

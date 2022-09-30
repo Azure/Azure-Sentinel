@@ -6,9 +6,9 @@ description: |
    https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html?1'
 severity: High 
 requiredDataConnectors: 
-  - connectorId: DNS 
-    dataTypes: 
-      - DnsEvents 
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
   - connectorId: AzureMonitor(VMInsights)  
     dataTypes: 
       - VMConnection 
@@ -24,6 +24,25 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: InfobloxNIOS
+    dataTypes: 
+      - Syslog
+  - connectorId: GCPDNSDataConnector
+    dataTypes: 
+      - GCP_DNS_CL
+  - connectorId: NXLogDnsLogs
+    dataTypes: 
+      - NXLog_DNS_Server_CL
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes: 
+      - Cisco_Umbrella_dns_CL
+  - connectorId: Corelight
+    dataTypes: 
+      - Corelight_CL
+
 queryFrequency: 6h 
 queryPeriod: 6h 
 triggerOperator: gt 
@@ -35,8 +54,9 @@ relevantTechniques:
 tags:
   - Solorigate
   - NOBELIUM
+  - Schema: ASIMDns
+    SchemaVersion: 0.1.1
 query:  |  
-
   let domains = dynamic(["incomeupdate.com","zupertech.com","databasegalore.com","panhardware.com","avsvmcloud.com","digitalcollege.org","freescanonline.com","deftsecurity.com","thedoccloud.com","virtualdataserver.com","lcomputers.com","webcodez.com","globalnetworkissues.com","kubecloud.com","seobundlekit.com","solartrackingsystem.net","virtualwebdata.com"]);
   (union isfuzzy=true
   (CommonSecurityLog 
@@ -44,11 +64,9 @@ query:  |
     | where DNSName in~ (domains) or DestinationHostName has_any (domains) or RequestURL has_any(domains)
     | extend AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName, IPCustomEntity = SourceIP
     ),
-  (DnsEvents 
-    | extend DNSName = Name
-    | where isnotempty(DNSName)
-    | where DNSName in~ (domains)
-    | extend IPCustomEntity = ClientIP
+  (_Im_Dns (domain_has_any=domains)
+    | extend DNSName = DnsQuery
+    | extend IPCustomEntity = SrcIpAddr
     ),
   (VMConnection 
     | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
@@ -62,14 +80,6 @@ query:  |
     | extend DNSName = RemoteUrl
     | extend IPCustomEntity = RemoteIP 
     | extend HostCustomEntity = DeviceName 
-    ),
-  (AzureDiagnostics
-    | where ResourceType == "AZUREFIREWALLS"
-    | where Category == "AzureFirewallDnsProxy"
-    | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
-    | where Request_Name has_any (domains)  
-    | extend DNSName = Request_Name
-    | extend IPCustomEntity = ClientIP 
     ),
   (AzureDiagnostics 
     | where ResourceType == "AZUREFIREWALLS"
@@ -98,3 +108,5 @@ entityMappings:
     fieldMappings:
       - identifier: DomainName
         columnName: DNSName
+version: 1.4.1
+kind: Scheduled

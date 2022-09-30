@@ -1,0 +1,107 @@
+id: 87d5cd18-211d-4fd4-9b86-65d23fed87ea
+name: Azure AD Rare UserAgent App Sign-in
+description: |
+  This query establishes a baseline of the type of UserAgent (i.e. browser, office application, etc) that is typically used for a particular application by looking back for a number of days. 
+  It then searches the current day for any deviations from this pattern, i.e. types of UserAgents not seen before in combination with this application.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1036
+query: |
+  let minimumAppThreshold = 100;
+  let timeframe = 1d;
+  let lookback_timeframe= 7d;
+  let ExtractBrowserTypeFromUA=(ua:string) {
+      // Note: these are in a specific order since, for example, Edge contains "Chrome/" and "Edge/" strings.
+      case(
+          ua has "Edge/", dynamic({"AgentType": "Browser", "AgentName": "Edge"}),
+          ua has "Edg/", dynamic({"AgentType": "Browser", "AgentName": "Edge"}),
+          ua has "Trident/", dynamic({"AgentType": "Browser", "AgentName": "Internet Explorer"}),
+          ua has "Chrome/" and ua has "Safari/", dynamic({"AgentType": "Browser", "AgentName": "Chrome"}),
+          ua has "Gecko/" and ua has "Firefox/", dynamic({"AgentType": "Browser", "AgentName": "Firefox"}),
+          not(ua has "Mobile/") and ua has "Safari/" and ua has "Version/", dynamic({"AgentType": "Browser", "AgentName": "Safari"}),
+          ua startswith "Dalvik/" and ua has "Android", dynamic({"AgentType": "Browser", "AgentName": "Android Browser"}),
+          ua startswith "MobileSafari//", dynamic({"AgentType": "Browser", "AgentName": "Mobile Safari"}),
+          ua has "Mobile/" and ua has "Safari/" and ua has "Version/", dynamic({"AgentType": "Browser", "AgentName": "Mobile Safari"}),
+          ua has "Mobile/" and ua has "FxiOS/", dynamic({"AgentType": "Browser", "AgentName": "IOS Firefox"}),
+          ua has "Mobile/" and ua has "CriOS/", dynamic({"AgentType": "Browser", "AgentName": "IOS Chrome"}),
+          ua has "Mobile/" and ua has "WebKit/", dynamic({"AgentType": "Browser", "AgentName": "Mobile Webkit"}),
+          //
+          ua startswith "Excel/", dynamic({"AgentType": "OfficeApp", "AgentName": "Excel"}),
+          ua startswith "Outlook/", dynamic({"AgentType": "OfficeApp", "AgentName": "Outlook"}),
+          ua startswith "OneDrive/", dynamic({"AgentType": "OfficeApp", "AgentName": "OneDrive"}),
+          ua startswith "OneNote/", dynamic({"AgentType": "OfficeApp", "AgentName": "OneNote"}),
+          ua startswith "Office/", dynamic({"AgentType": "OfficeApp", "AgentName": "Office"}),
+          ua startswith "PowerPoint/", dynamic({"AgentType": "OfficeApp", "AgentName": "PowerPoint"}),
+          ua startswith "PowerApps/", dynamic({"AgentType": "OfficeApp", "AgentName": "PowerApps"}),
+          ua startswith "SharePoint/", dynamic({"AgentType": "OfficeApp", "AgentName": "SharePoint"}),
+          ua startswith "Word/", dynamic({"AgentType": "OfficeApp", "AgentName": "Word"}),
+          ua startswith "Visio/", dynamic({"AgentType": "OfficeApp", "AgentName": "Visio"}),
+          ua startswith "Whiteboard/", dynamic({"AgentType": "OfficeApp", "AgentName": "Whiteboard"}),
+          ua =~ "Mozilla/5.0 (compatible; MSAL 1.0)", dynamic({"AgentType": "OfficeApp", "AgentName": "Office Telemetry"}),
+          //
+          ua has ".NET CLR", dynamic({"AgentType": "Custom", "AgentName": "Dotnet"}),
+          ua startswith "Java/", dynamic({"AgentType": "Custom", "AgentName": "Java"}),
+          ua startswith "okhttp/", dynamic({"AgentType": "Custom", "AgentName": "okhttp"}),
+          ua has "Drupal/", dynamic({"AgentType": "Custom", "AgentName": "Drupal"}),
+          ua has "PHP/", dynamic({"AgentType": "Custom", "AgentName": "PHP"}),
+          ua startswith "curl/", dynamic({"AgentType": "Custom", "AgentName": "curl"}),
+          ua has "python-requests", dynamic({"AgentType": "Custom", "AgentName": "Python"}),
+          pack("AgentType","Other","AgentName", extract(@"^([^/]*)/",1,ua))
+      )
+  };
+  // Query to obtain 'simplified' user agents in a given timespan.
+  let QueryUserAgents = (start_time:timespan, end_time:timespan) {
+      union withsource=tbl_name AADNonInteractiveUserSignInLogs, SigninLogs
+      | where TimeGenerated >= ago(start_time)
+      | where TimeGenerated < ago(end_time)
+      | where ResultType == 0  // Only look at succesful logins
+      | extend ParsedUserAgent=ExtractBrowserTypeFromUA(UserAgent)
+      | extend UserAgentType=tostring(ParsedUserAgent.AgentType)
+      | extend UserAgentName=tostring(ParsedUserAgent.AgentName)
+      //| extend SimpleUserAgent=strcat(UserAgentType,"_",UserAgentName)
+      | extend SimpleUserAgent=UserAgentType
+      | where not(isempty(UserAgent))
+      | where not(isempty(AppId))
+  };
+  // Get baseline usage per application.
+  let BaselineUserAgents=materialize(
+      QueryUserAgents(lookback_timeframe+timeframe, timeframe)
+      | summarize RequestCount=count() by AppId, AppDisplayName, SimpleUserAgent
+  );
+  let BaselineSummarizedAgents=(
+      BaselineUserAgents
+      | summarize BaselineUAs=make_set(SimpleUserAgent),BaselineRequestCount=sum(RequestCount) by AppId, AppDisplayName
+  );
+  QueryUserAgents(timeframe, 0d)
+  | summarize count() by AppId, AppDisplayName, UserAgent, SimpleUserAgent
+  | join kind=leftanti BaselineUserAgents on AppId, AppDisplayName, SimpleUserAgent
+  | join BaselineSummarizedAgents on AppId, AppDisplayName
+  | where BaselineRequestCount > minimumAppThreshold // Search only for actively used applications.
+  // Get back full original requests.
+  | join QueryUserAgents(timeframe, 0d) on AppId, UserAgent
+  | project-away ParsedUserAgent, UserAgentName
+  | project-reorder TimeGenerated, AppDisplayName, UserPrincipalName, UserAgent, BaselineUAs
+  // Begin allow-list.
+  // End allow-list.
+  | summarize count() by UserPrincipalName, AppDisplayName, AppId, UserAgentType, SimpleUserAgent, UserAgent
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+version: 1.0.0
+kind: Scheduled

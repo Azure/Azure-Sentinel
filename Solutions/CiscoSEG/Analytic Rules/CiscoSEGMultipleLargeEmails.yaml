@@ -1,0 +1,37 @@
+id: 1399a9a5-6200-411e-8c34-ca5658754cf7
+name: Cisco SEG - Multiple large emails sent to external recipient
+description: |
+  'Detects possible data exfiltration.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoSEG
+    dataTypes:
+      - CiscoSEGEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+  let e_theshold = 3;
+  let s_threshold = 10000000;
+  CiscoSEGEvent
+  | where AdditionalFields[15]['ESAMsgSize'] > s_threshold
+  | where NetworkDirection =~ 'Outgoing'
+  | extend rec_domain = extract(@'@(.*)', 1, DstUserName)
+  | extend s_domain = extract(@'@(.*)', 1, SrcUserName)
+  | where s_domain != rec_domain
+  | summarize count() by SrcUserName
+  | where count_ >= e_theshold
+  | extend AccountCustomEntity = SrcUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

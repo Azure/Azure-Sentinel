@@ -1,0 +1,44 @@
+id: 9578ef7f-cbb4-4e9a-bd26-37c15c53b413
+name: Ping Federate - Unexpected authentication URL.
+description: |
+  'Detects unexpected authentication URL.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: PingFederate
+    dataTypes:
+      - PingFederateEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let known_domains = 
+  PingFederateEvent
+  | where TimeGenerated between (ago(14d) .. (1d))
+  | where isnotempty(DeviceCustomString1)
+  | extend url_parsed = parse_url(DeviceCustomString1)
+  | extend url_domain = extract(@'.*\.(.*\.[a-z]+)', 1, tostring(url_parsed.Host))
+  | summarize makeset(url_domain);
+  PingFederateEvent
+  | where isnotempty(DeviceCustomString1)
+  | extend url_parsed = parse_url(DeviceCustomString1)
+  | extend url_domain = extract(@'.*\.(.*\.[a-z]+)', 1, tostring(url_parsed.Host))
+  | where url_domain !in (known_domains)
+  | extend AccountCustomEntity = DstUserName
+  | extend IpCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpCustomEntity
+version: 1.0.0
+kind: Scheduled

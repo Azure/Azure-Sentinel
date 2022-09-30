@@ -1,0 +1,66 @@
+id: 90b7ac11-dd6c-4ba1-a99b-737061873859
+name: Awake Security - High Match Counts By Device
+description: This query searches for devices with unexpectedly large number of activity match.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AristaAwakeSecurity
+    dataTypes:
+      - CommonSecurityLog (AwakeSecurity)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: []
+query: |
+  CommonSecurityLog
+  | where DeviceVendor == "Arista Networks" and DeviceProduct == "Awake Security"
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), Models=make_set(Activity), ASPMatchURLs=make_set(DeviceCustomString2), SourceIPs=make_set(SourceIP),
+    DestinationIPs=make_set(DestinationIP), ModelMatchCount=sum(EventCount), MaxSeverity=max(toint(LogSeverity)) by SourceHostName
+  | where ModelMatchCount > 1000 and MaxSeverity > 2
+  | extend SeverityName=iff(MaxSeverity == 0, "Informational", iff(MaxSeverity < 5, "Low", iff(MaxSeverity < 8, "Medium", "High")))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: Awake Security - High Model Match Counts On Device {{SourceHostName}}
+  alertDescriptionFormat: |-
+    The following Awake model(s):
+
+    {{Models}}
+
+    matched {{ModelMatchCount}} activities, an unexpectedly large number. The destination IPs associated with these matches were:
+
+    {{DestinationIPs}}
+  alertTacticsColumnName: null
+  alertSeverityColumnName: SeverityName
+customDetails:
+  Matched_Models: Models
+  Matches_ASP_URLs: ASPMatchURLs
+  Device: SourceHostName
+  Matches_Count: ModelMatchCount
+  Matches_Max_Severity: MaxSeverity
+  Matches_Dest_IPs: DestinationIPs
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPs
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 3d
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - Device
+version: 1.0.0
+kind: Scheduled

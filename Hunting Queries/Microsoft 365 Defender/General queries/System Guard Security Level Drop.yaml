@@ -1,0 +1,30 @@
+id: 701bee2f-c4d9-4f72-be03-e6bb1314e71c
+name: System Guard Security Level Drop
+description: |
+  Goal: Find machines in the last N days where the SystemGuardSecurityLevel value NOW is less than it was BEFORE.
+  Step 1: Get a list of all security levels in the system where the level is not null.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+query: |
+  let SecurityLevels = DeviceEvents
+  | where Timestamp >= ago(7d)
+  | where ActionType == "DeviceBootAttestationInfo"
+  | extend AdditionalFieldData = parse_json(AdditionalFields)
+  | project DeviceId, Timestamp, SystemGuardSecurityLevel = toint(AdditionalFieldData.SystemGuardSecurityLevel), ReportId
+  | where isnotnull(SystemGuardSecurityLevel);
+  // Step 2: Get the *latest* record for *each* machine from the SecurityLevels table
+  let LatestLevelsPerMachine = SecurityLevels
+   // This is going to be the most recent event
+  | summarize arg_max(Timestamp, SystemGuardSecurityLevel) by DeviceId
+  | project DeviceId, LatestSystemGuardSecurityLevel=SystemGuardSecurityLevel, LatestEventTime=Timestamp;
+  // Step 3: Join the two tables together where the LatestSystemGuardSecurityLevel is LESS than the SystemGuardSecurityLevel 
+  let MachinesExhibitingSecurityLevelDrop = LatestLevelsPerMachine
+  | join (
+   SecurityLevels
+  ) on DeviceId
+  | project-away DeviceId1
+  | where LatestSystemGuardSecurityLevel < SystemGuardSecurityLevel 
+  | summarize arg_max(Timestamp, LatestSystemGuardSecurityLevel, SystemGuardSecurityLevel, LatestEventTime, ReportId) by DeviceId;
+  MachinesExhibitingSecurityLevelDrop

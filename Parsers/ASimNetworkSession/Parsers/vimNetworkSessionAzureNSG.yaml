@@ -1,0 +1,212 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Azure NSG flows
+  Version: '0.1.1'
+  LastUpdated: Jul 3rd, 2021
+Product:
+  Name: Azure NSG flows
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing and filtering Azure Azure Network Security Groups (NSG) flows to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionAzureNSG
+EquivalentBuiltInParser: _Im_NetworkSession_AzureNSG
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DvcActionLookup = datatable(FlowStatus_s:string, DvcAction:string, EventResult:string) [
+      'A', 'Allow', 'Success',
+      'D', 'Deny', 'Failure',
+  ];
+  let NetworkDirectionLookup = datatable(FlowDirection_s:string, NetworkDirection:string, isOutBound:bool) [
+      'I', 'Inbound', false,
+      'O', 'Outbound', true
+  ];
+  let NetworkProtocolLookup = datatable(L4Protocol_s:string, NetworkProtocol:string)[
+      'T', 'TCP',
+      'U', 'UDP'
+  ];
+  let parser = (
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null),
+        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
+        dstportnumber:int=int(null), 
+        hostname_has_any:dynamic=dynamic([]), 
+        dvcaction:dynamic=dynamic([]), 
+        eventresult:string='*', 
+        disabled:bool=false)
+  {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM1_s:string, VM2_s:string)) { 
+      T
+      | where
+        (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) 
+      | extend dataSrcIPs = strcat(SrcIP_s," ",SrcPublicIPs_s),
+               dataDstIPs = strcat(DestIP_s," ",DestPublicIPs_s)
+      | extend temp_isSrcMatch=has_any_ipv4_prefix(dataSrcIPs,src_or_any)
+             , temp_isDstMatch=has_any_ipv4_prefix(dataDstIPs,dst_or_any)
+      | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+          )
+      | where ASimMatchingIpAddr != "No match"
+      | extend temp_is_MatchSrcHostname = VM1_s has_any (hostname_has_any)
+              , temp_is_MatchDstHostname = VM2_s has_any (hostname_has_any)
+      | extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,"-",
+                                  temp_is_MatchSrcHostname and temp_is_MatchDstHostname, "Both",
+                                  temp_is_MatchSrcHostname, "SrcHostname",
+                                  temp_is_MatchDstHostname, "DstHostname",
+                                  "No match"
+                                )
+      | where ASimMatchingHostname != "No match"
+      | project-away temp_*
+      | lookup DvcActionLookup on FlowStatus_s
+      | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
+      | where (eventresult=='*' or EventResult == eventresult)
+    }; // prefilter ends
+    let AzureNetworkAnalytics = 
+      AzureNetworkAnalytics_CL
+      | where
+       (isnull(starttime) or TimeGenerated >= starttime)
+        and  (isnull(endtime) or TimeGenerated <= endtime)
+      | where not(disabled) and isnotempty(FlowType_s)
+      | lookup NetworkDirectionLookup on FlowDirection_s
+    ;
+    let AzureNetworkAnalyticsInbound =
+      AzureNetworkAnalytics
+      | where not(isOutBound)
+      | invoke prefilter()
+      | project-rename
+          DstMacAddr = MACAddress_s
+      | extend
+          DstBytes = tolong(OutboundBytes_d), // -- size fields seem not to be populated for inbound
+          DstPackets = tolong(OutboundPackets_d),
+          SrcBytes = tolong(InboundBytes_d),
+          SrcPackets = tolong(InboundPackets_d),
+          SrcInterfaceName = tostring(split(NIC_s, '/')[1]),
+          SrcGeoCountry = toupper(Country_s)
+      | extend hostelements=split(VM2_s,'/')
+      | extend 
+          DstFQDN = strcat(hostelements[0], @"\", hostelements[1]),
+          DstHostname = tostring(hostelements[1]),
+          DstDomain = tostring(hostelements[0]),
+          DstDomainType = "ResourceGroup"
+      | extend Hostname = DstHostname
+      | project-away hostelements, isOutBound
+    ;  
+    let AzureNetworkAnalyticsOutbound =
+      AzureNetworkAnalytics
+      | where isOutBound
+      | invoke prefilter()
+      | project-rename
+          SrcMacAddr = MACAddress_s
+      | extend
+          SrcBytes   = tolong(OutboundBytes_d), 
+          SrcPackets = tolong(OutboundPackets_d),
+          DstBytes   = tolong(InboundBytes_d),
+          DstPackets = tolong(InboundPackets_d),
+          DstInterfaceName = tostring(split(NIC_s, '/')[1]),
+          DstGeoCountry = toupper(Country_s)
+      | extend hostelements=split(VM1_s,'/')
+      | extend 
+          SrcFQDN = strcat(hostelements[0], @"\", hostelements[1]),
+          SrcHostname = tostring(hostelements[1]),
+          SrcDomain = tostring(hostelements[0]),
+          SrcDomainType = "ResourceGroup"
+      | extend Hostname = SrcHostname
+      | project-away hostelements, isOutBound
+    ;
+    union AzureNetworkAnalyticsInbound, AzureNetworkAnalyticsOutbound
+    | project-rename
+        Dvc = NSGList_s,
+        DvcSubscriptionId = Subscription_g,
+        EventEndTime = FlowEndTime_t,
+        EventStartTime = FlowStartTime_t,
+        NetworkApplicationProtocol = L7Protocol_s,
+        NetworkRuleName = NSGRule_s,
+        NetworkSessionId = ConnectionName_s,
+        EventOriginalSubType = FlowType_s
+    | extend
+        DstPortNumber = toint(DestPort_d),
+        EventProduct = 'NSGFlow',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion='0.2.3',
+        EventSeverity = 'Informational', //??
+        EventType = 'Flow',
+        EventVendor = 'Microsoft',
+        EventCount = toint(AllowedInFlows_d+DeniedInFlows_d+AllowedOutFlows_d+DeniedOutFlows_d),
+        NetworkDuration = toint((((EventEndTime - datetime(1970-01-01)) / 1s) - ((EventStartTime - datetime(1970-01-01)) / 1s )) * 1000),
+        Rule = NetworkRuleName,
+        SessionId = NetworkSessionId
+    | extend 
+        DstIpAddr = iff(isnotempty(DestIP_s),
+                        DestIP_s,
+                        split(DestPublicIPs_s, '|')[0]),
+        Duration = NetworkDuration,
+        NetworkBytes = tolong(DstBytes + SrcBytes),
+        NetworkPackets = tolong(DstPackets + SrcPackets),
+        SrcIpAddr = iff(isnotempty(SrcIP_s),
+                        SrcIP_s,
+                        split(SrcPublicIPs_s, '|')[0])
+    | extend
+        Dst = DstIpAddr,
+        IpAddr = SrcIpAddr,
+        Src = SrcIpAddr
+    | lookup NetworkProtocolLookup on L4Protocol_s
+    | project-keep
+        Src*,
+        Dst*,
+        Event*,
+        Dvc*,
+        Network*,
+        IpAddr,
+        Hostname,
+        Type,
+        Duration,
+        SessionId,
+        _ResourceId,
+        TimeGenerated,
+        ASim*
+    | project-away *_s
+  };
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

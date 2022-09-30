@@ -1,0 +1,37 @@
+id: 672e2846-4226-11ec-81d3-0242ac130003
+name: Zscaler - Unexpected update operation
+description: |
+  'Detects unexpected version of update operation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ZscalerPrivateAccess
+    dataTypes:
+      - ZPAEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  ZPAEvent
+  | where isnotempty(AuditOperationType)
+  | extend ExpectedVersion1 = extract(@'(expectedVersion":")([0-9]+)\.([0-9]+\.[0-9]+)', 2, AuditOldValue)
+  | extend ExpectedVersion2 = extract(@'(expectedVersion":")([0-9]+)\.([0-9]+\.[0-9]+)', 3, AuditOldValue)
+  | extend NewVersion1 = extract(@'("currentVersion":")([0-9]+)\.([0-9]+\.[0-9]+)', 2, AuditNewValue)
+  | extend NewVersion2 = extract(@'("currentVersion":")([0-9]+)\.([0-9]+\.[0-9]+)', 3, AuditNewValue)
+  | extend Comparision1 = iff(tolong(ExpectedVersion2) > tolong(NewVersion2), 'Unexpected version', 'Expected version')
+  | extend VersionCheck = iff(tolong(ExpectedVersion1) > tolong(NewVersion1), 'Unexpected version', Comparision1)
+  | project-away ExpectedVersion1, ExpectedVersion2, NewVersion1, NewVersion2, Comparision1
+  | extend ProcessCustomEntity = AuditOperationType
+entityMappings:
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessCustomEntity
+version: 1.0.0
+kind: Scheduled

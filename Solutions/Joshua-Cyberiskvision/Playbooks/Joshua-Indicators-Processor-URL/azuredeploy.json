@@ -1,0 +1,458 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Joshua Indicators Processor URL", 
+    "description": "Joshua Cyberiskvision provides two main use cases: Get Indicators and Alert Enrichment.",
+    "prerequisites": ["None"],
+    "lastUpdateTime": "2022-08-01T00:00:00.000Z", 
+    "mainSteps": ["- Triggered on a defined schedule", 
+      "- Reads the indicators from Joshua Cyberiskvision", 
+      "- Transforms the indicators to the appropriate tiIndicator JSON format", 
+      "- Uses the Batch action to send the indicators to the 'Joshua-Import-To-Sentinel'"
+    ], 
+    "entities": ["URL"], 
+    "tags": [], 
+    "postDeployment": ["None"],
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "cyberiskvision"
+    },
+    "releaseNotes": [
+    {
+      "version": "1.0.0",
+      "title": "Joshua Indicators Processor URL",
+      "notes": [
+        "Initial version"
+      ]
+    }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Joshua-Indicators-Processor-URL",
+      "metadata": {
+        "description": "Name of the Logic App."
+      }
+    },
+	"Import2SentinelPlaybookName": {
+    "defaultValue": "Joshua-Import-To-Sentinel",
+    "type": "string",
+		"metadata": {
+        "description": "Name of Joshua-Import-To-Sentinel Playbook"
+        }
+    },
+	 "LogicAppsCategory_Tag": {
+     "type": "string",
+     "defaultValue": "security"
+    },
+    "Joshua_API_URI": {
+      "type": "string",
+      "defaultValue": "https://api.cyberiskvision.com/external/azure-sentinel/ioc-feed",
+		"metadata": {
+        "description": "Joshua API Uniform Resource Identifiers URI"
+        }
+    },
+    "RecurrenceFrequency": {
+      "type": "string",
+      "defaultValue": "Hour"
+    },
+    "RecurrenceInterval": {
+      "type": "int",
+      "defaultValue": 24
+    },
+    "RecurrenceStartTime": {
+      "type": "string",
+      "defaultValue": "2021-12-16T06:00:00.000Z"
+    }
+  },
+  "variables": {},
+  "resources": [
+    { 
+	 "tags": {
+     "LogicAppsCategory": "[parameters('LogicAppsCategory_Tag')]"
+      },	
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+	  "location": "[resourceGroup().location]",
+      "dependsOn": [],
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "triggers": {
+            "Recurrence": {
+              "recurrence": {
+                "frequency": "[parameters('RecurrenceFrequency')]",
+                "interval": "[parameters('RecurrenceInterval')]",
+                "startTime": "[parameters('RecurrenceStartTime')]"
+              },
+              "evaluatedRecurrence": {
+                "frequency": "Hour",
+                "interval": 24,
+                "startTime": "2021-10-22T06:00:00.000Z"
+              },
+              "type": "Recurrence"
+            }
+          },
+          "actions": {
+            "Condition": {
+              "actions": {
+                "Until_2": {
+                  "actions": {
+                    "For_each_2": {
+                      "foreach": "@body('Select_2')",
+                      "actions": {
+                        "Joshua-Import-To-Sentinel_2": {
+                          "runAfter": {},
+                          "type": "SendToBatch",
+                          "inputs": {
+                            "batchName": "tiIndicators",
+                            "content": "@items('For_each_2')",
+                            "host": {
+                              "triggerName": "Batch_messages",
+                              "workflow": {
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Import2SentinelPlaybookName'))]"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Select_2": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Foreach"
+                    },
+                    "HTTP_-_Joshua_API_2": {
+                      "runAfter": {},
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "queries": {
+                          "apiKey": "@variables('apiKey')",
+                          "nextPageToken": "@variables('VARnextPageToken')",
+                          "size": "7000",
+                          "type": "url"
+                        },
+                        "uri": "[parameters('Joshua_API_URI')]"
+                      }
+                    },
+                    "Parse_JSON_array_of_Joshua_indicators_2": {
+                      "runAfter": {
+                        "HTTP_-_Joshua_API_2": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@body('HTTP_-_Joshua_API_2')",
+                        "schema": {
+                          "properties": {
+                            "nextPageToken": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "results": {
+                              "items": {
+                                "properties": {
+                                  "description": {
+                                    "type": "string"
+                                  },
+                                  "domainName": {
+                                    "type": "string"
+                                  },
+                                  "emailSenderAddress": {
+                                    "type": "string"
+                                  },
+                                  "fileHashType": {
+                                    "type": "string"
+                                  },
+                                  "fileHashValue": {
+                                    "type": "string"
+                                  },
+                                  "networkIPv4": {
+                                    "type": "string"
+                                  },
+                                  "threatType": {
+                                    "type": "string"
+                                  },
+                                  "timestamp": {
+                                    "type": "integer"
+                                  },
+                                  "tlpLevel": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "description",
+                                  "threatType",
+                                  "tlpLevel",
+                                  "timestamp"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      }
+                    },
+                    "Select_2": {
+                      "runAfter": {
+                        "Set_variable_2": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Select",
+                      "inputs": {
+                        "from": "@body('Parse_JSON_array_of_Joshua_indicators_2')?['results']",
+                        "select": {
+                        "action": "alert",
+                        "confidence": "100",
+                        "description": "@item()?['description']",
+                        "expirationDateTime": "@addDays(utcNow(),7)",
+                        "targetProduct": "Azure Sentinel",
+                        "threatType": "@item()?['threatType']",
+                        "timestamp": "@item()?['timestamp']",
+                        "tlpLevel": "@item()?['tlpLevel']",
+                        "url": "@item()?['url']",
+                        "vendorInformation": "AlmavivA"
+                        }
+                      }
+                    },
+                    "Set_variable_2": {
+                      "runAfter": {
+                        "Parse_JSON_array_of_Joshua_indicators_2": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VARnextPageToken",
+                        "value": "@{body('Parse_JSON_array_of_Joshua_indicators_2')?['nextPageToken']}"
+                      }
+                    }
+                  },
+                  "runAfter": {},
+                  "expression": "@equals(variables('VARnextPageToken'), '')",
+                  "limit": {
+                    "count": 60,
+                    "timeout": "PT2H"
+                  },
+                  "type": "Until"
+                }
+              },
+              "runAfter": {
+                "For_each": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@variables('VARnextPageToken')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "For_each": {
+              "foreach": "@body('Select')",
+              "actions": {
+                "Joshua-Import-To-Sentinel": {
+                  "runAfter": {},
+                  "type": "SendToBatch",
+                  "inputs": {
+                    "batchName": "tiIndicators",
+                    "content": "@items('For_each')",
+                    "host": {
+                      "triggerName": "Batch_messages",
+                      "workflow": {
+						"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Import2SentinelPlaybookName'))]"
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Select": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "HTTP_-_Joshua_API": {
+              "runAfter": {
+                "Initialize_variable_Paging": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "queries": {
+                  "apiKey": "@variables('apiKey')",
+                  "lastMinutes": "1400",
+                  "size": "7000",
+                  "type": "url"
+                },
+                "uri": "[parameters('Joshua_API_URI')]"
+              }
+            },
+            "Initialize_variable_Paging": {
+              "runAfter": {
+                "Joshua_apiKey": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "VARnextPageToken",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Joshua_apiKey": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "apiKey",
+                    "type": "string",
+                    "value": "Get-API-key-value-from-Joshua-Cyberiskvision-representantive"
+                  }
+                ]
+              }
+            },
+            "Parse_JSON_array_of_Joshua_indicators": {
+              "runAfter": {
+                "HTTP_-_Joshua_API": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('HTTP_-_Joshua_API')",
+                "schema": {
+                  "properties": {
+                    "nextPageToken": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "results": {
+                      "items": {
+                        "properties": {
+                          "description": {
+                            "type": "string"
+                          },
+                          "domainName": {
+                            "type": "string"
+                          },
+                          "emailSenderAddress": {
+                            "type": "string"
+                          },
+                          "fileHashType": {
+                            "type": "string"
+                          },
+                          "fileHashValue": {
+                            "type": "string"
+                          },
+                          "networkIPv4": {
+                            "type": "string"
+                          },
+                          "threatType": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "type": "integer"
+                          },
+                          "tlpLevel": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "description",
+                          "threatType",
+                          "tlpLevel",
+                          "timestamp"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "Select": {
+              "runAfter": {
+                "Set_variable": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Parse_JSON_array_of_Joshua_indicators')?['results']",
+                "select": {
+                        "action": "alert",
+                        "confidence": "100",
+                        "description": "@item()?['description']",
+                        "expirationDateTime": "@addDays(utcNow(),7)",
+                        "targetProduct": "Azure Sentinel",
+                        "threatType": "@item()?['threatType']",
+                        "timestamp": "@item()?['timestamp']",
+                        "tlpLevel": "@item()?['tlpLevel']",
+                        "url": "@item()?['url']",
+                        "vendorInformation": "AlmavivA"
+                }
+              }
+            },
+            "Set_variable": {
+              "runAfter": {
+                "Parse_JSON_array_of_Joshua_indicators": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "VARnextPageToken",
+                "value": "@{body('Parse_JSON_array_of_Joshua_indicators')?['nextPageToken']}"
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ],
+  "outputs": {}
+}

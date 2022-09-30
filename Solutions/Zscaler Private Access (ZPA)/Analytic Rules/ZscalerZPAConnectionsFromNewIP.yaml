@@ -1,0 +1,43 @@
+id: 24f0779d-3927-403a-aac1-cc8791653606
+name: Zscaler - ZPA connections from new IP
+description: |
+  'Detects ZPA connections from new IP.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ZscalerPrivateAccess
+    dataTypes:
+      - ZPAEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1133
+query: |
+  let listIPs =
+  ZPAEvent 
+  | where TimeGenerated > ago(14d)
+  | where DvcAction == 'open'
+  | summarize ListofIPs = make_set(SrcIpAddr) by DstUserName
+  | project ListofIPs;
+  ZPAEvent
+  | where isnotempty(SrcIpAddr)
+  | where SrcIpAddr !in (listIPs)
+  | summarize EventCount = count() by DstUserName, SrcIpAddr
+  | project-away EventCount
+  | extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

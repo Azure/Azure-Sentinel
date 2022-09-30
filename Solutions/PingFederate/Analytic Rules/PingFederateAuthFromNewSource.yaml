@@ -1,0 +1,42 @@
+id: 30583ed4-d13c-43b8-baf2-d75fbe727210
+name: Ping Federate - Authentication from new IP.
+description: |
+  'Detects authentication requests from new IP address.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: PingFederate
+    dataTypes:
+      - PingFederateEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let known_src = 
+  PingFederateEvent
+  | where TimeGenerated between (ago(14d) .. (1d))
+  | where EventType in~ ('AUTHN_ATTEMPT', 'SSO')
+  | where isnotempty(SrcIpAddr)
+  | summarize makeset(SrcIpAddr);
+  PingFederateEvent
+  | where EventType in~ ('AUTHN_ATTEMPT', 'SSO')
+  | where isnotempty(SrcIpAddr)
+  | where SrcIpAddr !in (known_src)
+  | extend AccountCustomEntity = DstUserName
+  | extend IpCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpCustomEntity
+version: 1.0.0
+kind: Scheduled

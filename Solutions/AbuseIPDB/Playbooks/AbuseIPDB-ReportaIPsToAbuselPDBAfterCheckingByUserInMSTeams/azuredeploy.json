@@ -1,0 +1,513 @@
+{
+   "$schema":"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+   "contentVersion":"1.0.0.0",
+   "metadata": {
+    "title": " AbuseIPDB Report a IPs To AbuselPDB After Checking By User In MSTeams",
+    "description": "When a new sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Sends an adaptive card to the Teams channel where the analyst can choose an action to be taken.",
+   
+    "prerequisites": [
+      "1. Prior to the deployment of this playbook, AbuseIPDB Connector needs to be deployed under the same subscription.",
+      "2. Obtain AbuseIPDB API credentials.",
+      "3. Obtain Teams group id and channel id."
+    ],
+    "prerequisitesDeployTemplateFile": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AbuseIPDB/Playbooks/AbuseIPDBAPIConnector/azuredeploy.json",
+    "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Open playbook which has been deployed.",
+            "2. Click API connection on left side blade.",
+            "3. Click the Microsoft Sentinel connection resource.",
+            "4. Click edit API connection.",
+            "5. Click Authorize.",
+            "6. Sign in.",
+            "7. Click Save.",
+            "8. Repeat steps for other connections."
+        ],
+     "lastUpdateTime": "2022-09-20T00:00:00.000Z",
+    "entities": [
+      "Ip"
+    ],
+    "tags": [],
+    "support": {
+      "tier": "microsoft"
+    },
+    "author": {
+      "name": "SOC-Prime"
+    },
+    "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "AbuseIPDB Report a IPs To AbuselPDB After Checking By User In MSTeams",
+                "notes": [ "Initial version" ]
+            }
+        ]
+  },
+   "parameters":{
+      "PlaybookName":{
+         "defaultValue":"AbuseIPDB-ReportaIPsToAbuselPDBAfterCheckingByUserInMSTeams",
+         "type":"String"
+      },
+      "customApis_AbuseIPDBAPI_name": {
+      "defaultValue": "AbuseIPDBAPI",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the AbuseIPDBAPI Connector"
+      }
+    },
+      "MSTeamsGroupId":{
+         "defaultValue":"<MSTeamsGroupId>",
+         "type":"String",
+         "metadata": {
+                "description": "Value of the MSTeamsGroupId parameter in the AbuseIPDB-ReportaIPsToAbuselPDBAfterCheckingByUserInMSTeams playbook. Id of the Teams Group where the adaptive card will be posted."
+            }
+      },
+      "MSTeamsChannelId":{
+         "defaultValue":"<MSTeamsChannelId>",
+         "type":"String",
+         "metadata": {
+                "description": "Value of the MSTeamsChannelId parameter in the AbuseIPDB-ReportaIPsToAbuselPDBAfterCheckingByUserInMSTeams playbook. Id of the Teams Channel where the adaptive card will be posted."
+            }
+      }
+
+   },
+   "variables":{
+      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]",
+      "AbuseIPDBConnectionName":"[concat('abuseipdb-connection-', parameters('PlaybookName'))]",
+      "MSTeamsConnectionName":"[concat('msteams-connection-', parameters('PlaybookName'))]"
+   },
+   "resources":[
+      {
+         "type":"Microsoft.Web/connections",
+         "apiVersion":"2016-06-01",
+         "name":"[variables('AzureSentinelConnectionName')]",
+         "location":"[resourceGroup().location]",
+         "properties":{
+            "displayName":"[variables('AzureSentinelConnectionName')]",
+            "customParameterValues":{
+               
+            },
+            "api":{
+               "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+            }
+         }
+      },
+      {
+         "type":"Microsoft.Web/connections",
+         "apiVersion":"2016-06-01",
+         "name":"[variables('MSTeamsConnectionName')]",
+         "location":"[resourceGroup().location]",
+         "properties":{
+            "displayName":"[variables('MSTeamsConnectionName')]",
+            "customParameterValues":{
+               
+            },
+            "api":{
+               "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+            }
+         }
+      },
+      {
+         "type":"Microsoft.Web/connections",
+         "apiVersion":"2016-06-01",
+         "name":"[variables('AbuseIPDBConnectionName')]",
+         "location":"[resourceGroup().location]",
+         "kind":"V1",
+         "properties":{
+            "displayName":"[variables('AbuseIPDBConnectionName')]",
+            "customParameterValues":{
+               
+            },
+            "api":{
+               "id":"[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_AbuseIPDBAPI_name'))]"
+            }
+         }
+      },
+      {
+         "type":"Microsoft.Logic/workflows",
+         "apiVersion":"2017-07-01",
+         "name":"[parameters('PlaybookName')]",
+         "location":"[resourceGroup().location]",
+         "dependsOn":[
+            "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+            "[resourceId('Microsoft.Web/connections', variables('AbuseIPDBConnectionName'))]"
+         ],
+         "properties":{
+            "state":"Enabled",
+            "definition":{
+               "$schema":"https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+               "actions":{
+                  "Entities_-_Get_IPs":{
+                     "inputs":{
+                        "body":"@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "host":{
+                           "connection":{
+                              "name":"@parameters('$connections')['azuresentinel']['connectionId']"
+                           }
+                        },
+                        "method":"post",
+                        "path":"/entities/ip"
+                     },
+                     "runAfter":{
+                        
+                     },
+                     "type":"ApiConnection"
+                  },
+                  "For_each":{
+                     "actions":{
+                        "Condition":{
+                           "actions":{
+                              "REPORT_Endpoint":{
+                                 "inputs":{
+                                    "host":{
+                                       "connection":{
+                                          "name":"@parameters('$connections')['AbuseIPDBAPI']['connectionId']"
+                                       }
+                                    },
+                                    "method":"post",
+                                    "path":"/report",
+                                    "queries":{
+                                       "categories":"@{body('Post_adaptive_card_and_wait_for_a_response')['data']['AbuseCategories']}",
+                                       "comment":"@{body('Post_adaptive_card_and_wait_for_a_response')['data']['AbuseIPDBComment']}",
+                                       "ip":"@items('For_each')?['Address']"
+                                    }
+                                 },
+                                 "runAfter":{
+                                    
+                                 },
+                                 "type":"ApiConnection"
+                              }
+                           },
+                           "expression":{
+                              "and":[
+                                 {
+                                    "contains":[
+                                       "@body('Post_adaptive_card_and_wait_for_a_response')",
+                                       "data"
+                                    ]
+                                 },
+                                 {
+                                    "contains":[
+                                       "@body('Post_adaptive_card_and_wait_for_a_response')['data']",
+                                       "AbuseCategories"
+                                    ]
+                                 },
+                                 {
+                                    "contains":[
+                                       "@body('Post_adaptive_card_and_wait_for_a_response')['data']",
+                                       "AbuseIPDBComment"
+                                    ]
+                                 }
+                              ]
+                           },
+                           "runAfter":{
+                              "Post_adaptive_card_and_wait_for_a_response":[
+                                 "Succeeded"
+                              ]
+                           },
+                           "type":"If"
+                        },
+                        "Get_Adaptive_Card_Body":{
+                           "inputs":{
+                              "$schema":"http://adaptivecards.io/schemas/adaptive-card.json",
+                              "actions":[
+                                 {
+                                    "id":"btnSubmit",
+                                    "title":"Submit",
+                                    "type":"Action.Submit"
+                                 },
+                                 {
+                                    "id":"btnIgnore",
+                                    "title":"Ignore",
+                                    "type":"Action.Submit"
+                                 }
+                              ],
+                              "body":[
+                                 {
+                                    "size":"large",
+                                    "text":"Microsoft Sentinel - Report IP to AbuseIPDB",
+                                    "type":"TextBlock",
+                                    "weight":"bolder",
+                                    "wrap":true
+                                 },
+                                 {
+                                    "text":" Incident No : @{triggerBody()?['object']?['properties']?['incidentNumber']}  ",
+                                    "type":"TextBlock",
+                                    "weight":"Bolder",
+                                    "wrap":true
+                                 },
+                                 {
+                                    "text":"@{triggerBody()?['object']?['properties']?['description']}",
+                                    "type":"TextBlock",
+                                    "wrap":true
+                                 },
+                                 {
+                                    "text":"For more details check the incident:",
+                                    "type":"TextBlock",
+                                    "weight":"Bolder",
+                                    "wrap":true
+                                 },
+                                 {
+                                    "text":"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})",
+                                    "type":"TextBlock",
+                                    "wrap":true
+                                 },
+                                 {
+                                    "id":"PollQuestionAction",
+                                    "text":"Select AbuseIPDB attack categories associated with this IP Address: @{items('For_each')?['Address']}",
+                                    "type":"TextBlock",
+                                    "wrap":true
+                                 },
+                                 {
+                                    "choices":[
+                                       {
+                                          "title":"DNS Compromise",
+                                          "value":"1"
+                                       },
+                                       {
+                                          "title":"DNS Poisoning",
+                                          "value":"2"
+                                       },
+                                       {
+                                          "title":"Fraud Orders",
+                                          "value":"3"
+                                       },
+                                       {
+                                          "title":"DDoS Attack",
+                                          "value":"4"
+                                       },
+                                       {
+                                          "title":"FTP Brute-Force",
+                                          "value":"5"
+                                       },
+                                       {
+                                          "title":"Ping of Death",
+                                          "value":"6"
+                                       },
+                                       {
+                                          "title":"Phishing",
+                                          "value":"7"
+                                       },
+                                       {
+                                          "title":"Fraud VoIP",
+                                          "value":"8"
+                                       },
+                                       {
+                                          "title":"Open Proxy",
+                                          "value":"9"
+                                       },
+                                       {
+                                          "title":"Web Spam",
+                                          "value":"10"
+                                       },
+                                       {
+                                          "title":"Email Spam",
+                                          "value":"11"
+                                       },
+                                       {
+                                          "title":"Blog Spam",
+                                          "value":"12"
+                                       },
+                                       {
+                                          "title":"VPN IP",
+                                          "value":"13"
+                                       },
+                                       {
+                                          "title":"Port Scan",
+                                          "value":"14"
+                                       },
+                                       {
+                                          "title":"Hacking",
+                                          "value":"15"
+                                       },
+                                       {
+                                          "title":"SQL Injection",
+                                          "value":"16"
+                                       },
+                                       {
+                                          "title":"Spoofing",
+                                          "value":"17"
+                                       },
+                                       {
+                                          "title":"Brute-Force",
+                                          "value":"18"
+                                       },
+                                       {
+                                          "title":"Bad Web Bot",
+                                          "value":"19"
+                                       },
+                                       {
+                                          "title":"Exploited Host",
+                                          "value":"20"
+                                       },
+                                       {
+                                          "title":"Web App Attack",
+                                          "value":"21"
+                                       },
+                                       {
+                                          "title":"SSH",
+                                          "value":"22"
+                                       },
+                                       {
+                                          "title":"IoT Targeted",
+                                          "value":"23"
+                                       }
+                                    ],
+                                    "id":"AbuseCategories",
+                                    "isMultiSelect":true,
+                                    "placeholder":"Attack categories",
+                                    "style":"compact",
+                                    "type":"Input.ChoiceSet"
+                                 },
+                                 {
+                                    "text":"Please add comment with relative information:",
+                                    "type":"TextBlock",
+                                    "wrap":true
+                                 },
+                                 {
+                                    "id":"AbuseIPDBComment",
+                                    "placeholder":"{AbuseIPDBComment}",
+                                    "type":"Input.Text"
+                                 }
+                              ],
+                              "type":"AdaptiveCard",
+                              "version":"1.0"
+                           },
+                           "runAfter":{
+                              
+                           },
+                           "type":"Compose"
+                        },
+                        "Post_adaptive_card_and_wait_for_a_response":{
+                           "inputs":{
+                              "body":{
+                                 "body":{
+                                    "messageBody":"@{outputs('Get_Adaptive_Card_Body')}",
+                                    "recipient":{
+                                       "channelId":"@variables('TeamsChannelId')",
+                                       "groupId":"@variables('TeamsGroupId')"
+                                    },
+                                    "updateMessage":"Thanks for your response!"
+                                 },
+                                 "notificationUrl":"@{listCallbackUrl()}"
+                              },
+                              "host":{
+                                 "connection":{
+                                    "name":"@parameters('$connections')['teams']['connectionId']"
+                                 }
+                              },
+                              "path":"/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                           },
+                           "runAfter":{
+                              "Get_Adaptive_Card_Body":[
+                                 "Succeeded"
+                              ]
+                           },
+                           "type":"ApiConnectionWebhook"
+                        }
+                     },
+                     "foreach":"@body('Entities_-_Get_IPs')?['IPs']",
+                     "runAfter":{
+                        "Initialize_TeamsChannelId":[
+                           "Succeeded"
+                        ]
+                     },
+                     "type":"Foreach"
+                  },
+                  "Get_Logo":{
+                     "inputs":"<img src=\"https://www.abuseipdb.com/img/abuseipdb.png.pagespeed.ce.CI8T6WsXU7.png\"  width=\"152\" height=\"32\"> ",
+                     "runAfter":{
+                        "Entities_-_Get_IPs":[
+                           "Succeeded"
+                        ]
+                     },
+                     "type":"Compose"
+                  },
+                  "Initialize_TeamsChannelId":{
+                     "inputs":{
+                        "variables":[
+                           {
+                              "name":"TeamsChannelId",
+                              "type":"string",
+                              "value":"[parameters('MSTeamsChannelId')]"
+                           }
+                        ]
+                     },
+                     "runAfter":{
+                        "Initialize_TeamsGroupId":[
+                           "Succeeded"
+                        ]
+                     },
+                     "type":"InitializeVariable"
+                  },
+                  "Initialize_TeamsGroupId":{
+                     "inputs":{
+                        "variables":[
+                           {
+                              "name":"TeamsGroupId",
+                              "type":"string",
+                              "value":"[parameters('MSTeamsGroupId')]"
+                           }
+                        ]
+                     },
+                     "runAfter":{
+                        "Get_Logo":[
+                           "Succeeded"
+                        ]
+                     },
+                     "type":"InitializeVariable"
+                  }
+               },
+               "contentVersion":"1.0.0.0",
+               "outputs":{
+                  
+               },
+               "parameters":{
+                  "$connections":{
+                     "defaultValue":{
+                        
+                     },
+                     "type":"Object"
+                  }
+               },
+               "triggers":{
+                  "Microsoft_Sentinel_incident":{
+                     "inputs":{
+                        "body":{
+                           "callback_url":"@{listCallbackUrl()}"
+                        },
+                        "host":{
+                           "connection":{
+                              "name":"@parameters('$connections')['azuresentinel']['connectionId']"
+                           }
+                        },
+                        "path":"/incident-creation"
+                     },
+                     "type":"ApiConnectionWebhook"
+                  }
+               }
+            },
+            "parameters":{
+               "$connections":{
+                  "value":{
+                     "azuresentinel":{
+                        "connectionName":"[variables('AzureSentinelConnectionName')]",
+                        "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                        "id":"[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                     },
+                     "teams":{
+                        "connectionName":"[variables('MSTeamsConnectionName')]",
+                        "connectionId":"[resourceId('Microsoft.Web/connections', variables('MSTeamsConnectionName'))]",
+                        "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                     },
+                     "AbuseIPDBAPI":{
+                        "connectionId":"[resourceId('Microsoft.Web/connections', variables('AbuseIPDBConnectionName'))]",
+                        "connectionName":"[variables('AbuseIPDBConnectionName')]",
+                        "id":"[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_AbuseIPDBAPI_name'))]"
+                     }
+                  }
+               }
+            }
+         }
+      }
+   ]
+}

@@ -1,0 +1,58 @@
+id: f19f913f-292a-41ed-9ac0-f3ea5e703d36
+name: Storage Account Key Enumeration
+description: |
+  'This query identifies attackers trying to enumerate the Storage keys as well as updating roles using AzureActivity,SigninLogs 
+  and  AuditLogs'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - InitialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1586
+  - T1570
+query: |
+ SigninLogs 
+  | where ResultType == "0" 
+  | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online", "Office 365 SharePoint Online")
+  | project  SuccessLogonTime = TimeGenerated,UserPrincipalName, IPAddress,SuccessAppDisplayName = AppDisplayName
+  |  join kind=inner
+  (
+  AzureActivity
+  | where tolower(OperationNameValue) endswith "listkeys/action"
+  | where ActivityStatus =~ "Succeeded"
+  | project CallerIpAddress, _ResourceId, SubscriptionId, ActivityStatus, Category, Authorization,OperationName
+  )
+  on $left.IPAddress == $right. CallerIpAddress
+  | project SubscriptionId, ActivityStatus, IPAddress, OperationName, UserPrincipalName
+  | join kind=inner 
+  (
+  AuditLogs
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "RoleManagement"
+  | extend IpAddress = case(
+   isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), 
+  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),'Not Available')
+  | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+    tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))  
+  ) 
+  on $left. IPAddress == $right. IpAddress
+  | summarize count () by TimeGenerated,IPCustomEntity=IpAddress,UserRoles,AccountCustomEntity=InitiatedBy,TargetResourceName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

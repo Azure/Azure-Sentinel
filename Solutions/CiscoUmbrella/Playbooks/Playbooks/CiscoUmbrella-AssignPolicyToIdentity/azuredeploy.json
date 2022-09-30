@@ -1,0 +1,425 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+		"title": "CiscoUmbrella-AssignPolicyToIdentity",
+		"description": "This playbook showcases an example of triggering an incident within a targeted Teams channel and opening up a ticket within Service Now. Additionally The playbook will also list playbooks that can be initiated from teams using an adaptive card and callbacks that will take action upon certain entities identified in the incident.",
+		"prerequisites": [
+			"1. ServiceNow Instance URL, Username, and password.",
+			"2. Access and authorization to enable API connectors",
+			"3. Teams Group ID and Alert Channel ID where the messages are to be posted in."
+		],
+		"lastUpdateTime": "2021-06-29T10:00:00.000Z",
+		"entities": [
+			"Account",
+			"Url",
+			"Host"
+		],
+		"tags": [
+			"Sync",
+			"Notification",
+			"Teams Response"
+		],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "Jing Nghik"
+		}
+	},
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CiscoUmbrella-AssignPolicyToIdentity",
+            "type": "String"
+        },
+        "PolicyId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "customApis_ciscoumbrellanetworkdevicemanagement_name": {
+            "defaultValue": "CiscoUmbrellaNetworkDeviceManagementAPI",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "CiscoUmbrellaNetworkDeviceManagementAPIConnectionName": "[concat('ciscoumbrellanetworkdevice-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CiscoUmbrellaNetworkDeviceManagementAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('CiscoUmbrellaNetworkDeviceManagementAPIConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellanetworkdevicemanagement_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaNetworkDeviceManagementAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p><strong></strong><strong>@{outputs('Create_logo')}</strong><strong> CiscoUmbrella-AssignPolicyToIdentity</strong><br>\nThe following origin ids were assigned to policy @{variables('policyId')} for organization @{variables('organizationId')}:<br>\n@{body('Create_HTML_table_with_updated_origin_IDs')}<br>\nThe following origin ids were not assigned because of errors:<br>\n@{body('Create_HTML_table_with_not_updated_origin_IDs')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Create_HTML_table_with_not_updated_origin_IDs": {
+                            "inputs": {
+                                "columns": [
+                                    {
+                                        "header": "originId",
+                                        "value": "@item()"
+                                    }
+                                ],
+                                "format": "HTML",
+                                "from": "@variables('not_updated_oridinIds_array')"
+                            },
+                            "runAfter": {
+                                "Create_HTML_table_with_updated_origin_IDs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Create_HTML_table_with_updated_origin_IDs": {
+                            "inputs": {
+                                "columns": [
+                                    {
+                                        "header": "originId",
+                                        "value": "@item()"
+                                    }
+                                ],
+                                "format": "HTML",
+                                "from": "@variables('updated_oridinIds_array')"
+                            },
+                            "runAfter": {
+                                "For_each_originId_assign_policy_to_originId": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Create_logo": {
+                            "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Solutions/CiscoUmbrella/Playbooks/cisco-logo.png\"  width=\"32\" height=\"32\">",
+                            "runAfter": {
+                                "Create_HTML_table_with_not_updated_origin_IDs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose"
+                        },
+                        "For_each_alert_in_incident": {
+                            "actions": {
+                                "For_each_originId": {
+                                    "actions": {
+                                        "Add_unique_originId_to_OriginId_array": {
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "inputs": {
+                                                        "name": "originId_array",
+                                                        "value": "@items('For_each_originId')"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@variables('originId_array')",
+                                                                "@items('For_each_originId')"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "foreach": "@body('Parse_alert_custom_details')?['originId']",
+                                    "runAfter": {
+                                        "Parse_alert_custom_details": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_alert_custom_details": {
+                                    "inputs": {
+                                        "content": "@items('For_each_alert_in_incident')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "originId": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "runAfter": {
+                                "Set_value_for_organizationId_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_originId_assign_policy_to_originId": {
+                            "actions": {
+                                "Append_originId_to_not_updated_originIds_array_variable_in_case_of_error": {
+                                    "inputs": {
+                                        "name": "not_updated_oridinIds_array",
+                                        "value": "@items('For_each_originId_assign_policy_to_originId')"
+                                    },
+                                    "runAfter": {
+                                        "Assign_a_policy_to_an_identity": [
+                                            "Failed",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
+                                },
+                                "Append_originId_to_updated_originIds_array_variable": {
+                                    "inputs": {
+                                        "name": "updated_oridinIds_array",
+                                        "value": "@items('For_each_originId_assign_policy_to_originId')"
+                                    },
+                                    "runAfter": {
+                                        "Append_originId_to_not_updated_originIds_array_variable_in_case_of_error": [
+                                            "Skipped"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
+                                },
+                                "Assign_a_policy_to_an_identity": {
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ciscoumbrellanetworkdevicemanagement']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/v1/organizations/@{encodeURIComponent(variables('organizationId'))}/policies/@{encodeURIComponent(variables('policyId'))}/identities/@{encodeURIComponent(items('For_each_originId_assign_policy_to_originId'))}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "foreach": "@variables('originId_array')",
+                            "runAfter": {
+                                "For_each_alert_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_organization_id": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['ciscoumbrellanetworkdevicemanagement']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v1/organizations"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_not_updated_oridinIds_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_variable_not_updated_oridinIds_array": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "not_updated_oridinIds_array",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_updated_oridinIds_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_organizationId": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "organizationId",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_originId_array": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "originId_array",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_policyId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_policyId": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "policyId",
+                                        "type": "string",
+                                        "value": "[parameters('PolicyId')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_organizationId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_updated_oridinIds_array": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "updated_oridinIds_array",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_originId_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Set_value_for_organizationId_variable": {
+                            "inputs": {
+                                "name": "organizationId",
+                                "value": "@{body('Get_organization_id')[0]['organizationId']}"
+                            },
+                            "runAfter": {
+                                "Get_organization_id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "ciscoumbrellanetworkdevicemanagement": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaNetworkDeviceManagementAPIConnectionName'))]",
+                                "connectionName": "[variables('CiscoUmbrellaNetworkDeviceManagementAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellanetworkdevicemanagement_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

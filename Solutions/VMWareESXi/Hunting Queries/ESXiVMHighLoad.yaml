@@ -1,0 +1,28 @@
+id: 3467bb11-7cbf-49f7-9e71-c3d0da327af5
+name: VMware ESXi - VM high resource load
+description: |
+  'Query searches for VMs with high resource consumption.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  let threshold = 50;
+  VMwareESXi
+  | where TimeGenerated > ago(24h)
+  | where SyslogMessage has_any ('Virtual machine CPU usage', 'Virtual machine memory usage')
+  | where SyslogMessage has_all ('AlarmStatusChangedEvent', 'Red')
+  | extend DstHostname = extract(@"usage'\son\s(.*?)\schanged", 1, SyslogMessage)
+  | summarize count() by DstHostname, bin(TimeGenerated, 1h)
+  | where count_ >= threshold
+  | extend HostCustomEntity = DstHostname
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

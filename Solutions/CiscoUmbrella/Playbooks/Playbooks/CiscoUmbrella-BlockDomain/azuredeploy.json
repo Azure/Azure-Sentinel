@@ -1,0 +1,269 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+		"title": "CiscoUmbrella-BlockDomain",
+		"description": "This playbook showcases an example of triggering an incident within a targeted Teams channel and opening up a ticket within Service Now. Additionally The playbook will also list playbooks that can be initiated from teams using an adaptive card and callbacks that will take action upon certain entities identified in the incident.",
+		"prerequisites": [
+			"1. ServiceNow Instance URL, Username, and password.",
+			"2. Access and authorization to enable API connectors",
+			"3. Teams Group ID and Alert Channel ID where the messages are to be posted in."
+		],
+        "lastUpdateTime": "2021-06-29T10:00:00.000Z",
+		"entities": [
+			"Account",
+			"Url",
+			"Host"
+		],
+		"tags": [
+			"Sync",
+			"Notification",
+			"Teams Response"
+		],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "Jing Nghik"
+		}
+	},
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CiscoUmbrella-BlockDomain",
+            "type": "String"
+        },
+        "customApis_ciscoumbrellaenforcement_name": {
+            "defaultValue": "CiscoUmbrellaEnforcementAPI",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "CiscoUmbrellaEnforcementAPIConnectionName": "[concat('ciscoumbrellaenforcement-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CiscoUmbrellaEnforcementAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('CiscoUmbrellaEnforcementAPIConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellaenforcement_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaEnforcementAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{outputs('Create_logo')}CiscoUmbrella-BlockDomain<br>\nThe following domains have been added to Cisco Umbrella block destination list:<br>\n@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Create_HTML_table": {
+                            "inputs": {
+                                "columns": [
+                                    {
+                                        "header": "Domain",
+                                        "value": "@item()"
+                                    }
+                                ],
+                                "format": "HTML",
+                                "from": "@variables('blocked_domains')"
+                            },
+                            "runAfter": {
+                                "For_each_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Create_logo": {
+                            "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Solutions/CiscoUmbrella/Playbooks/cisco-logo.png\"  width=\"32\" height=\"32\">",
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_blocked_domains": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "For_each_URL": {
+                            "actions": {
+                                "Append_domain_to_blocked_domains_variable": {
+                                    "inputs": {
+                                        "name": "blocked_domains",
+                                        "value": "@outputs('Get_Domain_from_URL')"
+                                    },
+                                    "runAfter": {
+                                        "Block_domain": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
+                                },
+                                "Block_domain": {
+                                    "inputs": {
+                                        "body": [
+                                            {
+                                                "alertTime": "@{utcNow()}",
+                                                "deviceId": "azuresentinel",
+                                                "deviceVersion": "13.7a",
+                                                "dstDomain": "@{outputs('Get_Domain_from_URL')}",
+                                                "dstUrl": "@{outputs('Get_Domain_from_URL')}",
+                                                "eventTime": "@{utcNow()}",
+                                                "protocolVersion": "1.0a",
+                                                "providerName": "Security Platform"
+                                            }
+                                        ],
+                                        "headers": {
+                                            "Accept": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ciscoumbrellaenforcement']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/1.0/events"
+                                    },
+                                    "runAfter": {
+                                        "Get_Domain_from_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Get_Domain_from_URL": {
+                                    "inputs": "@split(replace(replace(items('For_each_URL')?['Url'],'http://',''), 'https://', ''), '/')[0]",
+                                    "runAfter": {},
+                                    "type": "Compose"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_blocked_domains": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "blocked_domains",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "ciscoumbrellaenforcement": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaEnforcementAPIConnectionName'))]",
+                                "connectionName": "[variables('CiscoUmbrellaEnforcementAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellaenforcement_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

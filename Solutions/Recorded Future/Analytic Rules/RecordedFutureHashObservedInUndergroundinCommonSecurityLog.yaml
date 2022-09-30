@@ -1,0 +1,61 @@
+id: 388e197d-ec9e-46b6-addb-947d74d2a5c4
+name: Detection of Specific Hashes in CommonSecurityLog
+description: |
+  'Identifies a match in CommonSecurityLog from Recorded Future Hash Observed in Underground Virus Testing Sites RiskList.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PreAttack
+relevantTechniques:
+  - T1587.001
+query: |
+  // Identifies a match in CommonSecurityLog from the Recorded Future Hashes Observed in Underground Virus Testing Sites
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 1d;
+  let fileHashIndicators = ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  // Picking up only Recorded Future IOC's that have been observed in undersground testing sites
+  | where Description == "Recorded Future - HASH - Observed in Underground Virus Testing Sites"
+  | where Active == true
+  | where isnotempty(FileHashValue);
+  // Handle matches against both lower case and uppercase versions of the hash:
+  (fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)
+  | union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))
+  | join (
+    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)
+    | where isnotempty(FileHash)
+    | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+    )
+  on $left.FileHashValue == $right.FileHash
+  | where CommonSecurityLog_TimeGenerated >= TimeGenerated and CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  CommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction, RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHash, AdditionalInformation
+  | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName, URLCustomEntity = Url
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

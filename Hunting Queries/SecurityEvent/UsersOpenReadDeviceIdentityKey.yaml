@@ -1,0 +1,42 @@
+id: 9feddda0-6f46-43b4-a54f-5921e2b136b8
+name: Users Opening and Reading the Local Device Identity Key 
+description: |
+  'This detection uses Windows security events to look for users reading the local Device Identity Key (Machine Key).
+   This information can be correlated with other events for additional context and get to use-cases where a
+   machine key with a transport key together can be used to impersonate an AAD joined or registered machine.
+   Reference: https://o365blog.com/post/deviceidentity/'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Credential Access
+relevantTechniques:
+  - T1552
+tags:
+  - SimuLand
+  - ATR
+  - AADInternals
+query: |
+  // Activities: 
+  //   5058 - Key file operation
+  //   5061 - Cryptographic operation (Event does not provide enough information to filter out potential false positives)
+  // KeyType:
+  //   %%2499 -> Machine Key
+  // Operation:
+  //   %%2458 -> Read persisted key from file
+  //   %%2480 -> Open Key
+  // Machine Keys:
+  //   f686aace6942fb7f7ceb231212eef4a4 -> TSSECKeySet1
+  let filterList = dynamic(["TSSecKeySet1", "iisCngWasKey", "iisCngConfigurationKey", "ConfigMgrPrimaryKey"]);
+  SecurityEvent
+  | where Activity == '5058 - Key file operation.'
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID)
+  | where KeyType == '%%2499' and SubjectLogonId !in ('0x3e7', '0x3e4')
+  | where KeyFilePath has 'Microsoft\\Crypto\\Keys\\'
+  | where KeyName !in (filterList)
+  | extend ProcessId = ClientProcessId, KeyName = tostring(KeyName), SubjectLogonId = tostring(SubjectLogonId)

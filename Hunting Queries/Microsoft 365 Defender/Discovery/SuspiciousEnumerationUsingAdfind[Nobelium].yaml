@@ -1,0 +1,34 @@
+id: 9df6cf43-679c-4ffe-8da7-7b1174b17e5b
+name: SuspiciousEnumerationUsingAdfind[Nobelium]
+description: |
+  Attackers can use Adfind which is administrative tool to gather information about domain controllers or ADFS servers. They may also rename executables with other benign tools on the system.
+  The below query will look for Adfind usage in command line arguments irrespective of executable name in short span of time. You can limit query this to your DC and ADFS servers.
+  Below references talk about suspicious use of adfind by adversaries.
+  1. AdFind Recon
+  2. Navigating the MAZE: Tactics, Techniques and Procedures Associated With MAZE Ransomware Incidents
+  3. Analyzing Solorigate, the compromised DLL file that started a sophisticated cyberattack, and how Microsoft Defender helps protect customers
+  This query is inspired by a Azure Sentinel detection.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Execution
+- Discovery
+- Collection
+tags:
+- Nobelium
+query: |
+  let startdate = 10d;
+  let lookupwindow = 2m;
+  let threshold = 3; //number of commandlines in the set below
+  let DCADFSServersList = dynamic (["DCServer01", "DCServer02", "ADFSServer01"]); // Enter a reference list of hostnames for your DC/ADFS servers
+  let tokens = dynamic(["objectcategory","domainlist","dcmodes","adinfo","trustdmp","computers_pwdnotreqd","Domain Admins", "objectcategory=person", "objectcategory=computer", "objectcategory=*"]);
+  DeviceProcessEvents
+  | where Timestamp between (ago(startdate) .. now())
+  //| where DeviceName in (DCADFSServersList) // Uncomment to limit it to your DC/ADFS servers list if specified above or any pattern in hostnames (startswith, matches regex, etc).
+  | where ProcessCommandLine  has_any (tokens)
+  | where ProcessCommandLine matches regex "(.*)>(.*)"
+  | summarize Commandlines = make_set(ProcessCommandLine), LastObserved=max(Timestamp) by bin(Timestamp, lookupwindow), AccountName, DeviceName, InitiatingProcessFileName, FileName
+  | extend Count = array_length(Commandlines)
+  | where Count > threshold

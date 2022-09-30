@@ -1,0 +1,28 @@
+id: 34ade758-9e1e-4e65-9adc-1b8d6f081ebf
+name: doppelpaymer
+description: |
+  This query was originally published in the threat analytics report, Doppelpaymer: More human-operated ransomware. There is also a related blog.
+  DoppelPaymer is ransomware that is spread manually by human operators. These operators have exhibited extensive knowledge of system administration and common network security misconfigurations. For example, they may use net.exe to run reconnaissance and find service accounts to target. They often use stolen credentials from over-privileged service accounts to turn off security software, run malicious commands, and spread malware throughout an organization.
+  The following query detects the net.exe reconnaissance method described above.
+  The See also section below lists links to other queries associated with DoppelPaymer.
+  References:
+  https://msrc-blog.microsoft.com/2019/11/20/customer-guidance-for-the-dopplepaymer-ransomware/
+  https://www.microsoft.com/wdsi/threats/malware-encyclopedia-description?Name=Trojan:Win32/DoppelPaymer!MTB&threatId=-2147205372
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Discovery
+- Lateral movement
+query: |
+  // Finds Net commands used to locate high-value accounts
+  DeviceProcessEvents
+  | where Timestamp > ago(7d)
+  | where  FileName == "net.exe"
+  // Create a set for the command lines
+  | summarize makeset(ProcessCommandLine) by DeviceId, bin(Timestamp, 5m)
+  // Other process launches by Net in that same timeframe
+  | where (set_ProcessCommandLine has "admin"
+  and set_ProcessCommandLine has_any("domain", "enterprise", "backup operators"))
+  and set_ProcessCommandLine has "group" and set_ProcessCommandLine contains "/do"

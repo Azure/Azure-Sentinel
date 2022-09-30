@@ -9,6 +9,12 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent 
 tactics:
   - DefenseEvasion
 relevantTechniques:
@@ -31,11 +37,9 @@ query: |
   let regparams5 = dynamic(['reg add "HKLM\\SYSTEM\\CurrentControlSet\\services\\HealthService"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Sense"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\WinDefend"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\MsSecFlt"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DiagTrack"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SgrmBroker"', 'reg add "HKLMSYSTEM\\CurrentControlSet\\Services\\SgrmAgent"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AATPSensorUpdater"' , 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AATPSensor"', 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\mpssvc"']);
   let regparams6 = dynamic(['/d 4','/d "4"','/d 0x00000004']);
   let regparams7 = dynamic(['/d 1','/d "1"','/d 0x00000001']);
-  let timeframe = 1d;
   (union isfuzzy=true
   (
   SecurityEvent
-  | where TimeGenerated >= ago(timeframe)
   | where EventID == 4688
   | extend ProcessName = tostring(split(NewProcessName, '\\')[-1])
   | where ProcessName in~ (includeProc)
@@ -48,15 +52,38 @@ query: |
   | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
   ),
   (
+  WindowsEvent
+  | where EventID == 4688 and EventData has_any(includeProc)
+  | where (EventData  has_any (action) and EventData has_any (service1)) 
+  or (EventData has_any (params1) and EventData has 'Set-MpPreference' and EventData has '$true')
+  or (EventData has_any (params2) and EventData has "/IM") 
+  or (EventData has_any (regparams5) and EventData has 'Start' and EventData has_any (regparams6))
+  or (EventData has_any (regparams1) and EventData has_any (regparams2) and EventData has_any (regparams7)) 
+  or (EventData has "start" and EventData has "config" and EventData has_any (regparams3) and EventData has_any (regparams4))
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend ProcessName = tostring(split(NewProcessName, '\\')[-1])
+  | where ProcessName in~ (includeProc)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where (CommandLine has_any (action) and CommandLine has_any (service1)) 
+  or (CommandLine has_any (params1) and CommandLine has 'Set-MpPreference' and CommandLine has '$true')
+  or (CommandLine has_any (params2) and CommandLine has "/IM") 
+  or (CommandLine has_any (regparams5) and CommandLine has 'Start' and CommandLine has_any (regparams6))
+  or (CommandLine has_any (regparams1) and CommandLine has_any (regparams2) and CommandLine has_any (regparams7)) 
+  or (CommandLine has "start" and CommandLine has "config" and CommandLine has_any (regparams3) and CommandLine has_any (regparams4))
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend AccountDomain = tostring(EventData.AccountDomain)
+  | extend Activity="4688 - A new process has been created."
+  | extend EventSourceName=Provider
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (
   Event
-  | where TimeGenerated >= ago(timeframe)
   | where Source =~ "Microsoft-Windows-SENSE"
   | where EventID == 87 and ParameterXml in ("<Param>sgrmbroker</Param>", "<Param>WinDefend</Param>")
   | project TimeGenerated, Computer, Account = UserName, EventID, Activity = RenderedDescription, EventSourceName = Source, Type
   ),
   (
   DeviceProcessEvents
-  | where TimeGenerated >= ago(timeframe)
   | where InitiatingProcessFileName in~ (includeProc)
   | where (InitiatingProcessCommandLine has_any(action) and InitiatingProcessCommandLine has_any (service2) and InitiatingProcessParentFileName != 'cscript.exe')
   or (InitiatingProcessCommandLine has_any (params1) and InitiatingProcessCommandLine has 'Set-MpPreference' and InitiatingProcessCommandLine has '$true') 

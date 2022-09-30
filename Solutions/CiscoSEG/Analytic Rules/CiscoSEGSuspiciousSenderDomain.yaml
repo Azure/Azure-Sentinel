@@ -1,0 +1,39 @@
+id: ef0a253c-95b5-48e1-8ebc-dbeb073b9338
+name: Cisco SEG - Suspicious sender domain
+description: |
+  'Detects suspicious sender domain age.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoSEG
+    dataTypes:
+      - CiscoSEGEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  CiscoSEGEvent
+  | where NetworkDirection =~ 'Incoming'
+  | extend rec_domain = extract(@'@(.*)', 1, DstUserName)
+  | extend s_domain = extract(@'@(.*)', 1, SrcUserName)
+  | where s_domain != rec_domain
+  | where tostring(AdditionalFields) has 'ESASDRDomainAge'
+  | extend domain_age = extract(@'ESASDRDomainAge":"(.*days)"', 1, tostring(AdditionalFields))
+  | extend yy = toint(extract(@'(\d+)\syears', 1, domain_age))
+  | extend mm = toint(extract(@'(\d+)\smonths', 1, domain_age))
+  | extend dd = toint(extract(@'(\d+)\sdays', 1, domain_age))
+  | where isempty(yy)
+  | where isempty(mm) or mm <= 2
+  | extend AccountCustomEntity = SrcUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

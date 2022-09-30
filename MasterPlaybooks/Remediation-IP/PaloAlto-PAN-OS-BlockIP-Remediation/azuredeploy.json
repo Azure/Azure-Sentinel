@@ -1,0 +1,734 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP Nested Remediation - Palo Alto PAN-OS",
+        "description": "This playbook checks if malicious IP address is blocked or unblocked by Security Policy Rule.",
+        "mainSteps": [ "1. Fetches a list of potentially malicious IP addresses", "2.  If malicious IP address is not blocked by security policy rule then blocks it.", "3. If malicious IP address is blocked by security policy rule then unblocks it." ],
+        "prerequisites": [
+            "1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription and same resource group. Capture the name of Connector during deployment. Relevant instructions can be found in the connector doc page.",
+            "2. Generate an API key.[Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)",
+            "3. Address group should be created for PAN-OS and this should be used while creating playbooks."
+        ],
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": [ "IP" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "string",
+            "defaultValue": "PaloAlto-PAN-OS-Block-IP-Nested-Remediation",
+            "metadata": {
+                "description": "Enter name for Block IP Address playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "PAN-OSConnectorName": {
+            "type": "string",
+            "defaultValue": "PaloAltoConnector",
+            "metadata": {
+                "description": "Enter name of PAN OS custom connector without spaces"
+            },
+            "minLength": 3
+        },
+        "AddressGroup": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the predefined address group name here to Block IP / Unblock IP"
+            }
+        }
+    },
+
+    "variables": {
+        "PaloaltoConnectionName": "[concat('PaloaltoConnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('PaloaltoConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "IPs": {
+                                            "items": {
+                                                "properties": {
+                                                    "Type": {
+                                                        "type": "string"
+                                                    },
+                                                    "address": {
+                                                        "type": "string"
+                                                    },
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "address",
+                                                    "friendlyName",
+                                                    "Type"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "runs": 1
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Catch_Scope": {
+                            "actions": {
+                                "Create_HTML_table_for_error": {
+                                    "runAfter": {
+                                        "Filter_error_array": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "columns": [
+                                            {
+                                                "header": "IP Address",
+                                                "value": "@item()['address']"
+                                            },
+                                            {
+                                                "header": "Action Name",
+                                                "value": "@body('Filter_error_array')[0]?['name']"
+                                            },
+                                            {
+                                                "header": "Message",
+                                                "value": "@body('Filter_error_array')[0]?['outputs']?['body']?['error']?['message']"
+                                            }
+                                        ],
+                                        "format": "HTML",
+                                        "from": "@triggerBody()?['IPs']"
+                                    },
+                                    "description": " This composes the incident comment in a HTML table"
+                                },
+                                "Error_Response": {
+                                    "runAfter": {
+                                        "Create_HTML_table_for_error": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "body": "@{outputs('Compose_Image_to_add_to_the_Incident')}  PAN-OS -Remidiation Playbook Error\n@{body('Create_HTML_table_for_error')}",
+                                        "statusCode": 500
+                                    },
+                                    "operationOptions": "Asynchronous"
+                                },
+                                "Filter_error_array": {
+                                    "runAfter": {},
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@result('Try_Scope')",
+                                        "where": "@equals(item()?['status'], 'Failed')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Try_Scope": [
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Initialize_variable_Address_action": {
+                            "runAfter": {
+                                "Initialize_variable_address_group_members": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AddressAction",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the address action"
+                        },
+                        "Initialize_variable_IP_address_action": {
+                            "runAfter": {
+                                "Initialize_variable_Address_action": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IPAddressAction",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the action taken on each IP "
+                        },
+                        "Initialize_variable_action_name": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ActionName",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "variable to store action name "
+                        },
+                        "Initialize_variable_address_group_members": {
+                            "runAfter": {
+                                "Initialize_variable_action_name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AddressGroupMembers",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "variable to store the list of address group members"
+                        },
+                        "Try_Scope": {
+                            "actions": {
+                                "Compose_Image_to_add_to_the_Incident": {
+                                    "runAfter": {
+                                        "Create_HTML_table_to_comment_in_the_Incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "<img src=\"https://avatars.githubusercontent.com/u/4855743?s=200&v=4\" ,alt=\"Lamp\" width=\"32\" height=\"32\" />",
+                                    "description": "This composes the PAN-OS Image to be added in the incident"
+                                },
+                                "Create_HTML_table_to_comment_in_the_Incident": {
+                                    "runAfter": {
+                                        "For_each_malicious_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "columns": [
+                                            {
+                                                "header": "IP Address",
+                                                "value": "@item()?['IPAddress']"
+                                            },
+                                            {
+                                                "header": "Action Taken",
+                                                "value": "@item()?['ActionTaken']"
+                                            },
+                                            {
+                                                "header": "Status",
+                                                "value": "@item()?['Status']"
+                                            }
+                                        ],
+                                        "format": "HTML",
+                                        "from": "@variables('IPAddressAction')"
+                                    },
+                                    "description": "This composes the incident comment in a HTML table"
+                                },
+                                "For_each_malicious_IP": {
+                                    "foreach": "@triggerBody()?['IPs']",
+                                    "actions": {
+                                        "Condition__to_check_if_IP_needs_to_be_blocked": {
+                                            "actions": {
+                                                "Create_an_address_object": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "entry": {
+                                                                "@@name": "@items('For_each_malicious_IP')?['Address']",
+                                                                "description": "@items('For_each_malicious_IP')?['Address']",
+                                                                "ip-netmask": "@items('For_each_malicious_IP')?['Address']"
+                                                            }
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/restapi/v10.0/Objects/Addresses",
+                                                        "queries": {
+                                                            "address type": "ip-netmask",
+                                                            "location": "vsys",
+                                                            "name": "@items('For_each_malicious_IP')?['Address']",
+                                                            "vsys": "vsys1"
+                                                        }
+                                                    },
+                                                    "description": "This creates a new address object for the malicious IP"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Condition_to_check_if_IP_address_already_present_in_list_of_address_objects": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@length(body('Filter_array_of_IP_address_from_list_of_address_objects'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If",
+                                            "description": "This check if IP needs to be blocked"
+                                        },
+                                        "Condition_to_check_if_IP_address_already_present_in_list_of_address_objects": {
+                                            "actions": {
+                                                "Condition_to_check_if_IP_already_present_in_predefined_address_group": {
+                                                    "actions": {
+                                                        "Filter_array_IP_address_from_the_list_of_address_objects_to_unreference": {
+                                                            "runAfter": {
+                                                                "Set_dynamic_action_name": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Query",
+                                                            "inputs": {
+                                                                "from": "@variables('AddressGroupMembers')",
+                                                                "where": "@not(equals(item(), items('For_each_malicious_IP')?['Address']))"
+                                                            },
+                                                            "description": "This filters the IP address from predefined address group to unreference/unblock IP"
+                                                        },
+                                                        "Set_dynamic_action_name": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "ActionName",
+                                                                "value": "UnBlock IP"
+                                                            },
+                                                            "description": "variable to set action name dynamically"
+                                                        },
+                                                        "unreference_IP_address_from_the_existing_group_members": {
+                                                            "runAfter": {
+                                                                "Filter_array_IP_address_from_the_list_of_address_objects_to_unreference": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "AddressGroupMembers",
+                                                                "value": "@body('Filter_array_IP_address_from_the_list_of_address_objects_to_unreference')"
+                                                            },
+                                                            "description": "unreference IP address from the group members and update"
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "Append_IP_address_to_the_address_group_members": {
+                                                                "runAfter": {},
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "AddressGroupMembers",
+                                                                    "value": "@items('For_each_malicious_IP')?['Address']"
+                                                                },
+                                                                "description": "append IP address to the address group members"
+                                                            },
+                                                            "Set_dynamic_action_name_to_variable_Action_name": {
+                                                                "runAfter": {
+                                                                    "Append_IP_address_to_the_address_group_members": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "ActionName",
+                                                                    "value": "Block IP"
+                                                                },
+                                                                "description": "set action name dynamically"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "contains": [
+                                                                    "@variables('AddressGroupMembers')",
+                                                                    "@items('For_each_malicious_IP')?['Address']"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If",
+                                                    "description": "condition to check the malicious IP address is present in the predefined address group and the IP is part of static member"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_array_IP_from_list_of_security_rules": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Append_IP_to_array_of_address_group_members": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "AddressGroupMembers",
+                                                            "value": "@items('For_each_malicious_IP')?['Address']"
+                                                        },
+                                                        "description": "append the Malicious IP address to the existing group members to block / unblock from the predefined address group"
+                                                    },
+                                                    "Set_variable_to_Block_IP": {
+                                                        "runAfter": {
+                                                            "Append_IP_to_array_of_address_group_members": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "ActionName",
+                                                            "value": "Block IP"
+                                                        },
+                                                        "description": "This sets the variable block IP"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('Filter_array_of_IP_address_from_list_of_address_objects'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If",
+                                            "description": "This checks if IP is a member of any of the list of address objects"
+                                        },
+                                        "Condition_to_check_the_edit_an_address_object_group_status": {
+                                            "actions": {
+                                                "Append_success_status_Blocked_IP_to_IP_address_action": {
+                                                    "runAfter": {
+                                                        "Set_variable_Address_action_in_case_of_success": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "IPAddressAction",
+                                                        "value": "@variables('AddressAction')"
+                                                    },
+                                                    "description": "append action taken to IP address action array"
+                                                },
+                                                "Set_variable_Address_action_in_case_of_success": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "AddressAction",
+                                                        "value": {
+                                                            "ActionTaken": " @{variables('ActionName')} ",
+                                                            "IPAddress": " @{items('For_each_malicious_IP')?['Address']}",
+                                                            "Status": "Success"
+                                                        }
+                                                    },
+                                                    "description": "This sets address action variable in case of success"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Update_an_address_object_group": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Append_failure_status_to_IP_address_action": {
+                                                        "runAfter": {
+                                                            "Set_variable_Address_action_in_case_of_failure": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToArrayVariable",
+                                                        "inputs": {
+                                                            "name": "IPAddressAction",
+                                                            "value": "@variables('AddressAction')"
+                                                        },
+                                                        "description": "append action taken to IP address action array"
+                                                    },
+                                                    "Set_variable_Address_action_in_case_of_failure": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "AddressAction",
+                                                            "value": {
+                                                                "ActionTaken": " @{variables('ActionName')} ",
+                                                                "IPAddress": " @{items('For_each_malicious_IP')?['Address']}",
+                                                                "Status": "Failure"
+                                                            }
+                                                        },
+                                                        "description": "This sets address action variable in case of failure"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@body('Update_an_address_object_group')?['@status']",
+                                                            "success"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Configured_address_group": {
+                                            "runAfter": {
+                                                "Set_variable_address_group_members": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@body('List_address_groups')?['result']?['entry']?[0]?['@name']",
+                                            "description": "compose predefined address group"
+                                        },
+                                        "Filter_array_IP_from_list_of_security_rules": {
+                                            "runAfter": {
+                                                "Configured_address_group": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('List_security_rules')?['result']?['entry']",
+                                                "where": "@contains(item()?['source']?['member'], items('For_each_malicious_IP')?['Address'])"
+                                            },
+                                            "description": "This filters all the security rules in which this IP is a member"
+                                        },
+                                        "Filter_array_of_IP_address_from_list_of_address_objects": {
+                                            "runAfter": {},
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('List_address_objects')?['result']?['entry']",
+                                                "where": "@equals(item()?['ip-netmask'], items('For_each_malicious_IP')?['Address'])"
+                                            },
+                                            "description": "This filters the list of address objects in which this IP is a member "
+                                        },
+                                        "List_address_groups": {
+                                            "runAfter": {
+                                                "Filter_array_of_IP_address_from_list_of_address_objects": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/restapi/v10.0/Objects/AddressGroups",
+                                                "queries": {
+                                                    "location": "vsys",
+                                                    "name": "[parameters('AddressGroup')]",
+                                                    "vsys": "vsys1"
+                                                }
+                                            },
+                                            "description": "This gets complete list of address object groups present in the PAN-OS"
+                                        },
+                                        "Set_variable_address_group_members": {
+                                            "runAfter": {
+                                                "List_address_groups": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "AddressGroupMembers",
+                                                "value": "@body('List_address_groups')?['result']?['entry']?[0]?['static']?['member']"
+                                            },
+                                            "description": "assign list of address group members"
+                                        },
+                                        "Update_an_address_object_group": {
+                                            "runAfter": {
+                                                "Condition__to_check_if_IP_needs_to_be_blocked": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "entry": {
+                                                        "@@name": "[parameters('AddressGroup')]",
+                                                        "static": {
+                                                            "member": "@variables('AddressGroupMembers')"
+                                                        }
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/restapi/v10.0/Objects/AddressGroups",
+                                                "queries": {
+                                                    "location": "vsys",
+                                                    "name": "[parameters('AddressGroup')]",
+                                                    "vsys": "vsys1"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "List_security_rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "List_address_objects": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/restapi/v10.0/Objects/Addresses",
+                                        "queries": {
+                                            "location": "vsys",
+                                            "vsys": "vsys1"
+                                        }
+                                    },
+                                    "description": "This gets complete list of address object present in the PAN-OS"
+                                },
+                                "List_security_rules": {
+                                    "runAfter": {
+                                        "List_address_objects": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['PaloAltoConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/restapi/v10.0/Policies/SecurityRules",
+                                        "queries": {
+                                            "location": "vsys",
+                                            "vsys": "vsys1"
+                                        }
+                                    },
+                                    "description": "This gets complete list of security policy rules present in the PAN-OS"
+                                },
+                                "Response": {
+                                    "runAfter": {
+                                        "Compose_Image_to_add_to_the_Incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "body": "@{outputs('Compose_Image_to_add_to_the_Incident')}  PAN-OS -Remidiation Playbook ran and performed the following actions:@{body('Create_HTML_table_to_comment_in_the_Incident')}",
+                                        "statusCode": 200
+                                    },
+                                    "operationOptions": "Asynchronous"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_IP_address_action": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "PaloAltoConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PaloaltoConnectionName'))]",
+                                "connectionName": "[variables('PaloAltoConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PAN-OSConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('PaloaltoConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('PAN-OSConnectorName'))]"
+                }
+            }
+        }
+    ]
+}

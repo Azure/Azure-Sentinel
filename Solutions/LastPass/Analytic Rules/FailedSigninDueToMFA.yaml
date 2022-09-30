@@ -1,0 +1,43 @@
+id: 760b8467-e6cc-4006-9149-5696845c1a54
+name: Failed sign-ins into LastPass due to MFA
+description: |
+  'This rule will check if a sign-in failed into LastPass due to MFA.
+  An incident can indicate the potential brute forcing of a LastPass account. 
+  The use of MFA is identified by combining the sign-in logs, this rule assumes LastPass is federated to AAD.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: LastPass
+    dataTypes:
+      - LastPassNativePoller_CL
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+tactics:
+  - InitialAccess
+relevantTechniques:
+ - T1078
+ - T1190
+query: |
+  LastPassNativePoller_CL
+  | where Action_s == "Log in"
+  | join (SigninLogs | where AppDisplayName == "LastPass Enterprise") on $left.IP_Address_s == $right.IPAddress and $left.Username_s == $right.UserPrincipalName
+  | where ResultType in (50074, 50076)
+  | extend AccountCustomEntity = Username_s, IPCustomEntity = IP_Address_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

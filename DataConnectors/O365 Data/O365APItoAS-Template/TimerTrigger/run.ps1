@@ -233,14 +233,14 @@ if ($Timer.IsPastDue) {
 }
 
 #add last run time to blob file to ensure no missed packages
-$endTime = $currentUTCtime | Get-Date -Format yyyy-MM-ddThh:mm:ss
+$endTime = $currentUTCtime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
 $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
 $Context = New-AzStorageContext -ConnectionString $azstoragestring
 if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
     #Set Container
     $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Blob "lastlog.log"
     $lastlogTime = $blob.ICloudBlob.DownloadText()
-    $startTime = $lastlogTime | Get-Date -Format yyyy-MM-ddThh:mm:ss
+    $startTime = $lastlogTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
     $endTime | Out-File "$env:TEMP\lastlog.log"
     Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Context $Context -Force
 }
@@ -249,7 +249,7 @@ else {
     $azStorageContainer = New-AzStorageContainer -Name "lastlog" -Context $Context
     $endTime | Out-File "$env:TEMP\lastlog.log"
     Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container $azStorageContainer.name -Context $Context -Force
-    $startTime = $currentUTCtime.AddSeconds(-300) | Get-Date -Format yyyy-MM-ddThh:mm:ss
+    $startTime = $currentUTCtime.AddSeconds(-300) | Get-Date -Format yyyy-MM-ddTHH:mm:ss
 }
 $startTime
 $endTime

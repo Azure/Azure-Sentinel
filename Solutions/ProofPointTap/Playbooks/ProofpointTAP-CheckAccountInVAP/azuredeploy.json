@@ -1,0 +1,367 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": " ProofpointTAP-CheckAccountInVAP",
+        "description": "Once a new sentinel incident is created, this playbook gets triggered and performs the following actions:\n\n1. Gets [Very Attacked People](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/People_API#.2Fv2.2Fpeople.2Fvap) for the latest 14 days.\n\n 2. Enriches the incident with information whether incident's users are in VAP list and changes incident severity.",
+        "prerequisites": [
+            "1. ProofpointTAP Custom Connector has to be deployed prior to the deployment of this playbook under the same subscription.",
+            "2. ProofpointTAP API credentials are required. Refer to ProofpointTAP Custom Connector documentation."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1.Click the MicroSoft Sentinel connection resource",
+            "2.Click edit API connection",
+            "3.Click Authorize",
+            "4.Sign in",
+            "5.Click Save",
+            "6.Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.",
+            "**b. Configurations in Sentinel**",
+            "1.In MicroSoft Sentinel, analytical rules have to be configured to trigger an incident with risky user account. In the *Entity maping* section of the analytics rule creation workflow, user's email has to be mapped to **FullName** identitfier of the **Account** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.",
+            "2.Configure the automation rules to trigger the playbooks."
+        ],
+        "lastUpdateTime": "2022-08-04T00:00:00.000Z",
+        "entities": [ "Account" ],
+        "tags": [],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Cristhofer Romeo Munoz"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "ProofpointTAP-CheckAccountInVAP",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ProofpointTAP-CheckAccountInVAP",
+            "type": "String"
+        },
+        "customApis_ProofpointTAP_name": {
+            "defaultValue": "ProofpointTAP",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ProofpointTAPCustomAPIConnectionName": "[concat('proofpointtap-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('ProofpointTAPCustomAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('ProofpointTAPCustomAPIConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_proofpointtap_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ProofpointTAPCustomAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Change_incident_severity_to_high')?['id']",
+                                            "message": "<p><strong></strong><strong>@{outputs('Create_logo')}</strong><strong>ProofpointTAP CheckAccountInVAP Playbook</strong><br>\nThe following users are in VAP list:<br>\n@{body('Create_HTML_table')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Create_logo": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Change_incident_severity_to_high": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "severity": "High"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                },
+                                "Create_HTML_table": {
+                                    "inputs": {
+                                        "format": "HTML",
+                                        "from": "@variables('incident_vap_emails')"
+                                    },
+                                    "runAfter": {
+                                        "Change_incident_severity_to_high": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table"
+                                },
+                                "Create_logo": {
+                                    "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Playbooks/ProofpointTAP/ProofpointTAPConnector/proofpointlogo.png\"  width=\"32\" height=\"32\">",
+                                    "runAfter": {
+                                        "Create_HTML_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('incident_vap_emails'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Filter_array": {
+                            "description": "Filter \"emails\" array with emails that are present in \"vap_emails\" array",
+                            "inputs": {
+                                "from": "@variables('emails')",
+                                "where": "@contains(variables('vap_emails'), item())"
+                            },
+                            "runAfter": {
+                                "For_each_user_from_\"Get_Very_Attacked_People\"_action_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query"
+                        },
+                        "For_each_account_in_incident": {
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "description": "Parsing email from Account object and adding it to \"emails\" variable.",
+                                    "inputs": {
+                                        "name": "emails",
+                                        "value": "@concat(trim(replace(replace(replace(item()?['Name'], '\"', ''), '[', ''), ']', '')), '@', trim(replace(replace(replace(item()?['UPNSuffix'], '\"', ''), '[', ''), ']', '')))"
+                                    },
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "runAfter": {
+                                "Initialize_variable_\"emails\"": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_user_from_\"Get_Very_Attacked_People\"_action_": {
+                            "actions": {
+                                "For_each_user's_email": {
+                                    "actions": {
+                                        "Append_user's_email_to_\"vap_emails\"_variable": {
+                                            "inputs": {
+                                                "name": "vap_emails",
+                                                "value": "@items('For_each_user''s_email')"
+                                            },
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable"
+                                        }
+                                    },
+                                    "foreach": "@items('For_each_user_from_\"Get_Very_Attacked_People\"_action_')?['identity']?['emails']",
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "foreach": "@body('Get_Very_Attacked_People')?['users']",
+                            "runAfter": {
+                                "Initialize_variable_\"vap_emails\"": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Very_Attacked_People": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['proofpointtapapi']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/people/vap",
+                                "queries": {
+                                    "page": 1,
+                                    "size": 1000,
+                                    "window": 14
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_account_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_vap_emails",
+                                        "type": "array",
+                                        "value": "@body('Filter_array')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Filter_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_\"emails\"": {
+                            "description": "This variable will contain emails from incident.",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "emails",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_\"vap_emails\"": {
+                            "description": "This variable will contain emails from \"Get Very Attacked People\" action",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vap_emails",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Get_Very_Attacked_People": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "proofpointtapapi": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('ProofpointTAPCustomAPIConnectionName'))]",
+                                "connectionName": "[variables('ProofpointTAPCustomAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_proofpointtap_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

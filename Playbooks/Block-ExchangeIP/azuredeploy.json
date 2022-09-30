@@ -1,0 +1,233 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP in Exchange On-Prem",
+        "description": "This Playbook will block the IP in on-premises Exchange Server.",
+        "prerequisites": "Existing Automation Account with a Hybrid Worker with Connection to Exchange Server. Automation account should be in same RG as Azure Sentinel.",
+        "lastUpdateTime": "2021-07-12T10:00:15.123Z",
+        "entities": [],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Thijs Lecomte"
+        }
+    },
+	"parameters": {
+        "PlaybookName": {
+            "defaultValue": "Block-ExchangeIP",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AutomationAccount": {
+            "metadata" : {
+                "description" : "Name of Azure Automation Account"
+            },
+            "type": "string"
+        },
+        "HybridWorkGroup": {
+            "metadata" : {
+                "description" : "Hybrid Worker Group configured for Exchange server"
+            },
+            "type": "string"
+        }
+    },
+    "variables": {
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+		"AzureAutomationConnectionName": "[concat('azureautomation-', parameters('PlaybookName'))]",
+		"RunBookContentsURI":"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Block-ExchangeIP/Block-ExchangeIP.ps1",
+        "RunBookName":"Block-IPRunbook"
+	},
+    "resources": [
+        {
+            "type": "Microsoft.Automation/automationAccounts/runbooks",
+            "apiVersion": "2018-06-30",
+            "name": "[concat(parameters('AutomationAccount'),'/',variables('RunBookName'))]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "runbookType": "PowerShell",
+                "logVerbose": false,
+                "logProgress": false,
+                "logActivityTrace": 0,
+				"publishContentLink": {
+			  "uri": "[variables('RunBookContentsURI')]"
+			  }
+            }
+        },
+         {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+		{
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureAutomationConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureautomation')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "BlockExchangeIP",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+			"dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureAutomationConnectionName'))]",
+                "[concat('Microsoft.Automation/automationAccounts/', parameters('AutomationAccount'), '/runbooks/', variables('RunBookName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Trigger_Automation": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>Blocked IP in @{items('For_each')?['Address']} &nbsp;Exchange</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Trigger_Automation": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "properties": {
+                                                "parameters": {
+                                                    "IPToBeBlocked": "@items('For_each')?['Address']"
+                                                },
+                                                "runOn": "[parameters('HybridWorkGroup')]"
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "[concat('/subscriptions/@{encodeURIComponent(''', subscription().subscriptionId, ''')}/resourceGroups/@{encodeURIComponent(''', resourceGroup().name ,''')}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent(''', parameters('AutomationAccount') , ''')}/jobs')]",
+                                        "queries": {
+                                            "runbookName": "[variables('RunBookName')]",
+                                            "wait": true,
+                                            "x-ms-api-version": "2015-10-31"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                             "azuresentinel": {
+									"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+									"connectionName": "[variables('AzureSentinelConnectionName')]",
+									"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                    "connectionProperties": {
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity"
+                                        }
+                                    }
+								},
+                            "azureautomation": {
+									"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureAutomationConnectionName'))]",
+									"connectionName": "[variables('AzureAutomationConnectionName')]",
+									"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureautomation')]"
+							}
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

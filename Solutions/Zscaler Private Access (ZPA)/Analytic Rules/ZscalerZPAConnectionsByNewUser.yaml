@@ -1,0 +1,37 @@
+id: 236a7ec1-0120-40f2-a157-c1a72dde8bcb
+name: Zscaler - ZPA connections by new user
+description: |
+  'Detects ZPA connections by new user.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ZscalerPrivateAccess
+    dataTypes:
+      - ZPAEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let listUsers =
+  ZPAEvent 
+  | where TimeGenerated > ago(14d)
+  | where DvcAction == 'open'
+  | summarize ListofUsers = make_set(DstUserName) by DstUserName
+  | project ListofUsers;
+  ZPAEvent
+  | where DstUserName !in (listUsers)
+  | summarize EventCount = count() by DstUserName
+  | project-away EventCount
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,36 @@
+id: 32c460ad-2d40-43e9-8ead-5cdd1d7a3163
+name: Cisco WSA - Unexpected uploads
+description: |
+  'Detects unexpected file uploads.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoWSA
+    dataTypes:
+      - CiscoWSAEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+query: |
+  let f_cnt_upload_threshold = 5;
+  let f_upload_size_threshold = 5000000;
+  CiscoWSAEvent
+  | where HttpRequestMethod in~ ('POST', 'PUT')
+  | where isnotempty(AmpFileName)
+  | where UrlCategory in~ ('IW_fts', 'IW_osb')
+  | where DstBytes > f_upload_size_threshold
+  | summarize count() by AmpFileName, SrcUserName, bin(TimeGenerated, 10m)
+  | where count_ >= f_cnt_upload_threshold
+  | extend AccountCustomEntity = SrcUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.1
+kind: Scheduled

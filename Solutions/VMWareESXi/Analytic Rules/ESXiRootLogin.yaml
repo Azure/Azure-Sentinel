@@ -1,0 +1,40 @@
+id: deb448a8-6a9d-4f8c-8a95-679a0a2cd62c
+name: VMware ESXi - Root login
+description: |
+  'Detects when root user login from uncommon IP address.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let p_lookback = 14d;
+  let t_lookback = 1h;
+  let root_ips = VMwareESXi
+  | where TimeGenerated between (ago(p_lookback) .. ago(t_lookback))
+  | where SyslogMessage has_all ('UserLoginSessionEvent', 'root', 'logged in')
+  | extend SrcIpAddr = extract(@'root@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, SyslogMessage)
+  | summarize makeset(SrcIpAddr);
+  VMwareESXi
+  | where TimeGenerated > ago(t_lookback)
+  | where SyslogMessage has_all ('UserLoginSessionEvent', 'root', 'logged in')
+  | extend SrcIpAddr = extract(@'root@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, SyslogMessage)
+  | where SrcIpAddr !in (root_ips)
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

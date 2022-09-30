@@ -1,0 +1,1360 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GIBTIA_Compromised_account",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "azuremonitorlogsConnectionName": "[concat('azuremon-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Set_variable": {
+                                    "inputs": {
+                                        "name": "seqUpdate",
+                                        "value": "@body('Get_last_received_item_ID_from_Azure_Log_DB')?['value'][0]['seqUpdate_d']"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "HTTP": {
+                                        "inputs": {
+                                            "headers": {
+                                                "accept": "*/*",
+                                                "x-auth-key": "@variables('GIB API Key')",
+                                                "x-auth-login": "@parameters('GIB Username')"
+                                            },
+                                            "method": "GET",
+                                            "queries": {
+                                                "collection": "@parameters('Collection Name')",
+                                                "date": "@{addDays(utcNow(), -1, 'yyyy-MM-dd')}"
+                                            },
+                                            "uri": "@{parameters('GIB API URL ')}sequence_list"
+                                        },
+                                        "runAfter": {},
+                                        "type": "Http"
+                                    },
+                                    "Parse_JSON": {
+                                        "inputs": {
+                                            "content": "@body('HTTP')",
+                                            "schema": {
+                                                "properties": {
+                                                    "list": {
+                                                        "properties": {
+                                                            "compromised/account": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "HTTP": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ParseJson"
+                                    },
+                                    "Update_Last_Item_id_in_Tech_table_": {
+                                        "inputs": {
+                                            "body": "{\n\"collection_name\" : \"@{parameters('Collection Name')}\",\n\"seqUpdate\" :  @{body('Parse_JSON')?['list']?['compromised/account']}\n}",
+                                            "headers": {
+                                                "Log-Type": "GIBTechTable"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/api/logs"
+                                        },
+                                        "runAfter": {
+                                            "Parse_JSON": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection"
+                                    },
+                                    "set_seqUpdate_": {
+                                        "inputs": {
+                                            "name": "seqUpdate",
+                                            "value": "@body('Parse_JSON')?['list']?['compromised/account']"
+                                        },
+                                        "runAfter": {
+                                            "Update_Last_Item_id_in_Tech_table_": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(body('Get_last_received_item_ID_from_Azure_Log_DB')?['value'])",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Get_last_received_item_ID_from_Azure_Log_DB": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_last_received_item_ID_from_Azure_Log_DB": {
+                            "inputs": {
+                                "body": "GIBTechTable_CL | where collection_name_s == \"@{parameters('Collection Name')}\" |  sort by TimeGenerated | limit 1",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "subscriptions": "[subscription().subscriptionId]",
+                                    "resourcegroups": "[resourceGroup().name]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "resourcename": "",
+                                    "timerange": "Last 7 days"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Init_GIBTechTable": {
+                            "inputs": {
+                                "body": "{\n\"collection_name\" : \"@{parameters('Collection Name')}\",\n\"seqUpdate\" : 0\n}\n",
+                                "headers": {
+                                    "Log-Type": "GIBTechTable"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_API_Key": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GIB API Key",
+                                        "type": "string",
+                                        "value": "<GIB API Key>"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_seqUpdate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_seqUpdate": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "seqUpdate",
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Intitalize_Indicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IsPortionEmpty",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Intitalize_Indicators": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Indicators",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Init_GIBTechTable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Until": {
+                            "actions": {
+                                "Get_items_from_response": {
+                                    "inputs": {
+                                        "content": "@body('Get_next_portion_of_events_from_GIB')",
+                                        "schema": {
+                                            "properties": {
+                                                "properties": {
+                                                    "properties": {
+                                                        "count": {
+                                                            "properties": {
+                                                                "type": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "items": {
+                                                            "properties": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "properties": {
+                                                                            "properties": {
+                                                                                "botId": {
+                                                                                    "properties": {},
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "client": {
+                                                                                    "properties": {
+                                                                                        "properties": {
+                                                                                            "properties": {
+                                                                                                "ipv4": {
+                                                                                                    "properties": {
+                                                                                                        "properties": {
+                                                                                                            "properties": {
+                                                                                                                "asn": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "city": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "countryCode": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "countryName": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "ip": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "provider": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "region": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "type": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "cnc": {
+                                                                                    "properties": {
+                                                                                        "properties": {
+                                                                                            "properties": {
+                                                                                                "cnc": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "domain": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "ipv4": {
+                                                                                                    "properties": {
+                                                                                                        "properties": {
+                                                                                                            "properties": {
+                                                                                                                "asn": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "city": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "countryCode": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "countryName": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "ip": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "provider": {
+                                                                                                                    "properties": {
+                                                                                                                        "type": {
+                                                                                                                            "items": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": "array"
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "region": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "type": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "ipv6": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "url": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "dateCompromised": {
+                                                                                    "properties": {},
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "dateDetected": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "device": {
+                                                                                    "properties": {},
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "domain": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "dropEmail": {
+                                                                                    "properties": {
+                                                                                        "properties": {
+                                                                                            "properties": {
+                                                                                                "domain": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "email": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "ipv4": {
+                                                                                                    "properties": {
+                                                                                                        "properties": {
+                                                                                                            "properties": {
+                                                                                                                "asn": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "city": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "countryCode": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "countryName": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "ip": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "provider": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                },
+                                                                                                                "region": {
+                                                                                                                    "properties": {},
+                                                                                                                    "type": "object"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "type": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "evaluation": {
+                                                                                    "properties": {
+                                                                                        "properties": {
+                                                                                            "properties": {
+                                                                                                "admiraltyCode": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "credibility": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "reliability": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "severity": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "tlp": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "ttl": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "id": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "isFavourite": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "isHidden": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "login": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "malware": {
+                                                                                    "properties": {
+                                                                                        "properties": {
+                                                                                            "properties": {
+                                                                                                "id": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "name": {
+                                                                                                    "properties": {
+                                                                                                        "type": {
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "oldId": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "password": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "person": {
+                                                                                    "properties": {
+                                                                                        "properties": {
+                                                                                            "properties": {
+                                                                                                "address": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "birthday": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "city": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "countryCode": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "email": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "name": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "passport": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "phone": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "state": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "taxNumber": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "zip": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "port": {
+                                                                                    "properties": {},
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "portalLink": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "seqUpdate": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "sourceType": {
+                                                                                    "properties": {
+                                                                                        "type": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "threatActor": {
+                                                                                    "properties": {},
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "required": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "type": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "resultId": {
+                                                            "properties": {
+                                                                "type": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "type": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_next_portion_of_events_from_GIB": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson"
+                                },
+                                "Get_next_portion_of_events_from_GIB": {
+                                    "inputs": {
+                                        "headers": {
+                                            "Accept": "*/*",
+                                            "x-auth-key": "@variables('GIB API Key')",
+                                            "x-auth-login": "@parameters('GIB Username')"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "limit": "100",
+                                            "seqUpdate": "@{variables('seqUpdate')}"
+                                        },
+                                        "uri": "@{parameters('GIB API URL ')}@{parameters('Collection Name')}/updated"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                },
+                                "IfPortionHasItems": {
+                                    "actions": {
+                                        "For_each": {
+                                            "actions": {
+                                                "IF_CNC_URL_Specified": {
+                                                    "actions": {
+                                                        "Append_URL_To_Indicators": {
+                                                            "inputs": {
+                                                                "name": "Indicators",
+                                                                "value": {
+                                                                    "action": "@parameters('GIB Compromised Account CNC URL Action')",
+                                                                    "activityGroupNames": [
+                                                                        "@items('For_each')?['threatActor']?['name']"
+                                                                    ],
+                                                                    "confidence": "@int(items('For_each')?['evaluation']?['credibility'])",
+                                                                    "description": "Compromised Account CNC",
+                                                                    "expirationDateTime": "@addDays(items('For_each')?['dateDetected'], items('For_each')?['evaluation']?['ttl'])",
+                                                                    "killChain": [],
+                                                                    "malwareFamilyNames": [],
+                                                                    "severity": 5,
+                                                                    "tags": [
+                                                                        "compromised-account"
+                                                                    ],
+                                                                    "targetProduct": "Azure Sentinel",
+                                                                    "threatType": "C2",
+                                                                    "tlpLevel": "@items('For_each')?['evaluation']?['tlp']",
+                                                                    "url": "@items('For_each')['cnc']['url']"
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable"
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_each')?['cnc']?['url']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {
+                                                        "If_CNC_IP_Specified": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "If_CNC_Doman_Specified": {
+                                                    "actions": {
+                                                        "Append_to_array_variable": {
+                                                            "inputs": {
+                                                                "name": "Indicators",
+                                                                "value": {
+                                                                    "action": "@parameters('GIB Compromised Account CNC Domain Action')",
+                                                                    "activityGroupNames": [
+                                                                        "@{items('For_each')?['threatActor']?['name']}"
+                                                                    ],
+                                                                    "confidence": "@int(items('For_each')?['evaluation']?['credibility'])",
+                                                                    "description": "Compromised Account CNC",
+                                                                    "domainName": "@{items('For_each')?['cnc']?['domain']}",
+                                                                    "expirationDateTime": "@{addDays(items('For_each')?['dateDetected'], items('For_each')?['evaluation']?['ttl'])}",
+                                                                    "externalId ": "@{items('For_each')?['id']}",
+                                                                    "killChain": [],
+                                                                    "malwareFamilyNames": [],
+                                                                    "severity": 5,
+                                                                    "tags": [
+                                                                        "compromised-account"
+                                                                    ],
+                                                                    "targetProduct": "Azure Sentinel",
+                                                                    "threatType": "C2",
+                                                                    "tlpLevel": "@{items('For_each')?['evaluation']?['tlp']}"
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable"
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_each')?['cnc']?['domain']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {
+                                                        "IF_CNC_URL_Specified": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "If_CNC_IP_Specified": {
+                                                    "actions": {
+                                                        "Add_IP_To_Indicators": {
+                                                            "inputs": {
+                                                                "name": "Indicators",
+                                                                "value": {
+                                                                    "action": "unknown",
+                                                                    "activityGroupNames": [
+                                                                        "@items('For_each')?['threatActor']?['name']"
+                                                                    ],
+                                                                    "confidence": "@int(items('For_each')?['evaluation']?['credibility'])",
+                                                                    "description": "GIB Compromised Account CNC",
+                                                                    "expirationDateTime": "@addDays(items('For_each')?['dateDetected'], items('For_each')?['evaluation']?['ttl'])",
+                                                                    "killChain": [],
+                                                                    "malwareFamilyNames": [],
+                                                                    "networkIPv4": "@items('For_each')?['cnc']?['ipv4']?['ip']",
+                                                                    "severity": 5,
+                                                                    "tags": [
+                                                                        "compromised-account"
+                                                                    ],
+                                                                    "targetProduct": "Azure Sentinel",
+                                                                    "threatType": "C2",
+                                                                    "tlpLevel": "@items('For_each')?['evaluation']?['tlp']"
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable"
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_each')?['cnc']?['ipv4']?['ip']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "If"
+                                                },
+                                                "If_there_are_indicators": {
+                                                    "actions": {
+                                                        "Empty_The_Indicators_Array": {
+                                                            "inputs": {
+                                                                "name": "Indicators",
+                                                                "value": []
+                                                            },
+                                                            "runAfter": {
+                                                                "GIBIndicatorProcessor": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "GIBIndicatorProcessor": {
+                                                            "inputs": {
+                                                                "batchName": "GIBIndicatorsBatch",
+                                                                "content": "@variables('Indicators')",
+                                                                "host": {
+                                                                    "triggerName": "Batch_messages",
+                                                                    "workflow": {
+                                                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', 'GIBIndicatorProcessor')]"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "SendToBatch"
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@length(variables('Indicators'))",
+                                                                        0
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {
+                                                        "If_CNC_Doman_Specified": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "foreach": "@body('Get_items_from_response')?['items']",
+                                            "runAfter": {
+                                                "Save_only_as_Indicators": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Save_only_as_Indicators": {
+                                            "actions": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Send_Data": {
+                                                        "inputs": {
+                                                            "body": "@{body('Get_items_from_response')?['items']}",
+                                                            "headers": {
+                                                                "Log-Type": "GIBTIABPPhishingKit"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/api/logs"
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('Save only indicators')",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_Empty_portion_value": {
+                                                "inputs": {
+                                                    "name": "IsPortionEmpty",
+                                                    "value": true
+                                                },
+                                                "runAfter": {},
+                                                "type": "SetVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@length(body('Get_items_from_response')?['items'])",
+                                                        0
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "equals": [
+                                                    "",
+                                                    ""
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Reset_seqUpdate": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Reset_seqUpdate": {
+                                    "inputs": {
+                                        "name": "seqUpdate",
+                                        "value": "@body('Get_items_from_response')?['seqUpdate']"
+                                    },
+                                    "runAfter": {
+                                        "Get_items_from_response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "Save_seqUpdate": {
+                                    "inputs": {
+                                        "body": "{\n\"collection_name\" :  \"@{parameters('Collection Name')}\",\n\"seqUpdate\" : @{variables('seqUpdate')}\n}",
+                                        "headers": {
+                                            "Log-Type": "GIBTechTable"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    },
+                                    "runAfter": {
+                                        "IfPortionHasItems": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "expression": "@equals(variables('IsPortionEmpty'), true)",
+                            "limit": {
+                                "count": 10,
+                                "timeout": "PT1H"
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Collection Name": {
+                            "defaultValue": "compromised/account",
+                            "type": "String"
+                        },
+                        "GIB API URL ": {
+                            "defaultValue": "https://bt.group-ib.com/api/v2/",
+                            "type": "String"
+                        },
+                        "GIB Compromised Account CNC Domain Action": {
+                            "defaultValue": "unknown",
+                            "type": "String"
+                        },
+                        "GIB Compromised Account CNC IP Action": {
+                            "defaultValue": "unknown",
+                            "type": "String"
+                        },
+                        "GIB Compromised Account CNC URL Action": {
+                            "defaultValue": "unknown",
+                            "type": "String"
+                        },
+                        "GIB Username": {
+                            "defaultValue": "<xxxx@domain.com>",
+                            "type": "String"
+                        },
+                        "Save only indicators": {
+                            "defaultValue": true,
+                            "type": "Bool"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('azuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

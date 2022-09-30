@@ -1,0 +1,42 @@
+id: 8ea80cde-a211-45e3-a7c3-62fae160026c
+name: OAuth Apps reading mail both via GraphAPI and directly [Nobelium]
+description: |
+  As described in previous guidance, Nobelium may re-purpose legitimate existing OAuth Applications in the environment to their own ends. However, malicious activity patterns may be discernable from  legitimate ones.
+  The following query returns OAuth Applications that access mail both directly and via Graph, allowing review of whether such dual access methods follow expected use patterns.
+  Reference - https://msrc-blog.microsoft.com/2020/12/13/customer-guidance-on-recent-nation-state-cyber-attacks/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+- Exfiltration
+tags:
+- Nobelium
+query: |
+  // Look for OAuth apps reading mail both via GraphAPI, and directly (not via GraphAPI) 
+  // (one method may be legitimate and one suspect?) 
+  let appsReadingMailDirectly = CloudAppEvents 
+  | where Timestamp >= ago(1h) 
+  | where ActionType == "MailItemsAccessed" 
+  | where RawEventData has "AppId" 
+  | extend rawData = parse_json(RawEventData) 
+  | extend AppId = tostring(parse_json(rawData.AppId)) 
+  | where AppId != "00000003-0000-0000-c000-000000000000" 
+  | summarize by AppId 
+  | project-rename OAuthAppId = AppId; 
+  let appsReadingMailViaGraphAPI = CloudAppEvents 
+  | where Timestamp >= ago(1h) 
+  | where ActionType == "MailItemsAccessed" 
+  | where RawEventData has "ClientAppId" 
+  | where RawEventData has "00000003-0000-0000-c000-000000000000" // performance check 
+  | extend rawData = parse_json(RawEventData) 
+  | extend AppId = tostring(parse_json(rawData.AppId)) 
+  | extend OAuthAppId = tostring(parse_json(rawData.ClientAppId)) // extract OAuthAppId 
+  | where AppId == "00000003-0000-0000-c000-000000000000" 
+  | summarize by OAuthAppId; 
+  // Applications reading mail both directly and via GraphAPI  
+  // (one method may be legitimate and one suspect?) 
+  appsReadingMailDirectly 
+  | join kind = inner appsReadingMailViaGraphAPI 
+  on OAuthAppId 
+  | project OAuthAppId 

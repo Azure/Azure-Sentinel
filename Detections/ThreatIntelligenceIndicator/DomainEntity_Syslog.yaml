@@ -1,5 +1,5 @@
 id: 532f62c1-fba6-4baa-bbb6-4a32a4ef32fa
-name: (Preview) TI map Domain entity to Syslog
+name: TI map Domain entity to Syslog
 description: |
   'Identifies a match in Syslog table from any Domain IOC from TI'
 severity: Medium
@@ -33,10 +33,12 @@ query: |
     | summarize make_list(tld);
     ThreatIntelligenceIndicator
     | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
     | where Active == true
     // Picking up only IOC's that contain the entities we want
     | where isnotempty(DomainName)
-    | join (
+    // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+    | join kind=innerunique (
         Syslog
         | where TimeGenerated > ago(dt_lookBack)
         //Extract domain patterns from syslog message
@@ -49,8 +51,9 @@ query: |
         | where tld in~ (list_tlds)
         | extend Syslog_TimeGenerated = TimeGenerated
     ) on $left.DomainName==$right.domain
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Syslog_TimeGenerated, SyslogMessage, Computer, ProcessName, domain, HostIP, Url
+    | where Syslog_TimeGenerated < ExpirationDateTime
+    | summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by IndicatorId, domain
+    | project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url
     | extend timestamp = Syslog_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = HostIP, URLCustomEntity = Url
 entityMappings:
   - entityType: Host
@@ -65,3 +68,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+version: 1.2.1
+kind: Scheduled

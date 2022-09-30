@@ -1,0 +1,37 @@
+id: 1c2310ef-19bf-4caf-b2b0-a4c983932fa5
+name: Claroty - Multiple failed logins to same destinations
+description: |
+  'Detects multiple failed logins to same destinations.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: Claroty
+    dataTypes:
+      - ClarotyEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let threshold = 10;
+  ClarotyEvent
+  | where EventType has 'Login to SRA'
+  | where EventType !has 'succeeded'
+  | extend Site = column_ifexists("site_name","")
+  | where isnotempty(Site)
+  | extend SrcUsername = extract(@'User\s(.*?)\sfailed', 1, EventMessage)
+  | summarize count() by Site, bin(TimeGenerated, 5m)
+  | where count_ > threshold
+  | extend SGCustomEntity = Site
+entityMappings:
+  - entityType: SecurityGroup
+    fieldMappings:
+      - identifier: DistinguishedName
+        columnName: SGCustomEntity
+version: 1.0.0
+kind: Scheduled

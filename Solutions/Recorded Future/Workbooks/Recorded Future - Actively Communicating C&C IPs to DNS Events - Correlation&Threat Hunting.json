@@ -1,0 +1,252 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Recorded Future - Actively Communicating C&C IPs to DNS Events - Correlation/Threat Hunting\n\n"
+      },
+      "name": "text - 0"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "5aaf92cc-3c1e-43f0-8a2f-18a79d7c1d5d",
+            "version": "KqlParameterItem/1.0",
+            "name": "DNS_Events_Time_Range",
+            "label": "DNS Events Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 7776000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "eea9b6a5-76f4-4d3b-b62d-4f5e1c4173b6",
+            "version": "KqlParameterItem/1.0",
+            "name": "Threat_Intelligence_Time_Range",
+            "label": "Threat Intelligence Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 7776000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains 'Recorded Future - IP - Actively Communicating C&C Server'\r\n| join (\r\n    DnsEvents | where TimeGenerated {DNS_Events_Time_Range:query}\r\n    | where SubType =~ \"LookupQuery\" and isnotempty(IPAddresses)\r\n    | extend SingleIP = split(IPAddresses, \",\")\r\n    | mvexpand SingleIP\r\n    | extend SingleIP = tostring(SingleIP)\r\n    // renaming time column so it is clear the log this came from\r\n    | extend DNS_TimeGenerated = TimeGenerated\r\n)\r\non $left.NetworkIP == $right.SingleIP\r\n| summarize Correlation_Matches=count() by bin(DNS_TimeGenerated, 1d)\r\n| render barchart",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains 'Recorded Future - IP - Actively Communicating C&C Server'\r\n| join (\r\n    DnsEvents | where TimeGenerated {DNS_Events_Time_Range:query}\r\n    | where SubType =~ \"LookupQuery\" and isnotempty(IPAddresses)\r\n    | extend SingleIP = split(IPAddresses, \",\")\r\n    | mvexpand SingleIP\r\n    | extend SingleIP = tostring(SingleIP)\r\n    // renaming time column so it is clear the log this came from\r\n    | extend DNS_TimeGenerated = TimeGenerated\r\n)\r\non $left.NetworkIP == $right.SingleIP\r\n| project Risk=ConfidenceScore, NetworkIP, ThreatType, AdditionalInformation\r\n| extend Evidence=parse_json(AdditionalInformation)['EvidenceDetails']\r\n| mv-expand Evidence\r\n| extend Rule=Evidence['Rule']\r\n| summarize count() by tostring(Rule)\r\n| sort by count_ desc\r\n\r\n",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "count_",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "Rule"
+            },
+            {
+              "columnId": "count_",
+              "label": "Count"
+            }
+          ]
+        }
+      },
+      "customWidth": "30",
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ThreatIntelligenceIndicator\r\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\r\n| where Description contains 'Recorded Future - IP - Actively Communicating C&C Server'\r\n| join (\r\n    DnsEvents | where TimeGenerated {DNS_Events_Time_Range:query}\r\n    | where SubType =~ \"LookupQuery\" and isnotempty(IPAddresses)\r\n    | extend SingleIP = split(IPAddresses, \",\")\r\n    | mvexpand SingleIP\r\n    | extend SingleIP = tostring(SingleIP)\r\n    // renaming time column so it is clear the log this came from\r\n    | extend DNS_TimeGenerated = TimeGenerated\r\n)\r\non $left.NetworkIP == $right.SingleIP\r\n| project Risk=ConfidenceScore, DestinationIP=NetworkIP, Threat_Intelligence_IOC_Date = TimeGenerated, SourceIP=ClientIP, DNS_Event_Time = DNS_TimeGenerated, ThreatType, Device=Computer, AdditionalInformation\r\n| sort by Risk desc\r\n",
+        "size": 0,
+        "exportFieldName": "DestinationIP",
+        "exportParameterName": "IOC",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Risk",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": ">=",
+                    "thresholdValue": "90",
+                    "representation": "redBright",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": ">=",
+                    "thresholdValue": "65",
+                    "representation": "orange",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": ">=",
+                    "thresholdValue": "25",
+                    "representation": "yellow",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "blue",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "sortBy": []
+      },
+      "customWidth": "70",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated {Threat_Intelligence_Time_Range:query}\n| where Description contains 'Recorded Future - IP - Actively Communicating C&C Server'\n| where NetworkIP == \"{IOC}\"\n| where ExpirationDateTime > now()\n| extend Evidence=parse_json(AdditionalInformation)['EvidenceDetails']\n| take 1\n| mv-expand Evidence\n| project Rules = Evidence['Rule'], Evidence_String = Evidence['EvidenceString'], Criticality = Evidence['Criticality']\n| sort by toint(Criticality) desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 5"
+    }
+  ],
+  "fromTemplateId": "sentinel-RecordedFuture-IP-ActiveC2-Workbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

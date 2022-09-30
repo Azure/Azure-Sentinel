@@ -1,0 +1,40 @@
+id: ebf9db0c-ba7b-4249-b9ec-50a05fa7c7c9
+name: Cisco WSA - Multiple errors to resource from risky category
+description: |
+  'Detects multiple connection errors to resource from risky category.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoWSA
+    dataTypes:
+      - CiscoWSAEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1189
+  - T1102
+query: |
+  let threshold = 10;
+  let risky_sites = dynamic(['IW_adlt', 'IW_hack', 'IW_porn']);
+  CiscoWSAEvent
+  | where DvcAction startswith 'BLOCK_'
+  | where UrlCategory in~ (risky_sites)
+  | summarize count() by SrcUserName, UrlOriginal, bin(TimeGenerated, 5m)
+  | where count_ >= threshold
+  | extend URLCustomEntity = UrlOriginal, AccountCustomEntity = SrcUserName
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

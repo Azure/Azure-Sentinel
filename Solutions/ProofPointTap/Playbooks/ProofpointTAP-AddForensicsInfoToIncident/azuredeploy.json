@@ -1,0 +1,325 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "ProofpointTAP-AddForensicsInfoToIncident",
+        "description": "Once a new sentinel incident is created, this playbook gets triggered and performs the following actions:\n\n1. [Gets Forensics](https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/Forensics_API) by the *campaignId*, provided in the alert custom entities.\n\n2. Enriches the incident with Forensics info.",
+        "prerequisites": [
+            "1. ProofpointTAP Custom Connector has to be deployed prior to the deployment of this playbook under the same subscription.",
+            "2. ProofpointTAP API credentials are required. Refer to ProofpointTAP Custom Connector documentation."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1.Click the MicroSoft Sentinel connection resource",
+            "2.Click edit API connection",
+            "3.Click Authorize",
+            "4.Sign in",
+            "5.Click Save",
+            "6.Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.",
+            "**b. Configurations in Sentinel**",
+            "1.In MicroSoft Sentinel, analytical rules should be configured to trigger an incident. An incident should have *campaignId* custom entity (obtained from *campaignId_s* field in ProofpointTAP logs). Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.",
+            "2.Configure the automation rules to trigger the playbooks."
+        ],
+        "lastUpdateTime": "2022-08-04T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Cristhofer Romeo Munoz"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "ProofpointTAP-AddForensicsInfoToIncident",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ProofpointTAP-AddForensicsInfoToIncident",
+            "type": "String"
+        },
+        "customApis_ProofpointTAP_name": {
+            "defaultValue": "ProofpointTAP",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ProofpointTAPCustomAPIConnectionName": "[concat('proofpointtap-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('ProofpointTAPCustomAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('ProofpointTAPCustomAPIConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_proofpointtap_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('ProofpointTAPCustomAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p><strong></strong><strong>@{outputs('Create_logo')}</strong><strong>ProofpointTAP-AddForensicsInfoToIncident<br>\n</strong><strong>@{body('Create_HTML_table')}</strong><strong></strong></p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Create_HTML_table": {
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('forensics')"
+                            },
+                            "runAfter": {
+                                "For_each_campaign_id_in_campaign_ids_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Create_logo": {
+                            "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Playbooks/ProofpointTAP/ProofpointTAPConnector/proofpointlogo.png\"  width=\"32\" height=\"32\">",
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose"
+                        },
+                        "For_each_alert_in_incident": {
+                            "actions": {
+                                "For_each_campaign_id_in_alert_custom_details": {
+                                    "actions": {
+                                        "Append_campaign_id_to_campaign_ids_variable": {
+                                            "inputs": {
+                                                "name": "compaign_ids",
+                                                "value": "@items('For_each_campaign_id_in_alert_custom_details')"
+                                            },
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable"
+                                        }
+                                    },
+                                    "foreach": "@body('Get_campaign_ids_from_alert_custom_details')?['campaignId']",
+                                    "runAfter": {
+                                        "Get_campaign_ids_from_alert_custom_details": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_campaign_ids_from_alert_custom_details": {
+                                    "inputs": {
+                                        "content": "@items('For_each_alert_in_incident')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "campaignId": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_campaign_id_in_campaign_ids_array": {
+                            "actions": {
+                                "For_each_report": {
+                                    "actions": {
+                                        "Filter_malicious_forensics": {
+                                            "inputs": {
+                                                "from": "@items('For_each_report')?['forensics']",
+                                                "where": "@equals(item()?['malicious'], true)"
+                                            },
+                                            "runAfter": {},
+                                            "type": "Query"
+                                        },
+                                        "For_each_malicious_forensic": {
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "inputs": {
+                                                        "name": "forensics",
+                                                        "value": "@item()?['display']"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable"
+                                                }
+                                            },
+                                            "foreach": "@body('Filter_malicious_forensics')",
+                                            "runAfter": {
+                                                "Filter_malicious_forensics": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "foreach": "@body('Get_Forensics')?['reports']",
+                                    "runAfter": {
+                                        "Get_Forensics": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_Forensics": {
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['proofpointtapapi']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v2/forensics",
+                                        "queries": {
+                                            "campaignId": "@{items('For_each_campaign_id_in_campaign_ids_array')}"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "foreach": "@variables('compaign_ids')",
+                            "runAfter": {
+                                "For_each_alert_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "forensics",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_compaign_ids": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_compaign_ids": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "compaign_ids",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "proofpointtapapi": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('ProofpointTAPCustomAPIConnectionName'))]",
+                                "connectionName": "[variables('ProofpointTAPCustomAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_proofpointtap_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

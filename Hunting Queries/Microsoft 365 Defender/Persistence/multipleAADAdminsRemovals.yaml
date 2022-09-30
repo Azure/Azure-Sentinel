@@ -1,0 +1,29 @@
+id: 7ffb31ee-f164-4613-a9a7-4d04d0dba5d7
+name: Multiple AAD Admin Removals
+description: |
+  Looks for multiple users that had their admin role removed by a single user within a certain period. 
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+- Persistence
+query: |
+  let removedAccountsThreshold = 1;
+  let lookback = 12h;
+  CloudAppEvents
+  | where Timestamp > ago(lookback)
+  | where ApplicationId == 11161 // filter relevant events category
+  | where ActionType in~ ("Remove member from role.", "Remove eligible member from role.")
+  | project RawEventData
+  | where RawEventData.Actor !has "MS-PIM"
+  | mv-expand modifiedPropery = RawEventData.ModifiedProperties
+  | where isnotempty(modifiedPropery)
+  | extend propertyName = modifiedPropery.Name
+  | where propertyName =~ "Role.DisplayName"
+  | extend roleName = modifiedPropery.OldValue
+  | where roleName in ("Company Administrator", "Global Administrator") // Add more roles you found interesting here
+  | where RawEventData.Actor has "User" // Validate the actor of the oepration is a user and not service principal
+  | extend Actor = tostring(RawEventData.Actor[0].ID), removedUserUpn = tostring(RawEventData.Target[3].ID)
+  | summarize removedAccounts = dcount(removedUserUpn), make_set(removedUserUpn) by Actor
+  | where removedAccounts > removedAccountsThreshold

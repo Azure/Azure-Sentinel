@@ -1,0 +1,70 @@
+id: 6a638d80-f6b2-473b-9087-3cac78a84b40
+name: Azure AD UserAgent OS Missmatch
+description: |
+  This query extracts the operating system from the UserAgent header and compares this to the DeviceDetail information present in Azure Active Directory.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1036
+query: |
+  let timeframe = 1d;
+  let ExtractOSFromUA=(ua:string) {
+      case(
+          ua has "Windows NT 6.0", "Windows Vista/Windows Server 2008",
+          ua has "Windows NT 6.1", "Windows 7/Windows Server 2008R2",
+          ua has "Windows NT 6.1", "Windows 7/Windows Server 2008",
+          ua has "Windows NT 6.2", "Windows 8/Windows Server 2012",
+          ua has "Windows NT 6.3", "Windows 8.1/Windows Server 2012R2",
+          ua has "Windows NT 10.0", "Windows 10",
+          ua has "Windows Phone", "WindowsPhone",
+          ua has "Android", "Android",
+          ua has "iPhone;", "IOS",
+          ua has "iPad;", "IOS",
+          ua has "Polycom/", "Polycom",
+          ua has "Darwin/", "MacOS",
+          ua has "Mac OS X", "MacOS",
+          ua has "macOS", "MacOS",
+          ua has "ubuntu", "Linux",
+          ua has "Linux", "Linux",
+          ua has "curl", "CLI",
+          ua has "python", "CLI",
+          "Unknown"
+      )
+  };
+  // Query to obtain 'simplified' user agents in a given timespan.
+  union withsource=tbl_name AADNonInteractiveUserSignInLogs, SigninLogs
+  | where TimeGenerated >= ago(timeframe)
+  | extend UserAgentOS=tolower(ExtractOSFromUA(UserAgent))
+  | where not(isempty(UserAgent))
+  | where not(isempty(AppId))
+  | where ResultType == 0
+  | extend DeviceOS=tolower(DeviceDetail_dynamic.operatingSystem)
+  | where not(isempty(DeviceOS))
+  | where not(UserAgentOS == "unknown")
+  // Look for matches both ways, since sometimes the browser OS is more specific and sometimes the DeviceOS is more specific.
+  | where not(UserAgentOS contains DeviceOS) and not(DeviceOS contains UserAgentOS)
+  | where not(DeviceOS == "ios" and UserAgentOS == "macos") // This can happen for 'request desktop site'
+  | where not(DeviceOS == "android" and UserAgentOS == "linux") // Android and Linux sometimes confused
+  | summarize count(), arg_min(TimeGenerated,*) by DeviceOS, UserAgentOS, UserPrincipalName
+  // Begin allow-list.
+  // End allow-list.
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+version: 1.0.0
+kind: Scheduled

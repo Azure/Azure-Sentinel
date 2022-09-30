@@ -1,0 +1,47 @@
+id: 7ae72c80-c114-43cd-bd99-46dab7c13338
+name: AppLocker Policy Design Assistant
+description: |
+  One of the challenges in making an AppLocker policy is knowing where applications
+  launch from.  This query normalizes process launch paths through aliasing, then
+  counts the number of processes launched from that path, how many distinct machines it
+  was launched on, and how many distinct file names \ hashes these processes had.  The
+  path is broken into subfolders to help simplify analysis.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+query: |
+  let FolderDepthLimit = 5;
+  let AliasPath = (SourcePath:(FolderPath:string, FileName:string))
+  {
+  SourcePath
+      | extend AliasPath = tolower(
+              case(
+                  //Modern style profile
+                  FolderPath startswith 'c:\\users\\', strcat('%UserProfile%', substring(FolderPath, indexof(FolderPath,'\\',11), strlen(FolderPath) - 11)),
+                  //Legacy style profile
+                  FolderPath startswith 'c:\\documents and settings\\', strcat('%UserProfile%', substring(FolderPath, indexof(FolderPath,'\\',27), strlen(FolderPath) - 27)),
+                  //Windir
+                  FolderPath contains @':\Windows\', strcat('%windir%', substring(FolderPath, 10)),
+                  //ProgramData
+                  FolderPath contains @':\programdata\', strcat('%programdata%', substring(FolderPath, 14)),
+                  // ProgramFiles
+                  FolderPath contains @':\Program Files\', strcat('%ProgramFiles%', substring(FolderPath, 16)),
+                  // Program Files (x86)
+                  FolderPath contains @':\Program Files (x86)\', strcat('%ProgramFilesx86%', substring(FolderPath, 22)),
+                  //Other
+                  FolderPath)
+          )
+  };
+  DeviceProcessEvents
+  | where isnotempty(FolderPath) and FolderPath !startswith '/' //AppLocker is not supported on Linux \ Mac and we need a FolderPath
+  | invoke AliasPath() // Alias the path for consistency
+  | extend Folder = substring(AliasPath, 0, strlen(AliasPath) - strlen(FileName) - 1) // Trim the FileName
+  | where Folder !startswith @'%windir%' and Folder !startswith @'%programfiles%' and Folder !startswith @'%programfilesx86%' // Remove folders that are included in AppLocker by default
+  | extend SplitFolderPath = split(Folder, '\\') // Break the folder down by folders
+  | extend PathDepth = range(1,FolderDepthLimit,1) // create a range to break the path into depths
+  | mvexpand PathDepth to typeof(int) // mvexpand
+  | where PathDepth < array_length(SplitFolderPath) // Determine if the current depth is greater than the number of folders in the path
+  | extend SubPath = strcat_array(array_slice(SplitFolderPath, 0, PathDepth), '\\') // Reassemble the subpath based on the number of folders
+  | summarize ProcessCount = count(), DistinctMachines = dcount(DeviceId), DistinctProcesses = dcount(SHA256), DistinctFileNames = dcount(FileName) by SubPath 
+  | order by DistinctMachines desc // Order by the number of distinct machines in descending order

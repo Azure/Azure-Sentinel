@@ -1,0 +1,279 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+		"title": "CiscoUmbrella-GetDomainInfo",
+		"description": "This playbook showcases an example of triggering an incident within a targeted Teams channel and opening up a ticket within Service Now. Additionally The playbook will also list playbooks that can be initiated from teams using an adaptive card and callbacks that will take action upon certain entities identified in the incident.",
+		"prerequisites": [
+			"1. ServiceNow Instance URL, Username, and password.",
+			"2. Access and authorization to enable API connectors",
+			"3. Teams Group ID and Alert Channel ID where the messages are to be posted in."
+		],
+		"lastUpdateTime": "2021-06-29T10:00:00.000Z",
+		"entities": [
+			"Account",
+			"Url",
+			"Host"
+		],
+		"tags": [
+			"Sync",
+			"Notification",
+			"Teams Response"
+		],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "Jing Nghik"
+		}
+	},
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CiscoUmbrella-GetDomainInfo",
+            "type": "String"
+        },
+        "customApis_ciscoumbrellainvestigate_name": {
+            "defaultValue": "CiscoUmbrellaInvestigateAPI",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "CiscoUmbrellaInvestigateAPIConnectionName": "[concat('ciscoumbrellainvestigate-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CiscoUmbrellaInvestigateAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('CiscoUmbrellaInvestigateAPIConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellainvestigate_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaInvestigateAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Entities_-_Get_URLs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "For_each_URL": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><strong></strong><strong>@{outputs('Get_logo')}</strong><strong> </strong><span style=\"font-size: 14px\"><strong>CiscoUmbrella-GetDomainInfo</strong></span><br>\nRisk score for domain @{outputs('Get_domain_from_URL')} is &nbsp;@{body('Get_Risk_score_for_a_domain')?['risk_score']}.<br>\n<span style=\"font-size: 12px\"><strong>Risk score indicators:</strong></span><br>\n@{body('Create_HTML_table_with_security_indicators')}<br>\n<br>\n</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Create_HTML_table_with_security_indicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Add_comment_to_incident_(V3)_2": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Get_logo')}<span style=\"font-size: 14px\"><strong> CiscoUmbrella-GetDomainInfo<br>\n</strong></span><span style=\"font-size: 12px\">Security data for </span><span style=\"font-size: 12px\">@{outputs('Get_domain_from_URL')}</span><span style=\"font-size: 12px\"> (part 1) :<br>\n</span><span style=\"font-size: 12px\"><strong>dga_score:</strong></span><span style=\"font-size: 12px\"> </span><span style=\"font-size: 12px\">@{body('Get_domain_security_data')?['dga_score']}</span><span style=\"font-size: 12px\"><br>\nDomain Generation Algorithm. This score is generated based on the likeliness of the domain name being generated by an algorithm rather than a human. This algorithm is designed to identify domains which have been created using an automated randomization strategy, which is a common evasion technique in malware kits or botnets. This score ranges from -100 (suspicious) to 0 (benign).<br>\n</span><span style=\"font-size: 12px\"><strong>perplexity:</strong></span><span style=\"font-size: 12px\"> </span><span style=\"font-size: 12px\">@{body('Get_domain_security_data')?['perplexity']}</span><span style=\"font-size: 12px\"><br>\nA second score on the likeliness of the name to be algorithmically generated, on a scale from 0 to 100. This score is to be used in conjunction with DGA.<br>\n</span><span style=\"font-size: 12px\"><strong>entropy:</strong></span><span style=\"font-size: 12px\"> </span><span style=\"font-size: 12px\">@{body('Get_domain_security_data')?['entropy']}</span><span style=\"font-size: 12px\"><br>\nThe number of bits required to encode the domain name, as a score. This score is to be used in conjunction with DGA and Perplexity.<br>\n</span><span style=\"font-size: 12px\"><strong>securerank2:</strong></span><span style=\"font-size: 12px\"> </span><span style=\"font-size: 12px\">@{body('Get_domain_security_data')?['securerank2']}</span><span style=\"font-size: 12px\"><br>\nSuspicious rank for a domain that reviews based on the lookup behavior of client IP for the domain. Securerank is designed to identify hostnames requested by known infected clients but never requested by clean clients, assuming these domains are more likely to be bad. Scores returned range from -100 (suspicious) to 100 (benign).<br>\n</span></p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Add_comment_to_incident_(V3)_3": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Get_logo')} CiscoUmbrella-GetDomainInfo<br>\nSecurity data for @{outputs('Get_domain_from_URL')} (part 2):<br>\n<strong>pagerank: </strong>@{body('Get_domain_security_data')?['pagerank']}<br>\nPopularity according to Google's pagerank algorithm.<br>\n<strong>asn_score: </strong>@{body('Get_domain_security_data')?['asn_score']}<br>\nASN reputation score, ranges from -100 to 0 with -100 being very suspicious.<br>\n<strong>prefix_score:</strong> @{body('Get_domain_security_data')?['prefix_score']}<br>\nPrefix ranks domains given their IP prefixes (first three octets in IP) and the reputation score of these prefixes. Ranges from -100 to 0, -100 being very suspicious.<br>\n<strong>rip_score: </strong>@{body('Get_domain_security_data')?['rip_score']}<br>\nRIP ranks domains given their IP addresses and the reputation score of these IP addresses. Ranges from -100 to 0, -100 being very suspicious.<br>\n<strong>popularity:</strong> @{body('Get_domain_security_data')?['popularity']}<br>\nThe number of unique client IPs visiting this site, relative to the all requests to all sites.<br>\n<strong>geoscore:</strong> @{body('Get_domain_security_data')?['geoscore']}<br>\nA score that represents how far the different physical locations serving this name are from each other.<br>\n<strong>ks_test:</strong> @{body('Get_domain_security_data')?['ks_test']}<br>\nKolmogorov–Smirnov test on geodiversity. 0 means that the client traffic matches what is expected for this TLD.<br>\n<strong>attack:</strong> @{body('Get_domain_security_data')?['attack']}<br>\nThe name of any known attacks associated with this domain.<br>\n<strong>threat_type: </strong>@{body('Get_domain_security_data')?['threat_type']}<br>\nThe type of the known attack.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Create_HTML_table_with_security_indicators": {
+                                    "inputs": {
+                                        "format": "HTML",
+                                        "from": "@body('Get_Risk_score_for_a_domain')?['indicators']"
+                                    },
+                                    "runAfter": {
+                                        "Get_logo": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table"
+                                },
+                                "Get_Risk_score_for_a_domain": {
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ciscoumbrellainvestigate']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/domains/risk-score/@{encodeURIComponent(outputs('Get_domain_from_URL'))}"
+                                    },
+                                    "runAfter": {
+                                        "Get_domain_security_data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Get_domain_from_URL": {
+                                    "inputs": "@split(replace(replace(item()?['Url'],'http://',''), 'https://', ''), '/')[0]",
+                                    "runAfter": {},
+                                    "type": "Compose"
+                                },
+                                "Get_domain_security_data": {
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ciscoumbrellainvestigate']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/security/name/@{encodeURIComponent(outputs('Get_domain_from_URL'))}"
+                                    },
+                                    "runAfter": {
+                                        "Get_domain_from_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Get_logo": {
+                                    "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/master/Solutions/CiscoUmbrella/Playbooks/cisco-logo.png\"  width=\"32\" height=\"32\">",
+                                    "runAfter": {
+                                        "Get_Risk_score_for_a_domain": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "ciscoumbrellainvestigate": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaInvestigateAPIConnectionName'))]",
+                                "connectionName": "[variables('CiscoUmbrellaInvestigateAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellainvestigate_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,5 +1,5 @@
 # Ingest DocuSign Security Events
-Author: Sreedhar Ande
+**Author: Sreedhar Ande**
 
 DocuSign-SecurityEvents Data connector ingests   
 	1. Security Events for your DocuSign account into Azure Log Analytics Workspace using DocuSign Monitor REST API  
@@ -64,9 +64,7 @@ It’s only one-time step to collect consent
 
 ## Configuration Steps to Deploy Function App
 1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
-   <a href="https://aka.ms/sentinel-docusignconnector-azuredeploy" target="_blank">
-    <img src="https://aka.ms/deploytoazurebutton"/>
-	</a>
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-docusignconnector-azuredeploy)
   
 
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  

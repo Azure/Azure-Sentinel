@@ -1,0 +1,47 @@
+id: a4d8e681-6f30-440a-a2f3-c312bc1389d0
+name: Suspicious Process Injection from Office application
+description: |
+  This query detects process injections using CreateRemoteThread, QueueUserAPC or SetThread context APIs, originating from an Office process (only Word/Excel/PowerPoint)
+  that might contains macros. Performing process injection from a macro is a common technique by attackers to escape out of the Office process into something
+  longer running. 
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  DeviceEvents 
+  | where ActionType in ("CreateRemoteThreadApiCall", "QueueUserApcRemoteApiCall", "SetThreadContextRemoteApiCall")
+  | where InitiatingProcessFileName in~ ("winword.exe", "excel.exe", "powerpnt.exe")
+  | where InitiatingProcessCommandLine !contains "/dde"
+  | where not(InitiatingProcessCommandLine has_any (".docx", "dotx",".xlsx", ".xltx", ".pptx")) // These files can't contain macros.
+  // Enable the line below if the results are too noisy.
+  //| where InitiatingProcessCommandLine has_any (".doc", ".wbk", ".docm", ".dot", ".dotm" ".xls", ".xlsm", ".xltm", ".xla",".xll", ".xlam", ".ppt", ".pptm", ".pot", ".potm", ".ppsm", ".sldm") 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: InitiatingProcessAccountSid 
+      - identifier: Name
+        columnName: InitiatingProcessAccountName
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+version: 1.0.0
+kind: Scheduled

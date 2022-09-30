@@ -1,0 +1,64 @@
+id: d58035ff-0bac-4c61-a7f4-f58939ff9764
+name: DCOM Lateral Movement
+description: |
+  This detection looks for cases of close-time proximity between incoming network traffic on RPC/TCP, followed by the creation of a DCOM object, followed by the creation of a child process of the DCOM object. 
+  The query first identifies incoming network traffic over RPC/TCP, followed by the creation of a DCOM object (process) within 2 seconds, followed by the creation of a child process of this DCOM object. 
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceNetworkEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021.003
+query: |
+  let allowListedExecs = dynamic(["TiWorker.exe", "dllhost.exe", "backgroundTaskHost.exe", "mobsync.exe", "WmiPrvSE.exe", "RuntimeBroker.exe", "smartscreen.exe", "SppExtComObj.Exe", "usocoreworker.exe", "browser_broker.exe", "ssoncom.exe"]);
+  let rpcNetwEvents = materialize(DeviceNetworkEvents
+  | where InitiatingProcessFileName =~ "svchost.exe" and InitiatingProcessCommandLine has "rpcss" and LocalPort == 135
+  | where LocalIP !~ RemoteIP and ActionType != "ListeningConnectionCreated"
+  | project TimestampNetwEvent=bin(Timestamp, 5s),TimestampNetwEventExact=Timestamp, DeviceId, DeviceName, RPCHostID=InitiatingProcessId, RPCHostFileName=InitiatingProcessFileName, LocalIP, RemoteIP);
+  let dcomProcEvents = materialize (DeviceProcessEvents
+  | where InitiatingProcessFileName =~ "svchost.exe" and InitiatingProcessCommandLine has "dcomlaunch"
+  | project TimestampProcEvent=bin(Timestamp, 5s),TimestampProcEventExact=Timestamp, DeviceId, DeviceName, DCOMHostPID=InitiatingProcessId, DCOMHostFileName=InitiatingProcessFileName, DCOMPID=ProcessId, DCOMFileName=FileName, DCOMCmdLine=ProcessCommandLine);
+  let lastBootTime = materialize(DeviceProcessEvents
+  | where FileName =~ "services.exe"
+  | summarize LastBootTime=max(Timestamp) by DeviceId);
+  let RemoteDcomProcs = materialize(rpcNetwEvents
+  | join kind=inner dcomProcEvents on DeviceId 
+  | join kind=leftouter lastBootTime on DeviceId
+  | where TimestampProcEvent > LastBootTime+5m // Ignore first 5 min after boot.
+  // Avoiding < 2 since if the time between netw and proc creation is negative, they can't be related. Network event must come first. 
+  | where datetime_diff("second", TimestampProcEventExact, TimestampNetwEventExact) between (0 .. 2) 
+  // Allow-listing some usual suspects which create lot of noise. This is dangerous though...huge gap for bypass. 
+  | where DCOMFileName  !in~ (allowListedExecs));
+  RemoteDcomProcs
+  | join kind=inner hint.strategy=broadcast (
+      DeviceProcessEvents 
+      | where InitiatingProcessParentFileName =~ "svchost.exe" and InitiatingProcessFileName in ((RemoteDcomProcs | project DCOMFileName))) 
+  on $left.DCOMHostPID == $right.InitiatingProcessParentId, DeviceId, $left.DCOMPID == $right.InitiatingProcessId
+  | where InitiatingProcessParentFileName =~ "svchost.exe" and InitiatingProcessFileName =~ DCOMFileName 
+  // Allow-listing the magic of Defender.
+  | where FileName !in~ ("csc.exe") 
+  | summarize make_set(ProcessCommandLine) by TimestampNetwEventExact, TimestampProcEventExact, DeviceId, DeviceName, InitiatingProcessId, LocalIP, RemoteIP, LastBootTime, DCOMCmdLine
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP 
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: DCOMCmdLine
+version: 1.0.0
+kind: Scheduled

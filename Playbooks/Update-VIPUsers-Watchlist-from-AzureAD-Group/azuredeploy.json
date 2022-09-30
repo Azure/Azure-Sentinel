@@ -1,0 +1,485 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "author": "Benjamin Kovacevic",
+        "comments": "This playbook will sync Azure AD VIP group to Azure Sentinel VIP Users watchlist, and detect discrepencies between the watchlist and Azure AD group"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Update-VIPUsers-Watchlist-from-AzureAD-Group",
+            "type": "string"
+        },
+        "Resource Group": {
+            "defaultValue": "Resource Group name",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Resource Group where Microsoft Sentinel is deployed."
+            }
+        },
+        "Workspace Name": {
+            "defaultValue": "Workspace Name",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics Workspace on which Microsoft Sentinel is deployed."
+            }
+        },
+        "Workspace ID": {
+            "defaultValue": "Workspace ID",
+            "type": "string",
+            "metadata": {
+                "description": "ID of the Log Analytics Workspace on which Microsoft Sentinel is deployed."
+            }
+        },
+        "Azure AD Group ID": {
+            "defaultValue": "Azure AD Group ID",
+            "type": "string",
+            "metadata": {
+                "description": "Azure AD Group ID (Object ID) where VIP users are added as members."
+            }
+        }
+    },
+    "variables": {
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "o365ConnectionName": "[concat('o365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('o365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('o365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "MicrosoftSentinelWorkspaceID": {
+                            "defaultValue": "[parameters('Workspace ID')]",
+                            "type": "string"
+                        },
+                        "MicrosoftSentinelWorkspaceName": {
+                            "defaultValue": "[parameters('Workspace Name')]",
+                            "type": "string"
+                        },
+                        "ResourceGroupName": {
+                            "defaultValue": "[parameters('Resource Group')]",
+                            "type": "string"
+                        },
+                        "SubscriptionID": {
+                            "defaultValue": "[subscription().subscriptionId]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Compose_-_GroupID_body": {
+                            "runAfter": {
+                                "Run_query_and_list_results_-_Get_VIP_Watchlist_members": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": {
+                                "groupIds": [
+                                    "@{variables('VIP Group ID')}"
+                                ]
+                            }
+                        },
+                        "For_each_VIP_Watchlist_member": {
+                            "foreach": "@body('Run_query_and_list_results_-_Get_VIP_Watchlist_members')?['value']",
+                            "actions": {
+                                "Condition_-_if_user_is_not_in_Azure_AD_VIP_group": {
+                                    "actions": {
+                                        "Watchlists_-_Delete_a_watchlist_item": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "delete",
+                                                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('ResourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('MicrosoftSentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('VIPUsers')}/watchlistItem/@{encodeURIComponent(items('For_each_VIP_Watchlist_member')?['_DTItemId'])}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_check_is_the_Watchlist_user_still_member_of_Azure_AD_group": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('HTTP_-_check_is_the_Watchlist_user_still_member_of_Azure_AD_group')?['value'])",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_-_check_is_the_Watchlist_user_still_member_of_Azure_AD_group": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": "@outputs('Compose_-_GroupID_body')",
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{items('For_each_VIP_Watchlist_member')?['User Principal Name']}/checkMemberGroups"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_-_GroupID_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_member_of_VIP_Azure_AD_group": {
+                            "foreach": "@body('Parse_JSON_-_Get_VIP_Azure_AD_Group_Members')?['value']",
+                            "actions": {
+                                "Condition_-_member_not_in_VIP_Watchlist": {
+                                    "actions": {
+                                        "Condition_-_does_user_have_SID": {
+                                            "actions": {
+                                                "Watchlists_-_Add_a_new_watchlist_item_-_with_SID": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "Tags": "",
+                                                            "User AAD Object Id": "@{items('For_each_member_of_VIP_Azure_AD_group')?['id']}",
+                                                            "User Identifier": "",
+                                                            "User On-Prem Sid": "@{body('HTTP_-_does_user_have_SID')['onPremisesSecurityIdentifier']}",
+                                                            "User Principal Name": "@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('ResourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('MicrosoftSentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('VIPUsers')}/watchlistItem"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_does_user_have_SID": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Watchlists_-_Add_a_new_watchlist_item_-_VIP_Watchlist_-_without_SID": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "Tags": "",
+                                                                "User AAD Object Id": "@{items('For_each_member_of_VIP_Azure_AD_group')?['id']}",
+                                                                "User Identifier": "",
+                                                                "User On-Prem Sid": "",
+                                                                "User Principal Name": "@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "put",
+                                                            "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('ResourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('MicrosoftSentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('VIPUsers')}/watchlistItem"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('HTTP_-_does_user_have_SID')['onPremisesSecurityIdentifier']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_does_user_have_SID": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}?$select=onPremisesSecurityIdentifier"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Run_query_and_list_results_-_if_user_is_in_VIP_watchlist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@length(body('Run_query_and_list_results_-_if_user_is_in_VIP_watchlist')?['value'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Run_query_and_list_results_-_if_user_is_in_VIP_watchlist": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "_GetWatchlist('VIPUsers')\n| where [\"User Principal Name\"] == \"@{items('For_each_member_of_VIP_Azure_AD_group')?['userPrincipalName']}\"",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "[parameters('Resource Group')]",
+                                            "resourcename": "[parameters('Workspace Name')]",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "[subscription().subscriptionId]",
+                                            "timerange": "Last 12 hours"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_Get_VIP_Azure_AD_Group_Members": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP_-_Get_Group_details": {
+                            "runAfter": {
+                                "Initialize_variable_-_VIP_Group_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com/",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/v1.0/groups/@{variables('VIP Group ID')}"
+                            }
+                        },
+                        "HTTP_-_Get_VIP_Azure_AD_Group_Members": {
+                            "runAfter": {
+                                "HTTP_-_Get_Group_details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com/",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/v1.0/groups/@{variables('VIP Group ID')}/members"
+                            }
+                        },
+                        "Initialize_variable_-_VIP_Group_ID": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "VIP Group ID",
+                                        "type": "string",
+                                        "value": "[parameters('Azure AD Group ID')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_Get_VIP_Azure_AD_Group_Members": {
+                            "runAfter": {
+                                "HTTP_-_Get_VIP_Azure_AD_Group_Members": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_Get_VIP_Azure_AD_Group_Members')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "userPrincipalName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "userPrincipalName",
+                                                    "id"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_-_Get_VIP_Watchlist_members": {
+                            "runAfter": {
+                                "For_each_member_of_VIP_Azure_AD_group": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "_GetWatchlist('VIPUsers')\n| distinct [\"User Principal Name\"], _DTItemId",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[parameters('Resource Group')]",
+                                    "resourcename": "[parameters('Workspace Name')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[subscription().subscriptionId]",
+                                    "timerange": "Last 12 hours"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                                "connectionName": "[variables('o365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

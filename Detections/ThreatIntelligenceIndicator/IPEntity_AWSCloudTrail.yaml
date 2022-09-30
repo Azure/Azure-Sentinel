@@ -1,5 +1,5 @@
 id: f110287e-1358-490d-8147-ed804b328514
-name: (Preview) TI map IP entity to AWSCloudTrail
+name: TI map IP entity to AWSCloudTrail
 description: |
   'Identifies a match in AWSCloudTrail from any IP IOC from TI'
 severity: Medium
@@ -25,6 +25,7 @@ query: |
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
@@ -33,14 +34,16 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
-  | join (
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
       AWSCloudTrail | where TimeGenerated >= ago(dt_lookBack)
       // renaming time column so it is clear the log this came from
       | extend AWSCloudTrail_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.SourceIpAddress
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, AWSCloudTrail_TimeGenerated,
+  | where AWSCloudTrail_TimeGenerated < ExpirationDateTime
+  | summarize AWSCloudTrail_TimeGenerated = arg_max(AWSCloudTrail_TimeGenerated, *) by IndicatorId, SourceIpAddress
+  | project AWSCloudTrail_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
   TI_ipEntity, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserIdentityUserName, SourceIpAddress,
   NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = AWSCloudTrail_TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, URLCustomEntity = Url
@@ -57,3 +60,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
+version: 1.2.1
+kind: Scheduled

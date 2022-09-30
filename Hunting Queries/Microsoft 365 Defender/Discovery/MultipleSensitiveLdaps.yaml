@@ -1,0 +1,36 @@
+id: 36582cd7-ddd2-43bc-be79-293a61c42cbe
+name: MultipleSensitiveLdaps
+description: |
+  Detect multiple sensitive Active Directory LDAP queries made in bin time
+  Sensitive queries defined as Roasting or sensitive objects queries
+  Replace 10 on line 6 with your desired thershold
+  Replace 1m on line 7 with your desired bin time
+  This LDAP query cover Rubeus, Kerberoast, BloodHound tools
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - IdentityQueryEvents
+query: |
+  let SensitiveObjects = "[\"Administrators\", \"Domain Controllers\", \"Domain Admins\", \"Account Operators\", \"Backup Operators\", \"DnsAdmin\", \"Enterprise Admins\", \"Group Policy Creator Owners\"]";
+  let ASREP_ROASTING = "userAccountControl:1.2.840.113556.1.4.803:=4194304";
+  let ASREP_ROASTING1 = "userAccountControl|4194304";
+  let ASREP_ROASTING2 = "userAccountControl&4194304";
+  let KERBEROASTING = "serviceprincipalname=*";
+  let Thershold = 10;
+  let BinTime = 1m;
+  let SensitiveQueries = (
+  IdentityQueryEvents
+  | where ActionType == "LDAP query"
+  | parse Query with * "Search Scope: " SearchScope ", Base Object:" BaseObject ", Search Filter: " SearchFilter
+  | where SensitiveObjects contains QueryTarget or SearchFilter contains "admincount=1");
+  let Roasting = (
+  IdentityQueryEvents
+  | where ActionType == "LDAP query"
+  | parse Query with * "Search Scope: " SearchScope ", Base Object:" BaseObject ", Search Filter: " SearchFilter
+  | where SearchFilter contains ASREP_ROASTING or
+  SearchFilter contains ASREP_ROASTING1 or
+  SearchFilter contains ASREP_ROASTING2 or
+  SearchFilter contains KERBEROASTING);
+  union SensitiveQueries, Roasting
+  | summarize NumberOfLdapQueries = count(), NumberOfDistinctLdapQueries = dcount(SearchFilter) by DeviceName, bin(Timestamp, BinTime)
+  | where NumberOfDistinctLdapQueries > Thershold 
