@@ -1,0 +1,74 @@
+Parser:
+  Title: Microsoft File Storage - Eventlog - Audit Events
+  Version: '0.1'
+  LastUpdated: October 1, 2022
+Product:
+  Name: Microsoft Sentinel
+Normalization:
+  Schema: FileEvent
+  Version: '0.1'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/ASimFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Windows Audit Events to the ASIM File Event normalized schema.
+ParserName: ASimFileEventMicrosoftAuditEvent
+EquivalentBuiltInParser: _ASim_FileEvent_MicrosoftAuditEvent
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Parser=(disabled:bool=false)
+  {
+  SecurityEvent
+  | where not(disabled)
+  | project TimeGenerated, EventID, ObjectType, AccessMask, ProcessName, SubjectUserSid, AccountType, Account, Activity, Computer, ObjectName, ProcessId
+  | where EventID == 4663 
+    and ObjectType == "File"
+  | extend EventType = case(
+    AccessMask == "0x1", "ObjectAccessed"
+    , AccessMask == "0x10", "MetadataModified"
+    , AccessMask == "0x100", "MetadataModified"
+    , AccessMask == "0x10000", "ObjectDeleted"
+    , AccessMask == "0x2", "ObjectModified"
+    , AccessMask == "0x20000", "MetadataAccessed"
+    , AccessMask == "0x4", "ObjectModified"
+    , AccessMask == "0x40", "ObjectDeleted"
+    , AccessMask == "0x40000", "MetadataModified"
+    , AccessMask == "0x6", "ObjectModified"
+    , AccessMask == "0x8", "MetadataAccessed"
+    , AccessMask == "0x80", "MetadataAccessed"
+    , AccessMask == "0x80000", "MetadataModified"
+    , "")
+    , ActingProcessName = ProcessName
+    , ActorUserIdType = iif(SubjectUserSid startswith_cs "S-1-5-","SID","")
+    , ActorUsernameType = iif(Account contains "\\", "Windows", "")
+    , ActorUserType = iif(AccountType == "Machine", "Machine", "Regular")
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , TargetFilePath = iif(ObjectName startswith @"\Device\",""
+      ,ObjectName) 
+    , TargetFilePathType = iif(ObjectName !startswith @"\Device\","Windows Local"
+      ,"")
+    , FilePath = iif(ObjectName startswith @"\Device\",""
+      ,ObjectName) 
+    , ActorUsername = Account
+    , Process = ProcessName
+    , ActingProcessId = tolong(ProcessId)
+  | project-away ProcessName
+  | project-rename ActorUserId = SubjectUserSid
+    , EventOriginalType = EventID
+    , EventOriginalSubType = Activity
+    , Dvc = Computer
+    , User = Account
+  | extend EventSchema = "FileEvent"
+    , EventSchemaVersion = "0.1.1"
+    , EventResult = "Success"
+    , EventCount = int(1)
+    , EventVendor = 'Microsoft'
+    , EventProduct = 'Security Events'
+  };
+  Parser (disabled)
