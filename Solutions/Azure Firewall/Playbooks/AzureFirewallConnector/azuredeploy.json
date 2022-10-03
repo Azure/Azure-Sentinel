@@ -1,0 +1,3325 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "comments": "This Azure Firewall connector uses Firewall, IP Groups and Firewall Policies APIs to perform different actions on the Firewall, IP Groups and Firewall Policies.",
+    "author": "Dharma Reddy, Azure Firewall"
+  },
+  "parameters": {
+    "Custom Connector Name": {
+      "defaultValue": "AzureFirewallConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Azure Firewall Connector"
+      }
+    }
+  },
+  "variables": {
+    "azure": "[concat('https://management','.azure','.com')]",
+    "domain": "[replace(variables('azure'), 'https://', '')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/customApis",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('Custom Connector Name')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "connectionParameters": {
+          "token": {
+            "type": "oauthSetting",
+            "oAuthSettings": {
+              "identityProvider": "aadcertificate",
+              "clientId": "",
+              "scopes": [],
+              "redirectMode": "Direct",
+              "redirectUrl": "",
+              "properties": { "IsFirstParty": "False" },
+              "customParameters": {
+                "resourceUri": { "value": "[variables('azure')]" },
+                "loginUriAAD": { "value": "https://login.windows.net" }
+              }
+            },
+            "uiDefinition": {
+              "displayName": "Login your Credentials",
+              "description": "Login your Credentials",
+              "tooltip": "Provide your Credentials",
+              "constraints": {
+                "required": "false",
+                "hidden": "true"
+              }
+            }
+          },
+          "token:clientId": {
+            "type": "string",
+            "uiDefinition": {
+              "displayName": "Client ID",
+              "description": "Client (or Application) ID of the Azure Active Directory application.",
+              "constraints": {
+                "required": "false",
+                "hidden": "true"
+              }
+            }
+          },
+          "token:clientSecret": {
+            "type": "securestring",
+            "uiDefinition": {
+              "displayName": "Client Secret",
+              "description": "Client secret of the Azure Active Directory application.",
+              "constraints": {
+                "required": "false",
+                "hidden": "true"
+              }
+            }
+          },
+          "token:TenantId": {
+            "type": "string",
+            "metadata": { "sourceType": "AzureActiveDirectoryTenant" },
+            "uiDefinition": {
+              "displayName": "Tenant",
+              "description": "The tenant ID of for the Azure Active Directory application",
+              "constraints": {
+                "required": "false",
+                "hidden": "true"
+              }
+            }
+          },
+          "token:resourceUri": {
+            "type": "string",
+            "uiDefinition": {
+              "displayName": "ResourceUri",
+              "description": "The resource you are requesting authorization to use.",
+              "constraints": {
+                "required": "false",
+                "hidden": "true"
+              }
+            }
+          },
+          "token:grantType": {
+            "type": "string",
+            "allowedValues": [ { "value": "client_credentials" } ],
+            "uiDefinition": {
+              "displayName": "Grant Type",
+              "description": "Grant type",
+              "constraints": {
+                "required": "false",
+                "hidden": "true",
+                "allowedValues": [
+                  {
+                    "text": "Client Credentials",
+                    "value": "client_credentials"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "backendService": {
+          "serviceUrl": "[variables('azure')]"
+        },
+        "brandColor": "#FFFFFF",
+        "displayName": "[parameters('Custom Connector Name')]",
+        "iconUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOcAAADnCAYAAADl9EEgAAAACXBIWXMAAAsSAAALEgHS3X78AAAMNElEQVR4nO3dX2yV9R3H8V9HtQwdhRIZ4PiXFUMGrDgDwRuKyaIuM6FesiVS3J27QHS3hpBd6MU25MJbqV7oxRItiSZzF3pKZJKRFWrrYgRSikKRhdIWKa1QXL5Pe+DQHug5p+d5ns/v97xfyUnQBJ7nPOd8zu//71dTs+dIq3NulQOgJFfrnLNwNvOxAFp+xOcBaCKcgCjCCYginIAowgmIIpyAKMIJiCKcgCjCCYginIAowgmIIpyAKMIJiCKcgCjCCYginIAowgmIIpyAKMIJiCKcgCjCCYginIAowgmIIpyAKMIJiCKcgCjCCYginIAowgmIIpyAKMIJiCKcgCjCCYginIAowgmIIpyAKMIJiCKcgKhaPhj/Lfhxrdv48AMzvo8zA6PuzMBY1h+XNwinR7Y11ruNy+a5pocfcKsa5kaBrJ87p+w3MDQ67k6cuxqFtevcVXfi/IjLnRrK8JPVRDiFWfi2r2+IQtn88/lVu1ELtP170b+56fb/7zg97A51X3K508NReJEuwilmVUOd2711mWvZ0OBWLqxL9OZuBdY513d5zLX9+6J769hFqsIpqanZcyRnn0sm372Q1k2L3c7Ni6taQlbLoZ4Bd+BwP1XfZO2j5EyZhXLv08sTLyXLYVVre1m1d99HXxPShBDOlPgQyqmsVP/4hXWENCGMcybMOnk++eN69+aORq+CWSgf0oM7GqNhHMSDcCZo71PLXefLTZLtykrs3LTY9b7yWNR5heojnAmw0vL4n5qicIbGhmXe27WWUjQGhDNm1ra0amzTspln8PhsZ/Q+15U0UwmlIZwxstLE2paVzOLxkf0A2Q+RTZrA7BHOGFj17v3n10alSdbYD5F1FrVm8L1XG42EKrNgWvUu9GrsTKzGYNqOXVS+TWmUnFVEMO9kAaUErRzhrBKCWRwBrRzhrBJrYxLM4iygjIWWj3BWgfXKhjKxIC4Hd6xhmKVMhHOWXty6NJO9suWyXlwmKpSHcM6ClQR/a1nt7f0nzar9Byd7cTEzwlmh/FgmymNLz2h/loZwVsjmyfq6qiRt1v6kejszwlkBm562e+tS7+5bRb79iXsjnBXgizV7+Y3LcHeEs0xUZ6tnf8uqUN5KLAhnGayd9GLzMm/uV5313jJ76O4IZxmsnZmV5V9JsX2UUBzhLBGlZjysiUDpWRzhLBGlZnxsv15MRzhL1MoXKDY2L5l5t9MRzhKkcTRC1jA/eTqmaRRh55XYKV72i25/ZjwufvYDuKe9N/S3WRbCOdnZ07K+wTU3zo+CSCmZPHvm9uzZRf62TIfTegm3b5g4BwTps8+BcN6WuXDmj9izDh56X7Vsa2TBeqHMhNNCaVPv6HjQZTOGrIkxeO1G5p+Fy0I47cO2ULKKxA9WerZ3D2T+ObjQw2ltyv3Prqb66hErPQnnhCDHOSe2qVyfqaMQQsGw1W3BlZw2XmYr7Qmln6xvABOCCqe1LUM8Zi9LGGO+LZhqre1OQDDDQOk5wfuSk2MQwmNTJ88MjGX9MfhdchJMhGxOzeN/aLUfK9/eI8EMl5WcVrVdOK/Wjd646QavjWfxMXR4W621NibBDJOtBio8e6bv8lg05/ZQz0CmxkC9DKcFk8nq2WE9uDbt0l5Do+OuvfuSO3C43504dzXoZ+Bdm7N18kNCNtn4tX3+nS83RRNNQp604FU4bSsLm44HuMnq78cvrAs2pF6F8yDT8VBEPqShHTHoTThtggEdQLgXq+72vvJYMKeYeRFOq84y+welsJrVe7vWuv0BnJvqRThDeNBIlq3ftbaoz9Vc+XBaFaVwzAsolX1vbKKKrwGVDyelJmbD+imsHerjptXS4bQxTZYQYbbyh/X6VoJKh3N3M/v+oDqsBPWtiisbThtUZugE1WTfJ59OJZcN585NDwncBUJjc7J9GZaTDKdVPZg/i7hYOH2Y7icZzhZWnCBmPnQQSYZzeyDTr6DLRgHUNxqXDCd7lyIJVr1V3kxMLpwWTFaeICnKnUNy4WSqHpJkHY+qpadcOH2cZgW/qZaehBOZZ6WnYs+tXDiZS4s0tApOepEKJ720SMvOzXqTXoI8AhAol827VesYkgrnxmXzBO4CWaU2M00qnPUB7ZwG/zSLNauo1gKT1Po8CCcwyWamKbU7CSdQwE44UyEVzq7zYR9MA31K00elwpnRcxiBoqTCeWZgVOAukGVK00fFwjkmcBfIMqU5tnIdQh2nhwXuAkifXDhDP60YKJVcOLsIJ1Kk1O8hF87c6SGBu0BWKfV7yIXTHg7jnUjL0LUbMs9ecoZQ7hSdQkjHifMjMk9eMpxvHbsocBfIIqUOSclw2gPqu8yYJ5Jl37lBqrUzO9BxXvXWEKjcKa3OSNlwth37n8BdIEs6xPo6ZMNp1QvankhSe8+A1POWXs+576OvBe4CWXCoZ0CqvWmkN+2xMU8rPdM6q7Pjtddc36efpnLtrFiwYoV78tVX3dz6dLcIOdStVWo69XC6ydIzjXC+/cwzru/IkcSvmzX2jC90d7vnPvggtYAOjY67NsEmlPw2JVZ6Jl297XrnHYKZoG97eqJaSlpeFx0Z8GIPoQOH+xMd9xw8ezaxa2HCt93dqTwJKzXt+6XIi3BaQ33Xu6cE7gShsVJTrSMoz5tdnG2A2H7h0joq/JG6OremLv5tE4+OjLhLNya+LEsWPeSe3LIt9mv+82jOXbg0Ma68qLbWbZkX/877he8zLcqlpvMpnG6yc2hb4/zoXIukPThnjlt6332xX/X+mppbf667v86tXPKz2K9p1ym8ftLvMy37/nFWttR0vu1bm6/e2i8eMBu2Hc7rwqWm83FTaZsUv+vdkwJ3Al/Zj7sP3yEvd3xv7x5wz9NBhArteb/Xi50evT2OwQaNmd6HctmMM8UJB8V4fVaKhZPJ8SiVtTN9GpLz/iAje9gvtfcK3AmU2b5Uz775pVefURCnjFmvG21Q3I0F84k3vpAeNikmmCMArR3xq792McyCO/gaTBfa+Zw2zLL6z//hSAdErD/C12A632YIlcI+iCfe6HF7n1oevarlu/Fx13/9euz3//0PP9z689j3Y67vwjexX9OuU3j9pN9nHKyz0Pfe/ODCmWcfjK1u39+yuioHon41Nha9kmTzXd/+8O+JXtPmu3447G/Nw1YvWSeh2mZdlQj62Hmr5lopap1FbLUZPpvE/uhfuoIIpgu55CzUNjnwbNXc1s2L3cqF8a8uQXKsj2FPe29wJ9RlIpx5+XZI66bFbu/Ty8sKaTlLxtJY9tX11X9d18kvbv33b+fPvio/k5NTqvpNa9a5pkd+UdLfLVymVikLpX2eoZSUU2UqnHn5ktSOGLf1oS0bFrn6uXPu+XfKWTKWxrKvvv47O46SWPbVP2U95oKfzC/5vRYuUyuHDZW1d1+KQhn6SeiZDGfexAqXU9FrW2O9276+IVovCi3WX2Clo3XwtQvukheXTIezkH34+erRb3rOuS0qN5YxFkQrEe2H0w5StvNaQy8h74ZwFjF6/abcPYXO2o+tL/0r64/hDkEPpQA+I5yAKMIJiCKcgCjCCYginIAohlJKVM6SsTSWfQ1euXMlSRLLvuyZTL2HUt9r4TI1FEc4S1TpkrE0ln2ZNJZ92dzewvm9mB2qtYAowgmIolpbIk4Zqy6FU8bUEc4SccpYdSmcMqaOai0ginACoggnIIpwAqIIJyCKcAKiCCcginACoggnIIoZQiWyJVidCVyncBnW0JVhd/j40divOVSw3Myu33ntWuzXnLrcDNMRzhJZOJNYI1lo8Lth19H5WaLXvHLzpuscGUn0miiOai0ginAW0bv0l3L3FLovVzye9UcwDeEs4sySDS638Xdy9xUqe96frdue9ccwDW3Ou/jk0d9HJejq/s8l7y8Ugw/+1B1f8+usP4aiCOc92C+6vYA0UK0FRBFOQBThBEQRTkAU4QREEU5AFOEERBFOQBThBEQRTkAU4QREEU5AFOEERBFOQBThBEQRTkAU4QREEU5AFOEERBFOQBThBEQRTkAU4QREEU5AFOEERBFOQBThBEQRTkAU4QREEU5AFOEERBFOQBThBEQRTkAU4QREEU5AFOEERBFOQBThBEQRTkAU4QREEU5AFOEERBFOQBThBEQRTkBUrXOuzTmX4wMChDiX+z+n1Ju7nMtUlwAAAABJRU5ErkJggg==",
+        "swagger": {
+          "swagger": "2.0",
+          "info": {
+            "title": "Default title",
+            "description": "",
+            "version": "1.0"
+          },
+          "host": "[variables('domain')]",
+          "basePath": "/",
+          "schemes": [
+            "https"
+          ],
+          "consumes": [
+
+          ],
+          "produces": [
+
+          ],
+          "paths": {
+            "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/azureFirewalls/{azureFirewallName}": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Name for the azure firewall",
+                          "title": "name"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "Unique id of the Azure firewall",
+                          "title": "id"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "Type of the azure firewall",
+                          "title": "type"
+                        },
+                        "etag": {
+                          "type": "string",
+                          "description": "Tag for azure firewall",
+                          "title": "etag"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "Location of azure firewall",
+                          "title": "location"
+                        },
+                        "zones": {
+                          "type": "array",
+                          "items": {
+
+                          },
+                          "description": "zones"
+                        },
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+                            "key1": {
+                              "type": "string",
+                              "description": "key1"
+                            }
+                          },
+                          "description": "tags"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "provisioningState": {
+                              "type": "string",
+                              "description": "Provisioning state of the rule collection",
+                              "title": "provisioning State"
+                            },
+                            "sku": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "description": "suku name",
+                                  "title": "name"
+                                },
+                                "tier": {
+                                  "type": "string",
+                                  "description": "tier"
+                                }
+                              },
+                              "description": "sku"
+                            },
+                            "threatIntelMode": {
+                              "type": "string",
+                              "description": "Threat Intel Mode",
+                              "title": "threatIntelMode"
+                            },
+                            "ipConfigurations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the IP configuration",
+                                    "title": "name"
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "description": "Unique id for IP configuration",
+                                    "title": "id"
+                                  },
+                                  "etag": {
+                                    "type": "string",
+                                    "description": "Tag for azure firewall",
+                                    "title": "etag"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "provisioningState": {
+                                        "type": "string",
+                                        "description": "Provisioning State",
+                                        "title": "ProvisioningState"
+                                      },
+                                      "privateIPAddress": {
+                                        "type": "string",
+                                        "description": "private IP Address of the rule collection",
+                                        "title": "privateIPAddress"
+                                      },
+                                      "subnet": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "description": "subnet Unique id",
+                                            "title": "id"
+                                          }
+                                        },
+                                        "description": "subnet"
+                                      },
+                                      "publicIPAddress": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "description": "public IP of the rule collection",
+                                            "title": "id"
+                                          }
+                                        },
+                                        "description": "publicIPAddress"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "ipConfigurations"
+                            },
+                            "applicationRuleCollections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the rule collection",
+                                    "title": "name"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "priority": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "description": "Priority of the rule collection",
+                                        "title": "priority"
+                                      },
+                                      "action": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "description": "Type of the rule colloection",
+                                            "title": "type"
+                                          }
+                                        },
+                                        "description": "action"
+                                      },
+                                      "rules": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "description": "name"
+                                            },
+                                            "description": {
+                                              "type": "string",
+                                              "description": "description"
+                                            },
+                                            "protocols": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "protocolType": {
+                                                    "type": "string",
+                                                    "description": "protocolType"
+                                                  },
+                                                  "port": {
+                                                    "type": "integer",
+                                                    "format": "int32",
+                                                    "description": "port"
+                                                  }
+                                                }
+                                              },
+                                              "description": "protocols"
+                                            },
+                                            "targetFqdns": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "targetFqdns"
+                                            },
+                                            "sourceAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "sourceAddresses"
+                                            }
+                                          }
+                                        },
+                                        "description": "rules"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "applicationRuleCollections"
+                            },
+                            "natRuleCollections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the rule collection",
+                                    "title": "name"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "priority": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "description": "priority of the azure firewall",
+                                        "title": "priority"
+                                      },
+                                      "action": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "description": "Type of the rule collection",
+                                            "title": "type"
+                                          }
+                                        },
+                                        "description": "action"
+                                      },
+                                      "rules": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "description": "name"
+                                            },
+                                            "description": {
+                                              "type": "string",
+                                              "description": "description"
+                                            },
+                                            "sourceAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "sourceAddresses"
+                                            },
+                                            "destinationAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationAddresses"
+                                            },
+                                            "destinationPorts": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationPorts"
+                                            },
+                                            "protocols": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "protocols"
+                                            },
+                                            "translatedAddress": {
+                                              "type": "string",
+                                              "description": "translatedAddress"
+                                            },
+                                            "translatedPort": {
+                                              "type": "string",
+                                              "description": "translatedPort"
+                                            },
+                                            "translatedFqdn": {
+                                              "type": "string",
+                                              "description": "translatedFqdn"
+                                            }
+                                          }
+                                        },
+                                        "description": "rules"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "natRuleCollections"
+                            },
+                            "networkRuleCollections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the rule collection",
+                                    "title": "name"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "priority": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "description": "priority of rule collection",
+                                        "title": "priority"
+                                      },
+                                      "action": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "description": "Type of the rule collection type",
+                                            "title": "type"
+                                          }
+                                        },
+                                        "description": "action"
+                                      },
+                                      "rules": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "description": "name"
+                                            },
+                                            "description": {
+                                              "type": "string",
+                                              "description": "description"
+                                            },
+                                            "sourceAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "sourceAddresses"
+                                            },
+                                            "destinationPorts": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationPorts"
+                                            },
+                                            "destinationAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationAddresses"
+                                            },
+                                            "protocols": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "protocols"
+                                            },
+                                            "destinationFqdns": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationFqdns"
+                                            }
+                                          }
+                                        },
+                                        "description": "rules"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "networkRuleCollections"
+                            },
+                            "ipGroups": {
+                              "type": "array",
+                              "items": {
+
+                              },
+                              "description": "ipGroups"
+                            },
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+
+                              },
+                              "description": "additionalProperties"
+                            }
+                          },
+                          "description": "properties"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Gets the specified Azure Firewall",
+                "description": "Gets the specified Azure Firewall",
+                "operationId": "GetFirewall",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please Enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter your Resource Group Name"
+                  },
+                  {
+                    "name": "azureFirewallName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter your Firewall name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01"
+                  }
+                ]
+              },
+              "put": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Name of the Firewall",
+                          "title": "name"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "Id of the Azure firewall",
+                          "title": "id"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "Type of the azure firewall",
+                          "title": "type"
+                        },
+                        "etag": {
+                          "type": "string",
+                          "description": "etag",
+                          "title": "etag"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location of the firewall",
+                          "title": "location"
+                        },
+                        "zones": {
+                          "type": "array",
+                          "items": {
+
+                          },
+                          "description": "zones"
+                        },
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+                            "key1": {
+                              "type": "string",
+                              "description": "key1",
+                              "title": "key"
+                            }
+                          },
+                          "description": "tags"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "provisioningState": {
+                              "type": "string",
+                              "description": "Provisioning state firewall",
+                              "title": "provisioningState"
+                            },
+                            "sku": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "description": "suku name",
+                                  "title": "name"
+                                },
+                                "tier": {
+                                  "type": "string",
+                                  "description": "Tier of the azure firewall",
+                                  "title": "tier"
+                                }
+                              },
+                              "description": "sku"
+                            },
+                            "threatIntelMode": {
+                              "type": "string",
+                              "description": "threatIntelMode"
+                            },
+                            "ipConfigurations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the IP configuration",
+                                    "title": "name"
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "description": "IP Configuration ID",
+                                    "title": "id"
+                                  },
+                                  "etag": {
+                                    "type": "string",
+                                    "description": "etag"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "provisioningState": {
+                                        "type": "string",
+                                        "description": "provisioning State",
+                                        "title": "Provisioning State"
+                                      },
+                                      "privateIPAddress": {
+                                        "type": "string",
+                                        "description": "Private IP Address configuration rule",
+                                        "title": "Private IP Address"
+                                      },
+                                      "subnet": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "description": "subnet id",
+                                            "title": "id"
+                                          }
+                                        },
+                                        "description": "subnet"
+                                      },
+                                      "publicIPAddress": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "description": "Id of the public IP addess",
+                                            "title": "id"
+                                          }
+                                        },
+                                        "description": "publicIPAddress"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "ipConfigurations"
+                            },
+                            "applicationRuleCollections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the rule collection",
+                                    "title": "name"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "priority": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "description": "priority of the rule collection",
+                                        "title": "priority"
+                                      },
+                                      "action": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "description": "Type of the",
+                                            "title": "type"
+                                          }
+                                        },
+                                        "description": "action"
+                                      },
+                                      "rules": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "description": "name"
+                                            },
+                                            "description": {
+                                              "type": "string",
+                                              "description": "description"
+                                            },
+                                            "protocols": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "protocolType": {
+                                                    "type": "string",
+                                                    "description": "protocolType"
+                                                  },
+                                                  "port": {
+                                                    "type": "integer",
+                                                    "format": "int32",
+                                                    "description": "port"
+                                                  }
+                                                }
+                                              },
+                                              "description": "protocols"
+                                            },
+                                            "targetFqdns": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "targetFqdns"
+                                            },
+                                            "sourceAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "sourceAddresses"
+                                            }
+                                          }
+                                        },
+                                        "description": "rules"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "applicationRuleCollections"
+                            },
+                            "natRuleCollections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the rule collection",
+                                    "title": "name"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "priority": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "description": "Priority of the firewall",
+                                        "title": "priority"
+                                      },
+                                      "action": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "description": "Type of rule collection",
+                                            "title": "type"
+                                          }
+                                        },
+                                        "description": "action"
+                                      },
+                                      "rules": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "description": "name"
+                                            },
+                                            "description": {
+                                              "type": "string",
+                                              "description": "description"
+                                            },
+                                            "sourceAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "sourceAddresses"
+                                            },
+                                            "destinationAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationAddresses"
+                                            },
+                                            "destinationPorts": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationPorts"
+                                            },
+                                            "protocols": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "protocols"
+                                            },
+                                            "translatedAddress": {
+                                              "type": "string",
+                                              "description": "translatedAddress"
+                                            },
+                                            "translatedPort": {
+                                              "type": "string",
+                                              "description": "translatedPort"
+                                            },
+                                            "translatedFqdn": {
+                                              "type": "string",
+                                              "description": "translatedFqdn"
+                                            }
+                                          }
+                                        },
+                                        "description": "rules"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "natRuleCollections"
+                            },
+                            "networkRuleCollections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Name of the rule collection",
+                                    "title": "name"
+                                  },
+                                  "properties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "priority": {
+                                        "type": "integer",
+                                        "format": "int32",
+                                        "description": "Priority of the rule collection",
+                                        "title": "priority"
+                                      },
+                                      "action": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "description": "Type of the network rule collection",
+                                            "title": "type"
+                                          }
+                                        },
+                                        "description": "action"
+                                      },
+                                      "rules": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string",
+                                              "description": "name"
+                                            },
+                                            "description": {
+                                              "type": "string",
+                                              "description": "description"
+                                            },
+                                            "sourceAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "sourceAddresses"
+                                            },
+                                            "destinationPorts": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationPorts"
+                                            },
+                                            "destinationAddresses": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationAddresses"
+                                            },
+                                            "protocols": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "protocols"
+                                            },
+                                            "destinationFqdns": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "description": "destinationFqdns"
+                                            }
+                                          }
+                                        },
+                                        "description": "rules"
+                                      }
+                                    },
+                                    "description": "properties"
+                                  }
+                                }
+                              },
+                              "description": "networkRuleCollections"
+                            },
+                            "ipGroups": {
+                              "type": "array",
+                              "items": {
+
+                              },
+                              "description": "ipGroups"
+                            },
+                            "additionalProperties": {
+                              "type": "object",
+                              "properties": {
+
+                              },
+                              "description": "additionalProperties"
+                            }
+                          },
+                          "description": "properties"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Creates or updates the specified Azure Firewall",
+                "description": "Creates or updates the specified Azure Firewall",
+                "operationId": "UpdateFirewall",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group name"
+                  },
+                  {
+                    "name": "azureFirewallName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Azure Firewall name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01",
+                    "description": "Please enter api version"
+                  },
+                  {
+                    "name": "body",
+                    "in": "body",
+                    "required": false,
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "location": {
+                          "type": "string",
+                          "description": "location"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "networkRuleCollections": {
+                              "type": "object",
+                              "properties": {
+
+                              },
+                              "description": "networkRuleCollections"
+                            }
+                          },
+                          "description": "properties"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "patch": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+
+                    }
+                  }
+                },
+                "summary": "Updates tags for Azure Firewall resource",
+                "description": "Updates tags for Azure Firewall resource",
+                "operationId": "UpdateTags",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group name"
+                  },
+                  {
+                    "name": "azureFirewallName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Azure Firewall name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "description": "Please enter api version"
+                  },
+                  {
+                    "name": "body",
+                    "in": "body",
+                    "required": false,
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+
+                          },
+                          "description": "tags"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "/subscriptions/{subscriptionId}/providers/Microsoft.Network/azureFirewalls": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+
+                    }
+                  }
+                },
+                "summary": "Gets all the Azure Firewalls in a subscription",
+                "description": "List All Azure Firewalls in Subscription",
+                "operationId": "ListAll",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/azureFirewalls": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "description": "Name of the firewall",
+                                "title": "name"
+                              },
+                              "id": {
+                                "type": "string",
+                                "description": "Id of the azure firewall",
+                                "title": "id"
+                              },
+                              "type": {
+                                "type": "string",
+                                "description": "Type of the firewall",
+                                "title": "type"
+                              },
+                              "etag": {
+                                "type": "string",
+                                "description": "etag",
+                                "title": "etag"
+                              },
+                              "location": {
+                                "type": "string",
+                                "description": "location of the azure firewall",
+                                "title": "location"
+                              },
+                              "zones": {
+                                "type": "array",
+                                "items": {
+
+                                },
+                                "description": "zones"
+                              },
+                              "tags": {
+                                "type": "object",
+                                "properties": {
+                                  "key1": {
+                                    "type": "string",
+                                    "description": "key1",
+                                    "title": "key1"
+                                  }
+                                },
+                                "description": "tags"
+                              },
+                              "properties": {
+                                "type": "object",
+                                "properties": {
+                                  "provisioningState": {
+                                    "type": "string",
+                                    "description": "provisioning State of the subnet",
+                                    "title": "provisioning State"
+                                  },
+                                  "threatIntelMode": {
+                                    "type": "string",
+                                    "description": "Threat Intel Mode",
+                                    "title": "threatIntelMode"
+                                  },
+                                  "ipConfigurations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string",
+                                          "description": "name"
+                                        },
+                                        "id": {
+                                          "type": "string",
+                                          "description": "id"
+                                        },
+                                        "etag": {
+                                          "type": "string",
+                                          "description": "etag"
+                                        },
+                                        "properties": {
+                                          "type": "object",
+                                          "properties": {
+                                            "provisioningState": {
+                                              "type": "string",
+                                              "description": "provisioningState"
+                                            },
+                                            "privateIPAddress": {
+                                              "type": "string",
+                                              "description": "privateIPAddress"
+                                            },
+                                            "subnet": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string",
+                                                  "description": "id"
+                                                }
+                                              },
+                                              "description": "subnet"
+                                            },
+                                            "publicIPAddress": {
+                                              "type": "object",
+                                              "properties": {
+                                                "id": {
+                                                  "type": "string",
+                                                  "description": "id"
+                                                }
+                                              },
+                                              "description": "publicIPAddress"
+                                            }
+                                          },
+                                          "description": "properties"
+                                        }
+                                      }
+                                    },
+                                    "description": "ipConfigurations"
+                                  },
+                                  "managementIpConfiguration": {
+                                    "type": "object",
+                                    "properties": {
+                                      "name": {
+                                        "type": "string",
+                                        "description": "name"
+                                      },
+                                      "id": {
+                                        "type": "string",
+                                        "description": "Id of  Management IP configuration",
+                                        "title": "id"
+                                      },
+                                      "etag": {
+                                        "type": "string",
+                                        "description": "etag",
+                                        "title": "etag"
+                                      },
+                                      "properties": {
+                                        "type": "object",
+                                        "properties": {
+                                          "provisioningState": {
+                                            "type": "string",
+                                            "description": "Provisioning State",
+                                            "title": "provisioningState"
+                                          },
+                                          "subnet": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string",
+                                                "description": "subnet id of the azure",
+                                                "title": "id"
+                                              }
+                                            },
+                                            "description": "subnet"
+                                          },
+                                          "publicIPAddress": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string",
+                                                "description": "Id of the azure public IP",
+                                                "title": "id"
+                                              }
+                                            },
+                                            "description": "publicIPAddress"
+                                          }
+                                        },
+                                        "description": "properties"
+                                      }
+                                    },
+                                    "description": "managementIpConfiguration"
+                                  },
+                                  "applicationRuleCollections": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string",
+                                          "description": "name"
+                                        },
+                                        "properties": {
+                                          "type": "object",
+                                          "properties": {
+                                            "priority": {
+                                              "type": "integer",
+                                              "format": "int32",
+                                              "description": "priority"
+                                            },
+                                            "action": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "description": "type"
+                                                }
+                                              },
+                                              "description": "action"
+                                            },
+                                            "rules": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "name": {
+                                                    "type": "string",
+                                                    "description": "name"
+                                                  },
+                                                  "description": {
+                                                    "type": "string",
+                                                    "description": "description"
+                                                  },
+                                                  "protocols": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "protocolType": {
+                                                          "type": "string",
+                                                          "description": "protocolType"
+                                                        },
+                                                        "port": {
+                                                          "type": "integer",
+                                                          "format": "int32",
+                                                          "description": "port"
+                                                        }
+                                                      }
+                                                    },
+                                                    "description": "protocols"
+                                                  },
+                                                  "targetFqdns": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "targetFqdns"
+                                                  },
+                                                  "sourceAddresses": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "sourceAddresses"
+                                                  }
+                                                }
+                                              },
+                                              "description": "rules"
+                                            }
+                                          },
+                                          "description": "properties"
+                                        }
+                                      }
+                                    },
+                                    "description": "applicationRuleCollections"
+                                  },
+                                  "natRuleCollections": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string",
+                                          "description": "name"
+                                        },
+                                        "properties": {
+                                          "type": "object",
+                                          "properties": {
+                                            "priority": {
+                                              "type": "integer",
+                                              "format": "int32",
+                                              "description": "priority"
+                                            },
+                                            "action": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "description": "type"
+                                                }
+                                              },
+                                              "description": "action"
+                                            },
+                                            "rules": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "name": {
+                                                    "type": "string",
+                                                    "description": "name"
+                                                  },
+                                                  "description": {
+                                                    "type": "string",
+                                                    "description": "description"
+                                                  },
+                                                  "sourceAddresses": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "sourceAddresses"
+                                                  },
+                                                  "destinationAddresses": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "destinationAddresses"
+                                                  },
+                                                  "destinationPorts": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "destinationPorts"
+                                                  },
+                                                  "protocols": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "protocols"
+                                                  },
+                                                  "translatedAddress": {
+                                                    "type": "string",
+                                                    "description": "translatedAddress"
+                                                  },
+                                                  "translatedPort": {
+                                                    "type": "string",
+                                                    "description": "translatedPort"
+                                                  },
+                                                  "translatedFqdn": {
+                                                    "type": "string",
+                                                    "description": "translatedFqdn"
+                                                  }
+                                                }
+                                              },
+                                              "description": "rules"
+                                            }
+                                          },
+                                          "description": "properties"
+                                        }
+                                      }
+                                    },
+                                    "description": "natRuleCollections"
+                                  },
+                                  "networkRuleCollections": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string",
+                                          "description": "name"
+                                        },
+                                        "properties": {
+                                          "type": "object",
+                                          "properties": {
+                                            "priority": {
+                                              "type": "integer",
+                                              "format": "int32",
+                                              "description": "priority"
+                                            },
+                                            "action": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "description": "type"
+                                                }
+                                              },
+                                              "description": "action"
+                                            },
+                                            "rules": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "name": {
+                                                    "type": "string",
+                                                    "description": "name"
+                                                  },
+                                                  "description": {
+                                                    "type": "string",
+                                                    "description": "description"
+                                                  },
+                                                  "sourceAddresses": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "sourceAddresses"
+                                                  },
+                                                  "destinationPorts": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "destinationPorts"
+                                                  },
+                                                  "destinationAddresses": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "destinationAddresses"
+                                                  },
+                                                  "protocols": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "protocols"
+                                                  },
+                                                  "destinationFqdns": {
+                                                    "type": "array",
+                                                    "items": {
+                                                      "type": "string"
+                                                    },
+                                                    "description": "destinationFqdns"
+                                                  }
+                                                }
+                                              },
+                                              "description": "rules"
+                                            }
+                                          },
+                                          "description": "properties"
+                                        }
+                                      }
+                                    },
+                                    "description": "networkRuleCollections"
+                                  },
+                                  "ipGroups": {
+                                    "type": "array",
+                                    "items": {
+
+                                    },
+                                    "description": "ipGroups"
+                                  },
+                                  "additionalProperties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "key1": {
+                                        "type": "string",
+                                        "description": "key of the firewall",
+                                        "title": "key1"
+                                      },
+                                      "key2": {
+                                        "type": "string",
+                                        "description": "key2"
+                                      }
+                                    },
+                                    "description": "additionalProperties"
+                                  }
+                                },
+                                "description": "properties"
+                              }
+                            }
+                          },
+                          "description": "value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Lists all Azure Firewalls in a resource group",
+                "description": "List Azure Firewalls in Resource Group",
+                "operationId": "List",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01",
+                    "description": "Please enter api version"
+                  }
+                ]
+              }
+            },
+            "/subscriptions/subid/resourceGroups/rg1/providers/Microsoft.Network/azureFirewalls/azurefirewall": {
+
+            },
+            "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/firewallPolicies/{firewallPolicyName}": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Name of the firewall",
+                          "title": "name"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "Id of the firewall",
+                          "title": "id"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "Type of the azure firewall",
+                          "title": "type"
+                        },
+                        "etag": {
+                          "type": "string",
+                          "description": "etag",
+                          "title": "etag"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location of the firewall",
+                          "title": "location"
+                        },
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+                            "key1": {
+                              "type": "string",
+                              "description": "key1",
+                              "title": "key1"
+                            }
+                          },
+                          "description": "tags"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "provisioningState": {
+                              "type": "string",
+                              "description": "Provisioning State of the firewall",
+                              "title": "provisioningState"
+                            },
+                            "threatIntelMode": {
+                              "type": "string",
+                              "description": "threat Intel mode of the firewall",
+                              "title": "threatIntelMode"
+                            },
+                            "threatIntelWhitelist": {
+                              "type": "object",
+                              "properties": {
+                                "ipAddresses": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "ipAddresses"
+                                },
+                                "fqdns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "fqdns"
+                                }
+                              },
+                              "description": "threatIntelWhitelist"
+                            },
+                            "ruleCollectionGroups": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "Id of the Rule collection group",
+                                    "title": "id"
+                                  }
+                                }
+                              },
+                              "description": "ruleCollectionGroups"
+                            },
+                            "firewalls": {
+                              "type": "array",
+                              "items": {
+
+                              },
+                              "description": "firewalls"
+                            },
+                            "dnsSettings": {
+                              "type": "object",
+                              "properties": {
+                                "servers": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "servers"
+                                },
+                                "enableProxy": {
+                                  "type": "boolean",
+                                  "description": "enable proxy  of the firewall",
+                                  "title": "enableproxy",
+                                  "enum": [
+                                    "",
+                                    "true",
+                                    "false"
+                                  ]
+                                },
+                                "requireProxyForNetworkRules": {
+                                  "type": "boolean",
+                                  "description": "requireProxyForNetworkRules"
+                                }
+                              },
+                              "description": "dnsSettings"
+                            },
+                            "sku": {
+                              "type": "object",
+                              "properties": {
+                                "tier": {
+                                  "type": "string",
+                                  "description": "tier of firewall",
+                                  "title": "tier"
+                                }
+                              },
+                              "description": "sku"
+                            },
+                            "intrusionDetection": {
+                              "type": "object",
+                              "properties": {
+                                "mode": {
+                                  "type": "string",
+                                  "description": "Mode of the intruction detection",
+                                  "title": "mode"
+                                },
+                                "configuration": {
+                                  "type": "object",
+                                  "properties": {
+                                    "signatureOverrides": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "description": "Id of the signature override",
+                                            "title": "id"
+                                          },
+                                          "mode": {
+                                            "type": "string",
+                                            "description": "Mode of the signature override",
+                                            "title": "mode"
+                                          }
+                                        }
+                                      },
+                                      "description": "signatureOverrides"
+                                    },
+                                    "bypassTrafficSettings": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "string",
+                                            "description": "Name of the traffic setting",
+                                            "title": "name"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "description": "Description of  traffic setting",
+                                            "title": "description"
+                                          },
+                                          "protocol": {
+                                            "type": "string",
+                                            "description": "Protocol setting",
+                                            "title": "protocol"
+                                          },
+                                          "sourceAddresses": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "description": "sourceAddresses"
+                                          },
+                                          "destinationAddresses": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "description": "destinationAddresses"
+                                          },
+                                          "destinationPorts": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "description": "destinationPorts"
+                                          }
+                                        }
+                                      },
+                                      "description": "bypassTrafficSettings"
+                                    }
+                                  },
+                                  "description": "configuration"
+                                }
+                              },
+                              "description": "intrusionDetection"
+                            },
+                            "transportSecurity": {
+                              "type": "object",
+                              "properties": {
+                                "certificateAuthority": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string",
+                                      "description": "name of the certificate Authority",
+                                      "title": "name"
+                                    },
+                                    "keyVaultSecretId": {
+                                      "type": "string",
+                                      "description": "key Vault Secret Id of the firewall",
+                                      "title": "keyVaultSecretId"
+                                    }
+                                  },
+                                  "description": "certificateAuthority"
+                                }
+                              },
+                              "description": "transportSecurity"
+                            }
+                          },
+                          "description": "properties"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Get firewall policy information",
+                "description": "Get firewall policy information",
+                "operationId": "GetFirewallPolicy",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group name"
+                  },
+                  {
+                    "name": "firewallPolicyName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Firewall Policy name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01",
+                    "description": "Please enter api version"
+                  }
+                ]
+              },
+              "delete": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+
+                    }
+                  }
+                },
+                "summary": "Deletes the specified Firewall Policy.",
+                "description": "Deletes the specified Firewall Policy.",
+                "operationId": "FirewallPoliciesDelete",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "firewallPolicyName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01"
+                  }
+                ]
+              },
+              "put": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Name of the firewall",
+                          "title": "name"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "Unique id of the azure id",
+                          "title": "id"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "Type of the firewall",
+                          "title": "type"
+                        },
+                        "etag": {
+                          "type": "string",
+                          "description": "etag",
+                          "title": "etag"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location"
+                        },
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+                            "key1": {
+                              "type": "string",
+                              "description": "key1",
+                              "title": "key1"
+                            }
+                          },
+                          "description": "tags"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "provisioningState": {
+                              "type": "string",
+                              "description": "Provisioning State",
+                              "title": "provisioningState"
+                            },
+                            "threatIntelMode": {
+                              "type": "string",
+                              "description": "threatIntelMode"
+                            },
+                            "threatIntelWhitelist": {
+                              "type": "object",
+                              "properties": {
+                                "ipAddresses": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "ipAddresses"
+                                },
+                                "fqdns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "fqdns"
+                                }
+                              },
+                              "description": "threatIntelWhitelist"
+                            },
+                            "ruleCollectionGroups": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "id"
+                                  }
+                                }
+                              },
+                              "description": "ruleCollectionGroups"
+                            },
+                            "firewalls": {
+                              "type": "array",
+                              "items": {
+
+                              },
+                              "description": "firewalls"
+                            },
+                            "dnsSettings": {
+                              "type": "object",
+                              "properties": {
+                                "servers": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "servers"
+                                },
+                                "enableProxy": {
+                                  "type": "boolean",
+                                  "description": "Enable Proxy of the firewall",
+                                  "title": "enableProxy",
+                                  "enum": [
+                                    "",
+                                    "true",
+                                    "false"
+                                  ]
+                                },
+                                "requireProxyForNetworkRules": {
+                                  "type": "boolean",
+                                  "description": "Require Proxy For Network Rules of firewall",
+                                  "title": "requireProxyForNetworkRules",
+                                  "enum": [
+                                    "",
+                                    "true",
+                                    "false"
+                                  ]
+                                }
+                              },
+                              "description": "dnsSettings"
+                            },
+                            "sku": {
+                              "type": "object",
+                              "properties": {
+                                "tier": {
+                                  "type": "string",
+                                  "description": "tier"
+                                }
+                              },
+                              "description": "sku"
+                            },
+                            "intrusionDetection": {
+                              "type": "object",
+                              "properties": {
+                                "mode": {
+                                  "type": "string",
+                                  "description": "mode of the interaction",
+                                  "title": "mode"
+                                },
+                                "configuration": {
+                                  "type": "object",
+                                  "properties": {
+                                    "signatureOverrides": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "description": "Id signature override",
+                                            "title": "id"
+                                          },
+                                          "mode": {
+                                            "type": "string",
+                                            "description": "mode of signature",
+                                            "title": "mode"
+                                          }
+                                        }
+                                      },
+                                      "description": "signatureOverrides"
+                                    },
+                                    "bypassTrafficSettings": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "string",
+                                            "description": "Name of the firewall",
+                                            "title": "name"
+                                          },
+                                          "description": {
+                                            "type": "string",
+                                            "description": "Description of the azure firewall",
+                                            "title": "description"
+                                          },
+                                          "protocol": {
+                                            "type": "string",
+                                            "description": "Protocol of the azure",
+                                            "title": "protocol"
+                                          },
+                                          "sourceAddresses": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "description": "sourceAddresses"
+                                          },
+                                          "destinationAddresses": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "description": "destinationAddresses"
+                                          },
+                                          "destinationPorts": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "description": "destinationPorts"
+                                          }
+                                        }
+                                      },
+                                      "description": "bypassTrafficSettings"
+                                    }
+                                  },
+                                  "description": "configuration"
+                                }
+                              },
+                              "description": "intrusionDetection"
+                            },
+                            "transportSecurity": {
+                              "type": "object",
+                              "properties": {
+                                "certificateAuthority": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string",
+                                      "description": "Name of the certificate authority",
+                                      "title": "name"
+                                    },
+                                    "keyVaultSecretId": {
+                                      "type": "string",
+                                      "description": "key vault secret Id",
+                                      "title": "keyVaultSecretId"
+                                    }
+                                  },
+                                  "description": "certificateAuthority"
+                                }
+                              },
+                              "description": "transportSecurity"
+                            }
+                          },
+                          "description": "properties"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Creates or updates the specified Firewall Policy.",
+                "description": "Creates or updates the specified Firewall Policy.",
+                "operationId": "CreateOrUpdateFirewallPolicy",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "firewallPolicyName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string"
+                  },
+                  {
+                    "name": "body",
+                    "in": "body",
+                    "required": false,
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+
+                          },
+                          "description": "tags"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "threatIntelWhitelist": {
+                              "type": "object",
+                              "properties": {
+                                "ipAddresses": {
+                                  "type": "array",
+                                  "items": {
+
+                                  },
+                                  "description": "ipAddresses"
+                                }
+                              },
+                              "description": "threatIntelWhitelist"
+                            }
+                          },
+                          "description": "properties"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/ipGroups/{ipGroupsName}": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Name of the group",
+                          "title": "name"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "Id IP group set",
+                          "title": "id"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "Type of the azure firewall",
+                          "title": "type"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location of the group set",
+                          "title": "location"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "provisioningState": {
+                              "type": "string",
+                              "description": "provisioningState"
+                            },
+                            "ipAddresses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "title": ""
+                              },
+                              "description": "ipAddresses"
+                            },
+                            "firewalls": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "Id Group set",
+                                    "title": "id"
+                                  }
+                                }
+                              },
+                              "description": "firewalls"
+                            },
+                            "firewallPolicies": {
+                              "type": "array",
+                              "items": {
+
+                              },
+                              "description": "firewallPolicies"
+                            }
+                          },
+                          "description": "properties"
+                        },
+                        "etag": {
+                          "type": "string",
+                          "description": "etag",
+                          "title": "etag"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "IP Groups - Get",
+                "description": "Gets the specified ipGroups.",
+                "operationId": "IPGroupsGet",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group  name"
+                  },
+                  {
+                    "name": "ipGroupsName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter IP Group name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01",
+                    "description": "Please enter api version"
+                  }
+                ]
+              },
+              "delete": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+
+                    }
+                  }
+                },
+                "summary": "Deletes the specified ipGroups",
+                "description": "Deletes the specified IP Groups",
+                "operationId": "IPGroupsDelete",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "ipGroupsName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string"
+                  }
+                ]
+              },
+              "put": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "name"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "Id of groups",
+                          "title": "id"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "Type of the group",
+                          "title": "type"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "provisioningState": {
+                              "type": "string",
+                              "description": "Provisioning State",
+                              "title": "provisioning State"
+                            },
+                            "ipAddresses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "ipAddresses"
+                            },
+                            "firewalls": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "Unique id of the firewall policy",
+                                    "title": "id"
+                                  }
+                                }
+                              },
+                              "description": "firewalls"
+                            },
+                            "firewallPolicies": {
+                              "type": "array",
+                              "items": {
+
+                              },
+                              "description": "firewallPolicies"
+                            }
+                          },
+                          "description": "properties"
+                        },
+                        "etag": {
+                          "type": "string",
+                          "description": "etag",
+                          "title": "etag"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "IP Groups - Create Or UpdateCreates or updates an ipGroups in a specified resource group",
+                "description": "Creates or updates an IP Groups in a specified resource group.",
+                "operationId": "IPGroupsCreateOrUpdate",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group name"
+                  },
+                  {
+                    "name": "ipGroupsName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter IP Group name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01",
+                    "description": "Please enter api version"
+                  },
+                  {
+                    "name": "body",
+                    "in": "body",
+                    "required": false,
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+
+                          },
+                          "description": "tags"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "ipAddresses": {
+                              "type": "object",
+                              "properties": {
+
+                              },
+                              "description": "ipAddresses"
+                            }
+                          },
+                          "description": "properties"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "patch": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "name"
+                        },
+                        "id": {
+                          "type": "string",
+                          "description": "Id of the updated group",
+                          "title": "id"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "Type of the group",
+                          "title": "type"
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "location of the group",
+                          "title": "location"
+                        },
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+                            "key1": {
+                              "type": "string",
+                              "description": "key1",
+                              "title": "key1"
+                            },
+                            "key2": {
+                              "type": "string",
+                              "description": "key2",
+                              "title": "key2"
+                            }
+                          },
+                          "description": "tags"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "provisioningState": {
+                              "type": "string",
+                              "description": "provisioningState"
+                            },
+                            "ipAddresses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "ipAddresses"
+                            },
+                            "firewalls": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "Unique ID of  the group",
+                                    "title": "id"
+                                  }
+                                }
+                              },
+                              "description": "firewalls"
+                            },
+                            "firewallPolicies": {
+                              "type": "array",
+                              "items": {
+
+                              },
+                              "description": "firewallPolicies"
+                            }
+                          },
+                          "description": "properties"
+                        },
+                        "etag": {
+                          "type": "string",
+                          "description": "etag",
+                          "title": "etag"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Updates tags of an IpGroups resource",
+                "description": "Updates tags of an IpGroups resource",
+                "operationId": "IPGroupsUpdateTags",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "ipGroupsName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01"
+                  },
+                  {
+                    "name": "body",
+                    "in": "body",
+                    "required": false,
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "tags": {
+                          "type": "object",
+                          "properties": {
+
+                          },
+                          "description": "tags"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "/subscriptions/{subscriptionId}/providers/Microsoft.Network/ipGroups": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "description": "Name of the groups",
+                                "title": "name"
+                              },
+                              "id": {
+                                "type": "string",
+                                "description": "Id groups",
+                                "title": "id"
+                              },
+                              "type": {
+                                "type": "string",
+                                "description": "type of the group",
+                                "title": "type"
+                              },
+                              "location": {
+                                "type": "string",
+                                "description": "location of the group",
+                                "title": "location"
+                              },
+                              "properties": {
+                                "type": "object",
+                                "properties": {
+                                  "provisioningState": {
+                                    "type": "string",
+                                    "description": "Provisioning State",
+                                    "title": "provisioningState"
+                                  },
+                                  "ipAddresses": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "ipAddresses"
+                                  },
+                                  "firewalls": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "description": "id"
+                                        }
+                                      }
+                                    },
+                                    "description": "firewalls"
+                                  },
+                                  "firewallPolicies": {
+                                    "type": "array",
+                                    "items": {
+
+                                    },
+                                    "description": "firewallPolicies"
+                                  }
+                                },
+                                "description": "properties"
+                              },
+                              "etag": {
+                                "type": "string",
+                                "description": "etag",
+                                "title": "etag"
+                              }
+                            }
+                          },
+                          "description": "value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Ip Groups - ListGets all IpGroups in a subscription",
+                "description": "Gets all IpGroups in a subscription",
+                "operationId": "IPGroupsList",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01"
+                  }
+                ]
+              }
+            },
+            "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/ipGroups": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "description": "Name of the group",
+                                "title": "name"
+                              },
+                              "id": {
+                                "type": "string",
+                                "description": "unique id of group",
+                                "title": "id"
+                              },
+                              "type": {
+                                "type": "string",
+                                "description": "Type of the group",
+                                "title": "type"
+                              },
+                              "location": {
+                                "type": "string",
+                                "description": "location of the group",
+                                "title": "location"
+                              },
+                              "properties": {
+                                "type": "object",
+                                "properties": {
+                                  "provisioningState": {
+                                    "type": "string",
+                                    "description": "Provisioning State",
+                                    "title": "provisioningState"
+                                  },
+                                  "ipAddresses": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "ipAddresses"
+                                  },
+                                  "firewalls": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "description": "id"
+                                        }
+                                      }
+                                    },
+                                    "description": "firewalls"
+                                  },
+                                  "firewallPolicies": {
+                                    "type": "array",
+                                    "items": {
+
+                                    },
+                                    "description": "firewallPolicies"
+                                  }
+                                },
+                                "description": "properties"
+                              },
+                              "etag": {
+                                "type": "string",
+                                "description": "etag",
+                                "title": "etag"
+                              }
+                            }
+                          },
+                          "description": "value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Gets all IpGroups in a resource group",
+                "description": "Gets all IpGroups in a resource group",
+                "operationId": "IPGroupsListByResourceGroup",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01",
+                    "description": "Please enter api version"
+                  }
+                ]
+              }
+            },
+            "/subscriptions/subId/resourceGroups/myResourceGroup/providers/Microsoft.Network/ipGroups/ipGroups1": {
+
+            },
+            "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/firewallPolicies": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "description": "Name of the firewall policy",
+                                "title": "name"
+                              },
+                              "id": {
+                                "type": "string",
+                                "description": "ID of the  firewall policy",
+                                "title": "id"
+                              },
+                              "type": {
+                                "type": "string",
+                                "description": "Type of the firewall policy",
+                                "title": "type"
+                              },
+                              "etag": {
+                                "type": "string",
+                                "description": "etag",
+                                "title": "etag"
+                              },
+                              "location": {
+                                "type": "string",
+                                "description": "Location of the firewall policy",
+                                "title": "location"
+                              },
+                              "tags": {
+                                "type": "object",
+                                "properties": {
+                                  "key1": {
+                                    "type": "string",
+                                    "description": "key1",
+                                    "title": "key1"
+                                  }
+                                },
+                                "description": "tags"
+                              },
+                              "properties": {
+                                "type": "object",
+                                "properties": {
+                                  "provisioningState": {
+                                    "type": "string",
+                                    "description": "provisioningState"
+                                  },
+                                  "threatIntelMode": {
+                                    "type": "string",
+                                    "description": "Threat Intel Mode of the firewall policy",
+                                    "title": "threatIntelMode"
+                                  },
+                                  "ruleCollectionGroups": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "description": "id"
+                                        }
+                                      }
+                                    },
+                                    "description": "ruleCollectionGroups"
+                                  },
+                                  "firewalls": {
+                                    "type": "array",
+                                    "items": {
+
+                                    },
+                                    "description": "firewalls"
+                                  },
+                                  "dnsSettings": {
+                                    "type": "object",
+                                    "properties": {
+                                      "servers": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "description": "servers"
+                                      },
+                                      "enableProxy": {
+                                        "type": "boolean",
+                                        "description": "Enable Proxy for the firewall policy",
+                                        "title": "enableProxy",
+                                        "enum": [
+                                          "",
+                                          "true",
+                                          "false"
+                                        ]
+                                      },
+                                      "requireProxyForNetworkRules": {
+                                        "type": "boolean",
+                                        "description": "requireProxyForNetworkRules"
+                                      }
+                                    },
+                                    "description": "dnsSettings"
+                                  },
+                                  "sku": {
+                                    "type": "object",
+                                    "properties": {
+                                      "tier": {
+                                        "type": "string",
+                                        "description": "tier",
+                                        "title": "tier"
+                                      }
+                                    },
+                                    "description": "sku"
+                                  }
+                                },
+                                "description": "properties"
+                              }
+                            }
+                          },
+                          "description": "value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Lists all Firewall Policies in a resource group.",
+                "description": "Lists all Firewall Policies in a resource group.",
+                "operationId": "FirewallPoliciesList",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Subscription Id"
+                  },
+                  {
+                    "name": "resourceGroupName",
+                    "in": "path",
+                    "required": true,
+                    "type": "string",
+                    "description": "Please enter Resource Group name"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01",
+                    "description": "Please enter api version"
+                  }
+                ]
+              }
+            },
+            "/subscriptions/{subscriptionId}/providers/Microsoft.Network/firewallPolicies": {
+              "get": {
+                "responses": {
+                  "default": {
+                    "description": "default",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "description": "Name of the firewall",
+                                "title": "name"
+                              },
+                              "id": {
+                                "type": "string",
+                                "description": "unique id for the firewall policy",
+                                "title": "id"
+                              },
+                              "type": {
+                                "type": "string",
+                                "description": "Type of the firewall",
+                                "title": "type"
+                              },
+                              "etag": {
+                                "type": "string",
+                                "description": "etag",
+                                "title": "etag"
+                              },
+                              "location": {
+                                "type": "string",
+                                "description": "location of the firewall",
+                                "title": "location"
+                              },
+                              "tags": {
+                                "type": "object",
+                                "properties": {
+                                  "key1": {
+                                    "type": "string",
+                                    "description": "key1",
+                                    "title": "key1"
+                                  }
+                                },
+                                "description": "tags"
+                              },
+                              "properties": {
+                                "type": "object",
+                                "properties": {
+                                  "provisioningState": {
+                                    "type": "string",
+                                    "description": "provisioningState"
+                                  },
+                                  "threatIntelMode": {
+                                    "type": "string",
+                                    "description": "Threat Intel Mode",
+                                    "title": "threatIntelMode"
+                                  },
+                                  "ruleCollectionGroups": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "description": "id"
+                                        }
+                                      }
+                                    },
+                                    "description": "ruleCollectionGroups"
+                                  },
+                                  "firewalls": {
+                                    "type": "array",
+                                    "items": {
+
+                                    },
+                                    "description": "firewalls"
+                                  },
+                                  "dnsSettings": {
+                                    "type": "object",
+                                    "properties": {
+                                      "servers": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "description": "servers"
+                                      },
+                                      "enableProxy": {
+                                        "type": "boolean",
+                                        "description": "enableProxy"
+                                      },
+                                      "requireProxyForNetworkRules": {
+                                        "type": "boolean",
+                                        "description": "Require Proxy For Network Rules of the firewall policy",
+                                        "title": "requireProxyForNetworkRules",
+                                        "enum": [
+                                          "",
+                                          "true",
+                                          "false"
+                                        ]
+                                      }
+                                    },
+                                    "description": "dnsSettings"
+                                  },
+                                  "sku": {
+                                    "type": "object",
+                                    "properties": {
+                                      "tier": {
+                                        "type": "string",
+                                        "description": "tier",
+                                        "title": "tier"
+                                      }
+                                    },
+                                    "description": "sku"
+                                  }
+                                },
+                                "description": "properties"
+                              }
+                            }
+                          },
+                          "description": "value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "summary": "Gets all the Firewall Policies in a subscription.",
+                "description": "Gets all the Firewall Policies in a subscription.",
+                "operationId": "FirewallPoliciesListAll",
+                "parameters": [
+                  {
+                    "name": "subscriptionId",
+                    "in": "path",
+                    "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "api-version",
+                    "in": "query",
+                    "required": false,
+                    "type": "string",
+                    "default": "2020-07-01"
+                  }
+                ]
+              }
+            },
+            "/PUT https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/firewallPolicies/{firewallPolicyName}": {
+
+            }
+          },
+          "definitions": {
+
+          },
+          "parameters": {
+
+          },
+          "responses": {
+
+          },
+          "securityDefinitions": {
+            "oauth2_auth": {
+              "type": "oauth2",
+              "flow": "accessCode",
+              "authorizationUrl": "https://login.windows.net/common/oauth2/authorize",
+              "tokenUrl": "https://login.windows.net/common/oauth2/authorize",
+              "scopes": {
+                "openid": "openid"
+              }
+            }
+          },
+          "security": [
+            {
+              "oauth2_auth": [
+                "openid"
+              ]
+            }
+          ],
+          "tags": [
+
+          ]
+        }
+      }
+    }
+  ]
+}
