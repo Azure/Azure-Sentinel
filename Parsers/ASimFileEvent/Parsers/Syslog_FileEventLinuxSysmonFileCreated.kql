@@ -1,0 +1,45 @@
+﻿// For reference, see: https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimFileEvent/ProductParsers/FileEventLinuxSysmonFileCreated.yaml
+source
+| where is_sentinel_workspace(TenantId)
+| where SyslogMessage contains ('<Provider Name="Linux-Sysmon"') and SyslogMessage contains ('<EventID>11</EventID>')
+| parse SyslogMessage with  *
+'<EventRecordID>'msgEventRecordID:string'</EventRecordID>'
+*
+//'<Computer>'msgComputer:string'</Computer>'
+'<Security UserId="'msgUserId:string '"/>'
+* 
+'<Data Name="ProcessGuid">'msgProcessGuid:string'</Data>'
+'<Data Name="ProcessId">'msgProcessId:string'</Data>'
+'<Data Name="Image">'msgImage:string'</Data>'
+'<Data Name="TargetFilename">'msgTargetFileName:string'</Data>'
+'<Data Name="CreationUtcTime">'msgCreationUtcTime:datetime'</Data>'*
+| parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>'*
+| extend
+    EventCount=int(1)
+, EventStartTime =TimeGenerated 
+, EventEndTime=TimeGenerated
+, EventType = 'FileCreated'
+, EventResult ='Success'
+, EventOriginalType ='11' 
+, EventProduct='Sysmon for Linux'
+, EventProductVersion='v13.22'
+, EventVendor ='Microsoft'
+, EventSchemaVersion ='0.1.0'
+, DvcOs = 'Linux'
+, TargetFilePathType='Unix'
+, ActorUserType = iff(isnotempty(ActorUsername),'Simple', '') // make sure user type is okay
+| project-rename
+    DvcHostname=Computer
+, EventOriginalUid=msgEventRecordID
+, ActingProcessName =msgImage
+, ActingProcessId=msgProcessId
+, ActingProcessGuid=msgProcessGuid
+, TargetFilePath =msgTargetFileName
+, TargetFileCreationTime =msgCreationUtcTime
+// ------  Alias
+| extend
+    Process=ActingProcessName
+    , FilePath=TargetFilePath
+    , Dvc = DvcHostname
+    , User = ActorUsername
+| project-away SyslogMessage
