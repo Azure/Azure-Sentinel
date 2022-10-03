@@ -52,6 +52,9 @@ Once deployment is complete, you will need to authorize each connection.
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for other connection such as Teams connection and Virus Total (For authorizing the Virus Total API connection, the API Key needs to be provided)
+7.  Authorize the Azure Firewall custom connector by following the below mentioned steps.
+
+	  a. Navigate to playbook
 
      b. Click Edit
 
