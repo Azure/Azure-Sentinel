@@ -24,11 +24,11 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
 1. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. Relevant instructions can be found in the connector doc page.
-1. This playbook will query IP Groups that exist in the resource group of Microsoft Sentinel workspace. Make sure to create IP Groups and attach them to Azure Firewall rules prior to running the playbook. You can change the source of the IP groups in the playbook itself after deployment.
+1. This playbook will query IP Groups that exist in the resource group of Azure Sentinel workspace. Make sure to create IP Groups and attach them to Azure Firewall rules prior to running the playbook. You can change the source of the IP groups in the playbook itself after deployment.
 1. **Permissions required for this playbook** 
 This playbook **Gets** and **Updates** IP groups. The registered application/Service Principal that is authenticated to the connector needs to have the following RBAC Roles:
 
-	* **Contributor** on the IP Groups in the Microsoft Sentinel resource group.
+	* **Contributor** on the IP Groups in the Azure Sentinel resource group.
 
 1. To use VirusTotal connector, get your Virus Totan API key. [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
 
@@ -51,7 +51,7 @@ This playbook **Gets** and **Updates** IP groups. The registered application/Ser
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Microsoft Sentinel connection resource
+1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -68,12 +68,12 @@ Once deployment is complete, you will need to authorize each connection.
      d. Click Change connection [ Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. ]
 
 #### b. Configurations in Sentinel
-1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.
+1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
 
 ## Playbook steps explained
-### When Microsoft Sentinel incident creation rule is triggered
+### When Azure Sentinel incident creation rule is triggered
 
 ### Varialbes 
 
