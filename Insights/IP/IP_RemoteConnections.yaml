@@ -1,0 +1,178 @@
+SchemaVersion: '1.0'
+Type: KQL
+Provider: Sentinel
+DataTypes:
+  - DataType: VMConnection
+  - DataType: DeviceNetworkEvents
+  - DataType: CommonSecurityLog
+EntitiesFilter: {}
+RequiredInputFieldsSets: 
+ - - Ip_Address
+BaseQuery: |  
+  let GetIPStats = (Ip_Address:string){
+  //checking time span to lock to 7 days or less for Entity page usage
+  let start = datetime('{{StartTimeISO}}');
+  let end = datetime('{{EndTimeISO}}');
+  let end_start = datetime_diff('day',end,start);
+  let start_time = iff(end_start > 7, end - 7d, start);
+  let end_time = end;
+  let IpStats = (union isfuzzy=true
+  (
+  VMConnection
+  | where isnotempty(Ip_Address)
+  | where TimeGenerated between (start_time..end_time)
+  | where SourceIp =~ Ip_Address
+  | where SourceIp != DestinationIp
+  | where Direction =~ "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(Direction =~ "outbound") by IPAddress = SourceIp, Type, RemoteIPAddress = DestinationIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
+  ),
+  (
+  VMConnection
+  | where isnotempty(Ip_Address)
+  | where TimeGenerated between (start_time..end_time)
+  | where DestinationIp =~ Ip_Address
+  | where SourceIp != DestinationIp
+  | where Direction =~ "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction =~ "inbound") by IPAddress = DestinationIp, Type, RemoteIPAddress = SourceIp, Direction, SentBytes = tolong(BytesSent), ReceivedBytes = tolong(BytesReceived)
+  ),
+  (
+  DeviceNetworkEvents
+  | where isnotempty(Ip_Address)
+  | where TimeGenerated between (start_time..end_time)
+  | where LocalIP =~ Ip_Address
+  | where LocalIP != RemoteIP
+  | extend Direction = "outbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OutboundCount = countif(ActionType =~ "ConnectionSuccess") by IPAddress = LocalIP, Type, RemoteIPAddress = RemoteIP, Direction
+  ),
+  (
+  DeviceNetworkEvents
+  | where isnotempty(Ip_Address)
+  | where TimeGenerated between (start_time..end_time)
+  | where RemoteIP =~ Ip_Address
+  | where LocalIP != RemoteIP
+  | extend Direction = "inbound"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(ActionType =~ "InboundConnectionAccepted") by IPAddress = RemoteIP, Type, RemoteIPAddress = LocalIP, Direction
+  ),
+  (
+  CommonSecurityLog
+  | where isnotempty(Ip_Address)
+  | where TimeGenerated between (start_time..end_time)
+  | where SourceIP =~ Ip_Address
+  | where SourceIP != DestinationIP
+  | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by IPAddress = SourceIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = DestinationIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
+  ),
+  (
+  CommonSecurityLog
+  | where isnotempty(Ip_Address)
+  | where TimeGenerated between (start_time..end_time)
+  | where DestinationIP =~ Ip_Address
+  | where SourceIP != DestinationIP
+  | extend Direction = iff(CommunicationDirection !in~ ('outbound','0') or CommunicationDirection !in~ ('inbound','1'), 'NotAvailable', CommunicationDirection)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), InboundCount = countif(Direction in~ ('Inbound','1')), OutboundCount = countif(Direction in~ ('Outbound', '0')), UnknownDirection = countif(Direction =~ 'NotAvailable') by IPAddress = DestinationIP, Type = strcat(Type,':', DeviceVendor,'-', DeviceProduct), RemoteIPAddress = SourceIP, Direction, SentBytes = tolong(SentBytes), ReceivedBytes = tolong(ReceivedBytes)
+  )
+  );
+  IpStats
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  | where isnotempty(Ip_Address)
+  | where TimeGenerated >= start_time
+  | where ExpirationDateTime > now()
+  | where Active = true
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | extend TI_ipEntity = case(
+  isnotempty(NetworkIP), NetworkIP,
+  isempty(NetworkIP) and isnotempty(NetworkSourceIP), NetworkSourceIP,
+  isempty(NetworkIP) and isempty(NetworkSourceIP) and isnotempty(NetworkDestinationIP), NetworkDestinationIP,
+  isempty(NetworkIP) and isempty(NetworkSourceIP) and isempty(NetworkDestinationIP), EmailSourceIpAddress,
+  "NotAvailable"
+  )
+  | summarize arg_max(TimeGenerated, *) by Description, ThreatType, TI_ipEntity
+  ) on $left.RemoteIPAddress == $right.TI_ipEntity
+  };
+  GetIPStats('{{Ip_Address}}')
+
+Insights:
+ Id: 340e5f6f-d218-4a11-8638-09e1af7847cc
+ DisplayName: "IP address remote connections with TI match"
+ Description: |
+  'Identifies when a connection is made outbound to or inbound from a remote IP address that is also an IOC in the ThreatIntelligenceIndicator table, along with how many times the connection was made during the indicated timeframe. 
+   Note: due to potential performance impact, data is limited to a 7 day max window.'
+ DefaultTimeRange: 
+  BeforeRange: 12h
+  AfterRange: 12h
+ TableQuery:
+  ColumnsDefinitions:
+  - Header: "Direction"
+    OutputType: String
+    SupportDeepLink: false
+  - Header: "IPAddress"
+    OutputType: String
+    SupportDeepLink: true
+  - Header: "RemoteIP"
+    OutputType: String
+    SupportDeepLink: true
+  - Header: "ThreatType"
+    OutputType: String
+    SupportDeepLink: false
+  QueriesDefinitions:
+  # Inbound TI Hits
+  - Filter:    "project IPAddress, RemoteIPAddress, InboundCount, ThreatType"
+    Summarize: "summarize Inbound = sum(InboundCount) by IPAddress, RemoteIPAddress, ThreatType | where Inbound > 0"
+    Project:   "project Direction = 'In', IPAddress, RemoteIP = RemoteIPAddress, ThreatType"
+    LinkColumnsDefinitions:
+    - ProjectedName: Direction
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: IPAddress
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: ThreatType
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+  # Outbound TI Hits
+  - Filter:    "project IPAddress, RemoteIPAddress, OutboundCount, ThreatType"
+    Summarize: "summarize Outbound = sum(OutboundCount) by IPAddress, RemoteIPAddress, ThreatType | where Outbound > 0"
+    Project:   "project Direction = 'Out', IPAddress, RemoteIP = RemoteIPAddress, ThreatType"
+    LinkColumnsDefinitions:
+    - ProjectedName: Direction
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: IPAddress
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: ThreatType
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+  # Direction Unknown TI Hits
+  - Filter:    "project IPAddress, RemoteIPAddress, UnknownDirection, ThreatType"
+    Summarize: "summarize UnknownCount = sum(UnknownDirection) by IPAddress, RemoteIPAddress, ThreatType | where UnknownCount > 0"
+    Project:   "project Direction = 'Unknown', IPAddress, RemoteIP = RemoteIPAddress, ThreatType"
+    LinkColumnsDefinitions:
+    - ProjectedName: Direction
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: IPAddress
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: RemoteIP
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+    - ProjectedName: ThreatType
+      Query: "{{BaseQuery}} | {{RowFilter}}"
+
+ ChartQuery: 
+  Title: "Connection Count to IP in TI"
+  DataSets: 
+   - Query: "summarize Count = max(InboundCount) by Time = bin(StartTime, 1d), RemoteIPAddress = strcat(RemoteIPAddress,' - In') | where isnotempty(Count) and Count > 0"
+     XColumnName: Time
+     YColumnName: Count
+     LegendColumnName: RemoteIPAddress
+   - Query: "summarize Count = max(OutboundCount) by Time = bin(StartTime, 1d), RemoteIPAddress = strcat(RemoteIPAddress,' - Out') | where isnotempty(Count) and Count > 0"
+     XColumnName: Time
+     YColumnName: Count
+     LegendColumnName: RemoteIPAddress
+   - Query: "summarize Count = max(UnknownDirection) by Time = bin(StartTime, 1d), RemoteIPAddress = strcat(RemoteIPAddress,' - UnknownDirection') | where isnotempty(Count) and Count > 0"
+     XColumnName: Time
+     YColumnName: Count
+     LegendColumnName: RemoteIPAddress
+  Type: BarChart
+
+ AdditionalQuery: 
+  Text: "See All connections"
+  Query: "project StartTime, EndTime, IPAddress, RemoteIPAddress, InboundCount, OutboundCount, ReceivedBytes, SentBytes, UnknownDirection, Type, ThreatType, Description, Tags"
