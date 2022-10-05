@@ -23,52 +23,79 @@ ParserParams:
 ParserQuery: |
   let Parser=(disabled:bool=false)
   {
-  SecurityEvent
-  | where not(disabled)
-  | project TimeGenerated, EventID, ObjectType, AccessMask, ProcessName, SubjectUserSid, AccountType, Account, Activity, Computer, ObjectName, ProcessId
+  let EventTypeLookup = datatable (AccessMask:string,EventType:string)
+  [
+      "0x1", "ObjectAccessed"
+      , "0x10", "MetadataModified"
+      , "0x100", "MetadataModified"
+      , "0x10000", "ObjectDeleted"
+      , "0x2", "ObjectModified"
+      , "0x20000", "MetadataAccessed"
+      , "0x4", "ObjectModified"
+      , "0x40", "ObjectDeleted"
+      , "0x40000", "MetadataModified"
+      , "0x6", "ObjectModified"
+      , "0x8", "MetadataAccessed"
+      , "0x80", "MetadataAccessed"
+      , "0x80000", "MetadataModified"
+  ];
+  let UserTypeLookup = datatable (AccountType:string, ActorUserType:string)
+  [
+    'User', 'Regular',
+    'Machine', 'Machine'
+  ];    
+  let KnownSIDs = datatable (sid:string, username:string, type:string)
+  [
+    'S-1-5-18', 'Local System', 'Simple',
+    'S-1-0-0', 'Nobody', 'Simple'
+  ];
+  union isfuzzy=false (WindowsEvent
+  | where not(disabled)  
+  | where EventID == 4663 
+    and EventData.ObjectType == "File"
+    and EventData.ObjectName !startswith @"\Device\"
+  | project TimeGenerated
+    , EventID, AccessMask = tostring(EventData.AccessMask)
+    , ProcessName = tostring(EventData.ProcessName)
+    , SubjectUserSid = tostring(EventData.SubjectUserSid)
+    , AccountType = tostring(EventData.AccountType)
+    , Computer = tostring(EventData.Computer)
+    , ObjectName = tostring(EventData.ObjectName)
+    , ProcessId = tostring(EventData.ProcessId)
+    , SubjectUserName = tostring(EventData.SubjectUserName)
+    , SubjectAccount = tostring(EventData.SubjectAccount)
+  )
+  , (SecurityEvent
+  | where not(disabled)  
   | where EventID == 4663 
     and ObjectType == "File"
-  | extend EventType = case(
-    AccessMask == "0x1", "ObjectAccessed"
-    , AccessMask == "0x10", "MetadataModified"
-    , AccessMask == "0x100", "MetadataModified"
-    , AccessMask == "0x10000", "ObjectDeleted"
-    , AccessMask == "0x2", "ObjectModified"
-    , AccessMask == "0x20000", "MetadataAccessed"
-    , AccessMask == "0x4", "ObjectModified"
-    , AccessMask == "0x40", "ObjectDeleted"
-    , AccessMask == "0x40000", "MetadataModified"
-    , AccessMask == "0x6", "ObjectModified"
-    , AccessMask == "0x8", "MetadataAccessed"
-    , AccessMask == "0x80", "MetadataAccessed"
-    , AccessMask == "0x80000", "MetadataModified"
-    , "")
-    , ActingProcessName = ProcessName
-    , ActorUserIdType = iif(SubjectUserSid startswith_cs "S-1-5-","SID","")
-    , ActorUsernameType = iif(Account contains "\\", "Windows", "")
-    , ActorUserType = iif(AccountType == "Machine", "Machine", "Regular")
+    and ObjectName !startswith @"\Device\"
+  | project TimeGenerated, EventID, AccessMask, ProcessName, SubjectUserSid, AccountType, Computer, ObjectName, ProcessId, SubjectUserName, SubjectAccount)
+  | lookup EventTypeLookup on AccessMask
+  | lookup UserTypeLookup on AccountType
+  | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
+  | extend ActingProcessName = ProcessName
+    , ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
+    , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
     , EventStartTime = TimeGenerated
     , EventEndTime = TimeGenerated
-    , TargetFilePath = iif(ObjectName startswith @"\Device\",""
-      ,ObjectName) 
-    , TargetFilePathFormat = iif(ObjectName !startswith @"\Device\","Windows Local"
-      ,"")
-    , FilePath = iif(ObjectName startswith @"\Device\",""
-      ,ObjectName) 
-    , ActorUsername = Account
-    , Process = ProcessName
-    , ActingProcessId = toint(ProcessId)
+    , TargetFilePath = ObjectName
+    , TargetFilePathFormat = "Windows Local"
+    , ActingProcessId = tostring(toint(ProcessId))
     , EventOriginalType = tostring(EventID)
-  | project-away ProcessName, EventID, ProcessId
+  | project-away EventID, ProcessId, AccountType, type, username
   | project-rename ActorUserId = SubjectUserSid
-    , EventOriginalSubType = Activity
-    , Dvc = Computer
-    , User = Account
+    , DvcHostname = Computer
+    , Process = ProcessName
+    , FilePath = ObjectName
   | extend EventSchema = "FileEvent"
     , EventSchemaVersion = "0.1.1"
     , EventResult = "Success"
     , EventCount = int(1)
     , EventVendor = 'Microsoft'
     , EventProduct = 'Security Events'
+    , Dvc = DvcHostname
+    , ActorWindowsUsername = ActorUsername
+    , User = ActorUsername
   };
   Parser (disabled)
