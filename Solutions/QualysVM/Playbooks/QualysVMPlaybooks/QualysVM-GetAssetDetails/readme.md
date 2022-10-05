@@ -23,7 +23,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Playbook Name
     * Custom Connector Name
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Fqualys-playbooks%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVMPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVMPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
