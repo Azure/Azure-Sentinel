@@ -1,0 +1,87 @@
+id: 6852d9da-8015-4b95-8ecf-d9572ee0395d
+name: Suspicious Service Principal creation activity
+description: |
+  'This alert will detect creation of an SPN, permissions granted, credentials created, activity and deletion of the SPN in a time frame (default 10 minutes)'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - AADServicePrincipalSignInLogs
+queryFrequency: 1h
+queryPeriod: 70m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+  - PrivilegeEscalation
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1528
+query: |
+  let queryfrequency = 1h;
+  let wait_for_deletion = 10m;
+  let account_created =
+    AuditLogs 
+    | where ActivityDisplayName == "Add service principal"
+    | where Result == "success"
+    | extend AppID = tostring(AdditionalDetails[1].value)
+    | extend creationTime = ActivityDateTime
+    | extend userPrincipalName_creator = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend ipAddress_creator = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
+  let account_activity =
+    AADServicePrincipalSignInLogs
+    | extend Activities = pack("ActivityTime", TimeGenerated ,"IpAddress", IPAddress, "ResourceDisplayName", ResourceDisplayName)
+    | extend AppID = AppId
+    | summarize make_list(Activities) by AppID;
+  let account_deleted =
+    AuditLogs 
+    | where OperationName == "Remove service principal"
+    | where Result == "success"
+    | extend AppID = tostring(AdditionalDetails[1].value)
+    | extend deletionTime = ActivityDateTime
+    | extend userPrincipalName_deleter = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend ipAddress_deleter = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
+  let account_credentials =
+    AuditLogs
+    | where OperationName has_all ("Update application", "Certificates and secrets management")
+    | where Result == "success"
+    | extend AppID = tostring(AdditionalDetails[1].value)
+    | extend credentialCreationTime = ActivityDateTime;
+  let roles_assigned =
+    AuditLogs
+    | where ActivityDisplayName == "Add app role assignment to service principal"
+    | extend AppID = tostring(TargetResources[1].displayName)
+    | extend AssignedRole =  iff(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].displayName)=="AppRole.Value", tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].newValue))),"")
+    | extend AssignedRoles = pack("Role", AssignedRole)
+    | summarize make_list(AssignedRoles) by AppID;
+  account_created
+  | where TimeGenerated between (ago(wait_for_deletion+queryfrequency)..ago(wait_for_deletion))
+  | join kind= inner (account_activity) on AppID
+  | join kind= inner (account_deleted) on AppID
+  | join kind= inner (account_credentials) on AppID
+  | join kind= inner (roles_assigned) on AppID
+  | where deletionTime - creationTime between (time(0s)..wait_for_deletion)
+  | extend AliveTime = deletionTime - creationTime
+  | project AADTenantId, AppID, creationTime, deletionTime, userPrincipalName_creator, userPrincipalName_deleter, ipAddress_creator, ipAddress_deleter, list_Activities, list_AssignedRoles, AliveTime
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: userPrincipalName_creator
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: userPrincipalName_deleter
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress_creator
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress_deleter
+version: 1.0.2
+kind: Scheduled
