@@ -1,4 +1,4 @@
-# OpenCTI Logic Apps Custom connector
+# Minemeld Logic Apps Custom connector
 
 This custom connector connects to Minemeld service end point to runs any Minemeld supported API queries and gives response back in json format.
 ### Authentication methods this connector supports
@@ -10,7 +10,7 @@ This custom connector connects to Minemeld service end point to runs any Minemel
 2. Basic authentication of user and password is required for accessing Minemeld API.
 
 
-## Actions supported by OpenCTI custom connector
+## Actions supported by Minemeld custom connector
 
 | Component | Description |
 | --------- | -------------- |
@@ -22,7 +22,7 @@ This custom connector connects to Minemeld service end point to runs any Minemel
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
     * Custom Connector Name : Enter the Custom connector name (ex:MinemeldCustomConnector)
-    * OpenCTI Host URL: Enter the OpenCTI URL or Host (ex: soar.minemeld.net)
+    * Minemeld Host URL: Enter the Minemeld URL or Host (ex: soar.minemeld.net)
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMinemeld%2FPlaybooks%2FCustomConnector%2FMinemeldCustomConnector%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2FSolutions%2F%Minemeld%2FPlaybooks%2FCustomConnector%2FMinemeldCustomConnector%2Fazuredeploy.json)
