@@ -1,4 +1,4 @@
-# OpenCTI- Add Indicators in OpenCTI Playbook
+# Minemeld- Add Indicators in Minemeld Playbook
  ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Searches for the matching indicator info of Entities (IP Address, FileHash, URL) in Minemeld 
@@ -16,7 +16,7 @@
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (Ex: Minemeld-CreateIndicator)
-    * Custom Connector Name: Enter the OpenCTI custom connector name here (Ex: MinemeldCustomConnector)
+    * Custom Connector Name: Enter the Minemeld custom connector name here (Ex: MinemeldCustomConnector)
     
 ### Post-Deployment instructions 
 #### a. Authorize connections
