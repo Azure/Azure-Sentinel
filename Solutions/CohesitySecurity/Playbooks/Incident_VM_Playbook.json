@@ -1,0 +1,113 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "For_each": {
+                "actions": {
+                    "HTTP": {
+                        "inputs": {
+                            "body": {
+                                "name": "Sentinel_triggered_restore_task_@{json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['object'][0]}",
+                                "objects": [{
+                                    "jobId": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobId'][0])",
+                                    "jobRunId": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobInstanceId'][0])",
+                                    "protectionSourceId": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['entityId'][0])",
+                                    "sourceName": "@json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['object'][0]",
+                                    "startedTimeUsecs": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobStartTimeUsecs'][0])"
+                                }],
+                                "type": "kRecoverVMs",
+                                "vmwareParameters": {
+                                    "poweredOn": true,
+                                    "prefix": "Recover-",
+                                    "suffix": "-VM-@{utcNow()}"
+                                }
+                            },
+                            "headers": {
+                                "Content-Type": "application/json",
+                                "apiKey": "33e44eac-ce99-46df-7f4e-9ac39446a66e",
+                                "clusterid": "@{json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['cid'][0]}"
+                            },
+                            "method": "Post",
+                            "uri": "https://helios.cohesity.com/irisservices/api/v1/public/restore/recover"
+                        },
+                        "runAfter": {
+                            "Set_jobId": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Http"
+                    },
+                    "Set_jobId": {
+                        "inputs": {
+                            "name": "jobId",
+                            "value": "@items('For_each')?['properties']?['additionalData']?['Custom Details']"
+                        },
+                        "runAfter": {},
+                        "type": "SetVariable"
+                    }
+                },
+                "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                "runAfter": {
+                    "jobId": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "jobId": {
+                "inputs": {
+                    "variables": [{
+                        "name": "jobId",
+                        "type": "string"
+                    }]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+            },
+            "jobId": {
+                "defaultValue": "1",
+                "type": "String"
+            }
+        },
+        "triggers": {
+            "Microsoft_Sentinel_incident": {
+                "inputs": {
+                    "body": {
+                        "callback_url": "@{listCallbackUrl()}"
+                    },
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "path": "/incident-creation"
+                },
+                "type": "ApiConnectionWebhook"
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "value": {
+                "azuresentinel": {
+                    "connectionId": "/subscriptions/26c46499-1b17-43a7-8d18-024c79f09bc7/resourceGroups/ying-test-resource-group/providers/Microsoft.Web/connections/azuresentinel-Incident_VM_Playbook",
+                    "connectionName": "azuresentinel-Incident_VM_Playbook",
+                    "connectionProperties": {
+                        "authentication": {
+                            "type": "ManagedServiceIdentity"
+                        }
+                    },
+                    "id": "/subscriptions/26c46499-1b17-43a7-8d18-024c79f09bc7/providers/Microsoft.Web/locations/eastus/managedApis/azuresentinel"
+                }
+            }
+        }
+    }
+}
