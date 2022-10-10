@@ -17,6 +17,7 @@
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex: Minemeld-GetIndicatorInfo)
     * Custom Connector Name: Enter the Minemeld custom connector name here (Ex: MinemeldCustomConnector)
+    * Local Minor DB node Name : Enter the Minemeld's Local Miner DB node name used for storing indictors
     
 ### Post-Deployment instructions 
 #### a. Authorize connections
