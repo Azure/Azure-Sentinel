@@ -31,7 +31,7 @@ When a new sentinel incident created, this playbook gets triggered and performs 
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
@@ -40,6 +40,6 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident.
+1. In Microsoft Sentinel, analytical rules should be configured to trigger an incident.
 An alert should contain *UserId* or/and *UserLogin* custom entities.
 2. Configure the automation rules to trigger the playbook.

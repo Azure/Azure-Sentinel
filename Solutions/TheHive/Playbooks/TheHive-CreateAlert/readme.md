@@ -33,7 +33,7 @@ When a new sentinel alerts is created, this playbook gets triggered and performs
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
@@ -42,5 +42,5 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an alert. An alert should contain *source* and *sourceRef* custom entities. [Docomentation about custom entities values](https://docs.thehive-project.org/thehive/legacy/thehive3/api/alert/)
+1. In Microsoft Sentinel, analytical rules should be configured to trigger an alert. An alert should contain *source* and *sourceRef* custom entities. [Docomentation about custom entities values](https://docs.thehive-project.org/thehive/legacy/thehive3/api/alert/)
 2. Configure the automation rules to trigger the playbook.
