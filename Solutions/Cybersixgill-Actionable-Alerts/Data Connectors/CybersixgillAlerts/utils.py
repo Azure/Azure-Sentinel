@@ -1,12 +1,9 @@
-from multiprocessing.spawn import import_main_path
 from re import escape, sub
 import hmac
 import hashlib
 import requests
 import logging
 from base64 import b64decode, b64encode
-from datetime import datetime
-from collections.abc import MutableMapping
 
 
 BLACKLIST_PATTERNS = ["@sixgill-start-highlight@", "@sixgill-end-highlight@"]
