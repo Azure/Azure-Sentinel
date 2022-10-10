@@ -20,7 +20,7 @@ This custom connector connects to Minemeld service end point to runs any Minemel
 
 ### Deployment instructions 
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Custom Connector Name : Enter the Custom connector name (ex:MinemeldCustomConnector)
     * Minemeld Host URL: Enter the Minemeld URL or Host (ex: soar.minemeld.net)
 
