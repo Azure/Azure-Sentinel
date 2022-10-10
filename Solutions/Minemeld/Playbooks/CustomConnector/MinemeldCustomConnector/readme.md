@@ -14,8 +14,8 @@ This custom connector connects to Minemeld service end point to runs any Minemel
 
 | Component | Description |
 | --------- | -------------- |
-| **Add Delete Update indicators** | Add Delete and update indictors available in minemeld |
-| **Get indicators** | Fetch the detailed enriched data of indicator available at minemeld |
+| **Add Delete Update indicators** | Add Delete and update indicators available in minemeld |
+| **Get indicators** | Fetch the detailed enriched data of indicators available at minemeld |
 
 
 ### Deployment instructions 
