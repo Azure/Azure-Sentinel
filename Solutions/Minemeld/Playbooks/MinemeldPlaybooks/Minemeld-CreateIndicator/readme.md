@@ -2,10 +2,12 @@
  ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Searches for the matching indicator info of Entities (IP Address, FileHash, URL) in Minemeld 
- 2. If indicators are not found, this playbook adds the new indicators to Minemeld Local database (Separate indicators for each IP Address, FileHash, URL that are presnet in Sentinel incident)
+ 2. If indicators are not found, this playbook adds the new indicators to Minemeld Local database (Separate indicators for each IP Address, FileHash, URL that are 
+ present in Sentinel incident)
  
 
-### Prerequisites 
+### 
+requisites 
 1. Minemeld Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Basic authentication of user and password is required for accessing Minemeld API.
 
