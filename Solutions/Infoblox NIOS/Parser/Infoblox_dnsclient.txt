@@ -1,38 +1,74 @@
 // Title:           Infoblox parser for type - DNS-client
 // Author:          Microsoft
-// Version:         1.1
-// Last Updated:    20/05/2022
-// Comment:         Updated to only parse the MSG (RFC3164) part of the Syslog message. Excluded the Header.
+// Version:         1.3
+// Last Updated:    Sept 23 2022
+// Comment:         Updated parser by replacing 'Regex' with 'Parse' operator.
 //
 // DESCRIPTION:
-// This parser comprised of function - Infoblox_dnsclient
+// This parser takes raw Infoblox NIOS logs from a Syslog stream and parses the logs into a normalized schema.
+//
 // REFERENCES: 
-// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
-// Infoblox NIOS logging formats: https://docs.infoblox.com/display/NAG8/Using+a+Syslog+Server
+// Infoblox NIOS logging formats: https://docs.infoblox.com/space/NAG8/22252254/Capturing+DNS+Queries+and+Responses
 //
 // LOG SAMPLES:
 // This parser assumes the raw log are formatted as follows:
 // 
-//      May 13 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
-//      May 13 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020
-let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
-let RawData = Syslog
-    | where Computer in (datasource)
-    | where ProcessName == "named" and SyslogMessage has "client"
-    | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
-    | extend responseTime = todatetime(Parser[0]),
-             Log_Type = tostring(Parser[1]),
-             RawData_subString = tostring(Parser[3])
-    | project-away Parser;  
-RawData
-    | extend dnsclient = extract_all(@"(\@[a-z0-9]+\s)?([0-9\.]+)\#(\d+)(\s\((\S+)\))?\:\s(?:view\s)?(\S+)?(?:\:\s)?((UDP|TCP)\:\s?)??query\:\s(\S+)\s(\S+)\s(\S+)(\sresponse:\s([A-Z]+))?\s(\S+)(.*)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), RawData_subString)[0]
-    | extend SrcIpAddr = tostring(dnsclient[1]),
-        SrcPortNumber = tostring(dnsclient[2]),
-        NetworkProtocol = tostring(dnsclient[7]),
-        DnsQuery = tostring(dnsclient[8]),
-        DnsQueryClassName = tostring(dnsclient[9]),
-        DnsQueryType = tostring(dnsclient[10]),
-        DnsResponseCode = tostring(dnsclient[12]),
-        DnsFlags = tostring(dnsclient[13]),
-        EventMessage = tostring(dnsclient[14])
-    | project-away SyslogMessage, dnsclient,RawData_subString;
+//      07-Apr-2013 20:16:49.083 client 10.120.20.198#57398 UDP: query: a2.foo.com IN A response: NOERROR +AED a2.foo.com. 28800 IN A 1.1.1.2;
+//      30-Apr-2013 13:35:02.187 client 10.120.20.32#42386: query: foo.com IN A + (100.90.80.102)
+//
+// Parse Response Logs
+let response =
+    Syslog
+    | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
+    | parse SyslogMessage with *
+        "client " SrcIpAddr: string
+        "#" SrcPortNumber: int
+        " " NetworkProtocol: string
+        ": query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " response: " DnsResponseCodeName: string
+        " " DnsFlags: string
+    | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
+    | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
+    | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
+    | extend EventSubType = "response"
+    | project-away DnsResponseNameIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    ;
+//
+// Parse Request Logs
+//
+let request =
+    Syslog 
+    | where ProcessName == "named"
+        and SyslogMessage has_all ("client", "query:")
+        and SyslogMessage !has "response:"
+    | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
+    | extend SyslogMessage = iif(SyslogMessage startswith "@", (substring(SyslogMessage, indexof(SyslogMessage, " ")+1)), SyslogMessage)
+    | extend SyslogMessage = replace_string(SyslogMessage,"\\ ","@@@")
+    | parse SyslogMessage with 
+        SrcIpAddr: string
+        "#" SrcPortNumber: int *
+        "query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " " DnsFlags: string
+    | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
+    | extend DnsFlags= tostring((split(DnsFlags," "))[0])
+    | extend EventSubType = "request",DnsResponseCodeName = "NA"
+    | project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    ;
+//
+// Union Request and Response Logs
+//
+let Infoblox_NIOS_ParsedData =
+    union response, request
+    | extend
+        EventProduct="NIOS",
+        EventVendor="Infoblox",
+        EventType="Query",
+        EventResult=iff(EventSubType=="request" or DnsResponseCodeName=="NOERROR","Success","Failure"),
+        DvcIpAddr=iff (HostIP == "Unknown IP", "", HostIP)
+    | project-away HostIP
+    ;
+Infoblox_NIOS_ParsedData
