@@ -41,6 +41,7 @@
             "properties": {
                 "displayName": "[variables('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
@@ -51,7 +52,6 @@
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureMonitorLogsConnectionName')]",
             "location": "[resourceGroup().location]",
-            "kind": "V1",
             "properties": {
                 "displayName": "[variables('AzureMonitorLogsConnectionName')]",
                 "customParameterValues": {},
@@ -65,6 +65,9 @@
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
@@ -378,7 +381,7 @@
                                 },
                                 "Run_query_and_list_results": {
                                     "inputs": {
-                                        "body": "Tenable_IO_Vuln_CL | where asset_ipv4_s contains \"@{items('For_each_IP_in_incident')?['Address']}\"",
+                                        "body": "Tenable_IO_Vuln_CL | where asset_ipv4_s contains \"@{items('For_each_IP_in_incident')?['Address']}\" and TimeGenerated > ago(30d)",
                                         "host": {
                                             "connection": {
                                                 "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -387,11 +390,11 @@
                                         "method": "post",
                                         "path": "/queryData",
                                         "queries": {
-                                            "resourcegroups": "Socprime",
-                                            "resourcename": "AzureSocprimeSentinel",
+                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
                                             "resourcetype": "Log Analytics Workspace",
-                                            "subscriptions": "3102b8f9-10e3-49bf-8712-51c184fddef5",
-                                            "timerange": "Last 30 days"
+                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                            "timerange": "Set in query"
                                         }
                                     },
                                     "runAfter": {},
@@ -467,11 +470,16 @@
                             "azuresentinel": {
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             },
                             "azuremonitorlogs": {
                                 "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
                                 "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuremonitorlogs')]"
                             }
                         }
