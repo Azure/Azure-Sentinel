@@ -84,9 +84,9 @@ This exercise shows you how to enable the Threat Intelligence - TAXII data conne
 
 3. In the Threat Intelligence - TAXII connector page, add the following information under *Configuration* menu:
 
-    - **Friendly name (for server)**: RansomwareIPs
-    - **API root URL**: https://limo.anomali.com/api/v1/taxii2/feeds/
-    - **Collection ID**: 135
+    - **Friendly name (for server)**: TAXIIfeed
+    - **API root URL**: https://test.pickupstix.io/taxii2/api2/
+    - **Collection ID**: 19b3703d-5541-4864-873f-ade94d202ec5
     - **Username**: guest
     - **Password**: guest
     - **Import Indicators**: All available (review all available options)
