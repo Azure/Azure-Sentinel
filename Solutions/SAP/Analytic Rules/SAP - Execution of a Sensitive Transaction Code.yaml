@@ -1,20 +1,16 @@
 alertDetailsOverride: null
 customDetails:
     SAP_User: User
-description: 'Identifies execution of a sensitive Transaction Code.
-
+description: |
+    Identifies execution of a sensitive Transaction Code.
 
     Source Action: Execute a sensitive Transaction Code.
 
-
     **Recommended for Production only**
 
+    Transaction Codes should be maintained in watchlist ""SAP - Sensitive Transaction Codes""
 
-    Transaction Codes should be maintained in watchlist ""SAP - Sensitive Transaction
-    Codes""
-
-
-    *Data Sources: SAPcon -  Audit Log*'
+    *Data Sources: SAPcon -  Audit Log*
 entityMappings:
 -   entityType: Account
     fieldMappings:
@@ -41,33 +37,38 @@ eventGroupingSettings:
 id: 797db008-0a53-4510-9883-b32673f9c3f5
 kind: Scheduled
 name: SAP - Execution of a Sensitive Transaction Code
-query: "// Define Variables\r\nlet Role = 'Production';\r\nlet AuditClasses = dynamic(['AU3']);\
-    \ // Audit Log Classes - Transaction Started\r\nlet allSystemRoles = dynamic(['Sandbox','Developement','QualityAssurance','Training','Production']);\
-    \ // Available System Roles\r\nlet allSystemUsage = dynamic (['ERP','CRM','BW','Solman','Gateway','Enterprise\
-    \ Portal']); // Available System Usages\r\n// Get Relevant Systems from WatchList\r\
-    \nlet systemID = _GetWatchlist('SAP - Systems');\r\nlet fixedSID = datatable(SystemID:string,\
-    \ SystemRole:string, SystemUsage:string)\r\n// Maintain these if WatchList is\
-    \ not available    \r\n    [\"S4H\",\"Production\",\"ERP\",\r\n    \"XXX\",\"\
-    Sandbox\",\"BW\"]\r\n; \r\n// Get Relevant Transaction Codes\r\nlet SensitiveTcode\
-    \ = _GetWatchlist('SAP - Sensitive Transactions');\r\nlet fixedTcode = datatable(TransactionCode:string)\r\
-    \n// Maintain these if WatchList is not available    \r\n    [\"RSAU_CONFIG\"\
-    ,\"RZ11\",\"SM19\"]\r\n; \r\nlet UnitedCodes = \r\n    union SensitiveTcode, fixedTcode\r\
-    \n    | summarize by TransactionCode;\r\nlet UnitedSystem =\r\nunion systemID,\
-    \ fixedSID\r\n| summarize by SystemID, SystemRole, SystemUsage\r\n| where SystemRole\
-    \ == Role; // Recommended  is Production only\r\n//| where SystemRole in (allSystemRoles);\
-    \ // Use this for all system roles\r\n// Query logic\r\nSAPAuditLog \r\n| where\
-    \ MessageID in (AuditClasses)\r\n| where TransactionCode in (UnitedCodes)\r\n\
-    | project-rename SystemIDTemp = SystemID \n| project-rename SystemID= SystemIDTemp\
-    \ \n| project-rename SystemID= SystemID\r\n| lookup kind = inner (UnitedSystem)\
-    \ on SystemID\r\n| order by TimeGenerated asc\r\n| project TimeGenerated,Instance\
-    \ ,SystemID, ClientID, User, TransactionCode, MessageText, MessageID, Email, TerminalIPv6,\
-    \ Host"
+query: |
+    // SAP - Execution of a Sensitive Transaction Code
+    // Define Variables
+    let AuditClasses = dynamic(['AU3']); // Audit Log Classes - Transaction Started
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey;
+    // Get Relevant Transaction Codes
+    let SensitiveTcode = _GetWatchlist('SAP - Sensitive Transactions') | summarize by TransactionCode;
+    // here you can exclude system users which are OK to execute a Sensitive Transaction Code
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'ExecuteSensitiveOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['ExecuteSensitiveOK','SAP_ALL']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    // Query logic
+    SAPAuditLog
+    | where MessageID in (AuditClasses)
+    | where SystemID in (SelectedSystems)
+    | where TransactionCode in (SensitiveTcode)
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | project-rename SystemIDTemp = SystemID
+    | project-rename SystemID= SystemIDTemp
+    | project-rename SystemID= SystemID
+    | order by TimeGenerated asc
+    | project TimeGenerated,Instance ,SystemID, ClientID, User, TransactionCode, MessageText, MessageID, Email, TerminalIPv6, Host
 queryFrequency: 1h
 queryPeriod: 1h
 relevantTechniques: ''
 requiredDataConnectors:
 -   connectorId: SAP
     dataTypes:
+    - SAPUsersGetVIP
+    - SAPSystems
     - SAPAuditLog
 severity: High
 tactics:
@@ -75,4 +76,4 @@ tactics:
 - Execution
 triggerOperator: gt
 triggerThreshold: 0
-version: 2.0.15
+version: 2.0.19

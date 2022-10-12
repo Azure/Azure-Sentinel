@@ -1,19 +1,17 @@
 alertDetailsOverride:
-    alertDescriptionFormat: 'Identifies activation or deactivation of ICF Services.
-
+    alertDescriptionFormat: |
+        Identifies activation or deactivation of ICF Services.
         Source Action: Activate or deactivate a service using SICF.
-
-        *Data Sources: SAPcon - Table Data Log*'
+        *Data Sources: SAPcon - Table Data Log*
     alertDisplayNameFormat: SAP - High - {{AlertText}}
     alertSeverityColumnName: Dummy
     alertTacticsColumnName: Dummy
 customDetails:
     SAP_User: User
-description: 'Identifies activation or deactivation of ICF Services.
-
+description: |
+    Identifies activation or deactivation of ICF Services.
     Source Action: Activate or deactivate a service using SICF.
-
-    *Data Sources: SAPcon - Table Data Log*'
+    *Data Sources: SAPcon - Table Data Log*
 entityMappings:
 -   entityType: Account
     fieldMappings:
@@ -36,24 +34,28 @@ eventGroupingSettings:
 id: e704b794-2f22-417a-b3ac-25e6037e2717
 kind: Scheduled
 name: SAP - Activation or Deactivation of ICF Service
-query: "// Activation or Deactivation of ICF Service\r\n// Materialize the data for\
-    \ self join to be esier\r\nlet TimeAgo= 2h;\r\nlet ICFDataChanges = materialize(SAPTableDataLog\
-    \ \r\n| where TimeGenerated > TimeAgo\r\n| where TableName == \"ICFSERVLOC\"\r\
-    \n| where NewValue == \"X\" or NewValue ==\"\" or isempty( NewValue)// X - Status\
-    \ is activated, \"\" Not activated now\r\n| where TableField == \"ICF_NAME\" or\
-    \ TableField == \"ICFACTIVE\"// Service name// Active status\r\n| project OldValue,\
-    \ NewValue, LogKey, DBLogID, SystemID, TimeGenerated, UserName, Host, Instance);\r\
-    \nlet ActDeactICF =\r\nICFDataChanges\r\n| where OldValue == NewValue and OldValue\
-    \ != \"\"\r\n| lookup ICFDataChanges on \r\nLogKey, DBLogID // Lookup for combining\
-    \ the data\r\n| extend ICFServiceStatus = iff(NewValue1 == \"X\", \"Activated\"\
-    , iff(NewValue1 == \"\" or isempty( NewValue1) and OldValue1 == \"X\" ,\"Deactivated\"\
-    ,\"No Activity\"))\r\n| extend Service = split(LogKey,\" \")[0];\r\nActDeactICF\r\
-    \n| lookup SAPUsersHeader() on SystemID, $left.UserName== $right.User\r\n| extend\
-    \ AlertText= strcat(\"Service \", Service, \" \", ICFServiceStatus, \" by User\
-    \ \", UserName, \" in System \", SystemID)//{{Service}} {{ICFServiceStatus}} by\
-    \ User {{User}} in System {{SystemID}}\r\n| project TimeGenerated, Service, PrimaryIP,\
-    \ PrimaryEmail, KnownIPs, KnownEmails, LastKnownIP, User= UserName, Host, SystemID,\
-    \ Client, Instance, ICFServiceStatus, AlertText\r\n| extend Dummy = ''"
+query: |
+    // Activation or Deactivation of ICF Service
+    // Materialize the data for self join to be esier
+    let TimeAgo= 2h;
+    let ICFDataChanges = materialize(SAPTableDataLog
+    | where TimeGenerated > TimeAgo
+    | where TableName == "ICFSERVLOC"
+    | where NewValue == "X" or NewValue =="" or isempty( NewValue)// X - Status is activated, "" Not activated now
+    | where TableField == "ICF_NAME" or TableField == "ICFACTIVE"// Service name// Active status
+    | project OldValue, NewValue, LogKey, DBLogID, SystemID, TimeGenerated, UserName, Host, Instance);
+    let ActDeactICF =
+    ICFDataChanges
+    | where OldValue == NewValue and OldValue != ""
+    | lookup ICFDataChanges on
+    LogKey, DBLogID // Lookup for combining the data
+    | extend ICFServiceStatus = iff(NewValue1 == "X", "Activated", iff(NewValue1 == "" or isempty( NewValue1) and OldValue1 == "X" ,"Deactivated","No Activity"))
+    | extend Service = split(LogKey," ")[0];
+    ActDeactICF
+    | lookup SAPUsersHeader() on SystemID, $left.UserName== $right.User
+    | extend AlertText= strcat("Service ", Service, " ", ICFServiceStatus, " by User ", UserName, " in System ", SystemID)//{{Service}} {{ICFServiceStatus}} by User {{User}} in System {{SystemID}}
+    | project TimeGenerated, Service, PrimaryIP, PrimaryEmail, KnownIPs, KnownEmails, LastKnownIP, User= UserName, Host, SystemID, Client, Instance, ICFServiceStatus, AlertText
+    | extend Dummy = ''
 queryFrequency: 2h
 queryPeriod: 2d
 relevantTechniques: ''
@@ -69,4 +71,4 @@ tactics:
 - Persistence
 triggerOperator: gt
 triggerThreshold: 0
-version: 2.0.15
+version: 2.0.19

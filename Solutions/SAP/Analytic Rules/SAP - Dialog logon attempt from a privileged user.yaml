@@ -1,14 +1,11 @@
 alertDetailsOverride: null
 customDetails:
     SAP_User: User
-description: 'Identifies dialog logon (Type AUM) attempts by priviledged users (See
-    Function SAPUsersGetPrivileged) on SAP system .
+description: |
+    Identifies dialog logon (Type AUM) attempts by priviledged users (See Function SAPUsersGetPrivileged) on SAP system .
+    Source Action: Attempt to login from the same IP to several systems/clients within the scheduled time interval.
 
-    Source Action: Attempt to login from the same IP to several systems/clients within
-    the scheduled time interval.
-
-
-    *Data Sources: SAPcon -  Audit Log*'
+    *Data Sources: SAPcon -  Audit Log*
 entityMappings:
 -   entityType: Account
     fieldMappings:
@@ -29,21 +26,30 @@ eventGroupingSettings:
 id: db123b5e-bcc2-43a5-9e13-8ac1e1a3c530
 kind: Scheduled
 name: SAP - Dialog logon attempt from a privileged user
-query: "// SAP - High- Dialog logon attempt from a privileged user\r\n// time span\
-    \ for audit events\r\nlet AuditTimeAgo= 6h;\r\n// Define variables\r\nlet AuditClasses\
-    \ = dynamic(['AUM']);//Dialog only\r\nlet perIPLimit = 1;\r\n// Query logic\r\n\
-    SAPAuditLog \r\n| where TimeGenerated > ago(AuditTimeAgo)\r\n| where MessageID\
-    \ in (AuditClasses)\r\n| extend DetailsBy = pack(\"User\", User, \"Email\", Email,\
-    \ \"SystemID\", SystemID, \"ClientID\", ClientID)\r\n| summarize LoginbyIPAttempts\
-    \ = count(), Details = make_set(DetailsBy), StartTime = min(TimeGenerated), EndTime\
-    \ = max(TimeGenerated) \r\n    by TerminalIPv6\r\n// Check if number of login\
-    \ attempts per IP is higher than limit\r\n| where LoginbyIPAttempts > perIPLimit\
-    \ \r\n| mv-expand Details\r\n| evaluate bag_unpack(Details, \"Details_\")\r\n\
-    | project \r\n    StartTime, EndTime,  TerminalIPv6,\r\n    Email = column_ifexists(\"\
-    Details_Email\", \"\"), User = column_ifexists(\"Details_User\", \"\"),\r\n  \
-    \  SysetmID = column_ifexists(\"Details_SystemID\", \"\"),\r\n   ClientID = column_ifexists(\"\
-    Details_ClientID\", \"\")\r\n| join (SAPUsersGetPrivileged | project User ) on\
-    \ $left.User == $right.User"
+query: |
+    // SAP - High- Dialog logon attempt from a privileged user
+    // time span for audit events
+    let AuditTimeAgo= 6h;
+    // Define variables
+    let AuditClasses = dynamic(['AUM']);//Dialog only
+    let perIPLimit = 1;
+    // Query logic
+    SAPAuditLog
+    | where TimeGenerated > ago(AuditTimeAgo)
+    | where MessageID in (AuditClasses)
+    | extend DetailsBy = pack("User", User, "Email", Email, "SystemID", SystemID, "ClientID", ClientID)
+    | summarize LoginbyIPAttempts = count(), Details = make_set(DetailsBy), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)
+        by TerminalIPv6
+    // Check if number of login attempts per IP is higher than limit
+    | where LoginbyIPAttempts > perIPLimit
+    | mv-expand Details
+    | evaluate bag_unpack(Details, "Details_")
+    | project
+        StartTime, EndTime,  TerminalIPv6,
+        Email = column_ifexists("Details_Email", ""), User = column_ifexists("Details_User", ""),
+        SysetmID = column_ifexists("Details_SystemID", ""),
+       ClientID = column_ifexists("Details_ClientID", "")
+    | join (SAPUsersGetPrivileged | project User ) on $left.User == $right.User
 queryFrequency: 6h
 queryPeriod: 2d
 relevantTechniques: ''
@@ -57,4 +63,4 @@ tactics:
 - CredentialAccess
 triggerOperator: gt
 triggerThreshold: 0
-version: 2.0.15
+version: 2.0.19

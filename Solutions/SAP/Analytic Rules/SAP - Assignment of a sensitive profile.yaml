@@ -1,18 +1,14 @@
 alertDetailsOverride: null
 customDetails:
     SAP_User: User
-description: 'Identifies new assignments of a sensitive profile to a user.
-
+description: |
+    Identifies new assignments of a sensitive profile to a user.
 
     Source Action: Assign a profile to a User using SU01.
 
-
     Sensitive profiles should be maintained in watchlist "SAP - Sensitive Profiles"
 
-
     *Data Sources: SAPcon -  Change Documents Log*
-
-    '
 entityMappings:
 -   entityType: Account
     fieldMappings:
@@ -39,30 +35,45 @@ eventGroupingSettings:
 id: 4e228f1a-55cc-4abc-8ef4-5e385b60f9c0
 kind: Scheduled
 name: SAP - Assignment of a sensitive profile
-query: "// Define Variables\r\n// Audit Log Classes - Authorizations for user changed\r\
-    \nlet Identity = 'IDENTITY';\r\nlet ProfileChangeDoc = 'SUSR_UST04';\r\nlet Insert\
-    \ = \"I\";\r\nlet logsThreshold = 3600; // 3600 seconds\r\nlet AuditClasses =\
-    \ dynamic(['AUB']); // Authorizations for user &A changed.\r\n// Maintain these\
-    \ if WatchList is not available\r\nlet SensitiveProfiles =  _GetWatchlist('SAP\
-    \ - Sensitive Profiles');\r\nlet fixedProfile = datatable(Profile:string)['SAP_ALL','SAP_NEW'];\r\
-    \n// Maintain these if System doesn't have CR's\r\nlet fixedChangeDocs = datatable(User\
-    \ : string, ObjectClass : string, TableName : string, TypeofChange_Item : string\
-    \ , ChangedTableKey : string, ObjectID : string, TimeGenerated : datetime, ValueNew\
-    \ : string, SystemID : string)[];\r\nlet ChangeDocs = \r\nunion isfuzzy=true table(\"\
-    SAPChangeDocsLog\"), fixedChangeDocs;\r\nlet IdentityChangeDocuments =\r\n// Identity\
-    \ Change documents which represents profiles assignment\r\n    ChangeDocs  \r\n\
-    \    | where ObjectClass == Identity // Identity\r\n    and TableName == ProfileChangeDoc\
-    \ // Profile Change Doc\r\n    and TypeofChange_Item == Insert // Insert \r\n\
-    \    | extend Profile = ChangedTableKey\r\n    | extend UserAssigned = ObjectID;\r\
-    \nlet UnitedProfiles =\r\ntoscalar(union fixedProfile, SensitiveProfiles\r\n|\
-    \ summarize Profiles = make_list(Profile));\r\n// Query logic\r\nSAPAuditLog \r\
-    \n| where MessageID in (AuditClasses)\r\n| summarize by TimeGenerated, TerminalIPv6,\
-    \ User, Host, Email\r\n| lookup kind = leftouter (IdentityChangeDocuments) on\
-    \ User\r\n| where Profile in (UnitedProfiles)\r\n| project-rename  TimeGenAudit\
-    \ = TimeGenerated1    \r\n| where abs(datetime_diff('second',TimeGenerated,TimeGenAudit))\
-    \ <= logsThreshold\r\nor isnull(TimeGenAudit)\r\n| project \r\n// Details\r\n\
-    TimeGenerated, Instance , SystemID, ClientID, Profile, User,  UserAssigned,\r\n\
-    Email, TerminalIPv6, Host"
+query: |
+    // Define Variables
+    // Audit Log Classes - Authorizations for user changed
+    let Identity = 'IDENTITY';
+    let ProfileChangeDoc = 'SUSR_UST04';
+    let Insert = "I";
+    let logsThreshold = 3600; // 3600 seconds
+    let AuditClasses = dynamic(['AUB']); // Authorizations for user &A changed.
+    // Maintain these if WatchList is not available
+    let SensitiveProfiles =  _GetWatchlist('SAP - Sensitive Profiles');
+    let fixedProfile = datatable(Profile:string)['SAP_ALL','SAP_NEW'];
+    // Maintain these if System doesn't have CR's
+    let fixedChangeDocs = datatable(User : string, ObjectClass : string, TableName : string, TypeofChange_Item : string , ChangedTableKey : string, ObjectID : string, TimeGenerated : datetime, ValueNew : string, SystemID : string)[];
+    let ChangeDocs =
+    union isfuzzy=true table("SAPChangeDocsLog"), fixedChangeDocs;
+    let IdentityChangeDocuments =
+    // Identity Change documents which represents profiles assignment
+        ChangeDocs
+        | where ObjectClass == Identity // Identity
+        and TableName == ProfileChangeDoc // Profile Change Doc
+        and TypeofChange_Item == Insert // Insert
+        | extend Profile = ChangedTableKey
+        | extend UserAssigned = ObjectID;
+    let UnitedProfiles =
+    toscalar(union fixedProfile, SensitiveProfiles
+    | summarize Profiles = make_list(Profile));
+    // Query logic
+    SAPAuditLog
+    | where MessageID in (AuditClasses)
+    | summarize by TimeGenerated, TerminalIPv6, User, Host, Email
+    | lookup kind = leftouter (IdentityChangeDocuments) on User
+    | where Profile in (UnitedProfiles)
+    | project-rename  TimeGenAudit = TimeGenerated1
+    | where abs(datetime_diff('second',TimeGenerated,TimeGenAudit)) <= logsThreshold
+    or isnull(TimeGenAudit)
+    | project
+    // Details
+    TimeGenerated, Instance , SystemID, ClientID, Profile, User,  UserAssigned,
+    Email, TerminalIPv6, Host
 queryFrequency: 12h
 queryPeriod: 12h
 relevantTechniques: ''
@@ -76,4 +87,4 @@ tactics:
 - PrivilegeEscalation
 triggerOperator: gt
 triggerThreshold: 0
-version: 2.0.15
+version: 2.0.19

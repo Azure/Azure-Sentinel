@@ -2,13 +2,13 @@
     "properties": {
         "category": "SAPFunctions",
         "displayName": "SAPUsersGetVIP",
-        "query": "// let SearchForTags= split('Sensitive; Super', ';');\r\n// // let SearchForTags= todynamic('All Tags');\r\n// let SpecialFocusTags = split('SpecialAttention; SoonToLeave', ';');\r\n\r\n_GetWatchlist('SAP_User_Config')\r\n| summarize arg_max(LastUpdatedTimeUTC, *) by SearchKey\r\n// remove spaces\r\n| extend Tags = replace_string(Tags, ' ', '')\r\n| extend TagsList = split(Tags,\";\")\r\n| extend TagsIntersect = set_intersect(TagsList, SearchForTags)\r\n| extend SpecialFocusTagged = iff(array_length(set_intersect(TagsList, SpecialFocusTags)) > 0, true, false)\r\n| extend IntersectionSize = array_length(TagsIntersect)\r\n| where (IntersectionSize > 0 or tostring(SearchForTags) == 'All Tags' or SpecialFocusTagged == true)",
+        "query": "// function gets tags which can either be SAP roles, SAP Profiles or tags.\r\n// let SearchForTags= dynamic(['Sensitive', 'T-AH390004']);\r\n// let SearchForTags= todynamic('All Tags');\r\n// let SpecialFocusTags = split('SpecialAttention; SoonToLeave', ';');\r\n// get the SAP roles / SAP profiles that are relevant\r\nlet SAPUserRolesAndProfiles = SAPUsersAssignments \r\n| where (tostring(SearchForTags) == 'All Tags' or Profiles has_any (SearchForTags) or ChildRoles has_any (SearchForTags) or DirectRoles has_any (SearchForTags))\r\n| project-keep User, SystemID, DirectRoles, ChildRoles, Profiles \r\n| summarize RolesAndProfiles = make_set(array_concat(DirectRoles, ChildRoles, Profiles), 120) by SAPUser= User\r\n| extend SearchKey= SAPUser;\r\n// query\r\n_GetWatchlist('SAP_User_Config')\r\n| union SAPUserRolesAndProfiles\r\n// remove spaces\r\n| extend Tags = replace_string(Tags, ' ', '')\r\n| extend TagsList = array_concat(split(Tags,\";\"), RolesAndProfiles)\r\n| extend TagsIntersect = set_intersect(TagsList, SearchForTags)\r\n| extend SpecialFocusTagged = iff(array_length(set_intersect(TagsList, SpecialFocusTags)) > 0, true, false)\r\n| extend IntersectionSize = array_length(TagsIntersect)\r\n| where (IntersectionSize > 0 or tostring(SearchForTags) == 'All Tags' or SpecialFocusTagged == true)\r\n| project-away _DTItemId, LastUpdatedTimeUTC",
         "functionAlias": "SAPUsersGetVIP",
-        "functionParameters": "SearchForTags:dynamic = dynamic('All Tags'), SpecialFocusTags:dynamic = dynamic([\"SoonToLeave\", \"SpecialAttention\"])",
-        "version": "2.0.15",
+        "functionParameters": "SearchForTags:dynamic = dynamic('All Tags'), SpecialFocusTags:dynamic = dynamic([\"Do not return any in-focus users\"])",
+        "version": 2,
         "etag": "*"
     },
     "name": "SAPUsersGetVIP",
     "type": "savedSearches",
-    "apiVersion": "2020-08-01"
+    "apiVersion": "2022-10-01"
 }
