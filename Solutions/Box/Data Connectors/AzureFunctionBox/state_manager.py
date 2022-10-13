@@ -14,9 +14,17 @@ class StateManager:
         except ResourceNotFoundError:
             self.share_cli.create_share()
             self.file_cli.upload_file(marker_text)
+        except Exception as e:
+            # Anything else that is not Azure related (network, stdlib, etc.)
+            logging.error("Exception during POST  %s" % str(e))
 
     def get(self):
         try:
             return self.file_cli.download_file().readall().decode()
         except ResourceNotFoundError:
+            logging.error("Exception during RESOURCENOTFOUND  %s" % str(e))
+            return None
+        except Exception as e:
+            # Anything else that is not Azure related (network, stdlib, etc.)
+            logging.error("Exception during GET  %s" % str(e))
             return None
