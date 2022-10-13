@@ -1,8 +1,13 @@
 // Title:           ESI - Exchange Configuration Parser
 // Author:          Microsoft
-// Version:         1.3
-// Last Updated:    19/09/2022
-// Comment:         
+// Version:         1.5
+// Last Updated:    13/10/2022
+// Comment:  
+//      v1.5 : 
+//          - Change the usage of TimeGenerated instead of EntryDate for filtering BaseRequest.
+/           - Change alllife duration to 1080 days instead of 90 days.  
+//      v1.4 : 
+//          - Capacity to find all configuration without date limitation with the keyword "alllife" in SpecificConfigurationDate    
 //      v1.3 : 
 //          - Adding fuzzy mode to be able to have only On-Premises or Online tables
 //          - Simplify the request
@@ -34,9 +39,9 @@ let _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(Specif
 let _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == "all","All",tostring(SpecificConfigurationEnv)),',');
 let _target = iff(isnull(Target) or isempty(Target),"On-Premises",Target);
 // Building Base Request
-let _targetDate = iff(_configurationDate == "lastdate", ago(7d), todatetime(_configurationDate));
+let _targetDate = iff(_configurationDate == "lastdate", ago(7d), iif(_configurationDate == "alllife",ago(1080d),todatetime(_configurationDate)));
 let baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* 
-    | where todatetime(EntryDate_s) > _targetDate
+    | where TimeGenerated > _targetDate
     | extend Source = iff (TableName contains "Online", "Online", "On-Premises")
     | where _target == 'All' or Source == _target
     | extend ScopedEnvironment = iff(_configurationEnv contains "All", "All",ESIEnvironment_s) 
@@ -47,7 +52,7 @@ let baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExc
 let findConfigDate = baseRequest
     | extend Env =strcat(Source, "_",ESIEnvironment_s)
     | summarize count() by GenerationInstanceID_g,Env,EntryDate
-    | extend distance = iff(_configurationDate == "lastdate", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))
+    | extend distance = iff(_configurationDate == "lastdate" or _configurationDate == "alllife", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))
     | top-nested of Env by Ignore0=max(1), 
         top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, 
         top-nested of GenerationInstanceID_g by Ignore2=max(2) 
