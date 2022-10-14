@@ -2,7 +2,6 @@
 from datetime import datetime, timedelta, timezone
 from copy import deepcopy
 from json import dumps
-import json
 from re import match
 import logging
 
