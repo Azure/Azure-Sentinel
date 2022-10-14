@@ -40,8 +40,8 @@ Once deployment is complete, you will need to authorize each connection.
 3. Find principal by playbook name and select it
 4. Click Create
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)  
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fsocprime%2FAzure-Sentinel%2Fraw%2FPAN-OS-OnPremCustomConnector%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooksOnPrem%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)  
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fsocprime%2FAzure-Sentinel%2Fraw%2FPAN-OS-OnPremCustomConnector%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooksOnPrem%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)
 
 ## Playbook steps explained
 
