@@ -10,7 +10,7 @@ for (( i=0; i<${#MAPFILE[@]}; i++ ))
 	if [[ "${MAPFILE[$i]}" == *"Detections/"* || "${MAPFILE[$i]}" == *"Analytic Rules/"* ]];
 	then
 		echo ${MAPFILE[$i]} is a detection
-		diffs=$(echo $(git diff origin/master -U0 --ignore-space-change ${MAPFILE[$i]}))
+		diffs=$(echo $(git diff origin/master -U0 --ignore-space-change "${MAPFILE[$i]}"))
 		if [[ "$diffs" == *"version:"* ]];
 		then
 			echo "all good - the version was updated"
