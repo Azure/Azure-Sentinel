@@ -1,14 +1,14 @@
 {
     "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion":  "1.0.0.0",
-        "metadata":  {
-        "title":  "Update Indicator in OpenCTI",
-        "description":  "This playbook creates indicator in OpenCTI based on the entities info present in Sentinel incident. This playbook search in OpenCTI for indicatoes based on the entities (Account, Host, IP, FileHash, URL) present in Microsoft Sentinel incident. If it presnts in OpenCTI, updates the indicator confidence (also information will be added to incident comment) otherwise it creates new indicator in OpenCTI",
+    "metadata":  {
+        "title":  "Create Indicator - OpenCTI",
+        "description":  "This playbook adds new indicator in OpenCTI based on the entities info present in Sentinel incident. This playbook search in OpenCTI for indicatoes based on the entities (Account, Host, IP, FileHash, URL) present in Microsoft Sentinel incident. If it presnts in OpenCTI, information will be added to incident comment otherwise it creates new indicator in OpenCTI",
         "prerequisites":  ["1. OpenCTI Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
         "2. API key. To get API Key, login into your OpenCTI instance dashboard and navigate to User profile page --> API Access."],
         "postDeployment":  ["1. Once deployment is complete, you will need to authorize each connection.",
         "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"],
-        "prerequisitesDeployTemplateFile":  "../../OpenCTICustomConnector/azuredeploy.json",
+        "prerequisitesDeployTemplateFile":  "../../CustomConnector/OpenCTICustomConnector/azuredeploy.json",
         "lastUpdateTime":  "2022-07-19T00:00:00.000Z",
         "entities":  ["account","ip","filehash","url","host"],
         "tags":  ["Enrichment","Notification","ThreatIntelligence", "OpenCTI"
@@ -56,21 +56,7 @@
         "metadata": {
           "description": "Marking used while creating indicators in OpenCTI. If you already have marking, you can provide the same"
         }
-        },
-        "ConfidenceScoreIncrementedBy":  {
-            "defaultValue":  10,
-            "type":  "int",
-        "metadata": {
-          "description": "Existing confidence score will be incremented by this value when we update the confidence score for existing indicators"
-        }
-        },             
-		"OpenCTICommitMessage":  {
-            "defaultValue":  "Increasing score from Sentinel SOAR playbook",
-            "type":  "string",
-        "metadata": {
-          "description": "This message is used as commit message while updating the indicatior information in OpenCTI."
-        }
-        }                        
+        }                    
     },
     "variables":  {
         "OpencticustomconnectorConnectionName":  "[concat('OpenCTICustomConnector-', parameters('PlaybookName'))]",
@@ -677,7 +663,7 @@
                                                 ]
                                             },
                                             "type": "Compose",
-                                            "inputs": "---------------------------------------------------------------------------------------\n<p> <u><b>Account: @{items('For_each_Account_in_Entity')?['Name']} </b> </u> \nNo match found from OpenCTI\nWe have created new indicator with ID: @{body('Parse_JSON_Newly_created_Indicator_-_account')?['data']?['indicatorAdd']?['id']} </p>"
+                                            "inputs": "\n<u>Account: @{items('For_each_Account_in_Entity')?['Name']} </u> \nNo match found from OpenCTI\nWe have created new indicator with ID: @{body('Parse_JSON_Newly_created_Indicator_-_account')?['data']?['indicatorAdd']?['id']}\n---------------------------------------------------------------------------------------"
                                         },
                                         "Parse_JSON_Newly_created_Indicator_-_account": {
                                             "runAfter": {
@@ -751,56 +737,9 @@
                                                         }
                                                     },
                                                     "Compose_Comment_message_-_Results_-_Accounts": {
-                                                        "runAfter": {
-                                                            "Run_GraphQL_Query_Update_Indicator_Score_-_Accounts": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Compose",
-                                                        "inputs": "\\n------------------------------------------------------------------------------------\nFound below information from OpenCTI for @{items('For_each_Account_in_Entity')?['Name']} (Account). \n---------------------------------------------------------------------------------------\nIndicator Name: @{items('For_each_indictor_info_on_Account')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_Account')?['node']?['indicator_types']}\nConfidence: @{items('For_each_indictor_info_on_Account')?['node']?['confidence']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_Account')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_Account')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_Account')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_Account')?['node']?['createdBy']}\nNOTE: Updated the indicator with new confidence score: @{variables('ScoreUpdatedforIndicatorAccounts')}\n"
-                                                    },
-                                                    "Increment_variable_Increment_Score_Accounts": {
-                                                        "runAfter": {
-                                                            "Set_variable_Existing_Score_-_Accounts": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "IncrementVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorAccounts",
-                                                            "value": "@variables('ScoreIncrementedBy')"
-                                                        }
-                                                    },
-                                                    "Run_GraphQL_Query_Update_Indicator_Score_-_Accounts": {
-                                                        "runAfter": {
-                                                            "Increment_variable_Increment_Score_Accounts": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "ApiConnection",
-                                                        "inputs": {
-                                                            "body": {
-                                                                "query": "mutation{\n  indicatorEdit(id: \"@{items('For_each_indictor_info_on_Account')?['node']?['id']}\" ){\n    fieldPatch (input:{key:\"confidence\" value:\"@{variables('ScoreUpdatedforIndicatorAccounts')}\" operation:replace} commitMessage: \"@{variables('IndicatorUpdateCommitMessage')}\") {\n      id\n    }\n  }\n}"
-                                                            },
-                                                            "headers": {
-                                                                "Content-Type": "application/json"
-                                                            },
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
-                                                                }
-                                                            },
-                                                            "method": "post",
-                                                            "path": "/graphql"
-                                                        }
-                                                    },
-                                                    "Set_variable_Existing_Score_-_Accounts": {
                                                         "runAfter": {},
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorAccounts",
-                                                            "value": "@items('For_each_indictor_info_on_Account')?['node']?['confidence']"
-                                                        }
+                                                        "type": "Compose",
+                                                        "inputs": "\nFound below information from OpenCTI for @{items('For_each_Account_in_Entity')?['Name']} (Account)\n---------------------------------------------------------------------------------------\nIndicator Name: @{items('For_each_indictor_info_on_Account')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_Account')?['node']?['indicator_types']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_Account')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_Account')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_Account')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_Account')?['node']?['createdBy']}\n---------------------------------------------------------------------------------------"
                                                     }
                                                 },
                                                 "runAfter": {},
@@ -840,53 +779,11 @@
                                                                         "properties": {
                                                                             "node": {
                                                                                 "properties": {
-                                                                                    "confidence": {
-                                                                                        "type": "integer"
-                                                                                    },
-                                                                                    "createdBy": {
-                                                                                        "properties": {
-                                                                                            "connectors": {
-                                                                                                "type": "array"
-                                                                                            },
-                                                                                            "creator": {
-                                                                                                "properties": {
-                                                                                                    "firstname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "lastname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "name": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "user_email": {
-                                                                                                        "type": "string"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "name": {
-                                                                                                "type": "string"
-                                                                                            },
-                                                                                            "observedData": {
-                                                                                                "properties": {
-                                                                                                    "edges": {
-                                                                                                        "type": "array"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "x_opencti_aliases": {}
-                                                                                        },
-                                                                                        "type": "object"
-                                                                                    },
+                                                                                    "createdBy": {},
                                                                                     "description": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "entity_type": {
-                                                                                        "type": "string"
-                                                                                    },
-                                                                                    "id": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "indicator_types": {
@@ -928,7 +825,7 @@
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_Account_in_Entity')?['Name']}\" operator:\"eq\" })\n{\n   edges {\n      node {\n        id\n        name\n        entity_type\n        indicator_types\n        confidence\n        description\n        x_opencti_score\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          connectors {\n            name\n          }\n        }\n      }\n    }\n  }\n}"
+                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_Account_in_Entity')?['Name']}\" operator:\"eq\" })\n{\n    edges {\n      node {\n        name\n        entity_type\n        indicator_types\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          confidence\n          connectors {\n            name\n          }\n        }\n        description\n        x_opencti_score\n      }\n    }\n  }\n}"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json"
@@ -974,7 +871,7 @@
                                                 ]
                                             },
                                             "type": "Compose",
-                                            "inputs": "---------------------------------------------------------------------------------------\n<p> <u><b>File Hash:  @{items('For_each_FileHash_in_Entity')?['Value']} </b> </u>\nNo match found from OpenCTI \nWe have created new indicator with ID  @{body('Parse_JSON_Newly_created_Indicator_-_FileHash')?['data']?['indicatorAdd']?['id']}</p>"
+                                            "inputs": "\n<u><b>File Hash:  @{items('For_each_FileHash_in_Entity')?['Value']} </b> </u>\nNo match found from OpenCTI \nWe have created new indicator with ID  @{body('Parse_JSON_Newly_created_Indicator_-_FileHash')?['data']?['indicatorAdd']?['id']}\n---------------------------------------------------------------------------------------"
                                         },
                                         "Parse_JSON_Newly_created_Indicator_-_FileHash": {
                                             "runAfter": {
@@ -1048,56 +945,9 @@
                                                         }
                                                     },
                                                     "Compose_Comment_message_-_Results_-_FileHash": {
-                                                        "runAfter": {
-                                                            "Run_GraphQL_Query_Update_Indicator_Score_-_FileHash": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Compose",
-                                                        "inputs": "\\n------------------------------------------------------------------------------------\nFound below information from OpenCTI for @{items('For_each_FileHash_in_Entity')?['Value']} (File Hash)\n---------------------------------------------------------------------------------------\nIndicator Name: @{items('For_each_indictor_info_on_FileHash')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_FileHash')?['node']?['indicator_types']}\nConfidence: @{items('For_each_indictor_info_on_FileHash')?['node']?['confidence']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_FileHash')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_FileHash')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_FileHash')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_FileHash')?['node']?['createdBy']}\nNOTE: Updated the indicator with new confidence score: @{variables('ScoreUpdatedforIndicatorFileHash')}"
-                                                    },
-                                                    "Increment_variable_Increment_Score_FileHash": {
-                                                        "runAfter": {
-                                                            "Set_variable_Existing_Score_-_FileHash": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "IncrementVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorFileHash",
-                                                            "value": "@variables('ScoreIncrementedBy')"
-                                                        }
-                                                    },
-                                                    "Run_GraphQL_Query_Update_Indicator_Score_-_FileHash": {
-                                                        "runAfter": {
-                                                            "Increment_variable_Increment_Score_FileHash": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "ApiConnection",
-                                                        "inputs": {
-                                                            "body": {
-                                                                "query": "mutation{\n  indicatorEdit(id: \"@{items('For_each_indictor_info_on_FileHash')?['node']?['id']}\" ){\n    fieldPatch (input:{key:\"confidence\" value:\"@{variables('ScoreUpdatedforIndicatorFileHash')}\" operation:replace} commitMessage: \"@{variables('IndicatorUpdateCommitMessage')}\") {\n      id\n    }\n  }\n}"
-                                                            },
-                                                            "headers": {
-                                                                "Content-Type": "application/json"
-                                                            },
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
-                                                                }
-                                                            },
-                                                            "method": "post",
-                                                            "path": "/graphql"
-                                                        }
-                                                    },
-                                                    "Set_variable_Existing_Score_-_FileHash": {
                                                         "runAfter": {},
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorFileHash",
-                                                            "value": "@items('For_each_indictor_info_on_FileHash')?['node']?['confidence']"
-                                                        }
+                                                        "type": "Compose",
+                                                        "inputs": "\nFound below information from OpenCTI for @{items('For_each_FileHash_in_Entity')?['Value']} (File Hash)\n---------------------------------------------------------------------------------------\nIndicator Name: @{items('For_each_indictor_info_on_FileHash')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_FileHash')?['node']?['indicator_types']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_FileHash')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_FileHash')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_FileHash')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_FileHash')?['node']?['createdBy']}\n---------------------------------------------------------------------------------------"
                                                     }
                                                 },
                                                 "runAfter": {},
@@ -1137,53 +987,11 @@
                                                                         "properties": {
                                                                             "node": {
                                                                                 "properties": {
-                                                                                    "confidence": {
-                                                                                        "type": "integer"
-                                                                                    },
-                                                                                    "createdBy": {
-                                                                                        "properties": {
-                                                                                            "connectors": {
-                                                                                                "type": "array"
-                                                                                            },
-                                                                                            "creator": {
-                                                                                                "properties": {
-                                                                                                    "firstname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "lastname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "name": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "user_email": {
-                                                                                                        "type": "string"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "name": {
-                                                                                                "type": "string"
-                                                                                            },
-                                                                                            "observedData": {
-                                                                                                "properties": {
-                                                                                                    "edges": {
-                                                                                                        "type": "array"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "x_opencti_aliases": {}
-                                                                                        },
-                                                                                        "type": "object"
-                                                                                    },
+                                                                                    "createdBy": {},
                                                                                     "description": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "entity_type": {
-                                                                                        "type": "string"
-                                                                                    },
-                                                                                    "id": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "indicator_types": {
@@ -1225,7 +1033,7 @@
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_FileHash_in_Entity')?['Value']}\" operator:\"eq\" })\n{\n     edges {\n      node {\n        id\n        name\n        entity_type\n        indicator_types\n        confidence\n        description\n        x_opencti_score\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          connectors {\n            name\n          }\n        }\n      }\n    }\n  }\n}"
+                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_FileHash_in_Entity')?['Value']}\" operator:\"eq\" })\n{\n    edges {\n      node {\n        name\n        entity_type\n        indicator_types\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          confidence\n          connectors {\n            name\n          }\n        }\n        description\n        x_opencti_score\n      }\n    }\n  }\n}"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json"
@@ -1271,7 +1079,7 @@
                                                 ]
                                             },
                                             "type": "Compose",
-                                            "inputs": "---------------------------------------------------------------------------------------\n<p> <u><b>Host Name:   @{items('For_each_Host_in_Entity')?['HostName']}</b> </u>\nNo match found from OpenCTI \\n \nWe have created new indicator with ID @{body('Parse_JSON_Newly_created_Indicator_-_Host')?['data']?['indicatorAdd']?['id']} </p>"
+                                            "inputs": "\n<u><b>Host Name:   @{items('For_each_Host_in_Entity')?['HostName']}</b> </u>\nNo match found from OpenCTI\nWe have created new indicator with ID @{body('Parse_JSON_Newly_created_Indicator_-_Host')?['data']?['indicatorAdd']?['id']}\n---------------------------------------------------------------------------------------"
                                         },
                                         "Parse_JSON_Newly_created_Indicator_-_Host": {
                                             "runAfter": {
@@ -1345,56 +1153,9 @@
                                                         }
                                                     },
                                                     "Compose_Comment_message_-_Results_-_Host": {
-                                                        "runAfter": {
-                                                            "Run_GraphQL_Query_Update_Indicator_Score_-_Host": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Compose",
-                                                        "inputs": "\\n------------------------------------------------------------------------------------\nFound below information from OpenCTI for @{items('For_each_Host_in_Entity')?['HostName']} (Host)\n---------------------------------------------------------------------------------------\nFound from OpenCTI for @{items('For_each_Host_in_Entity')?['HostName']}\nIndicator Name: @{items('For_each_indictor_info_on_Host')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_Host')?['node']?['indicator_types']}\nConfidence: @{items('For_each_indictor_info_on_Host')?['node']?['confidence']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_Host')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_Host')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_Host')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_Host')?['node']?['createdBy']}\nNOTE: Updated the indicator with new confidence score: @{variables('ScoreUpdatedforIndicatorHost')}"
-                                                    },
-                                                    "Increment_variable_Increment_Score_Host": {
-                                                        "runAfter": {
-                                                            "Set_variable_Existing_Score_-_Hosts": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "IncrementVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorHost",
-                                                            "value": "@variables('ScoreIncrementedBy')"
-                                                        }
-                                                    },
-                                                    "Run_GraphQL_Query_Update_Indicator_Score_-_Host": {
-                                                        "runAfter": {
-                                                            "Increment_variable_Increment_Score_Host": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "ApiConnection",
-                                                        "inputs": {
-                                                            "body": {
-                                                                "query": "mutation{\n  indicatorEdit(id: \"@{items('For_each_indictor_info_on_Host')?['node']?['id']}\" ){\n    fieldPatch (input:{key:\"confidence\" value:\"@{variables('ScoreUpdatedforIndicatorHost')}\" operation:replace} commitMessage: \"@{variables('IndicatorUpdateCommitMessage')}\") {\n      id\n    }\n  }\n}"
-                                                            },
-                                                            "headers": {
-                                                                "Content-Type": "application/json"
-                                                            },
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
-                                                                }
-                                                            },
-                                                            "method": "post",
-                                                            "path": "/graphql"
-                                                        }
-                                                    },
-                                                    "Set_variable_Existing_Score_-_Hosts": {
                                                         "runAfter": {},
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorHost",
-                                                            "value": "@items('For_each_indictor_info_on_Host')?['node']?['confidence']"
-                                                        }
+                                                        "type": "Compose",
+                                                        "inputs": "\nFound below information from OpenCTI for @{items('For_each_Host_in_Entity')?['HostName']} (Host)\n---------------------------------------------------------------------------------------\nFound from OpenCTI for @{items('For_each_Host_in_Entity')?['HostName']}\nIndicator Name: @{items('For_each_indictor_info_on_Host')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_Host')?['node']?['indicator_types']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_Host')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_Host')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_Host')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_Host')?['node']?['createdBy']}\n---------------------------------------------------------------------------------------"
                                                     }
                                                 },
                                                 "runAfter": {},
@@ -1434,53 +1195,11 @@
                                                                         "properties": {
                                                                             "node": {
                                                                                 "properties": {
-                                                                                    "confidence": {
-                                                                                        "type": "integer"
-                                                                                    },
-                                                                                    "createdBy": {
-                                                                                        "properties": {
-                                                                                            "connectors": {
-                                                                                                "type": "array"
-                                                                                            },
-                                                                                            "creator": {
-                                                                                                "properties": {
-                                                                                                    "firstname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "lastname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "name": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "user_email": {
-                                                                                                        "type": "string"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "name": {
-                                                                                                "type": "string"
-                                                                                            },
-                                                                                            "observedData": {
-                                                                                                "properties": {
-                                                                                                    "edges": {
-                                                                                                        "type": "array"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "x_opencti_aliases": {}
-                                                                                        },
-                                                                                        "type": "object"
-                                                                                    },
+                                                                                    "createdBy": {},
                                                                                     "description": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "entity_type": {
-                                                                                        "type": "string"
-                                                                                    },
-                                                                                    "id": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "indicator_types": {
@@ -1522,7 +1241,7 @@
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_Host_in_Entity')?['HostName']}\" operator:\"eq\" })\n{\n     edges {\n      node {\n        id\n        name\n        entity_type\n        indicator_types\n        confidence\n        description\n        x_opencti_score\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          connectors {\n            name\n          }\n        }\n      }\n    }\n  }\n}"
+                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_Host_in_Entity')?['HostName']}\" operator:\"eq\" })\n{\n    edges {\n      node {\n        name\n        entity_type\n        indicator_types\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          confidence\n          connectors {\n            name\n          }\n        }\n        description\n        x_opencti_score\n      }\n    }\n  }\n}"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json"
@@ -1568,7 +1287,7 @@
                                                 ]
                                             },
                                             "type": "Compose",
-                                            "inputs": "---------------------------------------------------------------------------------------\n<p> <u><b>IP Address:   @{items('For_each_IP_in_Entity')?['Address']}</b> </u> \nNo match found from OpenCTI \\n \nWe have created new indicator with ID @{body('Parse_JSON_Newly_created_Indicator_-_IP')?['data']?['indicatorAdd']?['id']} </p>"
+                                            "inputs": "\n<u><b>IP Address:   @{items('For_each_IP_in_Entity')?['Address']}</b> </u> \nNo match found from OpenCTI\nWe have created new indicator with ID @{body('Parse_JSON_Newly_created_Indicator_-_IP')?['data']?['indicatorAdd']?['id']}\n---------------------------------------------------------------------------------------"
                                         },
                                         "Parse_JSON_Newly_created_Indicator_-_IP": {
                                             "runAfter": {
@@ -1642,56 +1361,9 @@
                                                         }
                                                     },
                                                     "Compose_Comment_message_-_Results_-_IP": {
-                                                        "runAfter": {
-                                                            "Run_GraphQL_Query_Update_Indicator_Score_-_IP": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Compose",
-                                                        "inputs": "\\n------------------------------------------------------------------------------------\nFound below information from OpenCTI for @{items('For_each_IP_in_Entity')?['Address']} (IP Address)\n---------------------------------------------------------------------------------------\nFound from OpenCTI for @{items('For_each_IP_in_Entity')?['Address']}\nIndicator Name: @{items('For_each_indictor_info_on_IP')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_IP')?['node']?['indicator_types']}\nConfidence: @{items('For_each_indictor_info_on_IP')?['node']?['confidence']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_IP')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_IP')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_IP')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_IP')?['node']?['createdBy']}\nNOTE: Updated the indicator with new confidence score: @{variables('ScoreUpdatedforIndicatorIP')}"
-                                                    },
-                                                    "Increment_variable_Increment_Score_IP": {
-                                                        "runAfter": {
-                                                            "Set_variable_Existing_Score_-_IP": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "IncrementVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorIP",
-                                                            "value": "@variables('ScoreIncrementedBy')"
-                                                        }
-                                                    },
-                                                    "Run_GraphQL_Query_Update_Indicator_Score_-_IP": {
-                                                        "runAfter": {
-                                                            "Increment_variable_Increment_Score_IP": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "ApiConnection",
-                                                        "inputs": {
-                                                            "body": {
-                                                                "query": "mutation{\n  indicatorEdit(id: \"@{items('For_each_indictor_info_on_IP')?['node']?['id']}\" ){\n    fieldPatch (input:{key:\"confidence\" value:\"@{variables('ScoreUpdatedforIndicatorIP')}\" operation:replace} commitMessage: \"@{variables('IndicatorUpdateCommitMessage')}\") {\n      id\n    }\n  }\n}"
-                                                            },
-                                                            "headers": {
-                                                                "Content-Type": "application/json"
-                                                            },
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
-                                                                }
-                                                            },
-                                                            "method": "post",
-                                                            "path": "/graphql"
-                                                        }
-                                                    },
-                                                    "Set_variable_Existing_Score_-_IP": {
                                                         "runAfter": {},
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorIP",
-                                                            "value": "@items('For_each_indictor_info_on_IP')?['node']?['confidence']"
-                                                        }
+                                                        "type": "Compose",
+                                                        "inputs": "\nFound below information from OpenCTI for @{items('For_each_IP_in_Entity')?['Address']} (IP Address)\n---------------------------------------------------------------------------------------\nFound from OpenCTI for @{items('For_each_IP_in_Entity')?['Address']}\nIndicator Name: @{items('For_each_indictor_info_on_IP')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_IP')?['node']?['indicator_types']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_IP')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_IP')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_IP')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_IP')?['node']?['createdBy']}\n---------------------------------------------------------------------------------------"
                                                     }
                                                 },
                                                 "runAfter": {},
@@ -1731,53 +1403,11 @@
                                                                         "properties": {
                                                                             "node": {
                                                                                 "properties": {
-                                                                                    "confidence": {
-                                                                                        "type": "integer"
-                                                                                    },
-                                                                                    "createdBy": {
-                                                                                        "properties": {
-                                                                                            "connectors": {
-                                                                                                "type": "array"
-                                                                                            },
-                                                                                            "creator": {
-                                                                                                "properties": {
-                                                                                                    "firstname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "lastname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "name": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "user_email": {
-                                                                                                        "type": "string"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "name": {
-                                                                                                "type": "string"
-                                                                                            },
-                                                                                            "observedData": {
-                                                                                                "properties": {
-                                                                                                    "edges": {
-                                                                                                        "type": "array"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "x_opencti_aliases": {}
-                                                                                        },
-                                                                                        "type": "object"
-                                                                                    },
+                                                                                    "createdBy": {},
                                                                                     "description": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "entity_type": {
-                                                                                        "type": "string"
-                                                                                    },
-                                                                                    "id": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "indicator_types": {
@@ -1819,7 +1449,7 @@
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_IP_in_Entity')?['Address']}\" operator:\"eq\" })\n{\n    edges {\n      node {\n        id\n        name\n        entity_type\n        indicator_types\n        confidence\n        description\n        x_opencti_score\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          connectors {\n            name\n          }\n        }\n      }\n    }\n  }\n}"
+                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_IP_in_Entity')?['Address']}\" operator:\"eq\" })\n{\n    edges {\n      node {\n        name\n        entity_type\n        indicator_types\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          confidence\n          connectors {\n            name\n          }\n        }\n        description\n        x_opencti_score\n      }\n    }\n  }\n}"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json"
@@ -1865,7 +1495,7 @@
                                                 ]
                                             },
                                             "type": "Compose",
-                                            "inputs": "---------------------------------------------------------------------------------------\n<p> <u><b>URL:   @{items('For_each_URL_in_Entity')?['Url']}</b> </u> No match found from OpenCTI \\n \nWe have created new indicator with ID  @{body('Parse_JSON_Newly_created_Indicator_-_URL')?['data']?['indicatorAdd']?['id']}</p>"
+                                            "inputs": "\n<u><b>URL:   @{items('For_each_URL_in_Entity')?['Url']}</b> </u>\nNo match found from OpenCTI \nWe have created new indicator with ID  @{body('Parse_JSON_Newly_created_Indicator_-_URL')?['data']?['indicatorAdd']?['id']}\n---------------------------------------------------------------------------------------"
                                         },
                                         "Parse_JSON_Newly_created_Indicator_-_URL": {
                                             "runAfter": {
@@ -1939,56 +1569,9 @@
                                                         }
                                                     },
                                                     "Compose_Comment_message_-_Results_-_URLs": {
-                                                        "runAfter": {
-                                                            "Run_GraphQL_Query_Update_Indicator_Score_-_URL": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "Compose",
-                                                        "inputs": "\\n------------------------------------------------------------------------------------\nFound below information from OpenCTI for @{items('For_each_URL_in_Entity')?['Url']} (URL)\n---------------------------------------------------------------------------------------\nFound from OpenCTI for @{items('For_each_URL_in_Entity')?['Url']}\nIndicator Name: @{items('For_each_indictor_info_on_URL')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_URL')?['node']?['indicator_types']}\nConfidence: @{items('For_each_indictor_info_on_URL')?['node']?['confidence']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_URL')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_URL')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_URL')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_URL')?['node']?['createdBy']}\nNOTE: Updated the indicator with new confidence score: @{variables('ScoreUpdatedforIndicatorURL')}"
-                                                    },
-                                                    "Increment_variable_Increment_Score_URL": {
-                                                        "runAfter": {
-                                                            "Set_variable_Existing_Score_-_URL": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "IncrementVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorURL",
-                                                            "value": "@variables('ScoreIncrementedBy')"
-                                                        }
-                                                    },
-                                                    "Run_GraphQL_Query_Update_Indicator_Score_-_URL": {
-                                                        "runAfter": {
-                                                            "Increment_variable_Increment_Score_URL": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "ApiConnection",
-                                                        "inputs": {
-                                                            "body": {
-                                                                "query": "mutation{\n  indicatorEdit(id: \"@{items('For_each_indictor_info_on_URL')?['node']?['id']}\" ){\n    fieldPatch (input:{key:\"confidence\" value:\"@{variables('ScoreUpdatedforIndicatorURL')}\" operation:replace} commitMessage: \"@{variables('IndicatorUpdateCommitMessage')}\") {\n      id\n    }\n  }\n}"
-                                                            },
-                                                            "headers": {
-                                                                "Content-Type": "application/json"
-                                                            },
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['OpenCTICustomConnector']['connectionId']"
-                                                                }
-                                                            },
-                                                            "method": "post",
-                                                            "path": "/graphql"
-                                                        }
-                                                    },
-                                                    "Set_variable_Existing_Score_-_URL": {
                                                         "runAfter": {},
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "ScoreUpdatedforIndicatorURL",
-                                                            "value": "@items('For_each_indictor_info_on_URL')?['node']?['confidence']"
-                                                        }
+                                                        "type": "Compose",
+                                                        "inputs": "\nFound below information from OpenCTI for @{items('For_each_URL_in_Entity')?['Url']} (URL)\n---------------------------------------------------------------------------------------\nFound from OpenCTI for @{items('For_each_URL_in_Entity')?['Url']}\nIndicator Name: @{items('For_each_indictor_info_on_URL')?['node']?['name']}\nIndicator Type: @{items('For_each_indictor_info_on_URL')?['node']?['indicator_types']}\nOpenCTI Scope: @{items('For_each_indictor_info_on_URL')?['node']?['x_opencti_score']}\nEntity Type: @{items('For_each_indictor_info_on_URL')?['node']?['entity_type']}\nDescription: @{items('For_each_indictor_info_on_URL')?['node']?['description']}\nCreated By: @{items('For_each_indictor_info_on_URL')?['node']?['createdBy']}\n---------------------------------------------------------------------------------------"
                                                     }
                                                 },
                                                 "runAfter": {},
@@ -2028,53 +1611,11 @@
                                                                         "properties": {
                                                                             "node": {
                                                                                 "properties": {
-                                                                                    "confidence": {
-                                                                                        "type": "integer"
-                                                                                    },
-                                                                                    "createdBy": {
-                                                                                        "properties": {
-                                                                                            "connectors": {
-                                                                                                "type": "array"
-                                                                                            },
-                                                                                            "creator": {
-                                                                                                "properties": {
-                                                                                                    "firstname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "lastname": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "name": {
-                                                                                                        "type": "string"
-                                                                                                    },
-                                                                                                    "user_email": {
-                                                                                                        "type": "string"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "name": {
-                                                                                                "type": "string"
-                                                                                            },
-                                                                                            "observedData": {
-                                                                                                "properties": {
-                                                                                                    "edges": {
-                                                                                                        "type": "array"
-                                                                                                    }
-                                                                                                },
-                                                                                                "type": "object"
-                                                                                            },
-                                                                                            "x_opencti_aliases": {}
-                                                                                        },
-                                                                                        "type": "object"
-                                                                                    },
+                                                                                    "createdBy": {},
                                                                                     "description": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "entity_type": {
-                                                                                        "type": "string"
-                                                                                    },
-                                                                                    "id": {
                                                                                         "type": "string"
                                                                                     },
                                                                                     "indicator_types": {
@@ -2116,7 +1657,7 @@
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "body": {
-                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_URL_in_Entity')?['Url']}\" operator:\"eq\" })\n{\n     edges {\n      node {\n        id\n        name\n        entity_type\n        indicator_types\n        confidence\n        description\n        x_opencti_score\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          connectors {\n            name\n          }\n        }\n      }\n    }\n  }\n}"
+                                            "query": "query{\n  indicators(filters: {filterMode: and key:name  values: \"@{items('For_each_URL_in_Entity')?['Url']}\" operator:\"eq\" })\n{\n    edges {\n      node {\n        name\n        entity_type\n        indicator_types\n        createdBy {\n          name\n          creator {\n            user_email\n            name\n            firstname\n            lastname\n          }\n          observedData {\n            edges {\n              node {\n                name\n                id\n                modified\n                number_observed\n              }\n            }\n          }\n          x_opencti_aliases\n          confidence\n          connectors {\n            name\n          }\n        }\n        description\n        x_opencti_score\n      }\n    }\n  }\n}"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json"
@@ -2150,23 +1691,6 @@
                                     {
                                         "name": "Incident_Comment",
                                         "type": "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_Indicator_Update_Commit_Message": {
-                            "runAfter": {
-                                "Initialize_variable_Score_Incremented_By": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "IndicatorUpdateCommitMessage",
-                                        "type": "string",
-                                        "value": "[parameters('OpenCTICommitMessage')]"
                                     }
                                 ]
                             }
@@ -2270,122 +1794,9 @@
                                 ]
                             }
                         },
-                        "Initialize_variable_Score_Incremented_By": {
-                            "runAfter": {
-                                "Initialize_variable_Score_Initial_for_Indicator": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ScoreIncrementedBy",
-                                        "type": "integer",
-                                        "value": "[parameters('ConfidenceScoreIncrementedBy')]"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_Score_Initial_for_Indicator": {
-                            "runAfter": {
-                                "Initialize_variable_MarkingIdfromOpenCTI": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ScoreInitialforIndicator",
-                                        "type": "integer"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_Score_Updated_for_Indicator_Accounts": {
-                            "runAfter": {
-                                "Entities_-_Get_Accounts": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ScoreUpdatedforIndicatorAccounts",
-                                        "type": "integer"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_Score_Updated_for_Indicator_FileHash": {
-                            "runAfter": {
-                                "Entities_-_Get_FileHashes": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ScoreUpdatedforIndicatorFileHash",
-                                        "type": "integer"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_Score_Updated_for_Indicator_Host": {
-                            "runAfter": {
-                                "Entities_-_Get_Hosts": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ScoreUpdatedforIndicatorHost",
-                                        "type": "integer"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_Score_Updated_for_Indicator_IP": {
-                            "runAfter": {
-                                "Entities_-_Get_IPs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ScoreUpdatedforIndicatorIP",
-                                        "type": "integer"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_Score_Updated_for_Indicator_URL": {
-                            "runAfter": {
-                                "Entities_-_Get_URLs": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "ScoreUpdatedforIndicatorURL",
-                                        "type": "integer"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_variable_to_indicate_empty_result_sting_-_Accounts": {
                             "runAfter": {
-                                "Initialize_variable_Score_Updated_for_Indicator_Accounts": [
+                                "Entities_-_Get_Accounts": [
                                     "Succeeded"
                                 ]
                             },
@@ -2402,7 +1813,7 @@
                         },
                         "Initialize_variable_to_indicate_empty_result_sting_-_FileHash": {
                             "runAfter": {
-                                "Initialize_variable_Score_Updated_for_Indicator_FileHash": [
+                                "Entities_-_Get_FileHashes": [
                                     "Succeeded"
                                 ]
                             },
@@ -2419,7 +1830,7 @@
                         },
                         "Initialize_variable_to_indicate_empty_result_sting_-_Hosts": {
                             "runAfter": {
-                                "Initialize_variable_Score_Updated_for_Indicator_Host": [
+                                "Entities_-_Get_Hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -2436,7 +1847,7 @@
                         },
                         "Initialize_variable_to_indicate_empty_result_sting_-_IPs": {
                             "runAfter": {
-                                "Initialize_variable_Score_Updated_for_Indicator_IP": [
+                                "Entities_-_Get_IPs": [
                                     "Succeeded"
                                 ]
                             },
@@ -2453,7 +1864,7 @@
                         },
                         "Initialize_variable_to_indicate_empty_result_sting_-_URLs": {
                             "runAfter": {
-                                "Initialize_variable_Score_Updated_for_Indicator_URL": [
+                                "Entities_-_Get_URLs": [
                                     "Succeeded"
                                 ]
                             },
@@ -2643,7 +2054,7 @@
                         },
                         "Run_GraphQL_Query_for_Orginfo": {
                             "runAfter": {
-                                "Initialize_variable_Indicator_Update_Commit_Message": [
+                                "Initialize_variable_MarkingIdfromOpenCTI": [
                                     "Succeeded"
                                 ]
                             },
@@ -2703,7 +2114,7 @@
                     "outputs": {}
                 },
                 "parameters":  {
-                     "$connections":  {
+                    "$connections":  {
                         "value":  {
                             "OpenCTICustomConnector":  {
                                 "connectionId":  "[resourceId('Microsoft.Web/connections', variables('OpencticustomconnectorConnectionName'))]",
@@ -2728,7 +2139,7 @@
             "type":  "Microsoft.Logic/workflows",
             "location":  "[resourceGroup().location]",
             "tags":  {
-                "hidden-SentinelTemplateName":  "OpenCTI-UpdateIndicatorInfo",
+                "hidden-SentinelTemplateName":  "OpenCTI-CreateIndicator",
                 "hidden-SentinelTemplateVersion":  "1.0"
             },
             "identity":  {
