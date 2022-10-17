@@ -1,0 +1,159 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Notify Incident Owner in Microsoft Teams",
+        "description": "This playbook sends a Teams message to the new incident owner.",
+        "prerequisites": ["Microsoft Teams account that allows to send messages"],
+        "postdeploymentsteps": ["1. Authorize Microsoft Teams connector in Logic Apps designer", "2. Attach this playbook to an automation rule with trigger: When an incident is updated, condition: Owner Changed."],
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z",
+        "entities": [],
+        "tags": ["Notification", "Update Trigger"],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Lior Tamir"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Notify Incident Owner in Microsoft Teams",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": { 
+            "defaultValue": "updatetrigger-notifyOwner",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic Apps resource to be created"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+{
+    "type": "Microsoft.Web/connections",
+    "apiVersion": "2016-06-01",
+    "name": "[variables('TeamsConnectionName')]",
+    "location": "[resourceGroup().location]",
+    "properties": {
+        "displayName": "[variables('TeamsConnectionName')]",
+        "customParameterValues": {
+        },
+        "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+    }
+},
+{
+    "type": "Microsoft.Logic/workflows",
+    "apiVersion": "2017-07-01",
+    "name": "[parameters('PlaybookName')]",
+    "location": "[resourceGroup().location]",
+    "tags": {
+        "hidden-SentinelTemplateName": "notifyOwnerTeams",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
+    "identity": {
+        "type": "SystemAssigned"
+    },
+    "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+    ],
+    "properties": {
+        "state": "Enabled",
+        "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+            "triggers": {
+                "Microsoft_Sentinel_incident":  {
+                    "type":  "ApiConnectionWebhook",
+                    "inputs":  {
+                        "body":  {
+                            "callback_url":  "@{listCallbackUrl()}"
+                        },
+                        "host":  {
+                            "connection":  {
+                                "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                            }
+                        },
+                        "path":  "/incident-creation"
+                    }
+                }
+            },
+              "actions": {
+                "Post_message_in_a_chat_or_channel": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": {
+                      "messageBody": "<p><span style=\"font-size: 16px\"><strong>You have been assigned to a Microsoft Sentinel Incident </strong></span><span style=\"font-size: 16px\"><strong>@{triggerBody()?['object']?['properties']?['incidentNumber']}</strong></span><span style=\"font-size: 16px\"><strong>: </strong></span><span style=\"font-size: 16px\"><strong>@{triggerBody()?['object']?['properties']?['title']}</strong></span><span style=\"font-size: 16px\"><strong><br>\n</strong></span><br>\nClick here to view incident:<br>\n@{triggerBody()?['object']?['properties']?['incidentUrl']}<br>\n</p>",
+                      "recipient": "@triggerBody()?['object']?['properties']?['owner']?['email']"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['teams']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                  }
+                }
+              },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftsentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "teams": {
+                              "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                              "connectionName": "[variables('TeamsConnectionName')]",
+                              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
