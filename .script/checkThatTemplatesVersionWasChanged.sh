@@ -3,7 +3,7 @@
 failed=0
 SAVEIFS=$IFS
 IFS=$'\n'
-filesThatWereChanged=$(echo $(git diff origin/master --diff-filter=M --name-only))
+filesThatWereChanged=$(git diff origin/master --diff-filter=M --name-only)
 IFS=$SAVEIFS
 for (( i=0; i<${#filesthatwerechanged[@]}; i++ ))
     #Going over all the files that were changed in this PR
