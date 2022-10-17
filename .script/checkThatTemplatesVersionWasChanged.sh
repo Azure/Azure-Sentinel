@@ -2,11 +2,12 @@
 
 failed=0
 
-filesThatWereChanged=$(git diff origin/master --diff-filter=M --name-only)
-for file in $filesThatWereChanged
+readarray -t <<< $(git diff origin/master --diff-filter=M --name-only)
+for (( i=0; i<${#MAPFILE[@]}; i++ ))
     #Going over all the files that were changed in this PR
     #And making sure that in every file that its filename contains the word "Detection", the version was updated
     do
+		$file=${MAPFILE[$i]}
     	echo processing the file $file.
 	if [[ "$file" == *"Detections/"* || "$file" == *"Analytic Rules/"* ]];
 	then
