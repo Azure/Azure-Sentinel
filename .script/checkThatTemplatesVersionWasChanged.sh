@@ -5,25 +5,25 @@ SAVEIFS=$IFS
 IFS=$'\n'
 filesThatWereChanged=$(echo $(git diff origin/master --diff-filter=M --name-only))
 IFS=$SAVEIFS
-for file in $filesThatWereChanged
+for (( i=0; i<${#filesthatwerechanged[@]}; i++ ))
     #Going over all the files that were changed in this PR
     #And making sure that in every file that its filename contains the word "Detection", the version was updated
     do
-    	echo processing the file $file.
-	if [[ "$file" == *"Detections/"* || "$file" == *"Analytic Rules/"* ]];
+    	echo processing the file ${filesthatwerechanged[$i]}.
+	if [[ "${filesthatwerechanged[$i]}" == *"Detections/"* || "${filesthatwerechanged[$i]}" == *"Analytic Rules/"* ]];
 	then
-		echo $file is a detection
-		diffs=$(echo $(git diff origin/master -U0 --ignore-space-change $file))
+		echo ${filesthatwerechanged[$i]} is a detection
+		diffs=$(echo $(git diff origin/master -U0 --ignore-space-change ${filesthatwerechanged[$i]}))
 		if [[ "$diffs" == *"version:"* ]];
 		then
 			echo "all good - the version was updated"
 		else
-			echo "You **did not** change the version in this file: $file."
+			echo "You **did not** change the version in this file: ${filesthatwerechanged[$i]}."
 			failed=1
 		fi
 
 	else
-		echo "$file is not a detection."		
+		echo "${filesthatwerechanged[$i]} is not a detection."		
     fi
 done
 
