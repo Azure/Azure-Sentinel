@@ -1,0 +1,90 @@
+id: d57c33a9-76b9-40e0-9dfa-ff0404546410
+name: AD FS Remote HTTP Network Connection
+description: |
+  'This detection uses Sysmon events (NetworkConnect events) to detect incoming network traffic on port 80 on AD FS servers. This could be a sign of a threat actor
+  trying to use replication services on the AD FS server to get its configuration settings and extract sensitive information such as AD FS certificates.
+  In order to use this query you need to enable Sysmon telemetry on the AD FS Server.
+  Reference: https://twitter.com/OTR_Community/status/1387038995016732672
+  '
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Collection
+relevantTechniques:
+  - T1005
+tags:
+  - SimuLand
+query: |
+  // Adjust this to use a longer timeframe to identify ADFS servers
+  //let lookback = 0d;
+  // Adjust this to adjust detection timeframe
+  //let timeframe = 1d;
+  // Filter out other servers in the AD FS farm
+  let ADFSServersList = dynamic(["ADFS02.domain.com","ADFS03.domain.com"]);
+  // Start by identifying ADFS servers to reduce FP chance
+  let ADFS_Servers = (
+  Event
+  //| where TimeGenerated > ago(timeframe+lookback)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 18
+  | where Computer !in (ADFSServersList)
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, MG, ManagementGroupName, _ResourceId)
+  | extend Image = column_ifexists("Image", "")
+  | extend process = split(Image, '\\', -1)[-1]
+  | where process =~ "Microsoft.IdentityServer.ServiceHost.exe"
+  | summarize by Computer
+  );
+  // Look for ADFS servers receiving connections over port 80
+  Event
+  //| where TimeGenerated > ago(timeframe)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where Computer in~ (ADFS_Servers)
+  | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, _ResourceId)
+  | extend RuleName = column_ifexists("RuleName", ""), TechniqueId = column_ifexists("TechniqueId", ""),  TechniqueName = column_ifexists("TechniqueName", "")
+  | parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+  | where EventID == 3
+  // Look for endpoints connecting to the AD FS server over port 80
+  | extend DestinationPort = column_ifexists("DestinationPort", ""), Image = column_ifexists("Image", ""), Initiated = column_ifexists("Initiated", ""), SourceIp = column_ifexists("DestinationIp", ""), DestinationIp = column_ifexists("DestinationIp", "")
+  | where DestinationPort == 80
+  | extend process = split(Image, '\\', -1)[-1]
+  // Look for the System process receiving connections
+  | where process == 'System' and Initiated == 'false'
+  | where DestinationIp !in ('::1','0:0:0:0:0:0:0:1')
+  | extend Operation = RenderedDescription
+  | project-reorder TimeGenerated, Operation, Image, Computer, UserName
+  | extend HostCustomEntity = Computer, AccountCustomEntity = UserName, IPCustomEntity = SourceIp
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

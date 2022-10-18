@@ -1,0 +1,58 @@
+id: 2bc7b4ae-eeaa-4538-ba15-ef298ec1ffae
+name: Starting or Stopping HealthService to Avoid Detection
+description: |
+   'This query detects events where an actor is stopping or starting HealthService to disable telemetry collection/detection from the agent.
+    The query requires a SACL to audit for access request to the service.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  SecurityEvent
+  | where EventID == 4656
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, TargetAccount, Computer, EventSourceName, Channel, Task, Level, EventID, Activity, TargetLogonId, SourceComputerId, EventOriginId, Type, _ResourceId, TenantId, SourceSystem, ManagementGroupName, IpAddress, Account)
+  | extend ObjectServer = column_ifexists('ObjectServer', ""), ObjectType = column_ifexists('ObjectType', ""), ObjectName = column_ifexists('ObjectName', "")
+  | where isnotempty(ObjectServer) and isnotempty(ObjectType) and isnotempty(ObjectName)
+  | where ObjectServer =~ "SC Manager" and ObjectType =~ "SERVICE OBJECT" and ObjectName =~ "HealthService"
+  // Comment out the join below if the SACL only audits users that are part of the Network logon users, i.e. with user/group target pointing to "NU."
+  | join kind=leftouter (
+    SecurityEvent
+    | where EventID == 4624
+  ) on TargetLogonId
+  | project TimeGenerated, Computer, Account, TargetAccount, IpAddress,TargetLogonId, ObjectServer, ObjectType, ObjectName
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled
