@@ -1,0 +1,49 @@
+id: d9f28fdf-abc8-4f1a-a7e7-1aaec87a2fc5
+name: Sdelete deployed via GPO and run recursively
+description: |
+  'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+tags:
+  -
+query: |
+  SecurityEvent
+    | where EventID == 4688
+    | where Process =~ "svchost.exe"
+    | where CommandLine has "-k GPSvcGroup" or CommandLine has "-s gpsvc"
+    | extend timekey = bin(TimeGenerated, 1m)
+    | project timekey, NewProcessId, Computer
+    | join kind=inner (SecurityEvent
+    | where EventID == 4688
+    | where Process =~ "sdelete.exe" or CommandLine has "sdelete"
+    | where ParentProcessName endswith "svchost.exe"
+    | where CommandLine has_all ("-s", "-r")
+    | extend newProcess = Process
+    | extend timekey = bin(TimeGenerated, 1m)
+    ) on $left.NewProcessId == $right.ProcessId, timekey, Computer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.1
+kind: Scheduled

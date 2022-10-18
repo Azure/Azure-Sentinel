@@ -1,0 +1,1336 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "ElasticSearch-EnrichIncident",
+        "description":  "This playbook search in Elastic Search for based on the entities (Account, Host, IP, FileHash, URL) present result to Microsoft Sentinel incident",
+        "prerequisites":  ["1. Elastix Search Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+        "2. API key. To get API Key, login into your Elastic Search / Kibana instance dashboard and navigate to API Keys and generated key"],
+        "postDeployment":  ["1. Once deployment is complete, you will need to authorize each connection.",
+        "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"],
+        "prerequisitesDeployTemplateFile":  "../../CustomConnector/ElasticSearchCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2022-09-30T00:00:00.000Z",
+        "entities":  ["account","ip","filehash","url","host"],
+        "tags":  ["Enrichment","Notification","ElasticSearch"
+        ],
+        "support":  {
+            "tier":  "microsoft",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Microsoft"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "ElasticSearch-EnrichIncident",
+            "type":  "string",
+             "metadata": {
+                "description": "Enter Name of the playbook. If you are fine with the default name ElasticSearch-EnrichIncident then leave the default value as it is"
+            }
+        },
+		 "CustomConnectorName":  {
+            "defaultValue":  "ElasticSearchCustomConnector",
+            "type":  "string",
+             "metadata": {
+                "description": "Enter your Elastic Search custom connector name. Make sure you have installed custom connector already. Default name is ElasticSearchCustomConnector. If you are fine with the default value, then leave the value as it is"
+            }
+        },
+         "ElasticIndex":  {
+            "defaultValue":  "*",
+            "type":  "string",
+            "metadata": {
+                "description": "Enter your Elastic Search Index Name. If you want to search across all indices then you can provide * "
+            }
+        }
+    },
+    "variables":  {
+        "ElasticSearchCustomConnectorConnectionName":  "[concat('ElasticSearchCustomConnector-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "ElasticIndex": {
+                            "defaultValue": "[parameters('ElasticIndex')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "For_each_Account_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_FileHash_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_Host_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_IP_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_URL_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{variables('Incident_Comment')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Add_comment_to_incident_(V3)_2": {
+                            "runAfter": {
+                                "Parse_Elastic_Search_response": [
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>Failed to Query Elastic Search - Got below error<br>\n<br>\n@{body('Search_Shards')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "Entities_-_Get_FileHashes": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            }
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each_Account_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Condition_check_if_empty_indicator_info_-_Account": {
+                                    "actions": {
+                                        "Append_message_to_Comment_-_Accounts": {
+                                            "runAfter": {
+                                                "Compose_comment_message-_No_results_-_Accounts": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Incident_Comment",
+                                                "value": "@outputs('Compose_comment_message-_No_results_-_Accounts')"
+                                            }
+                                        },
+                                        "Compose_comment_message-_No_results_-_Accounts": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "\n<b>Account: </b> @{items('For_each_Account_in_Entity')?['Name']}\nNo match found from Elastic Search\n----------------------------------------------------------------------\n"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_Elastic_response_on_Account": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable": {
+                                                "runAfter": {
+                                                    "Compose": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "Incident_Comment",
+                                                    "value": "@outputs('Compose')"
+                                                }
+                                            },
+                                            "Compose": {
+                                                "runAfter": {
+                                                    "Set_variable": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Compose",
+                                                "inputs": "Found below information from Elastic Search for @{items('For_each_Account_in_Entity')?['Name']} (Account)\n----------------------------------------------------------------------\n@{variables('empty_result_accounts')}\n----------------------------------------------------------------------\n"
+                                            },
+                                            "Set_variable": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "empty_result_accounts",
+                                                    "value": "@{replace(replace(replace(string(body('Parse_JSON_Elastic_response_on_Account')?['hits']?['hits']),',','<br>'),'{','<br>{<br>'),'}','<br>}<br>')}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@string(body('Parse_JSON_Elastic_response_on_Account')?['hits']?['hits'])",
+                                                    "@variables('empty_result_accounts')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON_Elastic_response_on_Account": {
+                                    "runAfter": {
+                                        "Run_Search_Account": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_Search_Account')",
+                                        "schema": {
+                                            "properties": {
+                                                "hits": {
+                                                    "properties": {
+                                                        "hits": {
+                                                            "items": {
+                                                                "properties": {},
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "total": {
+                                                            "properties": {
+                                                                "relation": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "timed_out": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Run_Search_Account": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "query": {
+                                                "bool": {
+                                                    "must": {
+                                                        "match": {
+                                                            "@{variables('AccountFieldName')}": "@{items('For_each_Account_in_Entity')?['Name']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ElasticSearchCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/@{encodeURIComponent(variables('ElasticIndex'))}/_search"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_FileHash_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "actions": {
+                                "Condition_check_if_empty_indicator_info_-_FileHash": {
+                                    "actions": {
+                                        "Append_message_to_Comment_-_FileHash": {
+                                            "runAfter": {
+                                                "Compose_comment_message-_No_results_-_FileHash": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Incident_Comment",
+                                                "value": "@outputs('Compose_comment_message-_No_results_-_FileHash')"
+                                            }
+                                        },
+                                        "Compose_comment_message-_No_results_-_FileHash": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "\n<b>File Hash: </b>  @{items('For_each_FileHash_in_Entity')?['Value']}\nNo match found from Elastic Search\n----------------------------------------------------------------------\n"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_Elastic_response_on_FileHash": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable_4": {
+                                                "runAfter": {
+                                                    "Compose_5": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "Incident_Comment",
+                                                    "value": "@outputs('Compose_5')"
+                                                }
+                                            },
+                                            "Compose_5": {
+                                                "runAfter": {
+                                                    "Set_variable_6": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Compose",
+                                                "inputs": "\nFound below information from Elastic for  @{items('For_each_FileHash_in_Entity')?['Value']} (FileHash) \n----------------------------------------------------------------------\n@{variables('empty_result_hash')}\n----------------------------------------------------------------------"
+                                            },
+                                            "Set_variable_6": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "empty_result_hash",
+                                                    "value": "@{replace(replace(replace(string(body('Parse_JSON_Elastic_response_on_FileHash')?['hits']?['hits']),',','<br>'),'{','<br>{<br>'),'}','<br>}<br>')}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@string(body('Parse_JSON_Elastic_response_on_FileHash')?['hits']?['hits'])",
+                                                    "@variables('empty_result_hash')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON_Elastic_response_on_FileHash": {
+                                    "runAfter": {
+                                        "Run_Search_FileHash": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_Search_FileHash')",
+                                        "schema": {
+                                            "properties": {
+                                                "hits": {
+                                                    "properties": {
+                                                        "hits": {
+                                                            "items": {
+                                                                "properties": {},
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "total": {
+                                                            "properties": {
+                                                                "relation": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "timed_out": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Run_Search_FileHash": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "query": {
+                                                "bool": {
+                                                    "must": {
+                                                        "match": {
+                                                            "@{variables('FileHashFieldName')}": "@{items('For_each_FileHash_in_Entity')?['Value']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ElasticSearchCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/@{encodeURIComponent(variables('ElasticIndex'))}/_search"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_FileHash": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_Host_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "Condition_check_if_empty_indicator_info_-_Host": {
+                                    "actions": {
+                                        "Append_message_to_Comment_-_Host": {
+                                            "runAfter": {
+                                                "Compose_comment_message-_No_results_-_Host": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Incident_Comment",
+                                                "value": "@outputs('Compose_comment_message-_No_results_-_Host')"
+                                            }
+                                        },
+                                        "Compose_comment_message-_No_results_-_Host": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "\n<b>Host Name: </b>   @{items('For_each_Host_in_Entity')?['HostName']}\nNo match found from Elastic Search\n----------------------------------------------------------------------\n"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_Elastic_response_on_Host": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable_2": {
+                                                "runAfter": {
+                                                    "Compose_2": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "Incident_Comment",
+                                                    "value": "@outputs('Compose_2')"
+                                                }
+                                            },
+                                            "Compose_2": {
+                                                "runAfter": {
+                                                    "Set_variable_2": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Compose",
+                                                "inputs": "Found below information from Elastic Search for @{items('For_each_Host_in_Entity')?['HostName']}  (Host)\n----------------------------------------------------------------------\n@{variables('empty_result_accounts')}\n----------------------------------------------------------------------\n"
+                                            },
+                                            "Set_variable_2": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "empty_result_hosts",
+                                                    "value": "@{replace(replace(replace(string(body('Parse_JSON_Elastic_response_on_Host')?['hits']?['hits']),',','<br>'),'{','<br>{<br>'),'}','<br>}<br>')}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@string(body('Parse_JSON_Elastic_response_on_Host')?['hits']?['hits'])",
+                                                    "@variables('empty_result_hosts')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON_Elastic_response_on_Host": {
+                                    "runAfter": {
+                                        "Run_Search_Host": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_Search_Host')",
+                                        "schema": {
+                                            "properties": {
+                                                "hits": {
+                                                    "properties": {
+                                                        "hits": {
+                                                            "items": {
+                                                                "properties": {},
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "total": {
+                                                            "properties": {
+                                                                "relation": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "timed_out": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Run_Search_Host": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "query": {
+                                                "bool": {
+                                                    "must": {
+                                                        "match": {
+                                                            "@{variables('HostFieldName')}": "@{items('For_each_Host_in_Entity')?['HostName']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ElasticSearchCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/@{encodeURIComponent(variables('ElasticIndex'))}/_search"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_IP_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Condition_check_if_empty_indicator_info_-_IP": {
+                                    "actions": {
+                                        "Append_message_to_Comment_-_IP": {
+                                            "runAfter": {
+                                                "Compose_comment_message-_No_results_-_IP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Incident_Comment",
+                                                "value": "@{outputs('Compose_comment_message-_No_results_-_IP')}\n"
+                                            }
+                                        },
+                                        "Compose_comment_message-_No_results_-_IP": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "\n<b>IP Address: </b>   @{items('For_each_IP_in_Entity')?['Address']}\nNo match found from Elastic Search\n----------------------------------------------------------------------\n"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_Elastic_response_on_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Compose_3": {
+                                                "runAfter": {
+                                                    "Set_variable_3": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Compose",
+                                                "inputs": "\nFound below information from Elastic for @{items('For_each_IP_in_Entity')?['Address']}   (IP Address)  \n----------------------------------------------------------------------\n@{variables('empty_result_ips')}\n--------------------"
+                                            },
+                                            "Set_variable_3": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "empty_result_ips",
+                                                    "value": "@{replace(replace(replace(string(body('Parse_JSON_Elastic_response_on_IP')?['hits']?['hits']),',','<br>'),'{','<br>{<br>'),'}','<br>}<br>')}"
+                                                }
+                                            },
+                                            "Set_variable_4": {
+                                                "runAfter": {
+                                                    "Compose_3": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Incident_Comment",
+                                                    "value": "@{outputs('Compose_3')}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@string(body('Parse_JSON_Elastic_response_on_IP')?['hits']?['hits'])",
+                                                    "@variables('empty_result_ips')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON_Elastic_response_on_IP": {
+                                    "runAfter": {
+                                        "Run_Search": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_Search')",
+                                        "schema": {
+                                            "properties": {
+                                                "hits": {
+                                                    "properties": {
+                                                        "hits": {
+                                                            "items": {
+                                                                "properties": {},
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "total": {
+                                                            "properties": {
+                                                                "relation": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "timed_out": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Run_Search": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "query": {
+                                                "bool": {
+                                                    "must": {
+                                                        "match": {
+                                                            "@{variables('IPAddressFieldName')}": "@{items('For_each_IP_in_Entity')?['Address']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ElasticSearchCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/@{encodeURIComponent(variables('ElasticIndex'))}/_search"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_URL_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "Condition_check_if_empty_indicator_info_-_URLs": {
+                                    "actions": {
+                                        "Append_message_to_Comment_-_URL": {
+                                            "runAfter": {
+                                                "Compose_comment_message-_No_results_-_URLs": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Incident_Comment",
+                                                "value": "@{outputs('Compose_comment_message-_No_results_-_URLs')}\n"
+                                            }
+                                        },
+                                        "Compose_comment_message-_No_results_-_URLs": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "\n<b>URL: </b>   @{items('For_each_URL_in_Entity')?['Url']}\nNo match found from Elastic Search\n----------------------------------------------------------------------\n"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_Elastic_response_on_URLs": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable_3": {
+                                                "runAfter": {
+                                                    "Compose_4": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "Incident_Comment",
+                                                    "value": "@outputs('Compose_4')"
+                                                }
+                                            },
+                                            "Compose_4": {
+                                                "runAfter": {
+                                                    "Set_variable_5": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Compose",
+                                                "inputs": "Found below information from OpenCTI for  @{items('For_each_URL_in_Entity')?['Url']}   (URL)  \n----------------------------------------------------------------------\n@{variables('empty_result_urls')}\n----------------------------------------------------------------------"
+                                            },
+                                            "Set_variable_5": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "empty_result_urls",
+                                                    "value": "@{replace(replace(replace(string(body('Parse_JSON_Elastic_response_on_URLs')?['hits']?['hits']),',','<br>'),'{','<br>{<br>'),'}','<br>}<br>')}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@string(body('Parse_JSON_Elastic_response_on_URLs')?['hits']?['hits'])",
+                                                    "@variables('empty_result_urls')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON_Elastic_response_on_URLs": {
+                                    "runAfter": {
+                                        "Run_Search_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_Search_URL')",
+                                        "schema": {
+                                            "properties": {
+                                                "hits": {
+                                                    "properties": {
+                                                        "hits": {
+                                                            "items": {
+                                                                "properties": {},
+                                                                "required": [],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "total": {
+                                                            "properties": {
+                                                                "relation": {
+                                                                    "type": "string"
+                                                                },
+                                                                "value": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "timed_out": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Run_Search_URL": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "query": {
+                                                "bool": {
+                                                    "must": {
+                                                        "match": {
+                                                            "@{variables('URLFieldName')}": "@{items('For_each_URL_in_Entity')?['Url']}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ElasticSearchCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/@{encodeURIComponent(variables('ElasticIndex'))}/_search"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_-_Incident_Comment": {
+                            "runAfter": {
+                                "Parse_Elastic_Search_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident_Comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_AccountFieldName": {
+                            "runAfter": {
+                                "Initialize_variable_Elastic_Index": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AccountFieldName",
+                                        "type": "string",
+                                        "value": "AccountField"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_Elastic_Index": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ElasticIndex",
+                                        "type": "string",
+                                        "value": "@parameters('ElasticIndex')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_FileHashFieldName": {
+                            "runAfter": {
+                                "Initialize_variable_HostFieldName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FileHashFieldName",
+                                        "type": "string",
+                                        "value": "FileHashField"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_HostFieldName": {
+                            "runAfter": {
+                                "Initialize_variable_AccountFieldName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "HostFieldName",
+                                        "type": "string",
+                                        "value": "HostField"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_IPAddressFieldName": {
+                            "runAfter": {
+                                "Initialize_variable_FileHashFieldName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IPAddressFieldName",
+                                        "type": "string",
+                                        "value": "IPAddressField"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_URLFieldName": {
+                            "runAfter": {
+                                "Initialize_variable_IPAddressFieldName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "URLFieldName",
+                                        "type": "string",
+                                        "value": "URLField"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_Accounts": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_accounts",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_FileHash": {
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_hash",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_Hosts": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_hosts",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_IPs": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_ips",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_URLs": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_urls",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Elastic_Search_response": {
+                            "runAfter": {
+                                "Search_Shards": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Search_Shards')",
+                                "schema": {
+                                    "properties": {
+                                        "indices": {
+                                            "properties": {},
+                                            "type": "object"
+                                        },
+                                        "nodes": {
+                                            "properties": {},
+                                            "type": "object"
+                                        },
+                                        "shards": {
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Search_Shards": {
+                            "runAfter": {
+                                "Initialize_variable_URLFieldName": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['ElasticSearchCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/@{encodeURIComponent('*')}/_search_shards"
+                            }
+                        },
+                        "Terminate": {
+                            "runAfter": {
+                                "Add_comment_to_incident_(V3)_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runError": {
+                                    "code": "FAIL",
+                                    "message": "@body('Search_Shards')"
+                                },
+                                "runStatus": "Failed"
+                            },
+                            "description": "This step is to FAIL the workflow and stop in case of any Auth failures or issues while querying"
+                        }
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "ElasticSearchCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('ElasticSearchCustomConnectorConnectionName'))]",
+                                "connectionName":  "[variables('ElasticSearchCustomConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "ElasticSearch-EnrichIncident",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('ElasticSearchCustomConnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('ElasticSearchCustomConnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('ElasticSearchCustomConnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}
