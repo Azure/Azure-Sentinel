@@ -1,0 +1,459 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "QualysVM-GetAssetDetails",
+        "description":  "When a new sentinel incident is created, this playbook gets triggered and performs the following actions: \n 1. Get IP Addresses from incident. \n 2. Get Asset Details for all IP Addresses. \n 3. Add asset details as a comment to the incident.",
+        "prerequisites":  ["1. Prior to the deployment of this playbook, Qualys Logic App Custom Connector needs to be deployed under the same subscription.",
+        "2. Refer to [Qualys Logic App Custom Connector](../QualysCustomConnector/readme.md) documentation for deployment instructions."],
+        "postDeployment":  ["None"],
+        "prerequisitesDeployTemplateFile":  "../../CustomConnector/QualysCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2022-09-15T22:25:52Z",
+        "entities":  [
+            "IP"
+        ],
+        "tags":  [
+            "Qualys",
+            "Enrichment",
+            "VM Report"
+        ],
+        "support":  {
+            "tier":  "Microsoft"
+        },
+        "author":  {
+            "name":  "Microsoft"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "QualysVM-GetAssetDetails",
+            "type":  "string"
+        },
+         "CustomConnectorName": {
+            "defaultValue": "QualysCustomConnector",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the logic app connector which performs Qualys actions."
+            }
+        }
+    },
+    "variables":  {
+        "QualyscustomconnectorConnectionName":  "[concat('Qualyscustomconnector-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Add_comment_to_incident_(V3)":  {
+                            "runAfter":  {
+                                "Compose_Incident_Comment":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                    "message":  "\u003cp\u003e@{variables('IncidentComment')}\u003c/p\u003e"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/Incidents/Comment"
+                            }
+                        },
+                        "Compose_Incident_Comment":  {
+                            "runAfter":  {
+                                "Create_Output_HTML_table":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "AppendToStringVariable",
+                            "inputs":  {
+                                "name":  "IncidentComment",
+                                "value":  "@body('Create_Output_HTML_table')"
+                            }
+                        },
+                        "Create_Output_HTML_table":  {
+                            "runAfter":  {
+                                "For_each_IP_Address_get_asset_details":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Table",
+                            "inputs":  {
+                                "format":  "HTML",
+                                "from":  "@variables('OutputArray')"
+                            }
+                        },
+                        "Entities_-_Get_IPs":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/ip"
+                            }
+                        },
+                        "For_each_IP_Address_get_asset_details":  {
+                            "foreach":  "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions":  {
+                                "Condition":  {
+                                    "actions":  {
+                                        "Append_to_Output_Array":  {
+                                            "runAfter":  {
+                                                "Compose_Output":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "AppendToArrayVariable",
+                                            "inputs":  {
+                                                "name":  "OutputArray",
+                                                "value":  "@outputs('Compose_Output')"
+                                            }
+                                        },
+                                        "Compose_Output":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "Compose",
+                                            "inputs":  {
+                                                "DNS":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['DNS']?['#cdata-section']",
+                                                "Domain":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['DNS_DATA']?['DOMAIN']?['#cdata-section']",
+                                                "FQDN":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['DNS_DATA']?['FQDN']?['#cdata-section']",
+                                                "Hostname":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['DNS_DATA']?['HOSTNAME']?['#cdata-section']",
+                                                "IP Address":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['IP']",
+                                                "LastScannedDateTime":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['LAST_VULN_SCAN_DATETIME']",
+                                                "NetBIOS":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['NETBIOS']?['#cdata-section']",
+                                                "OS":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['OS']?['#cdata-section']",
+                                                "QualysAssetID":  "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']?['HOST']?['ID']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Parse_Asset_Details_JSON":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Add_comment_if_no_details_found":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "AppendToStringVariable",
+                                                "inputs":  {
+                                                    "name":  "IncidentComment",
+                                                    "value":  "No details found for host: \u003cstrong\u003e @{items('For_each_IP_Address_get_asset_details')?['Address']}\u003c/strong\u003e \n"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "not":  {
+                                                    "equals":  [
+                                                        "@body('Parse_Asset_Details_JSON')?['HOST_LIST_OUTPUT']?['RESPONSE']?['HOST_LIST']",
+                                                        null
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Get_Asset_Details_By_IP":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "headers":  {
+                                            "X-Requested-With":  "Sentinel"
+                                        },
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['QualysCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "post",
+                                        "path":  "/api/2.0/fo/asset/host/",
+                                        "queries":  {
+                                            "action":  "list",
+                                            "details":  "All",
+                                            "ips":  "@items('For_each_IP_Address_get_asset_details')?['Address']"
+                                        }
+                                    }
+                                },
+                                "Parse_Asset_Details_JSON":  {
+                                    "runAfter":  {
+                                        "Get_Asset_Details_By_IP":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ParseJson",
+                                    "inputs":  {
+                                        "content":  "@json(xml(body('Get_Asset_Details_By_IP')))",
+                                        "schema":  {
+                                            "properties":  {
+                                                "HOST_LIST_OUTPUT":  {
+                                                    "properties":  {
+                                                        "RESPONSE":  {
+                                                            "properties":  {
+                                                                "DATETIME":  {
+                                                                    "type":  "string"
+                                                                },
+                                                                "HOST_LIST":  {
+                                                                    "properties":  {
+                                                                        "HOST":  {
+                                                                            "properties":  {
+                                                                                "DNS":  {
+                                                                                    "properties":  {
+                                                                                        "#cdata-section":  {
+                                                                                            "type":  "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type":  "object"
+                                                                                },
+                                                                                "DNS_DATA":  {
+                                                                                    "properties":  {
+                                                                                        "DOMAIN":  {
+                                                                                            "properties":  {
+                                                                                                "#cdata-section":  {
+                                                                                                    "type":  "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type":  "object"
+                                                                                        },
+                                                                                        "FQDN":  {
+                                                                                            "properties":  {
+                                                                                                "#cdata-section":  {
+                                                                                                    "type":  "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type":  "object"
+                                                                                        },
+                                                                                        "HOSTNAME":  {
+                                                                                            "properties":  {
+                                                                                                "#cdata-section":  {
+                                                                                                    "type":  "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type":  "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type":  "object"
+                                                                                },
+                                                                                "ID":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "IP":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "LAST_VM_AUTH_SCANNED_DATE":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "LAST_VM_AUTH_SCANNED_DURATION":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "LAST_VM_SCANNED_DATE":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "LAST_VM_SCANNED_DURATION":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "LAST_VULN_SCAN_DATETIME":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "NETBIOS":  {
+                                                                                    "properties":  {
+                                                                                        "#cdata-section":  {
+                                                                                            "type":  "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type":  "object"
+                                                                                },
+                                                                                "OS":  {
+                                                                                    "properties":  {
+                                                                                        "#cdata-section":  {
+                                                                                            "type":  "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type":  "object"
+                                                                                },
+                                                                                "TRACKING_METHOD":  {
+                                                                                    "type":  "string"
+                                                                                }
+                                                                            },
+                                                                            "type":  "object"
+                                                                        }
+                                                                    },
+                                                                    "type":  "object"
+                                                                }
+                                                            },
+                                                            "type":  "object"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_-_OutputArray":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach",
+                            "runtimeConfiguration":  {
+                                "concurrency":  {
+                                    "repetitions":  1
+                                }
+                            }
+                        },
+                        "Initialize_variable_-_IncidentComment":  {
+                            "runAfter":  {
+                                "Entities_-_Get_IPs":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "IncidentComment",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_OutputArray":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_IncidentComment":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "OutputArray",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "QualysCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('QualyscustomconnectorConnectionName'))]",
+                                "connectionName":  "[variables('QualyscustomconnectorConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "tags":  {
+                "hidden-SentinelTemplateName":  "QualysVM-GetAssetDetails",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('QualyscustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('QualyscustomconnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('QualyscustomconnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}
