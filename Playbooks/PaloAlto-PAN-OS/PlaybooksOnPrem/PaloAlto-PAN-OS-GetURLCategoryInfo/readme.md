@@ -25,7 +25,7 @@ Once deployment is complete, you will need to authorize each connection.
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for PAN-OS API Connection (For authorizing the PAN-OS API connection, API Key needs to be provided)
+6.	Repeat steps for other connection such as Teams connection.
 
 #### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account 
