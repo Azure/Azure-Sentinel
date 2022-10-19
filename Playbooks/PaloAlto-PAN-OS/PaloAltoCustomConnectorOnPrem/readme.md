@@ -8,9 +8,14 @@ This custom connector connects to PAN-OS service end point and performs defined 
 
 *  API Key authentication
 
-### Prerequisites for deploying Custom Connector
+### Prerequisites
+
 1. PAN-OS service end point should be known. (e.g.  https://{paloaltonetworkdomain})
 2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
+3. PaloAlto-PAN-OS connector uses [On-Premises Data Gateway](https://docs.microsoft.com/data-integration/gateway/service-gateway-onprem).
+Therefore, [installation of the On-Premises Data Gateway](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-install) and [creation of the On-Premises Data Gateway resource](https://docs.microsoft.com/azure/logic-apps/logic-apps-gateway-connection#create-azure-gateway-resource) are required.
+
+### Prerequisites for deploying Custom Connector
 
 
 ## Actions supported by Palo-Alto custom connector
