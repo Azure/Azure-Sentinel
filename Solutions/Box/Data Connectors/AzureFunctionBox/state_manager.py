@@ -21,7 +21,7 @@ class StateManager:
     def get(self):
         try:
             return self.file_cli.download_file().readall().decode()
-        except ResourceNotFoundError:
+        except ResourceNotFoundError as e:
             logging.error("Exception during RESOURCENOTFOUND  %s" % str(e))
             return None
         except Exception as e:
