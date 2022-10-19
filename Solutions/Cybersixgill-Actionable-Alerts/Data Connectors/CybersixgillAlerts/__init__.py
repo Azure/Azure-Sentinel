@@ -23,7 +23,7 @@ LAST_X_DAYS = 90
 PAGE_SIZE = 5
 
 
-# https://docs.microsoft.com/en-us/azure/azure-monitor/logs/data-collector-api#python-sample
+# https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api#python-sample
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
