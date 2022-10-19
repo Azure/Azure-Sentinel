@@ -1,0 +1,973 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Enrich Dynatrace Application Security Problem Incident",
+        "description": "This playbook will enriche Dynatrace Application Security Problem Incidents with additional information when new incident is opened.",
+        "prerequisites": ["1. Dynatrace tenant (ex. xyz.dynatrace.com)",
+             "2. Dynatrace Access Token."],
+        "lastUpdateTime": "2022-10-19T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Security Problem" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Gareth Emslie"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Enrich Dynatrace Application Security Problem Incident",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "EnrichDynatraceApplicationSecurityProblemIncident",
+            "type": "string",
+            "metadata": {
+                "description": "Incident trigger"
+            }
+        },
+        "LogAnalyticsWorkspaceName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics Workspace Name"
+            }
+        },
+        "DynatraceEnvironmentUrl": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Dynatrace tenant (ex. xyz.dynatrace.com)"
+            }
+        },
+        "DynatraceApiToken": {
+            "defaultValue": "",
+            "type": "securestring",
+            "metadata": {
+                "description": "Dynatrace Api Token"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "automationRuleName": "[concat('automation-', parameters('PlaybookName'))]",
+        "alertRules": [
+            "[resourceId('Microsoft.OperationalInsights/workspaces/providers/alertRules', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights', '305093b4-0fa2-57bc-bced-caea782a6e9c')]",
+            "[resourceId('Microsoft.OperationalInsights/workspaces/providers/alertRules', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights', '305093b4-0fa2-57bc-bced-caea782a6e9c')]"
+        ]
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "EnrichDynatraceApplicationSecurityProblem-Incident",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "ApiToken": {
+                            "defaultValue": "",
+                            "type": "SecureString"
+                        },
+                        "EnvironmentUrl": {
+                            "defaultValue": "",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each_Host": {
+                            "foreach": "@body('Parse_Dynatrace_Security_Problem_JSON')?['relatedEntities']?['hosts']",
+                            "actions": {
+                                "For_each_Host_Tag": {
+                                    "foreach": "@body('Parse_JSON')?['tags']",
+                                    "actions": {
+                                        "Add_Host_tag_to_array": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "tags",
+                                                "value": "@items('For_each_Host_Tag')['name']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_Host_Entity": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Api-Token @{parameters('ApiToken')}"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{parameters('EnvironmentUrl')}/api/v2/entities/@{items('For_each_Host')['id']}"
+                                    }
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {
+                                        "Get_Host_Entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_Host_Entity')",
+                                        "schema": {
+                                            "properties": {
+                                                "displayName": {
+                                                    "type": "string"
+                                                },
+                                                "entityId": {
+                                                    "type": "string"
+                                                },
+                                                "firstSeenTms": {
+                                                    "type": "integer"
+                                                },
+                                                "fromRelationships": {
+                                                    "properties": {
+                                                        "isInstanceOf": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "isMainPgiOfCgi": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "isNetworkClientOf": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "isPgiOfCgi": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "isProcessOf": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "icon": {
+                                                    "properties": {
+                                                        "primaryIconType": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "lastSeenTms": {
+                                                    "type": "integer"
+                                                },
+                                                "managementZones": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "name"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "properties": {
+                                                    "properties": {
+                                                        "awsNameTag": {
+                                                            "type": "string"
+                                                        },
+                                                        "bitness": {
+                                                            "type": "string"
+                                                        },
+                                                        "customPgMetadata": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "key": {
+                                                                        "properties": {
+                                                                            "key": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "source": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "value": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "value",
+                                                                    "key"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "detectedName": {
+                                                            "type": "string"
+                                                        },
+                                                        "installerVersion": {
+                                                            "type": "string"
+                                                        },
+                                                        "isDockerized": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "listenPorts": {
+                                                            "items": {
+                                                                "type": "integer"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "metadata": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "key": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "value": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "key",
+                                                                    "value"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "processType": {
+                                                            "type": "string"
+                                                        },
+                                                        "softwareTechnologies": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "edition": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "version": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "tags": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "context": {
+                                                                "type": "string"
+                                                            },
+                                                            "key": {
+                                                                "type": "string"
+                                                            },
+                                                            "stringRepresentation": {
+                                                                "type": "string"
+                                                            },
+                                                            "value": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "context",
+                                                            "key",
+                                                            "stringRepresentation"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "toRelationships": {
+                                                    "properties": {
+                                                        "isDockerContainerOf": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "isNetworkClientOf": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "isSoftwareComponentOfPgi": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "runsOn": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "runsOnProcessGroupInstance": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "type": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_management_zone": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_management_zone": {
+                            "foreach": "@body('Parse_Dynatrace_Security_Problem_JSON')?['managementZones']",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "tags",
+                                        "value": "ManagementZone : @{items('For_each_management_zone')['name']}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Dynatrace_Security_Problem_Details": {
+                            "runAfter": {
+                                "Parse_Incident_Alert_Custom_Body_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "Api-Token @{parameters('ApiToken')}"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "fields": "+riskAssessment,+description,+events,+vulnerableComponents,+affectedEntities,+exposedEntities,+reachableDataAssets,+relatedContainerImages,+managementZones,+relatedEntities"
+                                },
+                                "uri": "@{parameters('EnvironmentUrl')}/api/v2/securityProblems/@{first(body('Parse_Incident_Alert_Custom_Body_JSON')?['securityProblemId'])}"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Parse_Dynatrace_Security_Problem_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tags",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Dynatrace_Security_Problem_JSON": {
+                            "runAfter": {
+                                "Get_Dynatrace_Security_Problem_Details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Dynatrace_Security_Problem_Details')",
+                                "schema": {
+                                    "properties": {
+                                        "affectedEntities": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "cveIds": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "description": {
+                                            "type": "string"
+                                        },
+                                        "displayId": {
+                                            "type": "string"
+                                        },
+                                        "events": {
+                                            "items": {
+                                                "properties": {
+                                                    "muteState": {
+                                                        "properties": {
+                                                            "comment": {
+                                                                "type": "string"
+                                                            },
+                                                            "reason": {
+                                                                "type": "string"
+                                                            },
+                                                            "user": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "reason": {
+                                                        "type": "string"
+                                                    },
+                                                    "riskAssessmentSnapshot": {
+                                                        "properties": {
+                                                            "exposure": {
+                                                                "type": "string"
+                                                            },
+                                                            "numberOfAffectedEntities": {
+                                                                "type": "integer"
+                                                            },
+                                                            "numberOfReachableDataAssets": {
+                                                                "type": "integer"
+                                                            },
+                                                            "publicExploit": {
+                                                                "type": "string"
+                                                            },
+                                                            "vulnerableFunctionUsage": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "timestamp": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "timestamp",
+                                                    "reason",
+                                                    "riskAssessmentSnapshot"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "exposedEntities": {
+                                            "type": "array"
+                                        },
+                                        "externalVulnerabilityId": {
+                                            "type": "string"
+                                        },
+                                        "firstSeenTimestamp": {
+                                            "type": "integer"
+                                        },
+                                        "lastUpdatedTimestamp": {
+                                            "type": "integer"
+                                        },
+                                        "managementZones": {
+                                            "type": "array"
+                                        },
+                                        "muteStateChangeInProgress": {
+                                            "type": "boolean"
+                                        },
+                                        "muted": {
+                                            "type": "boolean"
+                                        },
+                                        "packageName": {
+                                            "type": "string"
+                                        },
+                                        "reachableDataAssets": {
+                                            "type": "array"
+                                        },
+                                        "relatedContainerImages": {
+                                            "properties": {
+                                                "containerImages": {
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "relatedEntities": {
+                                            "properties": {
+                                                "applications": {
+                                                    "type": "array"
+                                                },
+                                                "databases": {
+                                                    "type": "array"
+                                                },
+                                                "hosts": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "affectedEntities": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "numberOfAffectedEntities": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "numberOfAffectedEntities",
+                                                            "affectedEntities"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "kubernetesClusters": {
+                                                    "type": "array"
+                                                },
+                                                "kubernetesWorkloads": {
+                                                    "type": "array"
+                                                },
+                                                "services": {
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "riskAssessment": {
+                                            "properties": {
+                                                "baseRiskLevel": {
+                                                    "type": "string"
+                                                },
+                                                "baseRiskScore": {
+                                                    "type": "number"
+                                                },
+                                                "baseRiskVector": {
+                                                    "type": "string"
+                                                },
+                                                "dataAssets": {
+                                                    "type": "string"
+                                                },
+                                                "exposure": {
+                                                    "type": "string"
+                                                },
+                                                "publicExploit": {
+                                                    "type": "string"
+                                                },
+                                                "riskLevel": {
+                                                    "type": "string"
+                                                },
+                                                "riskScore": {
+                                                    "type": "number"
+                                                },
+                                                "riskVector": {
+                                                    "type": "string"
+                                                },
+                                                "vulnerableFunctionUsage": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "securityProblemId": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "technology": {
+                                            "type": "string"
+                                        },
+                                        "title": {
+                                            "type": "string"
+                                        },
+                                        "url": {
+                                            "type": "string"
+                                        },
+                                        "vulnerabilityType": {
+                                            "type": "string"
+                                        },
+                                        "vulnerableComponents": {
+                                            "items": {
+                                                "properties": {
+                                                    "affectedEntities": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "displayName": {
+                                                        "type": "string"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "numberOfAffectedEntities": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "displayName",
+                                                    "numberOfAffectedEntities",
+                                                    "affectedEntities"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_Incident_Alert_Custom_Body_JSON": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['Alerts'][0]['properties']['additionalData']['Custom Details']",
+                                "schema": {
+                                    "properties": {
+                                        "packageName": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "riskLevel": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "securityProblemId": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "securityProblemUrl": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "technology": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Update_Microsoft_Sentinel_Incident": {
+                            "runAfter": {
+                                "For_each_Host": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "description": "@body('Parse_Dynatrace_Security_Problem_JSON')?['description']",
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "tagsToAdd": {
+                                        "TagsToAdd": "@variables('tags')"
+                                    }
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/Incidents"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "ApiToken": {
+                        "value": "[parameters('DynatraceApiToken')]"
+                    },
+                    "EnvironmentUrl": {
+                        "value": "[parameters('DynatraceEnvironmentUrl')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.SecurityInsights/automationRules",
+            "apiVersion": "2021-10-01",
+            "name": "[variables('automationRuleName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "displayName": "Enrich Dynatrace Application Security Problem Incident",
+                "order": 2,
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "expirationTimeUtc": null,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Created",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentRelatedAnalyticRuleIds",
+                                "operator": "Contains",
+                                "propertyValues": "[variables('alertRules')]"
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 2,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                            "tenantId": "[tenant().tenantId]"
+                        }
+                    }
+                ]
+            },
+            "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('LogAnalyticsWorkspaceName'))]"
+        }
+    ]
+}
