@@ -1,0 +1,413 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence",
+        "description": "This playbook will open a Jira Issue when a new incident is opened in Azure Sentinel.",
+        "prerequisites": ["1. Dynatrace tenant (ex. xyz.dynatrace.com)",
+             "2. Dynatrace Access Token."],
+        "lastUpdateTime": "2022-10-19T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Attacks" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Gareth Emslie"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AddDynatraceApplicationSecurityAttackSourceIPAddressTI",
+            "type": "string",
+            "metadata": {
+                "description": "Alert trigger"
+            }
+        },
+        "LogAnalyticsWorkspaceName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics Workspace Name"
+            }
+        },
+        "DynatraceEnvironmentUrl": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Dynatrace tenant (ex. xyz.dynatrace.com)"
+            }
+        },
+        "DynatraceApiToken": {
+            "defaultValue": "",
+            "type": "securestring",
+            "metadata": {
+                "description": "Dynatrace Api Token"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "MicrosoftGraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]",
+        "automationRuleName": "[concat('automation-', parameters('PlaybookName'))]",
+        "alertRules": [
+            "[resourceId('Microsoft.OperationalInsights/workspaces/providers/alertRules', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights', '1b0b2065-8bac-5a00-83c4-1b58f69ac212')]"
+        ]
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftGraphSecurityConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('MicrosoftGraphSecurityConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "AddDynatraceApplicationSecurityAttackSourceIPAddressThreatIntelligence-Alert",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "ApiToken": {
+                            "defaultValue": "",
+                            "type": "SecureString"
+                        },
+                        "EnvironmentUrl": {
+                            "defaultValue": "",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Dynatrace_Attack_Details": {
+                            "runAfter": {
+                                "Parse_Incident_Alert_Custom_Body_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "Api-Token @{parameters('ApiToken')}"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "fields": "+attacker"
+                                },
+                                "uri": "@{parameters('EnvironmentUrl')}/api/v2/attacks/@{first(body('Parse_Incident_Alert_Custom_Body_JSON')?['attackId'])}"
+                            }
+                        },
+                        "If_SourceIP_available_create_threat_indicator": {
+                            "actions": {
+                                "Create_tiIndicator_for_attackers_source_ip": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "action": "alert",
+                                            "description": "Dynatrace Application Security - @{body('Parse_Dynatrace_Attack_JSON')?['attackType']} Attack Detected",
+                                            "expirationDateTime": "@addDays(utcNow(),7)",
+                                            "externalId": "@body('Parse_Dynatrace_Attack_JSON')?['attackId']",
+                                            "networkSourceIPv4": "@body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']",
+                                            "tags": "",
+                                            "targetProduct": "Azure Sentinel",
+                                            "threatType": "WatchList",
+                                            "tlpLevel": "unknown"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/security/tiIndicators"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Dynatrace_Attack_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Dynatrace_did_not_supply_a_source_ip_for_attack": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Succeeded"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']",
+                                                ""
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Parse_Dynatrace_Attack_JSON": {
+                            "runAfter": {
+                                "Get_Dynatrace_Attack_Details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Dynatrace_Attack_Details')",
+                                "schema": {
+                                    "properties": {
+                                        "affectedEntities": {
+                                            "properties": {
+                                                "processGroup": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "processGroupInstance": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "attackId": {
+                                            "type": "string"
+                                        },
+                                        "attackType": {
+                                            "type": "string"
+                                        },
+                                        "attacker": {
+                                            "properties": {
+                                                "location": {
+                                                    "properties": {
+                                                        "city": {},
+                                                        "country": {},
+                                                        "countryCode": {}
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "sourceIp": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "displayId": {
+                                            "type": "string"
+                                        },
+                                        "displayName": {
+                                            "type": "string"
+                                        },
+                                        "state": {
+                                            "type": "string"
+                                        },
+                                        "timestamp": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_Incident_Alert_Custom_Body_JSON": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['ExtendedProperties']?['Custom Details']",
+                                "schema": {
+                                    "properties": {
+                                        "attackId": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "attackType": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "displayId": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "state": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "microsoftgraphsecurity": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftGraphSecurityConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "ApiToken": {
+                        "value": "[parameters('DynatraceApiToken')]"
+                    },
+                    "EnvironmentUrl": {
+                        "value": "[parameters('DynatraceEnvironmentUrl')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.SecurityInsights/automationRules",
+            "apiVersion": "2022-10-01-preview",
+            "name": "[variables('automationRuleName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "displayName": "Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence",
+                "order": 2,
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "expirationTimeUtc": null,
+                    "triggersOn": "Alerts",
+                    "triggersWhen": "Created",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "AlertAnalyticRuleIds",
+                                "operator": "Contains",
+                                "propertyValues": "[variables('alertRules')]"
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 2,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                            "tenantId": "[tenant().tenantId]"
+                        }
+                    }
+                ]
+            },
+            "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('LogAnalyticsWorkspaceName'))]"
+        }
+    ]
+}
