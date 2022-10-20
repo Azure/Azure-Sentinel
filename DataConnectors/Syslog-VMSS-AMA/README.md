@@ -1,4 +1,4 @@
-# Scaleable SYSLOG Collection using VMSS and Azure Monitor Agent
+# Scalable SYSLOG collection using VMSS and Azure Monitor Agent
 Author: María de Sousa-Valadas
 
 Sample is an ARM template that will deploy a Linux (RedHat or Ubuntu) Virtual Machine Scale Set. This has been built based on the previous solution we had for CEF based on the Log Analytics Agent (MMA) [CEF-VMSS]( https://github.com/mariavaladas/Azure-Sentinel/tree/master/DataConnectors/CEF-VMSS)
