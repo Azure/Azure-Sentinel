@@ -30,6 +30,12 @@ LOG_TYPE_VULNS = 'NexposeInsightVMCloud_vulnerabilities'
 VULNERS_API_REQUEST_CHUNK_SIZE = 50
 ASSETS_API_REQUSET_CHUNK_SIZE = 500
 
+ENABLE_LOGGING_ASSET_IDS = os.environ.get('ENABLE_LOGGING_ASSET_IDS')
+if ENABLE_LOGGING_ASSET_IDS and ENABLE_LOGGING_ASSET_IDS.lower() == 'true' or ENABLE_LOGGING_ASSET_IDS == '1':
+    ENABLE_LOGGING_ASSET_IDS = True
+else:
+    ENABLE_LOGGING_ASSET_IDS = False
+
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -216,6 +222,10 @@ def get_chunks_from_list(lst, n):
 
 
 async def send_assets_to_sentinel(assets: list, sentinel: AzureSentinelConnectorAsync) -> None:
+    if ENABLE_LOGGING_ASSET_IDS:
+        for asset in assets:
+            asset_id = asset['id']
+            logging.info(f'Sending asset {asset_id} to Sentinel.')
     await sentinel.send_events(data=assets, log_type=LOG_TYPE_ASSETS)
 
 
