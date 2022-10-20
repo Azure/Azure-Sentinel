@@ -1,0 +1,45 @@
+id: 7bdc10d6-aa24-4ca9-9a93-802cd8761354
+name: API - Suspicious Login
+description: |
+  '42Crunch API protection against suspicious login'
+severity: High
+requiredDataConnectors:
+  - connectorId: 42CrunchAPIProtection
+    dataTypes:
+      - apifirewall_log_1_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+query: |
+  let firstRec = apifirewall_log_1_CL
+  | where TimeGenerated >= ago(5m) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_6" and URI_Path_s has "/api/login?user=" and Status_d in (200, 403);
+  let ipAddressCount = toscalar(firstRec | summarize by Source_IP_s | count);
+  let secondRec = firstRec | summarize arg_max(Source_IP_s, *) by Source_IP_s;
+  let recCount = iff((toscalar(secondRec | count) > 3), ipAddressCount, 0);
+  secondRec | take recCount
+customDetails:
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_IP_s
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname_s
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Instance_Name_s
+version: 1.0.0
+kind: Scheduled
