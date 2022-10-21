@@ -35,12 +35,12 @@ You can choose to deploy the whole package connector + all three playbook templa
 
 ## Custom Connector and playbooks OnPrem versions
 
-This package supports OnPrem versions of Custom Connector [](./PaloAltoCustomConnectorOnPrem/readme.md) and corresponding playbooks:
- - BlockIP[](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockIP/readme.md)
- - BlockURL[](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockURL/readme.md)
- - GetSystemInfo[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetSystemInfo/readme.md)
- - GetThreatPCAP[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetThreatPCAP/readme.md)
- - GetURLCategoryInfo[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetURLCategoryInfo/readme.md)
+This package supports OnPrem versions of [Custom Connector](./PaloAltoCustomConnectorOnPrem/readme.md) and corresponding playbooks:
+ - [BlockIP](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockIP)
+ - [BlockURL](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockURL)
+ - [GetSystemInfo](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetSystemInfo)
+ - [GetThreatPCAP](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetThreatPCAP)
+ - [GetURLCategoryInfo](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetURLCategoryInfo)
 
 They can be deployed separately.
 
