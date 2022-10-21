@@ -33,14 +33,14 @@ You can choose to deploy the whole package connector + all three playbook templa
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPaloAltoCustomConnector%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPaloAltoCustomConnector%2Fazuredeploy.json)
 
-## Custom Connector and playbooks versions
+## Custom Connector and playbooks OnPrem versions
 
-This package supports OnPrem versions of Custom Connector [](./PaloAltoCustomConnectorOnPrem) and corresponding playbooks:
- - BlockIP[](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockIP)
- - BlockURL[](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockURL)
- - GetSystemInfo[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetSystemInfo)
- - GetThreatPCAP[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetThreatPCAP)
- - GetURLCategoryInfo[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetURLCategoryInfo)
+This package supports OnPrem versions of Custom Connector [](./PaloAltoCustomConnectorOnPrem/readme.md) and corresponding playbooks:
+ - BlockIP[](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockIP/readme.md)
+ - BlockURL[](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockURL/readme.md)
+ - GetSystemInfo[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetSystemInfo/readme.md)
+ - GetThreatPCAP[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetThreatPCAP/readme.md)
+ - GetURLCategoryInfo[](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetURLCategoryInfo/readme.md)
 
 They can be deployed separately.
 
