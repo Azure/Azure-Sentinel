@@ -4,7 +4,7 @@ SCRIPTPATH=$(dirname "$SCRIPT")
 cd "$SCRIPTPATH"
 
 cd ../../
-pwsh ./Tools/Create-Azure-Sentinel-Solution/createSolution.ps1
+pwsh ./Tools/Create-Azure-Sentinel-Solution/build_cohesity.ps1
 
 configFile=./Solutions/CohesitySecurity/cohesity.config
 send_to_email_for_playbook=`cat ${configFile} |awk -F'=' '/send_to_email_for_playbook/{print $2}'`
