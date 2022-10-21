@@ -28,6 +28,24 @@ namespace Kqlvalidations.Tests
 
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
+        [ClassData(typeof(HuntingQueriesYamlFilesTestData))]
+        public void Validate_HuntingQueries_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var id = (string)res["id"];
+
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+
+            var queryStr = (string)res["query"];
+            ValidateKql(id, queryStr);
+        }
+
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_HaveValidKql(string fileName, string encodedFilePath)
         {
