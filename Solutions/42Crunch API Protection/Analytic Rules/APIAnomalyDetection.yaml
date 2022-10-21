@@ -1,0 +1,46 @@
+id: 2c59e609-e0a0-4e8e-adc5-ab4224be8a36
+name: API - Anomaly Detection
+description: |
+  '42Crunch API protection anomaly detection'
+severity: Low
+requiredDataConnectors:
+  - connectorId: 42CrunchAPIProtection
+    dataTypes:
+      - apifirewall_log_1_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+query: |
+  let infoRec = apifirewall_log_1_CL
+  | where TimeGenerated >= ago(5m) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_4" and URI_Path_s has "/api/users/info" and Status_d == 200;
+  let timestamp = toscalar(infoRec | top 1 by Timestamp_t desc | summarize by Timestamp_t);
+  let activityRec = apifirewall_log_1_CL
+    | where Timestamp_t < timestamp and TimeGenerated >= ago(5m)
+    | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+    | where Instance_Name_s == "Instance_4" and URI_Path_s has "/api/users/activity" and Status_d == 200;
+  activityRec
+customDetails:
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_IP_s
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname_s
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Instance_Name_s
+version: 1.0.0
+kind: Scheduled
