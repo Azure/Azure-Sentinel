@@ -1,5 +1,8 @@
 $jsonConversionDepth = 50
-$path = "$PSScriptRoot\input"
+$SolutionJsonPath = $args[0]
+$RepoRoot = Split-path -Parent $PSScriptRoot | Split-Path -Parent
+$SolutionRoot = Join-Path -Path $RepoRoot -ChildPath "Tools" | Join-Path -ChildPath "Create-Azure-Sentinel-Solution"
+$path = Join-Path -Path $SolutionRoot -ChildPath "input"
 
 function handleEmptyInstructionProperties ($inputObj) {
     $outputObj = $inputObj |
@@ -68,7 +71,7 @@ function getQueryResourceLocation () {
     }
 }
 
-$inputJsonPath = Join-Path -Path $path -ChildPath "Solution_CohesitySecurity.json"
+$inputJsonPath = Join-Path -Path $path -ChildPath $SolutionJsonPath
 
 $contentToImport = Get-Content -Raw $inputJsonPath | Out-String | ConvertFrom-Json
 $basePath = $(if ($contentToImport.BasePath) { $contentToImport.BasePath + "/" } else { "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/" })
@@ -88,8 +91,8 @@ $solutionName = $contentToImport.Name
 
 
 # Base JSON Object Paths
-$baseMainTemplatePath = "$PSScriptRoot/templating/baseMainTemplate.json"
-$baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.json"
+$baseMainTemplatePath = "$SolutionRoot/templating/baseMainTemplate.json"
+$baseCreateUiDefinitionPath = "$SolutionRoot/templating/baseCreateUiDefinition.json"
 
 # Base JSON Objects
 $baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
@@ -101,7 +104,7 @@ foreach ($objectProperties in $contentToImport.PsObject.Properties) {
     # Access the value of the property
     if ($objectProperties.Value -is [System.Array]) {
         foreach ($file in $objectProperties.Value) {
-            $finalPath = $basePath + $file
+            $finalPath = $RepoRoot + "/" + $basePath + $file
             $rawData = $null
             try {
                 Write-Host "Downloading $file"
@@ -461,7 +464,7 @@ foreach ($objectProperties in $contentToImport.PsObject.Properties) {
                         $variableName = $playbookVariable.Name
                         $variableValue = $playbookVariable.Value
                         if ($variableValue -is [System.String]) {
-                            $variableValue = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
+                            $variableValue = $(node "$SolutionRoot/templating/replacePlaybookParamNames.js" $variableValue $playbookCounter)
                         }
                         if (($solutionName.ToLower() -eq "cisco meraki") -and ($variableName.ToLower().contains("apikey")))
                         {
@@ -486,11 +489,11 @@ foreach ($objectProperties in $contentToImport.PsObject.Properties) {
                             foreach ($prop in $resourceObj.PsObject.Properties) {
                                 $key = $prop.Name
                                 if ($prop.Value -is [System.String]) {
-                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                                    $resourceObj.$key = $(node "$SolutionRoot/templating/replacePlaybookParamNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
                                     if ($resourceObj.$key.StartsWith("[") -and $resourceObj.$key[$resourceObj.$key.Length - 1] -eq "]") {
-                                        $resourceObj.$key = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                                        $resourceObj.$key = $(node "$SolutionRoot/templating/replacePlaybookVarNames.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
                                     }
-                                    $resourceObj.$key = $(node "$PSScriptRoot/templating/replaceLocationValue.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
+                                    $resourceObj.$key = $(node "$SolutionRoot/templating/replaceLocationValue.js" "$(replaceQuotes $resourceObj.$key)" $playbookCounter)
                                     if ($resourceObj.$key.IndexOf($azureManagementUrl)) {
                                         $resourceObj.$key = $resourceObj.$key.Replace($azureManagementUrl, "@{variables('azureManagementUrl')}")
                                         $azureManagementUrlExists = $true
@@ -506,10 +509,10 @@ foreach ($objectProperties in $contentToImport.PsObject.Properties) {
                                         $itemIndex = $prop.Value.IndexOf($item)
                                         if ($null -ne $itemIndex) {
                                             if ($item -is [System.String]) {
-                                                $item = $(node "$PSScriptRoot/templating/replaceLocationValue.js" $item $playbookCounter)
-                                                $item = $(node "$PSScriptRoot/templating/replacePlaybookParamNames.js" $item $playbookCounter)
+                                                $item = $(node "$SolutionRoot/templating/replaceLocationValue.js" $item $playbookCounter)
+                                                $item = $(node "$SolutionRoot/templating/replacePlaybookParamNames.js" $item $playbookCounter)
                                                 if ($item.StartsWith("[") -and $item[$item.Length - 1] -eq "]") {
-                                                    $item = $(node "$PSScriptRoot/templating/replacePlaybookVarNames.js" $item $playbookCounter)
+                                                    $item = $(node "$SolutionRoot/templating/replacePlaybookVarNames.js" $item $playbookCounter)
                                                 }
                                                 $resourceObj.$key[$itemIndex] = $item
                                             }
@@ -1187,7 +1190,7 @@ foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         }
     }
     elseif ($objectProperties.Name.ToLower() -eq "metadata") {
-        $finalPath = $basePath + $objectProperties.Value
+        $finalPath = $RepoRoot + "/" + $basePath + $objectProperties.Value
         $rawData = $null
         try {
             Write-Host "Downloading $file"
@@ -1402,7 +1405,7 @@ $zipPackageName = "$(if($contentToImport.Version){$contentToImport.Version}else{
 Compress-Archive -Path "$solutionFolder/*" -DestinationPath "$solutionFolder/$zipPackageName" -Force
 
 #downloading and running arm-ttk on generated solution
-$armTtkFolder = "$PSScriptRoot/arm-ttk"
+$armTtkFolder = "$SolutionRoot/arm-ttk"
 if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
     Write-Output "Missing arm-ttk validations. Downloading module..."
     Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
