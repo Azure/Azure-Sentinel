@@ -1,6 +1,6 @@
 # Scalable Syslog collection using VMSS and Azure Monitor Agent
 
-This ARM template  will deploy an Ubuntu Virtual Machine Scale Set. This has been built based on the previous solution we had for CEF based on the Log Analytics Agent (MMA) [CEF-VMSS]( https://github.com/mariavaladas/Azure-Sentinel/tree/master/DataConnectors/CEF-VMSS)
+This ARM template  will deploy an Ubuntu Virtual Machine Scale Set to forward Syslog to Microsoft Sentinel using Azure Monitor Agent (AMA). This has been built based on the previous solution we had for CEF with Log Analytics Agent (MMA) [CEF-VMSS]( https://github.com/mariavaladas/Azure-Sentinel/tree/master/DataConnectors/CEF-VMSS)
 
 The ARM template will deploy everything needed:
 * Virtual Machine Scale Set
