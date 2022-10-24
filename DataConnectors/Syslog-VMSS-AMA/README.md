@@ -5,7 +5,6 @@ This ARM template  will deploy an Ubuntu Virtual Machine Scale Set. This has bee
 The ARM template will deploy everything needed:
 * Virtual Machine Scale Set
 * Autoscale settings
-* Storage Account
 * Network Security Group
 * Virtual Network
 * Subnet
@@ -15,7 +14,7 @@ The ARM template will deploy everything needed:
 * Data Colection Rule association
 * Managed identity required for AMA to authenticate
 
-The ARM template includes the cloud init files which runs commands on the VM instance when it is deployed.
+The ARM template includes a cloud init to run the required to commands on the VM instances to enable syslog collection.
 
 ## Deploy Ubuntu VMSS
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmariavaladas%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FSyslog-VMSS-AMA%2FazureDeploy.json)
