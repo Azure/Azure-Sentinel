@@ -78,24 +78,24 @@ This exercise shows you how to enable the Threat Intelligence - TAXII data conne
 
 **NOTE**: To do this exercise, your user must have the Security Reader role in the subscription of the logs you stream. If not done already, you will need to enable Azure Defender within Azure Security Center.
 
-1. Go to you Microsoft Sentinel workspace and select *Data Connectors* under *Configuration* section.
+1. Sign up for a free TAXII 2.0 feed, like Celerium's PickupStix. Go to https://www.celerium.com/pickupstix to signup and receive your credentials.
 
-2. In the data connectors screen, type *taxii* in the search bar, select the *Threat intelligence - TAXII* connector and click on *Open connector page*.
+2. Go to you Microsoft Sentinel workspace and select *Data Connectors* under *Configuration* section.
 
-3. In the Threat Intelligence - TAXII connector page, add the following information under *Configuration* menu:
+3. In the data connectors screen, type *taxii* in the search bar, select the *Threat intelligence - TAXII* connector and click on *Open connector page*.
+
+4. In the Threat Intelligence - TAXII connector page, add the following information under *Configuration* menu:
 
     - **Friendly name (for server)**: TAXIIfeed
     - **API root URL**: https://test.pickupstix.io/taxii2/api2/
     - **Collection ID**: 19b3703d-5541-4864-873f-ade94d202ec5
-    - **Username**: guest
-    - **Password**: guest
+    - **Username**: <_enter username_>
+    - **Password**: <_enter password_>
     - **Import Indicators**: All available (review all available options)
-    - **Polling frequency**: Once an minute (review all available options)
+    - **Polling frequency**: Once a day (since Celerium's free feed is updated daily)
 
-![taxii1](../Images/taxii11.png)
+5. Click *Add* and wait until the operation completes.
 
-4. Click *Add* and wait until the operation completes.
-
-5. Click on *Next Steps* at the top of the page and explore what content is available for this connector. In a few seconds, the ThreatIntelligenceIndicator will be populated with IOCs from Anomali's feed.
+6. Click on *Next Steps* at the top of the page and explore what content is available for this connector. In a few seconds, the ThreatIntelligenceIndicator will be populated with IOCs from Celerium's feed.
 
 **Congratulations, you have completed Module 2!**. You can now continue to **[Module 3 - Analytics Rules](./Module-3-Analytics-Rules.md)**
