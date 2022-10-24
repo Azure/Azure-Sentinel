@@ -144,7 +144,7 @@ namespace Kqlvalidations.Tests
             }
 
             var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
-            var parserName = (string)yaml["FunctionName"];
+            var parserName = (string)yaml["EquivalentBuiltInFunction"];
             ValidateKql(parserName, queryStr);
         }
 

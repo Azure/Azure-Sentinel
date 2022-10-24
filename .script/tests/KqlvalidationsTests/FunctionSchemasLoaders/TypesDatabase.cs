@@ -5,8 +5,14 @@ using System.Collections.Generic;
 
 namespace Kqlvalidations.Tests.FunctionSchemasLoaders
 {
+    /// <summary>
+    /// Manage the supported parameter types
+    /// </summary>
     public static class TypesDatabase
     {
+        /// <summary>
+        /// Mapping between the type and its default value
+        /// </summary>
         public static IReadOnlyDictionary<string, string> TypeToDefaultValueMapping = new Dictionary<string, string>()
         {
             { "string", "" },

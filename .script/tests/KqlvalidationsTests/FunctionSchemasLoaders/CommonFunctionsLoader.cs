@@ -22,8 +22,8 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private FunctionSchema GetFunction(string fileName)
         {
             var deserializer = new DeserializerBuilder().Build();
-            var yaml = deserializer.Deserialize<Dictionary<object, object>> (File.ReadAllText(fileName));
-            return new FunctionSchema((string)yaml["FunctionName"], (string)yaml["FunctionQuery"], GetFunctionParameters(yaml));
+            var yaml = deserializer.Deserialize<Dictionary<string, object>> (File.ReadAllText(fileName));
+            return new FunctionSchema((string)yaml["EquivalentBuiltInFunction"], (string)yaml["FunctionQuery"], GetFunctionParameters(yaml));
         }
 
         /// <summary>
@@ -31,7 +31,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         /// </summary>
         /// <param name="yaml">The yaml file</param>
         /// <returns>The function parameters</returns>
-        private List<FunctionParameter> GetFunctionParameters(Dictionary<object, object> yaml)
+        private List<FunctionParameter> GetFunctionParameters(Dictionary<string, object> yaml)
         {
             List<object> functionParameters = (List<object>)yaml.GetValueOrDefault("FunctionParams");
             return functionParameters?.Select(ConvertObjectToFunctionParameter).ToList();
