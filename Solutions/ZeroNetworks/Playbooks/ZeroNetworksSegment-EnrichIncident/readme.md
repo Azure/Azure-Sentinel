@@ -1,8 +1,8 @@
-# Zero Networks Access Orchestrator - Enrich Incident
+# Zero Networks Segment - Enrich Incident
 
 ## Summary
 
-This playbook will take each Host entity and get its Asset status from Zero Network Access Orchestrator. The playbook will then write a comment to the Microsoft Sentinel incident with a table of assets and protection statuses.
+This playbook will take each Host entity and get its Asset status from Zero Network Segment. The playbook will then write a comment to the Microsoft Sentinel incident with a table of assets and protection statuses.
 
 When a new Microsoft Sentinel incident is created,this playbook gets triggered and performs below actions
 1. For the hosts, we get their asset satus from the REST API.
@@ -20,11 +20,11 @@ When a new Microsoft Sentinel incident is created,this playbook gets triggered a
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZeroNetworks%2FZeroNetworksAcccessOrchestrator-EnrichIncident%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZeroNetworks%2FZeroNetworksAcccessOrchestrator-EnrichIncident%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZeroNetworks%2FZeroNetworksSegment-EnrichIncident%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZeroNetworks%2FZeroNetworksSegment-EnrichIncident%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
-    * Playbook Name: Enter the playbook name here (ex:ZeroNetworksAcccessOrchestrator-EnrichIncident)
+    * Playbook Name: Enter the playbook name here (ex:ZeroNetworksSegment-EnrichIncident)
     * Zero Networks Connector name : Enter the name of the Zero Networks custom connector (default value:ZeroNetworksConnector)
 
 ### Post-Deployment instructions 

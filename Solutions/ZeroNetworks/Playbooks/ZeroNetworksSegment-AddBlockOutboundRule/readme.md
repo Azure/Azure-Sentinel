@@ -1,11 +1,11 @@
-# Zero Networks Acccess Orchestrator - Add Block Outbound Rule
+# Zero Networks Segment - Add Block Outbound Rule
 
 ## Summary
 
-This playbook allows blocking an IP outbound from protected assets in Zero Networks Access Orchestrator.  
+This playbook allows blocking an IP outbound from protected assets in Zero Networks Segment.  
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions
-1. For the IPs, we add them to a new outbound block rule in Access Orchestrator.
+1. For the IPs, we add them to a new outbound block rule in Segment.
 2. A comment is added to Microsoft Sentinel incident.
 
 **Playbook overview:**
@@ -18,11 +18,11 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroNetworks%2FPlaybooks%2FZeroNetworksAcccessOrchestrator-AddBlockOutboundRule%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroNetworks%2FPlaybooks%2FZeroNetworksAcccessOrchestrator-AddBlockOutboundRule%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroNetworks%2FPlaybooks%2FZeroNetworksSegment-AddBlockOutboundRule%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroNetworks%2FPlaybooks%2FZeroNetworksSegment-AddBlockOutboundRule%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
-    * Playbook Name: Enter the playbook name here (ex:ZNAcccessOrchestrator-AddBlockOutboundRule)
+    * Playbook Name: Enter the playbook name here (ex:ZNSegment-AddBlockOutboundRule)
     * Connector name : Enter the name of the Zero Networks custom connector (default value:ZeroNetworksConnector)
 
 ### Post-Deployment instructions 

@@ -1,12 +1,12 @@
 <#  
-    Title:          Azure Function App Zero Networks Access Orchestrator Audit API Ingestion to Azure Sentinel   
+    Title:          Azure Function App Zero Networks Segment Audit API Ingestion to Azure Sentinel   
     Language:       PowerShell
-    Version:        1.0
-    Last Modified:  3/8/2022
-    Comment:        Inital Release
+    Version:        1.1
+    Last Modified:  10/24/2022
+    Comment:        Update product name
 
-    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your Zero Networks Access Orchestrator Audit API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
-                    Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the Zero Networks Access Orchestrator Audit API and format the data received into JSON format.  
+    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your Zero Networks Segment Audit API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
+                    Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the Zero Networks Segment Audit API and format the data received into JSON format.  
 
 #>
 
@@ -20,7 +20,7 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
 }
 
-# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, Zero Networks Access Orchestrator Audit API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
+# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, Zero Networks Segment Audit API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
 $apiToken = $env:apiToken
 $uri = $env:uri
 

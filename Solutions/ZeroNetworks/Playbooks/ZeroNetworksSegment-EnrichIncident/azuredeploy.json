@@ -2,13 +2,13 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Add Asset to Protection - Zero Networks Acccess Orchestrator",
-        "description": "This playbook takes a host from a Microsoft Sentinel incident and adds it to protection.  The playbook is configured to add the machine to protection(learning).  If you want to have it go straight to protection, remove the protectAt property in the action.",
+        "title": "Enrich Incident - Zero Networks Acccess Orchestrator",
+        "description": "This playbook will take each Host entity and get its Asset status from Zero Network Segment. The playbook will then write a comment to the Microsoft Sentinel incident with a table of assets and protection statuses.",
         "mainSteps": [
-            "1. For the hosts in the incident, each host is added to protection (learning).",
+            "1. For the hosts, we get their asset satus from the REST API.",
             "2. A comment is added to Microsoft Sentinel incident."
         ],
-        "postDeployment":  [
+       "postDeployment":  [
             "**a. Authorize connections**",
             "Once deployment is complete, you will need to authorize each connection.",
             "1. Click the Microsoft Sentinel connection resource",
@@ -22,9 +22,9 @@
             "1. Zero Networks custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page."
         ],
         "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
-        "lastUpdateTime": "2022-03-16T00:00:00.000Z",
+        "lastUpdateTime": "2022-03-15T00:00:00.000Z",
         "entities": [ "Host" ],
-        "tags": [ "Mitigation" ],
+        "tags": [ "Enrichment" ],
         "support": {
             "tier": "community"
         },
@@ -34,10 +34,10 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "ZNAcccessOrchestrator-AddAssettoProtection",
+            "defaultValue": "ZeroNetworksSegment-EnrichIncident",
             "type": "String",
             "metadata": {
-                "description": "Name of the Logic App/Playbook"
+                "description": "Name of the Logic Apps resource to be created"
             }
         },
         "ConnectorName": {
@@ -90,7 +90,7 @@
                 "[resourceId('Microsoft.Web/connections', variables('ZeroNetworksConnectionName'))]"
             ],
             "tags": {
-                "hidden-SentinelTemplateName": "ZeroNetworksAcccessOrchestrator-AddAssettoProtection",
+                "hidden-SentinelTemplateName": "ZeroNetworksSegment-EnrichIncident",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -105,7 +105,7 @@
                             "inputs": {
                                 "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p><strong>Zero Networks:</strong><br>\nThe following assets were added to protection:<br>\n@{body('Create_HTML_table')}</p>"
+                                    "message": "<p>Zero Networks Asset Protection Status:<br>\n@{body('Create_HTML_table')}<br>\n1 = Not Protected, 2 = Learning, 3 &nbsp;= Protected</p>"
                                 },
                                 "host": {
                                     "connection": {
@@ -125,7 +125,7 @@
                         "Create_HTML_table": {
                             "inputs": {
                                 "format": "HTML",
-                                "from": "@variables('AssetstoAddtoProtection')"
+                                "from": "@variables('Assets')"
                             },
                             "runAfter": {
                                 "For_each": [
@@ -145,57 +145,38 @@
                                 "method": "post",
                                 "path": "/entities/host"
                             },
-                            "runAfter": {},
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "ApiConnection"
                         },
                         "For_each": {
                             "actions": {
                                 "For_each_2": {
                                     "actions": {
-                                        "Add_asset_to_protection": {
-                                            "inputs": {
-                                                "body": {
-                                                    "items": [
-                                                        "@items('For_each_2')?['state']?['assetId']"
-                                                    ],
-                                                    "protectAt": "@div(sub(ticks(utcNow()),ticks('1970-01-01')),10000000)"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['ZeroNetworksConnector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/assets/protect"
-                                            },
-                                            "runAfter": {
-                                                "Append_to_array_variable": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection"
-                                        },
                                         "Append_to_array_variable": {
                                             "inputs": {
-                                                "name": "AssetstoAddtoProtection",
+                                                "name": "Assets",
                                                 "value": {
-                                                    "AssetId": "@{items('For_each_2')?['state']?['assetId']}",
-                                                    "FQDN": "@{items('For_each_2')?['fqdn']}"
+                                                    "AssetId": "@{items('For_each_2')?['name']}",
+                                                    "ProtectionStatus": "@{items('For_each_2')?['protectionState']}"
                                                 }
                                             },
                                             "runAfter": {},
                                             "type": "AppendToArrayVariable"
                                         }
                                     },
-                                    "foreach": "@body('Search_for_an_Asset')?['items']",
+                                    "foreach": "@body('Search_Asset')?['items']",
                                     "runAfter": {
-                                        "Search_for_an_Asset": [
+                                        "Search_Asset": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "Foreach"
                                 },
-                                "Search_for_an_Asset": {
+                                "Search_Asset": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -215,7 +196,7 @@
                             },
                             "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
                             "runAfter": {
-                                "Initialize_variable": [
+                                "Entities_-_Get_Hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -225,16 +206,12 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "AssetstoAddtoProtection",
+                                        "name": "Assets",
                                         "type": "array"
                                     }
                                 ]
                             },
-                            "runAfter": {
-                                "Entities_-_Get_Hosts": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable"
                         }
                     },
@@ -247,7 +224,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_incident_2": {
+                        "Microsoft_Sentinel_incident": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
@@ -266,7 +243,7 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "azuresentinel": {
+                            "azuresentinel": { 
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",

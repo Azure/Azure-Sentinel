@@ -2,14 +2,11 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Add Block Outbound Rule - Zero Networks Acccess Orchestrator",
-        "description": "This playbook allows blocking an IP outbound from protected assets in Zero Networks Access Orchestrator.",
+        "title": "Add Asset to Protection - Zero Networks Segment",
+        "description": "This playbook takes a host from a Microsoft Sentinel incident and adds it to protection.  The playbook is configured to add the machine to protection(learning).  If you want to have it go straight to protection, remove the protectAt property in the action.",
         "mainSteps": [
-            "1. For the IPs, we add them to a new outbound block rule in Access Orchestrator.",
+            "1. For the hosts in the incident, each host is added to protection (learning).",
             "2. A comment is added to Microsoft Sentinel incident."
-        ],
-        "prerequisites": [
-            "1. Zero Networks custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page."
         ],
         "postDeployment":  [
             "**a. Authorize connections**",
@@ -21,10 +18,13 @@
             "5. Click Save",
             "6. Repeat steps for other connections such as Zero Networks"
         ],
+        "prerequisites": [
+            "1. Zero Networks custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page."
+        ],
         "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
         "lastUpdateTime": "2022-03-16T00:00:00.000Z",
-        "entities": [ "Ip" ],
-        "tags": [ "Remediation" ],
+        "entities": [ "Host" ],
+        "tags": [ "Mitigation" ],
         "support": {
             "tier": "community"
         },
@@ -34,7 +34,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "ZNAcccessOrchestrator-AddBlockOutboundRule",
+            "defaultValue": "ZNSegment-AddAssettoProtection",
             "type": "String",
             "metadata": {
                 "description": "Name of the Logic App/Playbook"
@@ -89,6 +89,10 @@
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('ZeroNetworksConnectionName'))]"
             ],
+            "tags": {
+                "hidden-SentinelTemplateName": "ZeroNetworksSegment-AddAssettoProtection",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "identity": {
                 "type": "SystemAssigned"
             },
@@ -101,7 +105,7 @@
                             "inputs": {
                                 "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>Zero Networks:<br>\nOutbound block rule was created for:<br>\n<br>\n@{variables('IPstoAdd')}</p>"
+                                    "message": "<p><strong>Zero Networks:</strong><br>\nThe following assets were added to protection:<br>\n@{body('Create_HTML_table')}</p>"
                                 },
                                 "host": {
                                     "connection": {
@@ -112,45 +116,25 @@
                                 "path": "/Incidents/Comment"
                             },
                             "runAfter": {
-                                "Create_Outbound_Block_rule": [
+                                "Create_HTML_table": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection"
                         },
-                        "Create_Outbound_Block_rule": {
+                        "Create_HTML_table": {
                             "inputs": {
-                                "body": {
-                                    "description": "Microsoft Sentinel: @{triggerBody()?['object']?['properties']?['incidentNumber']}-@{triggerBody()?['object']?['properties']?['title']}",
-                                    "expiresAt": 0,
-                                    "localEntityId": "b:110002",
-                                    "localProcessesList": [
-                                        "*"
-                                    ],
-                                    "portsList": [
-                                        {
-                                            "protocolType": 256
-                                        }
-                                    ],
-                                    "remoteEntityIdsList": "@variables('IPstoAdd')",
-                                    "state": 1
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['ZeroNetworksConnector']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/protection/rules/outbound-block"
+                                "format": "HTML",
+                                "from": "@variables('AssetstoAddtoProtection')"
                             },
                             "runAfter": {
                                 "For_each": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "ApiConnection"
+                            "type": "Table"
                         },
-                        "Entities_-_Get_IPs": {
+                        "Entities_-_Get_Hosts": {
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
@@ -159,26 +143,59 @@
                                     }
                                 },
                                 "method": "post",
-                                "path": "/entities/ip"
+                                "path": "/entities/host"
                             },
                             "runAfter": {},
                             "type": "ApiConnection"
                         },
                         "For_each": {
                             "actions": {
-                                "Append_to_array_variable": {
-                                    "inputs": {
-                                        "name": "IPstoAdd",
-                                        "value": "@body('Encode_IP_Address_to_AssetId')?['id']"
+                                "For_each_2": {
+                                    "actions": {
+                                        "Add_asset_to_protection": {
+                                            "inputs": {
+                                                "body": {
+                                                    "items": [
+                                                        "@items('For_each_2')?['state']?['assetId']"
+                                                    ],
+                                                    "protectAt": "@div(sub(ticks(utcNow()),ticks('1970-01-01')),10000000)"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['ZeroNetworksConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/assets/protect"
+                                            },
+                                            "runAfter": {
+                                                "Append_to_array_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "Append_to_array_variable": {
+                                            "inputs": {
+                                                "name": "AssetstoAddtoProtection",
+                                                "value": {
+                                                    "AssetId": "@{items('For_each_2')?['state']?['assetId']}",
+                                                    "FQDN": "@{items('For_each_2')?['fqdn']}"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable"
+                                        }
                                     },
+                                    "foreach": "@body('Search_for_an_Asset')?['items']",
                                     "runAfter": {
-                                        "Encode_IP_Address_to_AssetId": [
+                                        "Search_for_an_Asset": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "AppendToArrayVariable"
+                                    "type": "Foreach"
                                 },
-                                "Encode_IP_Address_to_AssetId": {
+                                "Search_for_an_Asset": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -186,16 +203,17 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/entities/encode-ip",
+                                        "path": "/assets",
                                         "queries": {
-                                            "ip": "@items('For_each')?['Address']"
+                                            "_limit": 400,
+                                            "_search": "@items('For_each')?['HostName']"
                                         }
                                     },
                                     "runAfter": {},
                                     "type": "ApiConnection"
                                 }
                             },
-                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
                             "runAfter": {
                                 "Initialize_variable": [
                                     "Succeeded"
@@ -207,13 +225,13 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "IPstoAdd",
+                                        "name": "AssetstoAddtoProtection",
                                         "type": "array"
                                     }
                                 ]
                             },
                             "runAfter": {
-                                "Entities_-_Get_IPs": [
+                                "Entities_-_Get_Hosts": [
                                     "Succeeded"
                                 ]
                             },
@@ -229,7 +247,7 @@
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_incident": {
+                        "Microsoft_Sentinel_incident_2": {
                             "inputs": {
                                 "body": {
                                     "callback_url": "@{listCallbackUrl()}"
