@@ -2,13 +2,16 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Enrich Incident - Zero Networks Acccess Orchestrator",
-        "description": "This playbook will take each Host entity and get its Asset status from Zero Network Access Orchestrator. The playbook will then write a comment to the Microsoft Sentinel incident with a table of assets and protection statuses.",
+        "title": "Add Block Outbound Rule - Zero Networks Acccess Orchestrator",
+        "description": "This playbook allows blocking an IP outbound from protected assets in Zero Networks Segment.",
         "mainSteps": [
-            "1. For the hosts, we get their asset satus from the REST API.",
+            "1. For the IPs, we add them to a new outbound block rule in Segment.",
             "2. A comment is added to Microsoft Sentinel incident."
         ],
-       "postDeployment":  [
+        "prerequisites": [
+            "1. Zero Networks custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page."
+        ],
+        "postDeployment":  [
             "**a. Authorize connections**",
             "Once deployment is complete, you will need to authorize each connection.",
             "1. Click the Microsoft Sentinel connection resource",
@@ -18,13 +21,10 @@
             "5. Click Save",
             "6. Repeat steps for other connections such as Zero Networks"
         ],
-        "prerequisites": [
-            "1. Zero Networks custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page."
-        ],
         "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
-        "lastUpdateTime": "2022-03-15T00:00:00.000Z",
-        "entities": [ "Host" ],
-        "tags": [ "Enrichment" ],
+        "lastUpdateTime": "2022-03-16T00:00:00.000Z",
+        "entities": [ "Ip" ],
+        "tags": [ "Remediation" ],
         "support": {
             "tier": "community"
         },
@@ -34,10 +34,10 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "ZeroNetworksAcccessOrchestrator-EnrichIncident",
+            "defaultValue": "ZNSegment-AddBlockOutboundRule",
             "type": "String",
             "metadata": {
-                "description": "Name of the Logic Apps resource to be created"
+                "description": "Name of the Logic App/Playbook"
             }
         },
         "ConnectorName": {
@@ -89,10 +89,6 @@
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('ZeroNetworksConnectionName'))]"
             ],
-            "tags": {
-                "hidden-SentinelTemplateName": "ZeroNetworksAcccessOrchestrator-EnrichIncident",
-                "hidden-SentinelTemplateVersion": "1.0"
-            },
             "identity": {
                 "type": "SystemAssigned"
             },
@@ -105,7 +101,7 @@
                             "inputs": {
                                 "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>Zero Networks Asset Protection Status:<br>\n@{body('Create_HTML_table')}<br>\n1 = Not Protected, 2 = Learning, 3 &nbsp;= Protected</p>"
+                                    "message": "<p>Zero Networks:<br>\nOutbound block rule was created for:<br>\n<br>\n@{variables('IPstoAdd')}</p>"
                                 },
                                 "host": {
                                     "connection": {
@@ -116,25 +112,45 @@
                                 "path": "/Incidents/Comment"
                             },
                             "runAfter": {
-                                "Create_HTML_table": [
+                                "Create_Outbound_Block_rule": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection"
                         },
-                        "Create_HTML_table": {
+                        "Create_Outbound_Block_rule": {
                             "inputs": {
-                                "format": "HTML",
-                                "from": "@variables('Assets')"
+                                "body": {
+                                    "description": "Microsoft Sentinel: @{triggerBody()?['object']?['properties']?['incidentNumber']}-@{triggerBody()?['object']?['properties']?['title']}",
+                                    "expiresAt": 0,
+                                    "localEntityId": "b:110002",
+                                    "localProcessesList": [
+                                        "*"
+                                    ],
+                                    "portsList": [
+                                        {
+                                            "protocolType": 256
+                                        }
+                                    ],
+                                    "remoteEntityIdsList": "@variables('IPstoAdd')",
+                                    "state": 1
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['ZeroNetworksConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/protection/rules/outbound-block"
                             },
                             "runAfter": {
                                 "For_each": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Table"
+                            "type": "ApiConnection"
                         },
-                        "Entities_-_Get_Hosts": {
+                        "Entities_-_Get_IPs": {
                             "inputs": {
                                 "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
@@ -143,40 +159,26 @@
                                     }
                                 },
                                 "method": "post",
-                                "path": "/entities/host"
+                                "path": "/entities/ip"
                             },
-                            "runAfter": {
-                                "Initialize_variable": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "ApiConnection"
                         },
                         "For_each": {
                             "actions": {
-                                "For_each_2": {
-                                    "actions": {
-                                        "Append_to_array_variable": {
-                                            "inputs": {
-                                                "name": "Assets",
-                                                "value": {
-                                                    "AssetId": "@{items('For_each_2')?['name']}",
-                                                    "ProtectionStatus": "@{items('For_each_2')?['protectionState']}"
-                                                }
-                                            },
-                                            "runAfter": {},
-                                            "type": "AppendToArrayVariable"
-                                        }
+                                "Append_to_array_variable": {
+                                    "inputs": {
+                                        "name": "IPstoAdd",
+                                        "value": "@body('Encode_IP_Address_to_AssetId')?['id']"
                                     },
-                                    "foreach": "@body('Search_Asset')?['items']",
                                     "runAfter": {
-                                        "Search_Asset": [
+                                        "Encode_IP_Address_to_AssetId": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "Foreach"
+                                    "type": "AppendToArrayVariable"
                                 },
-                                "Search_Asset": {
+                                "Encode_IP_Address_to_AssetId": {
                                     "inputs": {
                                         "host": {
                                             "connection": {
@@ -184,19 +186,18 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/assets",
+                                        "path": "/entities/encode-ip",
                                         "queries": {
-                                            "_limit": 400,
-                                            "_search": "@items('For_each')?['HostName']"
+                                            "ip": "@items('For_each')?['Address']"
                                         }
                                     },
                                     "runAfter": {},
                                     "type": "ApiConnection"
                                 }
                             },
-                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
                             "runAfter": {
-                                "Entities_-_Get_Hosts": [
+                                "Initialize_variable": [
                                     "Succeeded"
                                 ]
                             },
@@ -206,12 +207,16 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "Assets",
+                                        "name": "IPstoAdd",
                                         "type": "array"
                                     }
                                 ]
                             },
-                            "runAfter": {},
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "InitializeVariable"
                         }
                     },
@@ -243,7 +248,7 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "azuresentinel": { 
+                            "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",

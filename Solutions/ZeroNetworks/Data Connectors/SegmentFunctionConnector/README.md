@@ -1,13 +1,13 @@
-# Zero Networks Access Orchestrator Integration for Microsoft Sentinel
+# Zero Networks Segment Integration for Microsoft Sentinel
 
 ## Introduction
 
-This folder contains the Azure function time trigger code for Zero Networks Access Orchestrator-Microsoft Sentinel connector. The connector will run periodically and ingest the Zero Networks Access Orchestrator Audit data into the Microsoft Sentinel logs custom table `ZNAccessOrchestratorAudit_CL`. 
+This folder contains the Azure function time trigger code for Zero Networks Segment-Microsoft Sentinel connector. The connector will run periodically and ingest the Zero Networks Segment Audit data into the Microsoft Sentinel logs custom table `ZNSegmentAudit_CL`. 
 
 ## Folders
 
 1. `Solutions/ZeroNetworks/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
-2. `Solutions/ZeroNetworks/AccessOrchestratorFunctionConnector/` - This contains the Azure function source code.
+2. `Solutions/ZeroNetworks/SegmentFunctionConnector/` - This contains the Azure function source code.
 
 
 ## Installing for the users
@@ -16,7 +16,7 @@ After the solution is published, we can find the connector in the connector gall
 
 i. Go to Microsoft Sentinel -> Data Connectors
 
-ii. Click on the `Zero Networks Access Orchestrator Audit (Function)` connector, connector page will open. 
+ii. Click on the `Zero Networks Segment Audit (Function)` connector, connector page will open. 
 
 iii. Click on the blue `Deploy to Azure` button.   
 
@@ -34,7 +34,7 @@ i. Log in to Azure portal using the URL - [https://portal.azure.com/?feature.Bri
 
 ii. Go to Microsoft Sentinel -> Data Connectors
 
-iii. Click the “import” button at the top and select the json file `DataConnector_API_AzureFunctionApp_ZeroNetworks_AccessOrchestrator_Audit` downloaded on your local machine from Github.
+iii. Click the “import” button at the top and select the json file `DataConnector_API_AzureFunctionApp_ZeroNetworks_Segment_Audit` downloaded on your local machine from Github.
 
 iv. This will load the connector page and rest of the process will be same as the Installing for users guideline above.
 
@@ -42,7 +42,7 @@ Each invocation and its logs of the function can be seen in Function App service
 
 i. Go to Function App and click on the function which you have deployed, identified with the given name at the deployment stage.
 
-ii. Go to Functions -> `ZNAccessOrchestratorAudit` -> Monitor
+ii. Go to Functions -> `ZNSegmentAudit` -> Monitor
 
 iii. By clicking on invocation time, you can see all the logs for that run. 
 
