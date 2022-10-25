@@ -33,32 +33,32 @@ relevantTechniques:
   - T1098
 query: |
 
-let threshold = 1;
-let aadFunc = (tableName:string){
-table(tableName)
-| where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ "failure"
-| extend d = parse_json(ConditionalAccessPolicies)
-| mv-apply d on (
+  let threshold = 1;
+  let aadFunc = (tableName:string){
+  table(tableName)
+  | where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ "failure"
+  | extend d = parse_json(ConditionalAccessPolicies)
+  | mv-apply d on (
     project ConditionalAccessPoliciesName = d.displayName, result = d.result
     | where result == "failure"
-)
-| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
-| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
-| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion) 
-| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-| extend Status = strcat(StatusCode, ": ", ResultDescription) 
-| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName)
-by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type
-| where IPAddressCount > threshold and StatusDetails !has "MFA successfully completed"
-| mvexpand IPAddresses, Status, StatusDetails, CorrelationIds
-| extend Status = strcat(Status, " ", StatusDetails)
-| summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName)
-by StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type
-| extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)
-};
-let aadSignin = aadFunc("SigninLogs");
-let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-union isfuzzy=true aadSignin, aadNonInt
+  )
+  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion) 
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend Status = strcat(StatusCode, ": ", ResultDescription) 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName)
+  by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type
+  | where IPAddressCount > threshold and StatusDetails !has "MFA successfully completed"
+  | mvexpand IPAddresses, Status, StatusDetails, CorrelationIds
+  | extend Status = strcat(Status, " ", StatusDetails)
+  | summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName)
+  by StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
