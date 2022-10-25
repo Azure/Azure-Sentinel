@@ -87,7 +87,6 @@
                 "displayName": "[variables('MicrosoftGraphSecurityConnectionName')]",
                 "customParameterValues": {
                 },
-                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
                 }
@@ -144,22 +143,6 @@
                             }
                         }
                     },
-                    "triggers": {
-                        "Microsoft_Sentinel_alert": {
-                            "type": "ApiConnectionWebhook",
-                            "inputs": {
-                                "body": {
-                                    "callback_url": "@{listCallbackUrl()}"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "path": "/subscribe"
-                            }
-                        }
-                    },
                     "actions": {
                         "Get_Dynatrace_Attack_Details": {
                             "runAfter": {
@@ -181,28 +164,94 @@
                         },
                         "If_SourceIP_available_create_threat_indicator": {
                             "actions": {
-                                "Create_tiIndicator_for_attackers_source_ip": {
+                                "Does_tiIndicator_already_Exist": {
+                                    "actions": {
+                                        "Create_tiIndicator_for_attackers_source_ip": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "action": "alert",
+                                                    "confidence": 0,
+                                                    "description": "Dynatrace Application Security - @{body('Parse_Dynatrace_Attack_JSON')?['attackType']} Attack Detected",
+                                                    "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                    "externalId": "@body('Parse_Dynatrace_Attack_JSON')?['attackId']",
+                                                    "networkSourceCidrBlock": "@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}/32",
+                                                    "severity": 0,
+                                                    "targetProduct": "Azure Sentinel",
+                                                    "threatType": "WatchList",
+                                                    "tlpLevel": "white"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/beta/security/tiIndicators"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_Existing_tiIndicator": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "For_each_tiIndicator": {
+                                                "foreach": "@body('Get_Existing_tiIndicator')?['value']",
+                                                "actions": {
+                                                    "Update_tiIndicator_expiration": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "expirationDateTime": "@{addDays(utcNow(),7)}",
+                                                                "targetProduct": "Azure Sentinel"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "patch",
+                                                            "path": "/beta/security/tiIndicators/@{encodeURIComponent(items('For_each_tiIndicator')?['id'])}"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "type": "Foreach"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "lessOrEquals": [
+                                                    "@body('Get_Existing_tiIndicator')?['@odata.count']",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Existing_tiIndicator": {
                                     "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
-                                        "body": {
-                                            "action": "alert",
-                                            "description": "Dynatrace Application Security - @{body('Parse_Dynatrace_Attack_JSON')?['attackType']} Attack Detected",
-                                            "expirationDateTime": "@addDays(utcNow(),7)",
-                                            "externalId": "@body('Parse_Dynatrace_Attack_JSON')?['attackId']",
-                                            "networkSourceCidrBlock": "@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}/32",
-                                            "tags": "",
-                                            "targetProduct": "Azure Sentinel",
-                                            "threatType": "WatchList",
-                                            "tlpLevel": "unknown"
-                                        },
                                         "host": {
                                             "connection": {
                                                 "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
                                             }
                                         },
-                                        "method": "post",
-                                        "path": "/beta/security/tiIndicators"
+                                        "method": "get",
+                                        "path": "/beta/security/tiIndicators",
+                                        "queries": {
+                                            "$count": "true",
+                                            "$filter": "externalId eq '@{body('Parse_Dynatrace_Attack_JSON')?['attackId']}' and networkSourceCidrBlock eq '@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}/32'"
+                                        }
                                     }
                                 }
                             },
