@@ -16,7 +16,7 @@ This playbook is intended to be run from a Microsoft Sentinel incident. It will 
 
 The following items are required under the template settings during deployment: 
 
-* The [id](https://github.com/Accelerynt-Security/AS-Azure-AD-Group#azure-active-directory-group-id) of your Azure Active Directory group
+* The [id](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Azure-AD-Group#azure-active-directory-group-id) of your Azure Active Directory group
 
 # 
 ### Setup
