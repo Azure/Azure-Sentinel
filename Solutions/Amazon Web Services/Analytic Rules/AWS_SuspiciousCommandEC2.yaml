@@ -1,0 +1,49 @@
+id: 21702832-aff3-4bd6-a8e1-663b6818503d
+name: Suspicious command sent to EC2
+description: |
+  'An attacker with the necessary permissions could be executing code remotely on a machine and saving the output to his own S3 bucket. Verify this action with the user identity.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+    let command_executed = AWSCloudTrail
+    | where EventName in ("SendCommand","CreateAssociation") and isempty(ErrorCode) and isempty(ErrorMessage)
+    | extend params = tostring(parse_json(RequestParameters).parameters)
+    | extend s3bucketCommand = tostring(parse_json(RequestParameters).outputS3BucketName)
+    | extend s3bucketAssociation = tostring(parse_json(RequestParameters).outputLocation.s3Location.outputS3BucketName)
+    | where isnotempty(params)
+    | extend commandId = tostring(parse_json(ResponseElements).command.commandId)
+    | extend associationId = tostring(parse_json(ResponseElements).associationDescription.associationId)
+    | extend executionId = iff(isnotempty(commandId), commandId, associationId)
+    | extend s3bucket = iff(isnotempty(s3bucketCommand), s3bucketCommand, s3bucketAssociation)
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName;
+    AWSCloudTrail
+    | where EventName == "PutObject" and isempty(ErrorCode) and isempty(ErrorMessage)
+    | extend s3bucket = tostring(parse_json(RequestParameters).bucketName)
+    | mv-expand todynamic(Resources)
+    | extend accountId=tostring(todynamic(Resources.['accountId']))
+    | where Resources contains "accountId" and accountId <> RecipientAccountId
+    | join command_executed on s3bucket
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled
