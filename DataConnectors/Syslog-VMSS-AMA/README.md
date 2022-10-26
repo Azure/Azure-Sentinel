@@ -17,5 +17,5 @@ The ARM template will deploy everything needed:
 The ARM template includes a cloud init to run the required to commands on the VM instances to enable syslog collection.
 
 ## Deploy Ubuntu VMSS
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmariavaladas%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FSyslog-VMSS-AMA%2FazureDeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmariavaladas%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FSyslog-VMSS-AMA%2FazureDeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FSyslog-VMSS-AMA%2FazureDeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FSyslog-VMSS-AMA%2FazureDeploy.json)
