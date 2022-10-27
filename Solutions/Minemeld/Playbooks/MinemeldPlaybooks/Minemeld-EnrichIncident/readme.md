@@ -1,6 +1,6 @@
 # Minemeld-Enrich Incident With Minemeld Indicators Info Playbook
  ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. For each Entity (IP Address, FileHash, URL) available in Sentinel incident, it searches for a match in in Minemeld indicators list
  2. If it finds the match, this playbook adds a rich comment to the incident with all the collected information
 
@@ -22,7 +22,7 @@
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -30,7 +30,7 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for Minemeld Api  Connection (For authorizing the Minemeld API connection, user and password needs to be provided)
 
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky entity mapping of URL ,FileHash or IP Address. 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky entity mapping of URL ,FileHash or IP Address. 
 2. Configure the automation rules to trigger this playbook
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role
