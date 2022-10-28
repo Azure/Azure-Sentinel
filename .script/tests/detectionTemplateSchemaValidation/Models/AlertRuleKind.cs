@@ -2,8 +2,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
 {
     public enum AlertRuleKind
     {
-        Undefined = 0,
-        Scheduled = 1,
-        NRT = 2
+        Scheduled,
+        NRT
     }
 }

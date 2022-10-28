@@ -1,0 +1,541 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Rapid7 Insight VM - Enrich vulnerability info",
+        "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Obtains IPs from the incident. \n 2. Searches asset ids by the IPs.\n 3. Gets vulnerability ids.\n 4. Gets vulnerability information.\n 5. Adds obtained information as a comment to the incident.",
+        "prerequisites": [
+			"1. Prior to the deployment of this playbook, [Rapid7 InsightVM API Connector](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Rapid7InsightVM/Playbooks/azuredeploy.json) needs to be deployed under the same subscription.",
+            "2. Obtain Rapid7 InsightVM API credentials. [Refer to Rapid7 InsightVM API Connector](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Rapid7InsightVM/Playbooks/azuredeploy.json) documentation."
+        ],
+        "lastUpdateTime": "2022-10-08T12:00:00.000Z",
+        "entities": [
+            "IP"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
+		"postDeployment": [
+			"**a. Authorize connections**",
+			"Once deployment is complete, authorize each connection.",
+			"1.Click the Microsoft Sentinel connection resource",
+			"2.Click edit API connection",
+			"3.Click Authorize",
+			"4.Sign in",
+			"5.Click Save",
+			"6.Click the Rapid7 connection resource",
+			"7.Click edit API connection",
+			"8.Provide API key",
+			"9.Click Save",
+			"**b. Configurations in Sentinel**",
+			"1.In Microsoft sentinel, analytical rules should be configured to trigger an incident that contains IPs. In the Entity maping section of the analytics rule creation workflow, IP should be mapped to Address identitfier of the IP entity type. Check the [documentation](https://learn.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.",
+			"2.Configure the automation rules to trigger the playbook. Check the [documentation](https://learn.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?tabs=LAC) to learn more about automation rules."
+		],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        },
+		"releaseNotes": [
+              {
+                "version": "1.0.0",
+                "title": "Rapid7 Insight VM - Enrich vulnerability info",
+                "notes": [
+                  "Initial version"
+                ]
+              }
+            ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Rapid7InsightVM-EnrichVulnerabilityInfo",
+            "type": "String"
+        },
+        "ConnectorName": {
+            "defaultValue": "Rapid7InsightVMCloud",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "Rapid7InsightVMCloudConnectionName": "[concat('rapid7insightvmcloud-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Rapid7InsightVMCloudConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Rapid7InsightVMCloudConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('ConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Rapid7InsightVMCloudConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Append_to_string_variable": {
+                            "inputs": {
+                                "name": "vuln_ids_string",
+                                "value": "@concat(variables('array_start'), join(variables('vuln_ids'), variables('array_delimiter')), variables('array_end'))"
+                            },
+                            "runAfter": {
+                                "Set_variable_vuln_ids": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable"
+                        },
+                        "Create_HTML_table": {
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('vuln info')"
+                            },
+                            "runAfter": {
+                                "For_each_vuln": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_vuln_info": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "For_each_IP": {
+                            "actions": {
+                                "For_each_asset": {
+                                    "actions": {
+                                        "For_each_vulnerability": {
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "inputs": {
+                                                        "name": "vuln_ids",
+                                                        "value": "@items('For_each_vulnerability')['vulnerability_id']"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable"
+                                                }
+                                            },
+                                            "foreach": "@body('Parse_JSON')",
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Parse_JSON": {
+                                            "inputs": {
+                                                "content": "@items('For_each_asset')?['same']",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "vulnerability_id": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "vulnerability_id"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "ParseJson"
+                                        }
+                                    },
+                                    "foreach": "@body('Search_Assets')?['data']",
+                                    "runAfter": {
+                                        "Search_Assets": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Search_Assets": {
+                                    "inputs": {
+                                        "body": {
+                                            "asset": "asset.ipv4 = @{items('For_each_IP')?['Address']}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['rapid7insightvmcloud']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v4/integration/assets",
+                                        "queries": {
+                                            "includeSame": true
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_vuln": {
+                            "actions": {
+                                "Append_to_array_variable_3": {
+                                    "inputs": {
+                                        "name": "vuln info",
+                                        "value": "@outputs('get_vuln_info')"
+                                    },
+                                    "runAfter": {
+                                        "get_vuln_info": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
+                                },
+                                "get_vuln_info": {
+                                    "inputs": {
+                                        "cves": "@items('For_each_vuln')?['cves']",
+                                        "id": "@items('For_each_vuln')?['id']",
+                                        "severity": "@items('For_each_vuln')?['severity']",
+                                        "title": "@items('For_each_vuln')?['title']"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Compose"
+                                }
+                            },
+                            "foreach": "@body('Search_Vulnerabilities')?['data']",
+                            "runAfter": {
+                                "Search_Vulnerabilities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_array_delimiter": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "array_delimiter",
+                                        "type": "string",
+                                        "value": "', '"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_array_end": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_array_end": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "array_end",
+                                        "type": "string",
+                                        "value": "']"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_array_start": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_array_start": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "array_start",
+                                        "type": "string",
+                                        "value": "['"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_vuln_ids_string": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_assets_info": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "assets_info",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_vuln_ids": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vuln_ids",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_assets_info": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_vuln_ids_final": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vuln_ids_final",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_vuln_ids": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_vuln_ids_string": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vuln_ids_string",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_vuln_ids_final": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_vuln_info": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vuln info",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_array_delimiter": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Remove_duplicates_from_vuln_ids": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Append_to_array_variable_2": {
+                                            "inputs": {
+                                                "name": "vuln_ids_final",
+                                                "value": "@items('Remove_duplicates_from_vuln_ids')"
+                                            },
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "contains": [
+                                                        "@variables('vuln_ids_final')",
+                                                        ""
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@variables('vuln_ids')",
+                            "runAfter": {
+                                "For_each_IP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Search_Vulnerabilities": {
+                            "inputs": {
+                                "body": {
+                                    "vulnerability": "id IN @{variables('vuln_ids_string')}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['rapid7insightvmcloud']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v4/integration/vulnerabilities",
+                                "queries": {
+                                    "size": 100
+                                }
+                            },
+                            "runAfter": {
+                                "Append_to_string_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Set_variable_vuln_ids": {
+                            "inputs": {
+                                "name": "vuln_ids",
+                                "value": "@variables('vuln_ids_final')"
+                            },
+                            "runAfter": {
+                                "Remove_duplicates_from_vuln_ids": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "rapid7insightvmcloud": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Rapid7InsightVMCloudConnectionName'))]",
+                                "connectionName": "[variables('Rapid7InsightVMCloudConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('ConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

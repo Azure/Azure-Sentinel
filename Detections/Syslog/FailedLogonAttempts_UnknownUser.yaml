@@ -19,46 +19,30 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-
   let threshold = 15;
   // Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.
   // IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages
   // are aggregated.
-  let authfail = Syslog
-  | where Facility =~ "authpriv"   // looks at authpriv messages
-  | where SyslogMessage contains "authentication failure" and SyslogMessage contains " uid=0"
-  | parse SyslogMessage with * "rhost=" ExternalIP
-  | project TimeGenerated, Computer, ProcessName, HostIP, ExternalIP, ProcessID;  
-  // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. 
-  let userfail = Syslog 
-  | where Facility =~ "authpriv" 
-  | where SyslogMessage contains "user unknown"
-  | project TimeGenerated, Computer, HostIP, ProcessID;
-  // Join the two log messages above
-  let userauthfail = authfail | join (userfail) on Computer, HostIP, ProcessID
-  | project TimeGenerated, Computer, HostIP, ExternalIP, ProcessID ;
-  // Extract the EventTime of the first logon attempt
-  let firstfail = userauthfail
-  | summarize arg_min(TimeGenerated, *) by Computer, ExternalIP
-  | project Computer, ExternalIP, FirstLogonAttempt = TimeGenerated;
-  // Extract the EventTime of the last logon attempt
-  let lastfail = userauthfail
-  | summarize arg_max(TimeGenerated, *) by Computer, ExternalIP
-  | project Computer, ExternalIP, LatestLogonAttempt = TimeGenerated;
-  // Join first and last logon attempt data and calculate the time between them (AttemptPeriodLength).
-  let faildates = firstfail | join (lastfail) on Computer, ExternalIP
-  | project ExternalIP, Computer, FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt;
+  Syslog
+  | where Facility =~ "authpriv"
+  | where SyslogMessage has "authentication failure" and SyslogMessage has " uid=0"
+  | parse SyslogMessage with * "rhost=" RemoteIP
+  | project TimeGenerated, Computer, ProcessName, HostIP, RemoteIP, ProcessID
+  | join kind=innerunique (
+      // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. 
+      Syslog 
+      | where Facility =~ "authpriv"
+      | where SyslogMessage has "user unknown"
+      | project Computer, HostIP, ProcessID
+      ) on Computer, HostIP, ProcessID
   // Count the number of failed logon attempts by External IP and internal machine
-  let totalfails = userauthfail
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TotalLogonAttempts = count() by ExternalIP, Computer, HostIP
-  | project StartTimeUtc, EndTimeUtc, ExternalIP, Computer, HostIP, TotalLogonAttempts;
-  // Combine total attempts with timing data from above
-  let finalfails = totalfails | join (faildates) on Computer, ExternalIP
-  | project StartTimeUtc, EndTimeUtc, SourceAddress = ExternalIP, DestinationHost = Computer, DestinationIP = HostIP, TotalLogonAttempts, FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts
-  | order by DestinationHost asc nulls last;
-  finalfails 
+  | summarize FirstLogonAttempt = min(TimeGenerated), LatestLogonAttempt = max(TimeGenerated), TotalLogonAttempts = count() by Computer, HostIP, RemoteIP
+  // Calculate the time between first and last logon attempt (AttemptPeriodLength)
+  | extend TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt
   | where TotalLogonAttempts >= threshold
-  | extend timestamp = StartTimeUtc, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationIP
+  | project FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts, TotalLogonAttempts, SourceAddress = RemoteIP, DestinationHost = Computer, DestinationAddress = HostIP
+  | sort by DestinationHost asc nulls last
+  | extend timestamp = FirstLogonAttempt, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationAddress
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -68,5 +52,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled
