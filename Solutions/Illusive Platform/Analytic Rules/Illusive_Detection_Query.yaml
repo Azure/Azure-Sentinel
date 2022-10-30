@@ -1,0 +1,50 @@
+id: 1a7dbcf6-21a2-4255-84b2-c8dbbdca4630
+name: Illusive Incidents Analytic Rule
+description: |
+  'Create a Sentinel incident upon a new Illusive alert (incident) and associate all related Illusive events to the relevant Sentinel alert. This is done by filtering and processing Illusive Syslog messages.'
+severity: Medium
+status: Available
+requiredDataConnectors: 
+  - connectorId: Illusive
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  CommonSecurityLog
+  | where DeviceProduct == "illusive"
+  | extend DeviceCustomNumber2 = coalesce(column_ifexists("FieldDeviceCustomNumber2", long(null)),DeviceCustomNumber2)
+  | summarize arg_max(TimeGenerated, *) by DeviceCustomNumber2, AdditionalExtensions, TimeGenerated
+  | extend Category = extract(@'cat=([^;]+)(\;|$)', 1, AdditionalExtensions), HasForensics = extract(@'cs7=([^;]+)(\;|$)', 1, AdditionalExtensions)
+  | extend Category = coalesce(column_ifexists("DeviceEventCategory",""),Category)	
+  | where Category == "illusive:alerts"
+  | extend IncidentId = DeviceCustomNumber2, IncidentURL = DeviceCustomString5
+  | project TimeGenerated, SourceIP, SourceHostName,Computer , DeviceEventClassID ,HasForensics ,SourceUserName, Activity, DeviceAddress,  DestinationHostName, DestinationUserName, IncidentId, IncidentURL
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: SourceHostName
+  - entityType: Host
+    fieldMappings:
+      - identifier: OMSAgentID
+        columnName: Computer
+customDetails:
+  IllusiveIncidentId: IncidentId
+  HasForensics: HasForensics
+  Account: SourceUserName
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: | 
+    Illusive Incident: {{IncidentId}}
+  alertDescriptionFormat: | 
+    Illusive Incident {{IncidentId}} generated at {{TimeGenerated}}
+version: 1.0.2
+kind: Scheduled

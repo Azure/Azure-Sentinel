@@ -1,0 +1,144 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Post Message Slack",
+        "description": "This playbook will post a message in a Slack channel when an Incident is created in Microsoft Sentinel",
+        "prerequisites": "Slack connector will require a Slack account and user credentials",
+        "postDeployment": ["After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."],
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z",
+        "entities": [],
+        "tags": ["Notification" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Yaniv Shasha"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "PostMessageSlack-incident",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "PostMessageSlack",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic Apps resource to be created"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "SlackConnectionName": "[concat('Slack-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SlackConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/slack')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "PostMessageSlack",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SlackConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Post_message": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['slack']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/chat.postMessage",
+                                "queries": {
+                                    "channel": "",
+                                    "text": "New Incident: @{triggerBody()?['object']?['properties']?['title']}\nDescription: @{triggerBody()?['object']?['properties']?['description']}\nIncident Severity: @{triggerBody()?['object']?['properties']?['severity']}\nSubscription: @{triggerBody()?['workspaceInfo']?['SubscriptionId']}\nIncident Entites: @{triggerBody()?['object']?['properties']?['relatedEntities']}\n\nPlease Investigate.\n\n"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "slack": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SlackConnectionName'))]",
+                                "connectionName": "[variables('SlackConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/slack')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
