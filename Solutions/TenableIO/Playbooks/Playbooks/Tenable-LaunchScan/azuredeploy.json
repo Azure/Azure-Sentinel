@@ -1,45 +1,42 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-  "metadata": {
-    "title": "Create-AzureDevOpsTask-alert-trigger",
-    "version": "1.0.0",
-    "description": "This playbook will create the Azure DevOps task filled with the Microsoft Sentinel incident details.  ",
-    "prerequisites": [ "None" ],
-    "lastUpdateTime": "2022-07-25T00:00:00.000Z",
-    "entities": [],
-    "tags": [],
-    "support": {
-      "tier": "Community"
+    "metadata": {
+        "title": "Tenable.io - Launch Scan",
+        "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Launches scan by scan id provided during the playbook deployment.\n 2. Adds information about launched scan as a comment to the incident.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, Tenable Vulnerability Management API Connector needs to be deployed under the same subscription.",
+            "2. Tenable API credentials credentials are required. Refer to the Tenable Vulnerability Management API Connector documentation."
+        ],
+        "lastUpdateTime": "2022-09-29T12:00:00.000Z",
+        "entities": [],
+        "tags": [
+            "Enrichment"
+        ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
     },
-    "categories": {
-      "domains": [ "Security - Automation (SOAR)" ]
-    },
-    "author": {
-      "name": "Nicholas DiCola"
-    },
-    "releaseNotes": [
-      {
-        "version": "1.0.0",
-        "title": "Create AzureDevOpsTask Alert Trigger",
-        "notes": [
-          "Initial version"
-        ]
-      }
-    ],
-    "source": {
-      "kind": "Community"
-    }
-  },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Create-AzureDevOpsTask-alert-trigger",
+            "defaultValue": "Tenable-LaunchScan",
+            "type": "String"
+        },
+        "ScanId": {
+            "defaultValue": "",
+            "type": "String"
+        },
+        "TenableVulnerabilityManagementConnectorName": {
+            "defaultValue": "TenableVulnerabilityManagement",
             "type": "string"
         }
     },
     "variables": {
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "AzureDevOpsConnectionName": "[concat('azuredevops-', parameters('PlaybookName'))]"
+        "TenableVMConnectionName": "[concat('tenablevm-connection-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -60,14 +57,14 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('AzureDevOpsConnectionName')]",
+            "name": "[variables('TenableVMConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[variables('AzureDevOpsConnectionName')]",
-                "customParameterValues": {
-                },
+                "displayName": "[variables('TenableVMConnectionName')]",
+                "customParameterValues": {},
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/visualstudioteamservices')]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('TenableVulnerabilityManagementConnectorName'))]"
                 }
             }
         },
@@ -81,7 +78,7 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureDevOpsConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('TenableVMConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -90,13 +87,12 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "$connections": {
-                            "defaultValue": {
-                            },
+                            "defaultValue": {},
                             "type": "Object"
                         }
                     },
                     "triggers": {
-                        "Microsoft_Sentinel_alert": {
+                        "Microsoft_Sentinel_incident": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "body": {
@@ -107,76 +103,82 @@
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "path": "/subscribe"
+                                "path": "/incident-creation"
                             }
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V2)": {
+                        "Add_comment_to_incident_(V3)": {
                             "runAfter": {
-                                "Create_a_work_item": [
+                                "Launch_scan": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "Value": "Azure DevOps Task created: @{body('Create_a_work_item')?['url']}"
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>Scan @{variables('scan_id')} was launched.</p>"
                                 },
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
-                                "method": "put",
-                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent(triggerBody()?['AlertType'])}/@{encodeURIComponent(triggerBody()?['ProviderAlertId'])}"
+                                "method": "post",
+                                "path": "/Incidents/Comment"
                             }
                         },
-                        "Create_a_work_item": {
+                        "Initialize_variable_scan_id": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "scan_id",
+                                        "type": "string",
+                                        "value": "[parameters('ScanId')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Launch_scan": {
                             "runAfter": {
+                                "Initialize_variable_scan_id": [
+                                    "Succeeded"
+                                ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": {
-                                    "description": "Description: @{triggerBody()?['Description']}\nSeverity: @{triggerBody()?['Severity']}\nWorkspace ID: @{triggerBody()?['WorkspaceId']}\n",
-                                    "dynamicFields": {
-                                        "System.Tags": "Sentinel"
-                                    },
-                                    "title": "New Microsoft Sentinel Incident: @{triggerBody()?['AlertDisplayName']}"
-                                },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['visualstudioteamservices']['connectionId']"
+                                        "name": "@parameters('$connections')['tenablevm']['connectionId']"
                                     }
                                 },
-                                "method": "patch",
-                                "path": "/@{encodeURIComponent('DevOpsProject123')}/_apis/wit/workitems/$@{encodeURIComponent('Task')}",
-                                "queries": {
-                                    "account": "DevOpsOrg123"
-                                }
+                                "method": "post",
+                                "path": "/scans/@{encodeURIComponent(variables('scan_id'))}/launch"
                             }
                         }
                     },
-                    "outputs": {
-                    }
+                    "outputs": {}
                 },
                 "parameters": {
                     "$connections": {
                         "value": {
                             "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                                 "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
                                 "connectionProperties": {
                                     "authentication": {
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
                             },
-                            "visualstudioteamservices": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureDevOpsConnectionName'))]",
-                                "connectionName": "[variables('AzureDevOpsConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/visualstudioteamservices')]"
+                            "tenablevm": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TenableVMConnectionName'))]",
+                                "connectionName": "[variables('TenableVMConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('TenableVulnerabilityManagementConnectorName'))]"
                             }
                         }
                     }
