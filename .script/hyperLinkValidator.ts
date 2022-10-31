@@ -12,6 +12,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
   if (links) {
     for (const link of links) {
+      console.log(link);
       //check if the link is valid
       const isValid = await isValidLink(link);
       if (!isValid) {
