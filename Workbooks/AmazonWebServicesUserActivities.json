@@ -1,0 +1,811 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## AWS user activities"
+      },
+      "name": "text - 1"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "crossComponentResources": [],
+        "parameters": [
+          {
+            "id": "b075dcf3-76b9-412a-8094-f7dfe264b4a1",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 1209600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 0"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Signin and login events"
+      },
+      "name": "text - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| project TimeGenerated, UserIdentityArn, SourceIpAddress, LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), EventName, UserIdentityUserName\r\n| where LoginResult != \"\"\r\n| summarize count() by TimeGenerated, LoginResult, EventName, UserIdentityUserName, bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Sign-in events",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart"
+      },
+      "customWidth": "50",
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\r\n| where LoginResult != \"\";\r\nlet appData = data\r\n| summarize TotalCount = count() by LoginResult\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by LoginResult\r\n    | project-away TimeGenerated) on LoginResult\r\n| order by TotalCount desc, LoginResult asc\r\n| project LoginResult, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by EventName , LoginResult\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by LoginResult, EventName\r\n    | project-away TimeGenerated) on LoginResult, EventName\r\n| order by TotalCount desc, LoginResult asc\r\n| project LoginResult, EventName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on LoginResult\r\n| project Id, Name = EventName, Type = 'EventName', ['LoginResults Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = LoginResult, Type = 'LoginResult', ['LoginResults Count'] = TotalCount,  Trend)\r\n| order by ['LoginResults Count'] desc, Name asc",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Sign-in events results",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 18,
+              "formatOptions": {
+                "showIcon": true,
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Success",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Failure",
+                    "representation": "failed",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "Blank",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "LoginResults Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blueDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "min": 0,
+                "palette": "purple",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"login\" or EventName contains \"signin\"\r\n| extend Result = tostring(parse_json(ResponseElements).ConsoleLogin)\r\n| where Result != \"\"\r\n| summarize Success = sum(Result == \"Success\"), Failure = sum(Result == \"Failure\") by UserIdentityUserName, UserIdentityAccountId, SourceIpAddress, EventName\r\n//| summarize NumberOfIPs = count() by UserIdentityUserName, UserIdentityAccountId, Success, Failure, EventName\r\n| sort by Failure desc \r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "User sign-ins, by failure rate, and IP addresses",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserIdentityUserName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityAccountId",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "EventName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "Success",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "greenRed",
+                "showIcon": true,
+                "aggregation": "Sum"
+              }
+            },
+            {
+              "columnMatch": "Failure",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "showIcon": true,
+                "aggregation": "Sum"
+              }
+            },
+            {
+              "columnMatch": "NumberOfIPs",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true,
+                "aggregation": "Unique"
+              }
+            },
+            {
+              "columnMatch": "$gen_group",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "hierarchySettings": {
+            "treeType": 1,
+            "groupBy": [
+              "UserIdentityUserName"
+            ]
+          },
+          "sortBy": [
+            {
+              "itemKey": "$gen_heatmap_Failure_5",
+              "sortOrder": 2
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"login\" or EventName contains \"signin\"\r\n| summarize count() by Event = strcat(EventTypeName, \": \", EventName), bin(TimeGenerated, {TimeRange:grain})\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Console and API signin events over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName contains \"Login\"\r\n| where tostring(parse_json(ResponseElements).ConsoleLogin) == \"Failure\"\r\n| summarize count() by UserIdentityUserName, UserIdentityArn, SourceIpAddress, ErrorMessage, UserAgent, AWSRegion,  TimeGenerated ",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Failed sign-ins",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserIdentityUserName",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityArn",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ErrorMessage",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserAgent",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AWSRegion",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6,
+              "formatOptions": {
+                "showIcon": true
+              },
+              "dateFormat": {
+                "formatName": "fullDateTimePattern"
+              }
+            },
+            {
+              "columnMatch": "count_",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "redDark",
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "name": "query - 8"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n### Activities, by user types"
+      },
+      "name": "text - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where UserIdentityType == \"IAMUser\"\r\n| summarize NumberOfEvents = count() by UserIdentityUserName, bin(TimeGenerated, {TimeRange:grain})\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Active users",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "33",
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| summarize NumberOfEvents = count() by UserIdentityAccountId , bin(TimeGenerated, {TimeRange:grain})\r\n| where UserIdentityAccountId != \"\"",
+        "size": 0,
+        "exportDefaultValue": "*",
+        "exportToExcelOptions": "visible",
+        "title": "Active account IDs",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "33",
+      "name": "query - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| summarize count() by UserIdentityType, bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "User identity types",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "33",
+      "name": "query - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n//| where UserIdentityAccountId != \"\"\r\n//| where UserIdentityUserName != \"\"\r\n| summarize NumberOfEvents = count() by UserIdentityAccountId, UserIdentityUserName, EventName,SourceIpAddress, UserIdentityType, EventTypeName, TimeGenerated\r\n| order by NumberOfEvents desc",
+        "size": 0,
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Summary",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserIdentityAccountId",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityUserName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "EventName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityType",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "EventTypeName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "NumberOfEvents",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "purple",
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 1000,
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where EventName == \"GetCallerIdentity\"\r\n| where UserIdentityType == \"AssumedRole\" \r\n| summarize Count = count() by SourceIpAddress, UserIdentityAccountId, UserIdentityPrincipalid, AWSRegion, TimeGenerated\r\n| sort by Count desc nulls last ",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Suspicious assumed-role account reconnaissance",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SourceIpAddress",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityAccountId",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserIdentityPrincipalid",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AWSRegion",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "redDark",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 11"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n### Region activities"
+      },
+      "name": "text - 19"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = AWSCloudTrail;\r\nlet appData = data\r\n| summarize TotalCount = count() by AWSRegion\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by AWSRegion\r\n    | project-away TimeGenerated) on AWSRegion\r\n| order by TotalCount desc, AWSRegion asc\r\n| project AWSRegion, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by EventName , AWSRegion\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by AWSRegion, EventName\r\n    | project-away TimeGenerated) on AWSRegion, EventName\r\n| order by TotalCount desc, AWSRegion asc\r\n| project AWSRegion, EventName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on AWSRegion\r\n| project Id, Name = EventName, Type = 'EventName', ['AWSRegions Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = AWSRegion, Type = 'AWSRegion', ['AWSRegions Count'] = TotalCount,  Trend)\r\n| order by ['AWSRegions Count'] desc, Name asc",
+        "size": 0,
+        "exportParameterName": "RegionFilter",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Activities, by region - click to filter",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AWSRegions Count",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "orange",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 10,
+              "formatOptions": {
+                "min": 0,
+                "palette": "lightBlue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 13"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({RegionFilter});\r\nAWSCloudTrail\r\n| where details.Type == \"*\" or (details.Type == \"EventName\" and details.Name == EventName) or (details.Type == \"AWSRegion\" and details.Name == AWSRegion)\r\n| summarize count() by AWSRegion, bin(TimeGenerated, {TimeRange:grain})\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Activities, by region over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "linechart"
+      },
+      "customWidth": "50",
+      "name": "query - 12"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n### User agent"
+      },
+      "name": "text - 18"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| summarize Count = count() by UserAgent\r\n| order by Count\r\n",
+        "size": 0,
+        "exportFieldName": "UserAgent",
+        "exportParameterName": "UserAgent",
+        "exportDefaultValue": "All",
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "User agent activities - click to filter",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "UserAgent",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blueDark",
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "40",
+      "name": "query - 16"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AWSCloudTrail\r\n| where '{UserAgent}' == UserAgent or '{UserAgent}' == \"All\"\r\n| summarize Count = count() by UserAgent, TimeGenerated",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "User agent activities over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "linechart"
+      },
+      "customWidth": "60",
+      "name": "query - 17"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-AWSUserActivities",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
