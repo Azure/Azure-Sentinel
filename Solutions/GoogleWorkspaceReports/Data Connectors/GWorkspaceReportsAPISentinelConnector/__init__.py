@@ -58,6 +58,10 @@ def get_credentials():
     if pickle_string:
         try:
             creds = pickle.loads(pickle_string)
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                    logging.info("Token refreshed!!")
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
     else:
