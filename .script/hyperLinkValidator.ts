@@ -16,7 +16,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
       const isValid = await isValidLink(link);
       if (!isValid) {
         logger.logError(`Invalid link: ${link}`);
-        return ExitCode.FAILURE;
+        throw new Error();
       }
     }
   }
