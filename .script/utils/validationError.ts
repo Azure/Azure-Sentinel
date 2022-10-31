@@ -44,3 +44,9 @@ export class SampleDataValidationError extends Error implements ValidationError 
     super(message);
   }
 }
+export class MetadataValidationError extends Error implements ValidationError {
+  public name = "MetadataValidationError";
+  constructor(message?: string) {
+    super(message);
+  }
+}
