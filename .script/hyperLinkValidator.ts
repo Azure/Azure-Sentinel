@@ -20,7 +20,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
         throw new Error();
       }
     }
-  return ExitCode.SUCCESS;
+ 
   }
 
   //create a function to check if the link is valid
@@ -35,6 +35,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
       return false;
     }
   }    
+  return ExitCode.SUCCESS;
   }
 
 
