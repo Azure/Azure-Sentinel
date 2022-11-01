@@ -2,7 +2,6 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
-import {XMLHttpRequest} from "xmlhttprequest";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
 
@@ -27,11 +26,9 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   //create a function to check if the link is valid
   async function isValidLink(link: string): Promise<boolean> {
     try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('HEAD', link, false);
-            xhr.send();
-            console.log(xhr.status);
-            return xhr.status==200;
+      const response = await fetch(link);
+      console.log('valid link')
+      return response.ok;
     } catch (error) {
       console.log('invalid link')
       console.log(error);
