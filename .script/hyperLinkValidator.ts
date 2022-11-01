@@ -20,18 +20,21 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
         throw new Error();
       }
     }
+  return ExitCode.SUCCESS;
   }
 
   //create a function to check if the link is valid
   async function isValidLink(link: string): Promise<boolean> {
     try {
       const response = await fetch(link);
+      console.log('valid link')
       return response.ok;
     } catch (error) {
+      console.log('invalid link')
+      console.log(error);
       return false;
     }
   }    
-  return ExitCode.SUCCESS;
   }
 
 
