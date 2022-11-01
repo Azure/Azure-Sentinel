@@ -20,13 +20,13 @@ log_type = 'NonameAPISecurityAlert'
 # An example JSON web monitor object
 json_data = [{
   "data": {
-    "host": "AzureAPIMhost",
-    "id": "randomguidinteger",
-    "method": "GET POST PUT PATCH etc",
-    "path": "/api/url/path?queryparams",
-    "self": "fqdn host and path and params",
-    "ts": "2022-01-13T15:55:24.000Z",
-    "type": "New API"
+    "host": nnhostname,
+    "id": nnguid,
+    "method": nnverb,
+    "path": nnpath,
+    "self": nnself,
+    "ts": nntimestamp,
+    "type": nnalerttype
   },
   "type": "change"
 }]
