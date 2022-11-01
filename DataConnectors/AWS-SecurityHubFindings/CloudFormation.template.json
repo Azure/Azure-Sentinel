@@ -1,0 +1,93 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Stack to provision resources in AWS for a Security Hub integration.",
+    "Parameters": {
+        "SecurityHubIntegrationRoleName": {
+            "Type": "String",
+            "Description": "Integration role with the required permissions for Security Hub, the default value is recommended.",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "SecurityHubIntegrationRole"
+        },
+        "ClientId": {
+            "Type": "String",
+            "Description": "Client ID for the Managed Identity in the Azure Function in the format of a GUID.",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "<ClientID>"
+        },
+        "TenantId": {
+            "Type": "String",
+            "Description": "Identity Provider Id in the format of a GUID.",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "<TenantID>"
+        },
+        "IdentityProviderThumbprint": {
+            "Type": "String",
+            "Description": "Identity Provider thumbprint.",
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "Default": "<Thumbprint>"
+        }
+    },
+    "Resources": {
+        "SecurityHubIntegrationOpenIdConnectIdentityProvider": {
+            "Type": "AWS::IAM::OIDCProvider",
+            "Properties": {
+                "ClientIdList": [
+                    { "Ref": "ClientId"}
+                ],
+                "ThumbprintList" : [ { "Ref": "IdentityProviderThumbprint" } ],
+                "Url": { "Fn::Sub": "https://sts.windows.net/${TenantId}/" },
+                "Tags" : [ {
+                    "Key" : "Name",
+                        "Value" : "SecurityHubIntegrationOpenIdConnectIdentityProvider"
+                    },
+                    {
+                        "Key" : "Service",
+                        "Value" : "SecurityHubIntegration"
+                    }]
+            }
+        },
+        "SecurityHubIntegrationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
+                ],
+                "AssumeRolePolicyDocument": {
+                    "Fn::Sub": "{\n  \"Version\": \"2012-10-17\",\n  \"Statement\": [\n    {\n      \"Effect\": \"Allow\",\n      \"Principal\": {\n        \"Federated\": \"arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/${TenantId}/\"\n      },\n      \"Action\": \"sts:AssumeRoleWithWebIdentity\",\n      \"Condition\": {\n        \"StringEquals\": {\n          \"sts.windows.net/${TenantId}/:aud\": \"${ClientId}\"\n        }\n      }\n    }\n  ]\n}\n"
+                },
+                "RoleName": {
+                    "Ref": "SecurityHubIntegrationRoleName"
+                },
+                "Tags" : [ {
+                    "Key" : "Name",
+                    "Value" : "SecurityHubIntegrationRole"
+                    },
+                    {
+                        "Key" : "Service",
+                        "Value" : "SecurityHubIntegration"
+                    }]
+            }
+        }
+    },
+    "Outputs": {
+        "SecurityHubIntegrationRoleARN": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecurityHubIntegrationRole",
+                    "Arn"
+                ]
+            },
+            "Description": "Security Hub Integration Role ARN."
+        },
+        
+        "SecurityHubIntegrationOpenIdConnectIdentityProvider": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecurityHubIntegrationOpenIdConnectIdentityProvider",
+                    "Arn"
+                ]
+            },
+            "Description": "Security Hub Integration Open ID Connect Identity Provider ARN."
+        }
+    }
+}
