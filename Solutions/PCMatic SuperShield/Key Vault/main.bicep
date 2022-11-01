@@ -21,12 +21,12 @@ param objectId string
 
 @description('Specifies the permissions to keys in the vault. Valid values are: all, encrypt, decrypt, wrapKey, unwrapKey, sign, verify, get, list, create, update, import, delete, backup, restore, recover, and purge.')
 param keysPermissions array = [
-  'list'
+  'all'
 ]
 
 @description('Specifies the permissions to secrets in the vault. Valid values are: all, get, list, set, delete, backup, restore, recover, and purge.')
 param secretsPermissions array = [
-  'list'
+  'all'
 ]
 
 @description('Specifies whether the key vault is a standard vault or a premium vault.')
@@ -36,12 +36,12 @@ param secretsPermissions array = [
 ])
 param skuName string = 'standard'
 
-@description('Specifies the name of the secret that you want to create.')
+@description('API username/email address entered when user was created in PC Matic Portal.')
 param secretName string
 
-@description('Specifies the value of the secret that you want to create.')
+@description('API password entered when user was created in PC Matic Portal.')
 @secure()
-param secretValue string
+param apiCredentials string
 
 resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
   name: keyVaultName
@@ -76,6 +76,6 @@ resource secret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
   parent: kv
   name: secretName
   properties: {
-    value: secretValue
+    value: apiCredentials
   }
 }
