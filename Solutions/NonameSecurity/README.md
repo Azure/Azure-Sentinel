@@ -1,5 +1,4 @@
-Noname Security integraton for Azure Sentinel
+Noname API Security Solution for Microsoft Sentinel
 
-Noname workflow integration to Sentinel
-to send alerts via HTTP POST or Azure Monitor Private Link Services 
-
+Noname Security Workflow integration to Microsoft Sentinel
+to send alerts via Azure Monitor API POST or Azure Monitor Private Link Services 
