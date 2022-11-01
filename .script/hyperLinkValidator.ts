@@ -2,6 +2,7 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
+import {XMLHttpRequest} from "xmlhttprequest";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
 
