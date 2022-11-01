@@ -26,9 +26,11 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   //create a function to check if the link is valid
   async function isValidLink(link: string): Promise<boolean> {
     try {
-      const response = await fetch(link);
-      console.log('valid link')
-      return response.ok;
+            var xhr = new XMLHttpRequest();
+            xhr.open('HEAD', link, false);
+            xhr.send();
+            console.log(xhr.status);
+            return xhr.status==200;
     } catch (error) {
       console.log('invalid link')
       console.log(error);
