@@ -35,13 +35,13 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "uiConfigId1": "AzureStorageAccount",
+    "uiConfigId1": "AzureStorageAccount_CCP",
     "_uiConfigId1": "[variables('uiConfigId1')]",
-    "dataConnectorContentId1": "AzureStorageAccount",
+    "dataConnectorContentId1": "AzureStorageAccount_CCP",
     "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
     "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
     "_dataConnectorId1": "[variables('dataConnectorId1')]",
-    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
     "dataConnectorVersion1": "1.0.0"
   },
   "resources": [
@@ -72,7 +72,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Azure Storage data connector with template version 2.0.0",
+        "description": "Azure Storage data connector with template version 2.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -92,6 +92,11 @@
                   "publisher": "Microsoft",
                   "descriptionMarkdown": "Azure Storage account is a cloud solution for modern data storage scenarios. It contains all your data objects: blobs, files, queues, tables, and disks. This connector lets you stream Azure Storage accounts diagnostics logs into your Microsoft Sentinel workspace, allowing you to continuously monitor activity in all your instances, and detect malicious activity in your organization.",
                   "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "AzureStorageAccount",
+                      "baseQuery": "AzureMetrics| where ResourceProvider == \"MICROSOFT.STORAGE\""
+                    },
                     {
                       "metricName": "Total data received",
                       "legend": "StorageBlobLogs",
@@ -117,6 +122,7 @@
                     {
                       "type": "IsConnectedQuery",
                       "value": [
+                        "AzureMetrics| where ResourceProvider == \"MICROSOFT.STORAGE\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
                         "StorageBlobLogs\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
                         "StorageQueueLogs\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
                         "StorageTableLogs\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
@@ -125,6 +131,10 @@
                     }
                   ],
                   "dataTypes": [
+                    {
+                      "name": "AzureMetrics (Azure Storage)",
+                      "lastDataReceivedQuery": "AzureMetrics| where ResourceProvider == \"MICROSOFT.STORAGE\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
                     {
                       "name": "StorageBlobLogs",
                       "lastDataReceivedQuery": "StorageBlobLogs\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
@@ -182,6 +192,7 @@
       "dependsOn": [
         "[variables('_dataConnectorId1')]"
       ],
+      "location": "[parameters('workspace-location')]",
       "properties": {
         "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
         "contentId": "[variables('_dataConnectorContentId1')]",
@@ -218,6 +229,11 @@
           "graphQueries": [
             {
               "metricName": "Total data received",
+              "legend": "AzureStorageAccount",
+              "baseQuery": "AzureMetrics| where ResourceProvider == \"MICROSOFT.STORAGE\""
+            },
+            {
+              "metricName": "Total data received",
               "legend": "StorageBlobLogs",
               "baseQuery": "StorageBlobLogs"
             },
@@ -239,6 +255,10 @@
           ],
           "dataTypes": [
             {
+              "name": "AzureMetrics (Azure Storage)",
+              "lastDataReceivedQuery": "AzureMetrics| where ResourceProvider == \"MICROSOFT.STORAGE\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
               "name": "StorageBlobLogs",
               "lastDataReceivedQuery": "StorageBlobLogs\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
             },
@@ -259,6 +279,7 @@
             {
               "type": "IsConnectedQuery",
               "value": [
+                "AzureMetrics| where ResourceProvider == \"MICROSOFT.STORAGE\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
                 "StorageBlobLogs\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
                 "StorageQueueLogs\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
                 "StorageTableLogs\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
@@ -273,8 +294,9 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.0",
+        "version": "2.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
