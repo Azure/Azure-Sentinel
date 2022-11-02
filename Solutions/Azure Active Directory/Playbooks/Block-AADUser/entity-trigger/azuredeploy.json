@@ -3,10 +3,10 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Block AAD user - Entity",
-        "description": "For each account entity included in the incident, this playbook will disable the user in Azure Active Directoy, add a comment to the incident that contains this alert and notify manager if available. Note: This playbook will not disable admin user!",
+        "description": "This playbook can be invoked on any account entity, and this will disable the user (account) in Azure Active Directoy, add a comment to the incident that contains this alert (incase invoked in incident context ) and notify manager if available. Note: This playbook will not disable admin user!",
         "prerequisites": [ "None" ],
         "postDeployment": [ "1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity.", "2. Grant User.Read.All, User.ReadWrite.All, Directory.Read.All, Directory.ReadWrite.All permissions to the managed identity.", "3. Authorize Azure AD and Office 365 Outlook Logic App connections." ],
-        "lastUpdateTime": "2022-07-11T00:00:00.000Z",
+        "lastUpdateTime": "2022-11-02T00:00:00.000Z",
         "entities": [ "Account" ],
         "tags": [ "Remediation" ],
         "support": {
@@ -126,26 +126,44 @@
                             "actions": {
                                 "Condition_-_if_user_have_manager": {
                                     "actions": {
-                                        "Add_comment_to_incident_-_with_manager_-_no_admin": {
+                                        "Condition_2": {
+                                            "actions": {
+                                                "Add_comment_to_incident_-_with_manager_-_no_admin": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                            "message": "<p>User @{triggerBody()?['Entity']?['properties']?['Name']} &nbsp;(UPN - @{variables('AccountDetails')}) was disabled in AAD via playbook Block-AADUser. Manager (@{body('Parse_JSON_-_get_user_manager')?['userPrincipalName']}) is notified.</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                }
+                                            },
                                             "runAfter": {
                                                 "Get_user_-_details": [
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": {
-                                                    "incidentArmId": "@triggerBody()?['IncidentArmID']",
-                                                    "message": "<p>User @{triggerBody()?['Entity']?['properties']?['Name']} &nbsp;(UPN - @{variables('AccountDetails')}) was disabled in AAD via playbook Block-AADUser. Manager (@{body('Parse_JSON_-_get_user_manager')?['userPrincipalName']}) is notified.</p>"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@triggerBody()?['IncidentArmID']",
+                                                                "@null"
+                                                            ]
+                                                        }
                                                     }
-                                                },
-                                                "method": "post",
-                                                "path": "/Incidents/Comment"
-                                            }
+                                                ]
+                                            },
+                                            "type": "If"
                                         },
                                         "Get_user_-_details": {
                                             "runAfter": {},
@@ -162,7 +180,7 @@
                                         },
                                         "Send_an_email_-_to_manager_-_no_admin": {
                                             "runAfter": {
-                                                "Add_comment_to_incident_-_with_manager_-_no_admin": [
+                                                "Condition_2": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -191,22 +209,40 @@
                                     },
                                     "else": {
                                         "actions": {
-                                            "Add_comment_to_incident_-_no_manager_-_no_admin": {
-                                                "runAfter": {},
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": {
-                                                        "incidentArmId": "@triggerBody()?['IncidentArmID']",
-                                                        "message": "<p>User @{triggerBody()?['Entity']?['properties']?['Name']} (UPN - @{variables('AccountDetails')}) was disabled in AAD via playbook Block-AADUser. Manager has not been notified, since it is not found for this user!</p>"
-                                                    },
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            "Condition_3": {
+                                                "actions": {
+                                                    "Add_comment_to_incident_-_no_manager_-_no_admin": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                                "message": "<p>User @{triggerBody()?['Entity']?['properties']?['Name']} (UPN - @{variables('AccountDetails')}) was disabled in AAD via playbook Block-AADUser. Manager has not been notified, since it is not found for this user!</p>"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/Incidents/Comment"
                                                         }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/Incidents/Comment"
-                                                }
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "not": {
+                                                                "equals": [
+                                                                    "@triggerBody()?['IncidentArmID']",
+                                                                    "@null"
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
                                             }
                                         }
                                     },
@@ -233,7 +269,7 @@
                                             "type": "ManagedServiceIdentity"
                                         },
                                         "method": "GET",
-                                        "uri": "https://graph.microsoft.com/v1.0/users/@{variables('AccountDetails')}/manager"
+                                        "uri": "https: //graph.microsoft.com/v1.0/users/@{variables('AccountDetails')}/manager"
                                     }
                                 },
                                 "Parse_JSON_-_get_user_manager": {

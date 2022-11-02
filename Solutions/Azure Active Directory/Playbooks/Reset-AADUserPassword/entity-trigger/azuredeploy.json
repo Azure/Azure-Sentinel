@@ -7,7 +7,7 @@
         "prerequisites": [ "None" ],
         "postDeployment": [ "1. Assign Password Administrator permission to managed identity.", "2. Assign Microsoft Sentinel Responder permission to managed identity.", "3. Authorize Office 365 Outlook connection" ],
         "prerequisitesDeployTemplateFile": "",
-        "lastUpdateTime": "2022-07-11T00:00:00.000Z",
+        "lastUpdateTime": "2022-01-02T00:00:00.000Z",
         "entities": [ "Account" ],
         "tags": [ "Remediation" ],
         "support": {
@@ -69,26 +69,44 @@
                     "actions": {
                         "Condition_-_is_manager_available": {
                             "actions": {
-                                "Add_comment_to_incident_-_manager_available": {
+                                "Condition_2": {
+                                    "actions": {
+                                        "Add_comment_to_incident_-_manager_available": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                    "message": "<p>User @{variables('AccountDetails')} password was reset in AAD and their manager @{body('Parse_JSON_-_HTTP_-_get_manager')?['userPrincipalName']} was contacted using playbook.</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
                                     "runAfter": {
                                         "Send_an_email_-_to_manager_with_password_details": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['IncidentArmID']",
-                                            "message": "<p>User @{variables('AccountDetails')} password was reset in AAD and their manager @{body('Parse_JSON_-_HTTP_-_get_manager')?['userPrincipalName']} was contacted using playbook.</p>"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@triggerBody()?['IncidentArmID']",
+                                                        "@null"
+                                                    ]
+                                                }
                                             }
-                                        },
-                                        "method": "post",
-                                        "path": "/Incidents/Comment"
-                                    }
+                                        ]
+                                    },
+                                    "type": "If"
                                 },
                                 "Parse_JSON_-_HTTP_-_get_manager": {
                                     "runAfter": {},
@@ -136,22 +154,40 @@
                             },
                             "else": {
                                 "actions": {
-                                    "Add_comment_to_incident_-_manager_not_available": {
-                                        "runAfter": {},
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "body": {
-                                                "incidentArmId": "@triggerBody()?['IncidentArmID']",
-                                                "message": "<p>User @{variables('AccountDetails')} password was reset in AAD but the user doesn't have a manager.<br>\n<br>\nThe temporary password is: @{variables('Password')}<br>\n<br>\nThe user will be required to reset this password upon login.</p>"
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    "Condition": {
+                                        "actions": {
+                                            "Add_comment_to_incident_-_manager_not_available": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['IncidentArmID']",
+                                                        "message": "<p>User @{variables('AccountDetails')} password was reset in AAD but the user doesn't have a manager.<br>\n<br>\nThe temporary password is: @{variables('Password')}<br>\n<br>\nThe user will be required to reset this password upon login.</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
                                                 }
-                                            },
-                                            "method": "post",
-                                            "path": "/Incidents/Comment"
-                                        }
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "expression": {
+                                            "and": [
+                                                {
+                                                    "not": {
+                                                        "equals": [
+                                                            "@triggerBody()?['IncidentArmID']",
+                                                            "@null"
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "type": "If"
                                     }
                                 }
                             },
