@@ -11,6 +11,8 @@ The Logic App creates and uses a Managed System Identity (MSI) to update the Mic
 
 Assign RBAC 'Microsoft Sentinel Responder' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
 
+To create new Threat Indicators for Microsoft Threat Intelligence we leverage the Microsoft Graph Security connector, please ensure you meet the prerequisites to connect with The [Microsoft Graph Security connector](https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/#prerequisites-to-connect-with-the-microsoft-graph-security-connector)
+
 ## Initial Setup
 
 Logic App is utilitzed by Automation rules. You must setup an Automation rule. Go to the Automation Rules blade in Azure Sentinel. 
