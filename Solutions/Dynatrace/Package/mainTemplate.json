@@ -903,19 +903,6 @@
                 "description": "Alert trigger"
               }
             },
-            "LogAnalyticsWorkspaceName": {
-              "defaultValue": "<Enter Log Analytics Workspace name>",
-              "type": "string",
-              "metadata": {
-                "description": "Log Analytics Workspace Name"
-              }
-            },
-            "workspace-location": {
-              "type": "string",
-              "metadata": {
-                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
-              }
-            },
             "DynatraceEnvironmentUrl": {
               "defaultValue": "<Dynatrace environment url>",
               "type": "string",
@@ -931,13 +918,11 @@
             }
           },
           "variables": {
-            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
+            "MicrosoftSentinelConnectionName": "[[concat('microsoftsentinel-', parameters('PlaybookName'))]",
             "MicrosoftGraphSecurityConnectionName": "[[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]",
-            "automationRuleName": "[[concat('automation-', parameters('PlaybookName'))]",
-            "alertRules": "[[resourceId('Microsoft.OperationalInsights/workspaces/providers/alertRules', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights', '1b0b2065-8bac-5a00-83c4-1b58f69ac212')]",
-            "connection-1": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'azuresentinel')]",
+            "connection-1": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'azuresentinel')]",
             "_connection-1": "[[variables('connection-1')]",
-            "connection-2": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'microsoftgraphsecurity')]",
+            "connection-2": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'microsoftgraphsecurity')]",
             "_connection-2": "[[variables('connection-2')]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
             "workspace-name": "[parameters('workspace')]",
@@ -946,11 +931,11 @@
           "resources": [
             {
               "type": "Microsoft.Web/connections",
-              "apiVersion": "2018-07-01-preview",
-              "name": "[[variables('AzureSentinelConnectionName')]",
-              "location": "[[parameters('workspace-location')]",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('MicrosoftSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
               "properties": {
-                "displayName": "[[variables('AzureSentinelConnectionName')]",
+                "displayName": "[[variables('MicrosoftSentinelConnectionName')]",
                 "parameterValueType": "Alternative",
                 "api": {
                   "id": "[[variables('_connection-1')]"
@@ -959,9 +944,9 @@
             },
             {
               "type": "Microsoft.Web/connections",
-              "apiVersion": "2018-07-01-preview",
+              "apiVersion": "2016-06-01",
               "name": "[[variables('MicrosoftGraphSecurityConnectionName')]",
-              "location": "[[parameters('workspace-location')]",
+              "location": "[[variables('workspace-location-inline')]",
               "properties": {
                 "displayName": "[[variables('MicrosoftGraphSecurityConnectionName')]",
                 "api": {
@@ -971,9 +956,9 @@
             },
             {
               "type": "Microsoft.Logic/workflows",
-              "apiVersion": "2019-05-01",
+              "apiVersion": "2017-07-01",
               "name": "[[parameters('PlaybookName')]",
-              "location": "[[parameters('workspace-location')]",
+              "location": "[[variables('workspace-location-inline')]",
               "tags": {
                 "hidden-SentinelTemplateName": "AddDynatraceApplicationSecurityAttackSourceIPAddressThreatIntelligence-Alert",
                 "hidden-SentinelTemplateVersion": "1.0",
@@ -983,7 +968,7 @@
                 "type": "SystemAssigned"
               },
               "dependsOn": [
-                "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "[[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]"
               ],
               "properties": {
@@ -1011,7 +996,7 @@
                         },
                         "host": {
                           "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
                           }
                         },
                         "path": "/subscribe"
@@ -1264,10 +1249,10 @@
                 "parameters": {
                   "$connections": {
                     "value": {
-                      "azuresentinel": {
-                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                        "connectionName": "[[variables('AzureSentinelConnectionName')]",
-                        "id": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'azuresentinel')]",
+                      "microsoftsentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                        "connectionName": "[[variables('MicrosoftSentinelConnectionName')]",
+                        "id": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'azuresentinel')]",
                         "connectionProperties": {
                           "authentication": {
                             "type": "ManagedServiceIdentity"
@@ -1277,7 +1262,7 @@
                       "microsoftgraphsecurity": {
                         "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]",
                         "connectionName": "[[variables('MicrosoftGraphSecurityConnectionName')]",
-                        "id": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'microsoftgraphsecurity')]",
+                        "id": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'microsoftgraphsecurity')]",
                         "connectionProperties": {
                           "authentication": {
                             "type": "ManagedServiceIdentity"
@@ -1294,44 +1279,6 @@
                   }
                 }
               }
-            },
-            {
-              "type": "Microsoft.SecurityInsights/automationRules",
-              "apiVersion": "2015-01-01",
-              "name": "[[variables('automationRuleName')]",
-              "dependsOn": [
-                "[[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
-              ],
-              "properties": {
-                "displayName": "Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence",
-                "order": 1,
-                "triggeringLogic": {
-                  "isEnabled": true,
-                  "triggersOn": "Alerts",
-                  "triggersWhen": "Created",
-                  "conditions": [
-                    {
-                      "conditionType": "Property",
-                      "conditionProperties": {
-                        "propertyName": "AlertAnalyticRuleIds",
-                        "operator": "Contains",
-                        "propertyValues": "[[variables('alertRules')]"
-                      }
-                    }
-                  ]
-                },
-                "actions": [
-                  {
-                    "order": 1,
-                    "actionType": "RunPlaybook",
-                    "actionConfiguration": {
-                      "logicAppResourceId": "[[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
-                      "tenantId": "[[tenant().tenantId]"
-                    }
-                  }
-                ]
-              },
-              "scope": "[[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('LogAnalyticsWorkspaceName'))]"
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -1423,12 +1370,6 @@
                 "description": "Incident trigger"
               }
             },
-            "workspaceId": {
-              "type": "string"
-            },
-            "workSpaceKey": {
-              "type": "string"
-            },
             "DynatraceEnvironmentUrl": {
               "defaultValue": "<Dynatrace environment url>",
               "type": "string",
@@ -1444,10 +1385,10 @@
             }
           },
           "variables": {
-            "AzureSentinelConnectionName": "[[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+            "MicrosoftSentinelConnectionName": "[[concat('microsoftsentinel-', parameters('PlaybookName'))]",
             "AzureMonitorLogsConnectionName": "[[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
             "AzureLogAnalyticsDataCollectorConnectionName": "[[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-            "connection-1": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'microsoftsentinel')]",
+            "connection-1": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'azuresentinel')]",
             "_connection-1": "[[variables('connection-1')]",
             "connection-2": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'azuremonitorlogs')]",
             "_connection-2": "[[variables('connection-2')]",
@@ -1460,11 +1401,12 @@
           "resources": [
             {
               "type": "Microsoft.Web/connections",
-              "apiVersion": "2018-07-01-preview",
-              "name": "[[variables('AzureSentinelConnectionName')]",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('MicrosoftSentinelConnectionName')]",
               "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
               "properties": {
-                "displayName": "[[variables('AzureSentinelConnectionName')]",
+                "displayName": "[[variables('MicrosoftSentinelConnectionName')]",
                 "parameterValueType": "Alternative",
                 "api": {
                   "id": "[[variables('_connection-1')]"
@@ -1473,7 +1415,7 @@
             },
             {
               "type": "Microsoft.Web/connections",
-              "apiVersion": "2018-07-01-preview",
+              "apiVersion": "2016-06-01",
               "name": "[[variables('AzureMonitorLogsConnectionName')]",
               "location": "[[variables('workspace-location-inline')]",
               "properties": {
@@ -1485,15 +1427,11 @@
             },
             {
               "type": "Microsoft.Web/connections",
-              "apiVersion": "2018-07-01-preview",
+              "apiVersion": "2016-06-01",
               "name": "[[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
               "location": "[[variables('workspace-location-inline')]",
               "properties": {
                 "displayName": "[[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
-                "parameterValues": {
-                  "username": "[[parameters('workspaceId')]",
-                  "password": "[[parameters('workSpaceKey')]"
-                },
                 "api": {
                   "id": "[[variables('_connection-3')]"
                 }
@@ -1501,7 +1439,7 @@
             },
             {
               "type": "Microsoft.Logic/workflows",
-              "apiVersion": "2019-05-01",
+              "apiVersion": "2017-07-01",
               "name": "[[parameters('PlaybookName')]",
               "location": "[[variables('workspace-location-inline')]",
               "tags": {
@@ -1513,7 +1451,7 @@
                 "type": "SystemAssigned"
               },
               "dependsOn": [
-                "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "[[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
                 "[[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]"
               ],
@@ -1944,9 +1882,9 @@
                   "$connections": {
                     "value": {
                       "microsoftsentinel": {
-                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                        "connectionName": "[[variables('AzureSentinelConnectionName')]",
-                        "id": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'microsoftsentinel')]",
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                        "connectionName": "[[variables('MicrosoftSentinelConnectionName')]",
+                        "id": "[[subscriptionResourceId('Microsoft.Web/locations/managedApis', variables('workspace-location-inline'),'azuresentinel')]",
                         "connectionProperties": {
                           "authentication": {
                             "type": "ManagedServiceIdentity"

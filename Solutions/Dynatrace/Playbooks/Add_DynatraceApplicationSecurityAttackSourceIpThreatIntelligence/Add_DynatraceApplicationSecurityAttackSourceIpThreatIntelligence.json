@@ -32,19 +32,6 @@
                 "description": "Alert trigger"
             }
         },
-        "LogAnalyticsWorkspaceName": {
-            "defaultValue": "<Enter Log Analytics Workspace name>",
-            "type": "string",
-            "metadata": {
-                "description": "Log Analytics Workspace Name"
-            }
-        },
-        "workspace-location": {
-            "type": "string",
-            "metadata": {
-              "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
-            }
-        },
         "DynatraceEnvironmentUrl": {
             "defaultValue": "<Dynatrace environment url>",
             "type": "string",
@@ -60,44 +47,40 @@
         }
     },
     "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "MicrosoftGraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]",
-        "automationRuleName": "[concat('automation-', parameters('PlaybookName'))]",
-        "alertRules": [
-            "[resourceId('Microsoft.OperationalInsights/workspaces/providers/alertRules', parameters('LogAnalyticsWorkspaceName'), 'Microsoft.SecurityInsights', '1b0b2065-8bac-5a00-83c4-1b58f69ac212')]"
-        ]
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "MicrosoftGraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
             "type": "Microsoft.Web/connections",
-            "apiVersion": "2018-07-01-preview",
-            "name": "[variables('AzureSentinelConnectionName')]",
-            "location": "[parameters('workspace-location')]",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
                 "parameterValueType": "Alternative",
                 "api": {
-                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'azuresentinel')]"
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location,'azuresentinel')]"
                 }
             }
         },
         {
             "type": "Microsoft.Web/connections",
-            "apiVersion": "2018-07-01-preview",
+            "apiVersion": "2016-06-01",
             "name": "[variables('MicrosoftGraphSecurityConnectionName')]",
-            "location": "[parameters('workspace-location')]",
+            "location": "[resourceGroup().location]",
             "properties": {
                 "displayName": "[variables('MicrosoftGraphSecurityConnectionName')]",
                 "api": {
-                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'microsoftgraphsecurity')]"
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location,'microsoftgraphsecurity')]"
                 }
             }
         },
         {
             "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2019-05-01",
+            "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
-            "location": "[parameters('workspace-location')]",
+            "location": "[resourceGroup().location]",
             "tags": {
                 "hidden-SentinelTemplateName": "AddDynatraceApplicationSecurityAttackSourceIPAddressThreatIntelligence-Alert",
                 "hidden-SentinelTemplateVersion": "1.0"
@@ -106,7 +89,7 @@
                 "type": "SystemAssigned"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]"
             ],
             "properties": {
@@ -134,7 +117,7 @@
                                 },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
                                     }
                                 },
                                 "path": "/subscribe"
@@ -387,10 +370,10 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
-                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'azuresentinel')]",
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location,'azuresentinel')]",
                                 "connectionProperties": {
                                     "authentication": {
                                         "type": "ManagedServiceIdentity"
@@ -400,7 +383,7 @@
                             "microsoftgraphsecurity": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftGraphSecurityConnectionName'))]",
                                 "connectionName": "[variables('MicrosoftGraphSecurityConnectionName')]",
-                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('workspace-location'),'microsoftgraphsecurity')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location,'microsoftgraphsecurity')]",
                                 "connectionProperties": {
                                     "authentication": {
                                         "type": "ManagedServiceIdentity"
@@ -417,44 +400,6 @@
                     }
                 }
             }
-        },
-        {
-            "type": "Microsoft.SecurityInsights/automationRules",
-            "apiVersion": "2015-01-01",
-            "name": "[variables('automationRuleName')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
-            ],
-            "properties": {
-                "displayName": "Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence",
-                "order": 1,
-                "triggeringLogic": {
-                    "isEnabled": true,
-                    "triggersOn": "Alerts",
-                    "triggersWhen": "Created",
-                    "conditions": [
-                        {
-                            "conditionType": "Property",
-                            "conditionProperties": {
-                                "propertyName": "AlertAnalyticRuleIds",
-                                "operator": "Contains",
-                                "propertyValues": "[variables('alertRules')]"
-                            }
-                        }
-                    ]
-                },
-                "actions": [
-                    {
-                        "order": 1,
-                        "actionType": "RunPlaybook",
-                        "actionConfiguration": {
-                            "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
-                            "tenantId": "[tenant().tenantId]"
-                        }
-                    }
-                ]
-            },
-            "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('LogAnalyticsWorkspaceName'))]"
         }
     ]
 }
