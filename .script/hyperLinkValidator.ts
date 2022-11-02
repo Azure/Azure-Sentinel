@@ -35,7 +35,7 @@ const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
       request.open("GET", link, false);
       request.send();
       console.log(request.status);
-      return request.status === 200;
+      return request.status !== 404;
     } catch (error) {
       console.log('invalid link')
       console.log(error);
