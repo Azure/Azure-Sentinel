@@ -2,7 +2,7 @@
 
 ARM template for ASIM NetworkSession schema parser for Microsoft Defender for IoT.
 
-This ASIM parser supports normalizing Microsoft Defender for IoT network logs to the ASIM Network Session normalized schema.
+This ASIM parser supports normalizing Microsoft Defender for IoT sensor logs to the ASIM Network Session normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
