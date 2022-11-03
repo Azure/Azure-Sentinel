@@ -1,0 +1,98 @@
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias as ZNSegmentAudit.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. ZNSegmentAudit | take 10).
+// Reference :  Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+let AuditTypesTable = datatable(auditType_d: double, AuditType: string) [
+    0, "Unspecified",
+    1, "Asset is being added to protection",
+    2, "Asset added to protection",
+    3, "Asset failed adding to protection",
+    4, "Asset is being removed from protection",
+    5, "Removed asset from protection",
+    6, "Failed removing asset from protection",
+    7, "Asset added to learning",
+    8, "Asset removed from learning",
+    9, "Access rule created",
+    10, "Access rule deleted",
+    11, "Access rule expired",
+    12, "Access rule edited",
+    17, "MFA access policy created",
+    18, "MFA access policy deleted",
+    19, "MFA access policy edited",
+    20, "JIT rule created",
+    21, "JIT rule deleted",
+    22, "JIT rule expired",
+    23, "JIT rule revived",
+    24, "JIT rule edited",
+    25, "API Token created",
+    26, "API Token deleted",
+    27, "API Token regenerated",
+    28, "Asset learning is extended",
+    29, "Outbound block rule created",
+    30, "Outbound block rule deleted",
+    31, "Outbound block rule expired",
+    32, "Outbound block rule edited",
+    33, "Inbound block rule created",
+    34, "Inbound block rule deleted",
+    35, "Inbound block rule expired",
+    36, "Inbound block rule edited",
+    37, "Inbound rule pseudo edited",
+    38, "Outbound rule pseudo edited"
+];
+let EnforcementSourceTypeTable = datatable (enforcementSource_d: double, EnforcementSource: string) [
+    1, "Reactive Policy",
+    2, "Automated",
+    3, "Access Portal",
+    4, "Admin Portal",
+    5, "AI",
+    6, "API"
+];
+let UserRoleTypeTable = datatable (userRole_d: double, UserRole: string) [
+    1, "Admin",
+    2, "Viewer",
+    3, "Regular",
+    4, "API - Full Access",
+    5, "API - Read Only",
+    6, "Self Service"
+];
+union isfuzzy=true ZNSegmentAuditNativePoller_CL, ZNSegmentAudit_CL
+| project-away TimeGenerated
+| lookup kind=leftouter AuditTypesTable on auditType_d
+| lookup kind=leftouter EnforcementSourceTypeTable on enforcementSource_d
+| lookup kind=leftouter UserRoleTypeTable on userRole_d
+| extend entity=parse_json(destinationEntitiesList_s)
+| extend EventVendor="Zero Networks",
+    EventProduct="Segment Audit",
+    AuditTypeId=column_ifexists('auditType_d', ''),
+    TimeGenerated=unixtime_milliseconds_todatetime(timestamp_d),
+    EnforcementSourceId=column_ifexists('enforcementSource_d', ''),
+    UserRoleId=column_ifexists('userRole_d', ''),
+    DestinationEntityName = ['entity'][0].name,
+    DestinationEntityId = ['entity'][0].id,
+    Details=column_ifexists('details_s', ''),
+    PerformedById=column_ifexists('performedBy_id_s', ''),
+    PerformedByName=column_ifexists('performedBy_name_s', ''),
+    PerformedByGuid=column_ifexists('performedBy_id_g', ''),
+    ReportedObjectGuid=column_ifexists('reportedObjectId_g', ''),
+    ReportedObjectId=column_ifexists('reportedObjectId_s', '')
+| extend Rule=parse_json(Details).rule,
+    ReactivePolicy=parse_json(Details).rp
+| project
+    TimeGenerated,
+    EventVendor,
+    EventProduct,
+    AuditTypeId,
+    AuditType,
+    DestinationEntityId,
+    DestinationEntityName,
+    EnforcementSourceId,
+    EnforcementSource,
+    PerformedByGuid,
+    PerformedById,
+    PerformedByName,
+    ReportedObjectGuid,
+    ReportedObjectId,
+    UserRoleId,
+    UserRole,
+    Rule,
+    ReactivePolicy
