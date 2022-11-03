@@ -1,0 +1,51 @@
+id: 31b9e94b-0df6-4a3d-a297-3457b53c5d86
+name: Successful brute force attack on S3 Bucket.
+description: |
+  'A successful brute force attack on an S3 bucket was detected. Verify these actions, and if needed, remediate the compromise.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+    let timeframe = 1h;
+    let failed_attempts = AWSCloudTrail
+    | where TimeGenerated >= ago(timeframe)
+    | where EventName == "GetObject" and isnotempty(ErrorMessage) and isnotempty(ErrorCode)
+    | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
+    | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+    | summarize time_min_failed=arg_min(TimeGenerated, *), failed_keys = dcount(keyName) by UserIdentityAccountId, SourceIpAddress, bucketName
+    | where failed_keys > 20;
+    let success_attempts = AWSCloudTrail
+    | where TimeGenerated >= ago(timeframe)
+    | where EventName == "GetObject" and isempty(ErrorMessage) and isempty(ErrorCode)
+    | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
+    | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+    | summarize time_min_success=arg_min(TimeGenerated, *), success_keys = dcount(keyName) by UserIdentityAccountId, SourceIpAddress, bucketName
+    | where success_keys >= 1;
+    failed_attempts
+    | join kind=inner success_attempts on SourceIpAddress, UserIdentityAccountId, bucketName
+    | where time_min_success > time_min_failed
+    | project-away keyName
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = time_min_success, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, AssumedRoleArn = UserIdentityArn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

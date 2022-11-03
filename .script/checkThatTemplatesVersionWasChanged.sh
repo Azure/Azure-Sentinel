@@ -8,7 +8,7 @@ for file in $filesThatWereChanged
     #And making sure that in every file that its filename contains the word "Detection", the version was updated
     do
     	echo processing the file $file.
-	if [[ "$file" == *"Detections/"* ]];
+	if [[ "$file" == *"Detections/"* && "${file: -5}" == *".yaml"* ]]
 	then
 		echo $file is a detection
 		diffs=$(echo $(git diff origin/master -U0 --ignore-space-change $file))

@@ -1,0 +1,491 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Tenable.io - Enrich incident with vulnerability info",
+        "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Obtains IPs from the incident. \n 2. Searches asset IDs by the IPs in Microsoft Sentinel.\n 3. Gets vulnerabilities information in Microsoft Sentinel.\n 4. Adds obtained information as a comment to the incident.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, TenableIO Data Connector should be deployed."
+        ],
+        "lastUpdateTime": "2022-09-29T12:00:00.000Z",
+        "entities": [
+            "IP"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Tenable-EnrichIncidentWithVulnInfo",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Create_HTML_table": {
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('results_list')"
+                            },
+                            "runAfter": {
+                                "For_each_IP_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_results_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "For_each_IP_in_incident": {
+                            "actions": {
+                                "For_each_asset_in_assets": {
+                                    "actions": {
+                                        "Append_to_array_variable": {
+                                            "inputs": {
+                                                "name": "results_list",
+                                                "value": "@outputs('Compose')"
+                                            },
+                                            "runAfter": {
+                                                "Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Compose": {
+                                            "inputs": {
+                                                "cvss_base_score": "@body('Parse_JSON')?['plugin_cvss_base_score_d']",
+                                                "description": "@body('Parse_JSON')?['plugin_description_s']",
+                                                "family": "@body('Parse_JSON')?['plugin_family_s']",
+                                                "name": "@body('Parse_JSON')?['plugin_name_s']",
+                                                "risk_factor": "@body('Parse_JSON')?['plugin_risk_factor_s']",
+                                                "severity": "@body('Parse_JSON')?['severity_s']",
+                                                "solution": "@body('Parse_JSON')?['plugin_solution_s']",
+                                                "synopsis": "@body('Parse_JSON')?['plugin_synopsis_s']",
+                                                "vpr score": "@body('Parse_JSON')?['plugin_vpr_score_d']"
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Parse_JSON": {
+                                            "inputs": {
+                                                "content": "@items('For_each_asset_in_assets')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "Computer": {
+                                                            "type": "string"
+                                                        },
+                                                        "MG": {
+                                                            "type": "string"
+                                                        },
+                                                        "ManagementGroupName": {
+                                                            "type": "string"
+                                                        },
+                                                        "RawData": {
+                                                            "type": "string"
+                                                        },
+                                                        "SourceSystem": {
+                                                            "type": "string"
+                                                        },
+                                                        "TenantId": {
+                                                            "type": "string"
+                                                        },
+                                                        "TimeGenerated": {
+                                                            "type": "string"
+                                                        },
+                                                        "Type": {
+                                                            "type": "string"
+                                                        },
+                                                        "_ResourceId": {
+                                                            "type": "string"
+                                                        },
+                                                        "asset_fqdn_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "asset_hostname_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "asset_ipv4_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "asset_network_id_g": {
+                                                            "type": "string"
+                                                        },
+                                                        "asset_operating_system_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "asset_tracked_b": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "asset_uuid_g": {
+                                                            "type": "string"
+                                                        },
+                                                        "first_found_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "indexed_at_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "last_found_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "output_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cve_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_base_score_d": {
+                                                            "type": "number"
+                                                        },
+                                                        "plugin_cvss_temporal_score_d": {
+                                                            "type": "number"
+                                                        },
+                                                        "plugin_cvss_temporal_vector_exploitability_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_temporal_vector_raw_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_temporal_vector_remediation_level_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_temporal_vector_report_confidence_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_vector_access_complexity_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_vector_access_vector_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_vector_authentication_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_vector_availability_impact_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_vector_confidentiality_impact_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_vector_integrity_impact_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_cvss_vector_raw_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_description_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_family_id_d": {
+                                                            "type": "integer"
+                                                        },
+                                                        "plugin_family_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_has_patch_b": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "plugin_id_d": {
+                                                            "type": "integer"
+                                                        },
+                                                        "plugin_name_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_risk_factor_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_see_also_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_solution_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_synopsis_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_vpr_drivers_age_of_vuln_lower_bound_d": {
+                                                            "type": "integer"
+                                                        },
+                                                        "plugin_vpr_drivers_age_of_vuln_upper_bound_d": {
+                                                            "type": "integer"
+                                                        },
+                                                        "plugin_vpr_drivers_cvss3_impact_score_d": {
+                                                            "type": "number"
+                                                        },
+                                                        "plugin_vpr_drivers_cvss_impact_score_predicted_b": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "plugin_vpr_drivers_exploit_code_maturity_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_vpr_drivers_product_coverage_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_vpr_drivers_threat_intensity_last28_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_vpr_drivers_threat_sources_last28_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "plugin_vpr_score_d": {
+                                                            "type": "number"
+                                                        },
+                                                        "plugin_vpr_updated_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "port_port_d": {
+                                                            "type": "integer"
+                                                        },
+                                                        "port_protocol_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "scan_completed_at_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "scan_schedule_uuid_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "scan_started_at_t": {
+                                                            "type": "string"
+                                                        },
+                                                        "scan_uuid_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "severity_default_id_d": {
+                                                            "type": "integer"
+                                                        },
+                                                        "severity_id_d": {
+                                                            "type": "integer"
+                                                        },
+                                                        "severity_modification_type_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "severity_s": {
+                                                            "type": "string"
+                                                        },
+                                                        "state_s": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "ParseJson"
+                                        }
+                                    },
+                                    "foreach": "@body('Run_query_and_list_results')?['value']",
+                                    "runAfter": {
+                                        "Run_query_and_list_results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Run_query_and_list_results": {
+                                    "inputs": {
+                                        "body": "Tenable_IO_Vuln_CL | where asset_ipv4_s contains \"@{items('For_each_IP_in_incident')?['Address']}\" and TimeGenerated > ago(30d)",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                            "timerange": "Set in query"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_assets": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "assets",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_results_list": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "results_list",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_assets": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuremonitorlogs": {
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
