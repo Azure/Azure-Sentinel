@@ -5,12 +5,13 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-1. [Deploy Custom Connector + 3 Playbook templates](#deployall)
-1. [Authentication](#authentication)
-1. [Prerequisites](#prerequisites)
-1. [Deployment](#deployment)
-1. [Post Deployment Steps](#postdeployment)
-1. [Known issues and limitations](#knownissues)
+2. [Deploy Custom Connector + 3 Playbook templates](#deployall)
+3. [Custom Connector and playbooks OnPrem versions](#onprem)
+4. [Authentication](#authentication)
+5. [Prerequisites](#prerequisites)
+6. [Deployment](#deployment)
+7. [Post Deployment Steps](#postdeployment)
+8. [Known issues and limitations](#knownissues)
 
 
 
@@ -33,7 +34,17 @@ You can choose to deploy the whole package connector + all three playbook templa
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPaloAltoCustomConnector%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPaloAltoCustomConnector%2Fazuredeploy.json)
 
+## Custom Connector and playbooks OnPrem versions
+<a name="onprem">
 
+This package supports OnPrem versions of [Custom Connector](./PaloAltoCustomConnectorOnPrem/readme.md) and corresponding playbooks:
+ - [BlockIP](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockIP)
+ - [BlockURL](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockURL)
+ - [GetSystemInfo](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetSystemInfo)
+ - [GetThreatPCAP](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetThreatPCAP)
+ - [GetURLCategoryInfo](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetURLCategoryInfo)
+
+They can be deployed separately.
 
 <a name="authentication">
 
