@@ -46,7 +46,7 @@ $param = @{'status'='New,Active,Fixed,Re-Opened'; 'action'='list'; 'show_results
 $time = $env:timeInterval
 # the $time will be reduced from the current UTC time to achive incremental pull.
 $vm_processed_before = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-$vm_processed_after = ([System.DateTime]::UtcNow.AddMinutes(-$($time))).ToString('yyyy-MM-ddTHH:mm:ssZ')
+$vm_processed_after = "2021-05-04T09:10:00Z"
 
 if ([string]::IsNullOrEmpty($logAnalyticsUri))
 {
