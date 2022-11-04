@@ -23,6 +23,7 @@ namespace Kqlvalidations.Tests
                .WithCustomTableSchemasLoader(new CustomJsonDirectoryTablesLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomTables")))
                .WithCustomFunctionSchemasLoader(new CustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
                .WithCustomFunctionSchemasLoader(new ParsersCustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
+               .WithCustomFunctionSchemasLoader(new CommonFunctionsLoader())
                .Build();
         }
 
@@ -127,6 +128,26 @@ namespace Kqlvalidations.Tests
             ValidateKql(parserName, queryStr);
         }
 
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
+        [ClassData(typeof(CommonFunctionsYamlFilesTestData))]
+        public void Validate_CommonFunctions_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            Dictionary<object, object> yaml = ReadAndDeserializeYaml(encodedFilePath);
+            var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml, "FunctionParams");
+
+            //Ignore known issues
+            yaml.TryGetValue("Id", out object id);
+            if (id != null && ShouldSkipTemplateValidation((string)id))
+            {
+                return;
+            }
+
+            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
+            var parserName = (string)yaml["EquivalentBuiltInFunction"];
+            ValidateKql(parserName, queryStr);
+        }
+
         private void ValidateKql(string id, string queryStr)
         {
             var validationResult = _queryValidator.ValidateSyntax(queryStr);
@@ -187,9 +208,9 @@ namespace Kqlvalidations.Tests
         /// </summary>
         /// <param name="yaml">The parser's yaml file</param>
         /// <returns>The function parameters as let statements</returns>
-        private string GenerateFunctionParametersAsLetStatements(Dictionary<object, object> yaml)
+        private string GenerateFunctionParametersAsLetStatements(Dictionary<object, object> yaml, string paramsKey = "ParserParams")
         {
-            if (yaml.TryGetValue("ParserParams", out object parserParamsObject))
+            if (yaml.TryGetValue(paramsKey, out object parserParamsObject))
             {
                 var parserParams = (List<object>)parserParamsObject;
                 return string.Join(Environment.NewLine, parserParams.Select(GenerateParamaterAsLetStatement).ToList());
@@ -204,10 +225,11 @@ namespace Kqlvalidations.Tests
         /// <returns>A function parameter as a let statement</returns>
         private string GenerateParamaterAsLetStatement(object parameter)
         {
-            var dictionary = (Dictionary<object, object>)parameter;
+            var dictionary = (IReadOnlyDictionary<object, object>)parameter;
             string name = (string)dictionary["Name"];
-            string defaultValue = (string)dictionary["Type"] == "string" ? $"'{dictionary["Default"]}'" : (string)dictionary["Default"];
-            return $"let {name}= {defaultValue};";
+            string type = (string)dictionary["Type"];
+            string defaultValue = ((string)dictionary.GetValueOrDefault("Default")) ?? TypesDatabase.TypeToDefaultValueMapping.GetValueOrDefault(type);
+            return $"let {name}= {(type == "string" ? $"'{defaultValue}'" : defaultValue)};";
         }
     }
 

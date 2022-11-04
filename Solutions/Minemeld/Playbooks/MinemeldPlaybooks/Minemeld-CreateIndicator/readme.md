@@ -1,6 +1,6 @@
 # Minemeld- Add Indicators in Minemeld Playbook
  ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Searches for the matching indicator info of Entities (IP Address, FileHash, URL) in Minemeld 
  2. If indicators are not found, this playbook adds the new indicators to Minemeld Local database (Separate indicators for each IP Address, FileHash, URL that are 
  present in Sentinel incident)
@@ -24,7 +24,7 @@ requisites
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -32,13 +32,13 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for Minemeld Api  Connection (For authorizing the Minemeld GraphQL API connection, user and password to be provided)
 
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with entity mapping of URL ,FileHash or IP Address. 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with entity mapping of URL ,FileHash or IP Address. 
 2. Configure the automation rules to trigger this playbook
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource
 2. Click on Identity Blade
-3. Choose Systen assigned tab
+3. Choose System assigned tab
 4. Click on Azure role assignments
 5. Click on Add role assignments
 6. Select Scope - Resource group
