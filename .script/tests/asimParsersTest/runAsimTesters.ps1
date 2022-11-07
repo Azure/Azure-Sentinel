@@ -72,7 +72,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
         }
         catch {
             Write-Host "  -- $_"
-            Write-Host "     $(((Get-Error -Newest 1).Exception).Response?.Content)"
+            Write-Host "     $(((Get-Error -Newest 1).Exception).Response.Content)"
             $global:failed = 1
         }
 }
