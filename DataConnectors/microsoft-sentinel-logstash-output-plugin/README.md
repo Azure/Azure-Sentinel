@@ -1,6 +1,6 @@
 # Microsoft Sentinel output plugin for Logstash 
 
-Microsoft Sentinel provides a new output plugin for Logstash. Using this output plugin, you will be able to send any log you wish using Logstash to the Microsoft Sentinel/Log Analytics workspace (through Log Analytics DCR based custom logs API).
+Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
 Plugin version: v0.1.3  

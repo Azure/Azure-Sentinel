@@ -5,7 +5,7 @@ Gem::Specification.new do |s|
   s.version = LogStash::Outputs::MicrosoftSentinelOutputInternal::VERSION
   s.authors = ["Microsoft Sentinel"]
   s.email   = 'AzureSentinel@microsoft.com'
-  s.summary = %q{Microsoft Sentinel provides a new output plugin for Logstash. Using this output plugin, you will be able to send any log you wish using Logstash to the Microsoft Sentinel/Log Analytics workspace (through Log Analytics DCR based custom logs API).}
+  s.summary = %q{Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.}
   s.description = s.summary
   s.homepage = "https://github.com/Azure/Azure-Sentinel"
   s.licenses = ["MIT"]
