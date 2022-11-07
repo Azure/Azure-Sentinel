@@ -1,20 +1,10 @@
+Param([string]$fork, [string]$branch, [string]$repoBaseFolder)
+
 $global:failed=0
 $global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
 $global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
 $global:schemas = ("DNS", "WebSession", "NetworkSession", "ProcessEvent")
 
-Class Parser {
-    [string] $Name;
-    [string] $OriginalQuery;
-    [string] $Schema;
-    [System.Collections.Generic.List`1[System.Object]] $Parameters
-    Parser([string] $Name, [string] $OriginalQuery, [string] $Schema, [System.Collections.Generic.List`1[System.Object]] $Parameters) {
-        $this.Name = $Name;
-        $this.OriginalQuery = $OriginalQuery;
-        $this.Schema = $Schema;
-        $this.Parameters = $Parameters;
-    }
-}
 
 function run {
     $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
@@ -22,18 +12,30 @@ function run {
     $modifiedSchemas | ForEach-Object { testSchema($_) }
 }
 
-function testSchema([string] $schema) {
-    $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/$($schema)/Parsers"
-    Write-Host "Testing $($schema) schema, $($parsersAsObjects.count) parsers were found"
-    $parsersAsObjects | ForEach-Object {
-        $functionName = "$($_.EquivalentBuiltInParser)V$($_.Parser.Version.Replace('.',''))"
-        if ($_.Parsers) {
-            Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
-        }
-        else {
-            testParser([Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams))
-        }
+function testSchema([string] $fork, [string] $branch, [string] $repoBaseFolder) {
+    if ($repoBaseFolder) {
+        Set-Location $repoBaseFolder
+    } else {
+        $repoBaseFolder = "$($PSScriptRoot)/../../../"
     }
+
+	$filesThatWereChanged=$(echo $(git diff --name-only))
+	if($filesThatWereChanged) {
+		Write-Error "Please commit your changes or stash them before run the script. "
+	}
+	else {   
+        Write-Host "git remote add $($fork) https://github.com/$($fork)/Azure-Sentinel"
+		git remote add $fork "https://github.com/$($fork)/Azure-Sentinel"
+
+        Write-Host "git fetch $($fork)"
+		git fetch $fork
+
+        Write-Host "git checkout $($branch)"
+		git checkout $branch
+
+        Write-Host "runAsimTesters"
+        & "$($repoBaseFolder)/.script/tests/asimParsersTest/runAsimTesters.ps1"
+	}
 }
 
 function testParser([Parser] $parser) {
@@ -72,7 +74,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
         }
         catch {
             Write-Host "  -- $_"
-            Write-Host "     $(((Get-Error -Newest 1).Exception).Response?.Content)"
+            # Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
             $global:failed = 1
         }
 }
@@ -92,5 +94,5 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
     return $paramsString
 }
 
-run
+testSchema $fork $branch $repoBaseFolder
 exit $global:failed
