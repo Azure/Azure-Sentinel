@@ -476,12 +476,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                         $IsLogicAppsCustomConnector = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/customApis".ToLower())}) ? $true : $false;
                         $IsFunctionAppResource = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/sites".ToLower())}) ? $true : $false;
-
+                        # $functionappfiledata = Get-Content "C:\GitHub\Azure-Sentinel\Solutions\Fortinet-FortiGate\Playbooks\FunctionApp\azuredeploy.json" | ConvertFrom-Json
+                        # $functionAppsPlaybookId = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/sites".ToLower())}) ? $functionappfiledata.parameters.FunctionAppName.defaultValue:''
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "FunctionApp" : "Playbook";;
                             contentId = "[variables('_$fileName')]";
                             version   = "[variables('playbookVersion$playbookCounter')]";
                         };
+                        if($fileName.ToLower() -eq "FunctionApp"){
+                            $functionAppsPlaybookId = $playbookData.parameters.FunctionAppName.defaultValue
+                        }
 
                         if (!$playbookName) {
                             $playbookName = $fileName;
@@ -859,7 +863,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $playbookVersion = '1.0';
                         $logicAppsPlaybookId = '';
                         $customConnectorContentId = '';
-                        $functionAppsPlaybookId= '';
+                        # $functionAppsPlaybookId= '';
                         foreach ($playbookResource in $playbookData.resources) {
                             if ($playbookResource.type -eq "Microsoft.Web/connections") {
                                 if ($playbookResource.properties -and $playbookResource.properties.api -and $playbookResource.properties.api.id) {
@@ -921,6 +925,29 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host $logicAppsPlaybookId;
                             }
 
+                            if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
+                            # {
+                            #     if ($playbookResource.properties -and $playbookResource.properties.function -and $playbookResource.properties.function.id) {
+                            #             if ($playbookResource.properties.function.id.Contains("/providers/Microsoft.Web/sites/")) {
+                            #                 $splits = $playbookResource.properties.function.id.Split(',');
+                            #                 $connectionKey = $splits[-1].Trim().Replace("parameters('","").Replace("'","").Replace(")","").Replace("]","");
+
+                            #                 foreach ($templateVar in $($playbookData.parameters).PSObject.Properties) {
+                            #                     if ($templateVar.Name -eq $connectionKey) {
+                            #                         $playbookDependencies += [PSCustomObject] @{
+                            #                             kind = "AzureFunction";
+                            #                             contentId = $functionAppList[$templateVar.Value.defaultValue].id;
+                            #                             version = $functionAppList[$templateVar.Value.defaultValue].version;
+                            #                         }
+                            #                     }
+                            #                 }
+                            #             }
+                            #         # $playbookDependencies += [PSCustomObject] @{
+                            #         #                     kind = "AzureFunction";
+                            #         #                     contentId = $functionAppList[$templateVar.Value.defaultValue].id;
+                            #         #                     version = $functionAppList[$templateVar.Value.defaultValue].version;
+                            #     }
+                            # }
 
                             $playbookResource =  $playbookResource
                             $playbookResource = $(removePropertiesRecursively $playbookResource)
@@ -928,16 +955,9 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $playbookResource =  $(removeBlanksRecursively $playbookResource)
                             $playbookResources += $playbookResource;
                             $connectionCounter += 1
+
                         }
 
-                        if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
-                        {
-                            $playbookDependencies += [PSCustomObject] @{
-                                    kind = "FunctionApp";
-                                    contentId = $functionAppList[$templateVar.Value.defaultValue].id;
-                                    version = $functionAppList[$templateVar.Value.defaultValue].version;
-                        }
-                    }
 
                         if($contentToImport.TemplateSpec)
                         {
@@ -1015,12 +1035,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
 
-                            if ($playbookDependencies) {
-                                $criteria = [PSCustomObject]@{
-                                    criteria = $playbookDependencies
-                                };
-                                $playbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $criteria
-                            }
+                            # if ($playbookDependencies) {
+                            #     $criteria = [PSCustomObject]@{
+                            #         criteria = $playbookDependencies
+                            #     };
+                            #     $playbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $criteria
+                            # }
 
                             $playbookVariables = [PSCustomObject]@{};
                             foreach($var in $playbookData.variables.PsObject.Properties)
