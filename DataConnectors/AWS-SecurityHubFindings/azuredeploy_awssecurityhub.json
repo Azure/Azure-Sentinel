@@ -14,21 +14,21 @@
             "type": "securestring",
             "defaultValue": ""
         },
-        "AWSAccessKeyId": {
+        "AWSRoleSessionName": {
             "type": "string",
-            "defaultValue": "<AWSAccessKeyId>"
+            "defaultValue": "AWSSecurityHub2Sentinel"
         },
-        "AWSSecretAccessKey": {
-            "type": "securestring",
-            "defaultValue": ""
+        "AWSRoleArn": {
+            "type": "string",
+            "defaultValue": "arn:aws:iam::<AWSAccountNumber>:role/SecurityHubIntegrationRole"
         },
         "AWSRegionName": {
             "type": "string",
-            "defaultValue": "<AWSRegionName>"
+            "defaultValue": "eu-central-1"
         },
-		"LogAnalyticsCustomLogName": {
+	"LogAnalyticsCustomLogName": {
             "type": "string",
-            "defaultValue": "<LogAnalyticsCustomLogName>"
+            "defaultValue": "AWSSecurityHubFindings_CL"
         }
     },
     "variables": {
@@ -36,8 +36,7 @@
 		"StorageAccountName":"[concat(substring(variables('FunctionName'), 0, 20), 'sa')]",    
 		"KeyVaultName": "[concat(substring(variables('FunctionName'), 0, 20), 'kv')]",    
 		"LogAnalyticsWorkspaceKey": "LogAnalyticsWorkspaceKey",
-		"AWSAccessKeyId":"AWSAccessKeyId",
-		"AWSSecretAccessKey":"AWSSecretAccessKey",
+		"AWSRoleArn":"AWSRoleArn",
 		"StorageSuffix":"[environment().suffixes.storage]",
 		"LogAnaltyicsUri":"[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceId')), '.ods.opinsights'))]"
     },
@@ -142,7 +141,7 @@
                 "clientAffinityEnabled": true,
                 "alwaysOn": true,
                 "reserved": true
-            },            
+            },           
             "resources": [
                 {
                     "apiVersion": "2018-11-01",
@@ -151,9 +150,8 @@
                     "dependsOn": [
                         "[concat('Microsoft.Web/sites/', variables('FunctionName'))]",
 						"[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]",
-						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('AWSAccessKeyId'))]",            
-						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('LogAnalyticsWorkspaceKey'))]",
-						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('AWSSecretAccessKey'))]"
+						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('AWSRoleArn'))]",            
+						"[resourceId('Microsoft.KeyVault/vaults/secrets', variables('KeyVaultName'), variables('LogAnalyticsWorkspaceKey'))]"
                     ],
                     "properties": {
                         "FUNCTIONS_EXTENSION_VERSION": "~3",
@@ -163,15 +161,18 @@
 						"AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('StorageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                         "WorkspaceID": "[parameters('WorkspaceID')]",
                         "WorkspaceKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('LogAnalyticsWorkspaceKey')).secretUriWithVersion, ')')]",                        
-                        "AWSAccessKeyId": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('AWSAccessKeyId')).secretUriWithVersion, ')')]",
-                        "AWSSecretAccessKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('AWSSecretAccessKey')).secretUriWithVersion, ')')]",
+                        "AWSRoleSessionName": "[parameters('AWSRoleSessionName')]",
+                        "AWSRoleArn": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('AWSRoleArn')).secretUriWithVersion, ')')]",
                         "AWSRegionName": "[parameters('AWSRegionName')]",
 						"LogAnalyticsCustomLogName":"[parameters('LogAnalyticsCustomLogName')]",
-						"Schedule":"0 */10 * * * *",
+						"Schedule":"*/10 * * * *",
 						"FreshEventTimeStamp":"10",
-						"SecurityHubFilters":"",
+						"SecurityHubFilters":"{'SeverityLabel': [{'Value': 'HIGH', 'Comparison': 'EQUALS'},{'Value': 'CRITICAL', 'Comparison': 'EQUALS'},],'RecordState': [{'Value': 'ACTIVE', 'Comparison': 'EQUALS'}]}",
 						"LAURI": "[variables('LogAnaltyicsUri')]",											 
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AWS-SecurityHubFindings/AzFunAWSSecurityHubIngestion.zip?raw=true"
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AWS-SecurityHubFindings/AzFunAWSSecurityHubIngestion.zip?raw=true",
+                        "ClientID":"",
+                        "SCM_DO_BUILD_DURING_DEPLOYMENT": "true",
+                        "ENABLE_ORYX_BUILD": "true"
                     }
                 }
             ]
@@ -210,33 +211,18 @@
 			{
 			  "type": "secrets",
 			  "apiVersion": "2016-10-01",
-			  "name": "[variables('AWSAccessKeyId')]",
+			  "name": "[variables('AWSRoleArn')]",
 			  "dependsOn": [
 				"[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
 			  ],
 			  "properties": {
-				"value": "[parameters('AWSAccessKeyId')]",
+				"value": "[parameters('AWSRoleArn')]",
 				"contentType": "string",
 				"attributes": {
 				  "enabled": true
 				}
 			  }
 			},
-			{
-			  "type": "secrets",
-			  "apiVersion": "2016-10-01",
-			  "name": "[variables('AWSSecretAccessKey')]",
-			  "dependsOn": [
-				"[resourceId('Microsoft.KeyVault/vaults/', variables('KeyVaultName'))]"
-			  ],
-			  "properties": {
-				"value": "[parameters('AWSSecretAccessKey')]",
-				"contentType": "string",
-				"attributes": {
-				  "enabled": true
-				}
-			  }
-			}, 
 			{
 			  "type": "secrets",
 			  "apiVersion": "2016-10-01",

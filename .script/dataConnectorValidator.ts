@@ -60,6 +60,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
+  {
+    return ConnectorCategory.ThreatIntelligenceIndicator;
+  }
   else if (dataTypes[0].name.includes("Event"))
   {
     return ConnectorCategory.Event;
