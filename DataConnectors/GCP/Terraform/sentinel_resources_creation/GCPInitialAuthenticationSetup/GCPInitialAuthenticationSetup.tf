@@ -10,11 +10,17 @@ terraform {
 }
 
 locals{
-  sentinel_app_id = "2041288c-b303-4ca0-9076-9612db3beeb2"
-  sentinel_tenant_id = "33e019214d644f8ca0555bdaffd5e33d"
+  sentinel_app_id = "2041288c-b303-4ca0-9076-9612db3beeb2" // Do not change it. It's our Azure Active Directory app id that will be used for authentication with your project.
+  sentinel_tenant_id = "33e01921-4d64-4f8c-a055-5bdaffd5e33d" // Do not change it. It's our tenant id that will be used for authentication with your project.
 }
 
 data "google_project" "project" {}
+
+variable "tenant-id" {
+  type    = string
+  nullable = false
+  description = "Please enter your Sentinel tenant id"
+}
 
 resource "google_project_service" "enable-api" {
   service = "iam.googleapis.com"
@@ -24,7 +30,7 @@ resource "google_project_service" "enable-api" {
 resource "google_iam_workload_identity_pool" "sentinel-workload-identity-pool" {
   provider                           = google-beta
   project = data.google_project.project.project_id
-  workload_identity_pool_id = locals.sentinel_tenant_id
+  workload_identity_pool_id = replace(var.tenant-id, "-", "")
   display_name              = "sentinel-workload-identity-pool"
 }
 
@@ -38,8 +44,8 @@ resource "google_iam_workload_identity_pool_provider" "sentinel-workload-identit
   }
 
   oidc {
-    allowed_audiences = ["api://${locals.sentinel_app_id}"]
-    issuer_uri        = "https://sts.windows.net/${locals.sentinel_tenant_id}"
+    allowed_audiences = ["api://${local.sentinel_app_id}"]
+    issuer_uri        = "https://sts.windows.net/${local.sentinel_tenant_id}"
   }
 }
 
