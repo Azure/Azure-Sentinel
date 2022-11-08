@@ -1,12 +1,12 @@
 # Introduction
 
-This playbook provides an integrated solution that will allow your SOC to leverage automation to add malicious URL to Netskope as a response to Azure Sentinel incidents. You can start automating blocking of these URLs with minimum configurations and effort and this is extremely useful when a Sentinel Incident identifies a malicious URL communication and you want to quickly add it to your Netskope URL block list. 
+This playbook provides an integrated solution that will allow your SOC to leverage automation to add malicious URL to Netskope as a response to Azure Sentinel incidents. You can start automating blocking of these URLs with minimum configurations and effort and this is extremely useful when a Sentinel Incident identifies a malicious URL communication, and you want to quickly add it to your Netskope URL block list. 
 
 This playbook template is a pre-built, tested, and ready-to-use workflow that can be customized to meet your needs or as inspiration for new automation scenarios.
 
 ## Architecture Diagram
 
-The below diagram shows the high level architecture and design for this playbook.
+The below diagram shows the high-level architecture and design for this playbook.
 
 ![](.//images/url-playbook-azure.png)
 
@@ -18,7 +18,7 @@ To deploy this template in Azure:
 
 - Identify the "Base URL" for your Netskope tenant. This is a URL that you use to access your Netskope tenant, for example: `https://example.goskope.com`
 
-- Follow the [REST APIv2 Documentaion](https://docs.netskope.com/en/rest-api-v2-overview-312207.html) to create an API token.
+- Follow the [REST APIv2 Documentation](https://docs.netskope.com/en/rest-api-v2-overview-312207.html) to create an API token.
 
     - Required "Read+Write" for `/api/v2/urllist` endpoint.
     - Required "Read+Write" for `/api/v2/urllist/deploy` endpoint.
@@ -27,7 +27,7 @@ To deploy this template in Azure:
 
 *Fig 2. Netskope API Token*
 
-- Deploy a playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard inside Azure Portal.
+- Deploy a playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard inside Azure Portal.
 - Provide values to the template parameters.
 
 |   Parameter                  |          Description                             |
