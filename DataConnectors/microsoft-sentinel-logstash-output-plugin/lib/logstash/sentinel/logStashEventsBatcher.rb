@@ -62,7 +62,7 @@ class LogStashEventsBatcher
 
             rescue RestClient::ExceptionWithResponse => ewr
                 response = ewr.response
-                @logger.error("Exception when posting data to #{api_name}. #{try_get_info_from_error_response(ewr.response)} [Exception: '#{ewr}, amount of documents=#{amount_of_documents}]'")
+                @logger.error("Exception when posting data to #{api_name}. [Exception: '#{ewr}'] #{try_get_info_from_error_response(ewr.response)} [amount of documents=#{amount_of_documents}]'")
                 @logger.trace("Exception in posting data to #{api_name}. Rest client response ['#{ewr.response}']. [amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")
 
                 if ewr.http_code.to_f == 400
@@ -77,7 +77,7 @@ class LogStashEventsBatcher
                     force_retry = true
                 end
             rescue Exception => ex
-                @logger.error("Exception in posting data to #{api_name}. [Exception: '#{ex}]'")
+                @logger.error("Exception in posting data to #{api_name}. [Exception: '#{ex}, amount of documents=#{amount_of_documents}]'")
                 @logger.trace("Exception in posting data to #{api_name}.[amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")       
             end
             is_retry = true
@@ -99,7 +99,7 @@ class LogStashEventsBatcher
         end
     end
 
-    # Try to get the values of the x-ms-error-code and x-ms-request-id headers and decorate it for printing
+    # Try to get the values of the x-ms-error-code and x-ms-request-id headers and content of body, decorate it for printing
     def try_get_info_from_error_response(response)
         output = ""
         if response.headers.include?(:x_ms_error_code)
@@ -108,6 +108,7 @@ class LogStashEventsBatcher
         if response.headers.include?(:x_ms_request_id)
             output += " [x-ms-request-id header: #{response.headers[:x_ms_request_id]}]"
         end
+        output += " [Response body: #{response.body}]" 
         return output
     end
 
