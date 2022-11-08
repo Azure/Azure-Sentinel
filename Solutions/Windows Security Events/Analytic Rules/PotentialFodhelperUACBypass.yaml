@@ -1,0 +1,45 @@
+id: 56f3f35c-3aca-4437-a1fb-b7a84dc4af00
+name: Potential Fodhelper UAC Bypass
+description: |
+  'This detection looks for the steps required to conduct a UAC bypass using Fodhelper.exe. By default this detection looks for the setting of the required registry keys and the invoking of the process within 1 hour - this can be tweaked as required.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1548.002
+query: |
+  SecurityEvent
+    | where EventID == 4657
+    | parse ObjectName with "\\REGISTRY\\" KeyPrefix "\\" RegistryKey
+    | project-reorder RegistryKey
+    | where RegistryKey has "Software\\Classes\\ms-settings\\shell\\open\\command"
+    | extend TimeKey = bin(TimeGenerated, 1h)
+    | join (
+    SecurityEvent
+    | where EventID == 4688
+    | where Process =~ "fodhelper.exe"
+    | where ParentProcessName endswith "cmd.exe" or ParentProcessName endswith "powershell.exe" or ParentProcessName endswith "powershell_ise.exe"
+    | extend TimeKey = bin(TimeGenerated, 1h)) on TimeKey, Computer
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+version: 1.0.1
+kind: Scheduled

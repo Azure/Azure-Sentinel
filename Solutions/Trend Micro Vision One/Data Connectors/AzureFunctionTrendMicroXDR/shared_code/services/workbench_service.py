@@ -67,6 +67,12 @@ def get_workbench_detail(token, workbench_id):
     })
     response = requests.get(url, headers=headers)
     logging.info(f'Get workbench detail response: {response.text}')
+    if response.status_code == requests.codes.not_found:
+        response_data = response.json()
+        msg = response_data['error']['message']
+        logging.warning(f'Workbench not found: {msg}')
+        return None
+    
     response.raise_for_status()
     response_data = response.json()
 

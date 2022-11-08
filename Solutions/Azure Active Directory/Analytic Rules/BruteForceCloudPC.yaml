@@ -1,0 +1,47 @@
+id: 3fbc20a4-04c4-464e-8fcb-6667f53e4987
+name: Brute force attack against a Cloud PC
+description: |
+  'Identifies evidence of brute force activity against a Windows 365 Cloud PC by highlighting multiple authentication failures and by a successful authentication within a given time window.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let failureCountThreshold = 5;
+  let successCountThreshold = 1;
+  let authenticationWindow = 20m;
+  SigninLogs
+  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+  | where AppDisplayName =~ "Windows Sign In"
+  // Split out failure versus non-failure types
+  | extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140", "70043", "70044"), "Success", "Failure")
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddress = makeset(IPAddress), makeset(OS), makeset(Browser), makeset(City), 
+  makeset(ResultType), FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success") 
+  by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName, AppDisplayName
+  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
+  | mvexpand IPAddress
+  | extend IPAddress = tostring(IPAddress)
+  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity    
+version: 1.0.1
+kind: Scheduled

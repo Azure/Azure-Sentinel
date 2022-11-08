@@ -1,7 +1,9 @@
+from ast import Pass
 import os
 import datetime
 import logging
 import re
+from xmlrpc.client import Boolean
 import requests
 import json
 from requests.auth import HTTPBasicAuth
@@ -47,7 +49,6 @@ def main(mytimer: func.TimerRequest):
     audit_logs_last_ts = parse_date_from(audit_logs_last_ts)
     logging.info(f'Getting audit logs from {audit_logs_last_ts}')
     for events in cli.get_audit_logs(audit_logs_last_ts):
-        check_on_future_event_time(events=events, time_field='created_at')
         for event in events:
             sentinel.send(event)
         sentinel.flush()
@@ -58,8 +59,8 @@ def main(mytimer: func.TimerRequest):
     events_last_ts = events_state_manager.get()
     events_last_ts = parse_date_from(events_last_ts)
     logging.info(f'Getting events from {events_last_ts}')
+    
     for events in cli.get_events(events_last_ts):
-        check_on_future_event_time(events=events, time_field='date')
         for event in events:
             sentinel.send(event)
         sentinel.flush()
@@ -154,19 +155,23 @@ def get_last_event_ts(events: List[dict], last_ts: datetime.datetime, field_name
         if isinstance(event_ts, datetime.datetime):
             if isinstance(last_ts, datetime.datetime) and event_ts > last_ts:
                 last_ts = event_ts
+    if check_on_future_event_time(last_ts):
+        current_timestap_utc = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        last_ts = current_timestap_utc.isoformat()
     return last_ts
 
 
-def check_on_future_event_time(events: List[dict], time_field: str) -> None:
-    if events:
-        event_ts = events[0].get(time_field)
-        try:
-            event_ts = parse_datetime(event_ts)
-        except:
-            pass
-        if isinstance(event_ts, datetime.datetime):
-            now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
-            if event_ts > now + datetime.timedelta(days=1):
-                msg = 'Event timestamp {} is larger that now. Exit script.'.format(event_ts.isoformat())
-                logging.error(msg)
-                raise Exception(msg)
+def check_on_future_event_time(time_field: datetime):
+    event_ts = time_field
+    try:
+        event_ts = parse_datetime(event_ts)
+    except:
+        pass
+    if isinstance(event_ts, datetime.datetime):
+        now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        if event_ts > now + datetime.timedelta(days=1):
+            msg = 'Event timestamp {} is larger that now. Exit script.'.format(event_ts.isoformat())
+            logging.info(msg)
+            return True
+        else:
+            return False

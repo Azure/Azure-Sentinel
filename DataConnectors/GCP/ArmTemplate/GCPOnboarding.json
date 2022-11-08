@@ -1,0 +1,93 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "defaultValue": "[resourceGroup().location]",
+      "type": "String"
+    },
+    "dataCollectionEndpointName": {
+      "defaultValue": "Microsoft-Sentinel-DataCollectionEndpoint",
+      "type": "String",
+      "metadata": {
+        "description": "Must start with Microsoft-Sentinel-"
+      }
+    },
+    "createNewDataCollectionEndpoint": {
+      "defaultValue": "True",
+      "allowedValues": [
+        "True",
+        "False"
+      ],
+      "type": "String"
+    },
+    "dataCollectionRuleName": {
+      "defaultValue": "Microsoft-Sentinel-GCPAuditLogsDataCollectionRule",
+      "type": "String",
+      "metadata": {
+        "description": "Must start with Microsoft-Sentinel-"
+      }
+    },
+    "workspaceName": {
+      "defaultValue": "",
+      "type": "String"
+    }
+  },
+  "variables": {
+    "tableType": "clv2ws1"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2021-09-01-preview",
+      "name": "[parameters('dataCollectionEndpointName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      },
+      "condition": "[equals(parameters('createNewDataCollectionEndpoint'), 'True')]"
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2021-09-01-preview",
+      "name": "[parameters('dataCollectionRuleName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints',parameters('dataCollectionEndpointName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints',parameters('dataCollectionEndpointName'))]",
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
+              "name": "[variables('tableType')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Microsoft-GCPAuditLogs"
+            ],
+            "destinations": [
+              "[variables('tableType')]"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "dataCollectionEndpointName": {
+      "type": "String",
+      "value": "[parameters('dataCollectionEndpointName')]"
+    },
+    "dataCollectionRuleImmutableId": {
+      "type": "String",
+      "value": "[reference(parameters('dataCollectionRuleName')).immutableId]"
+    }
+  }
+}

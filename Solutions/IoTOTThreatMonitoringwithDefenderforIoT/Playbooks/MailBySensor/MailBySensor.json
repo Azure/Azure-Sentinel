@@ -25,14 +25,15 @@
         ]
     },
    "parameters":{
-      "PlaybookName_AD4IoT-MailByProductionLine":{
+      "PlaybookName":{
          "defaultValue":"AD4IoT-MailByProductionLine",
          "type":"String"
       }
    },
    "variables":{
-      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName_AD4IoT-MailByProductionLine'))]",
-      "AzureOffice365ConnectionName":"[concat('office365', parameters('PlaybookName_AD4IoT-MailByProductionLine'))]"
+      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]",
+      "AzureOffice365ConnectionName":"[concat('office365', parameters('PlaybookName'))]",
+	  "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
    },
    "resources": [
                {
@@ -49,6 +50,19 @@
                }
            }
        },
+	   		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureMonitorLogsConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureMonitorLogsConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				}
+			}
+		},
         {
            "type": "Microsoft.Web/connections",
            "apiVersion": "2016-06-01",
@@ -65,7 +79,7 @@
        {
            "type": "Microsoft.Logic/workflows",
            "apiVersion": "2017-07-01",
-           "name": "[parameters('PlaybookName_AD4IoT-MailByProductionLine')]",
+           "name": "[parameters('PlaybookName')]",
            "location": "[resourceGroup().location]",
            "dependsOn": [
                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
@@ -180,6 +194,7 @@
                 "type": "ParseJson"
             },
             "Run_query_and_list_results": {
+				"type": "ApiConnection",
                 "inputs": {
                     "body": "_GetWatchlist(\"@{variables('WatchlistName')}\") \n| where Sensor == \"@{body('Parse_JSON')?['SensorId']}\"",
                     "host": {
@@ -221,7 +236,7 @@
                     },
                     "host": {
                         "connection": {
-                            "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                         }
                     },
                     "path": "/incident-creation"
@@ -233,6 +248,11 @@
     "parameters": {
             "$connections":{
                "value":{
+				  "azuremonitorlogs": {
+					 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+					 "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+					 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				  },
                   "azuresentinel":{
                      "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
                      "connectionName":"[variables('AzureSentinelConnectionName')]",
