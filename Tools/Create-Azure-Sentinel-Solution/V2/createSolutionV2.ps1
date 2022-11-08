@@ -863,6 +863,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $playbookVersion = '1.0';
                         $logicAppsPlaybookId = '';
                         $customConnectorContentId = '';
+                        $FunctionResource = @();
                         # $functionAppsPlaybookId= '';
                         foreach ($playbookResource in $playbookData.resources) {
                             if ($playbookResource.type -eq "Microsoft.Web/connections") {
@@ -925,29 +926,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host $logicAppsPlaybookId;
                             }
 
-                            if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
-                            # {
-                            #     if ($playbookResource.properties -and $playbookResource.properties.function -and $playbookResource.properties.function.id) {
-                            #             if ($playbookResource.properties.function.id.Contains("/providers/Microsoft.Web/sites/")) {
-                            #                 $splits = $playbookResource.properties.function.id.Split(',');
-                            #                 $connectionKey = $splits[-1].Trim().Replace("parameters('","").Replace("'","").Replace(")","").Replace("]","");
-
-                            #                 foreach ($templateVar in $($playbookData.parameters).PSObject.Properties) {
-                            #                     if ($templateVar.Name -eq $connectionKey) {
-                            #                         $playbookDependencies += [PSCustomObject] @{
-                            #                             kind = "AzureFunction";
-                            #                             contentId = $functionAppList[$templateVar.Value.defaultValue].id;
-                            #                             version = $functionAppList[$templateVar.Value.defaultValue].version;
-                            #                         }
-                            #                     }
-                            #                 }
-                            #             }
-                            #         # $playbookDependencies += [PSCustomObject] @{
-                            #         #                     kind = "AzureFunction";
-                            #         #                     contentId = $functionAppList[$templateVar.Value.defaultValue].id;
-                            #         #                     version = $functionAppList[$templateVar.Value.defaultValue].version;
-                            #     }
-                            # }
+                            
 
                             $playbookResource =  $playbookResource
                             $playbookResource = $(removePropertiesRecursively $playbookResource)
@@ -956,6 +935,35 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $playbookResources += $playbookResource;
                             $connectionCounter += 1
 
+                        }
+                        if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
+                            {
+                            # if($null -ne $playbookData.parameters.FunctionAppName ){}
+                            if ($null -ne $playbookData -and $null -ne $playbookData.parameters){
+                                # if ($playbookResource.properties -and $playbookResource.properties.api -and $playbookResource.properties.api.id) {
+                                #     if ($playbookResource.properties.api.id.Contains("/providers/Microsoft.Web/customApis/")) {
+                                #         $splits = $playbookResource.properties.api.id.Split(',');
+                                #         $connectionKey = $splits[-1].Trim().Replace("parameters('","").Replace("'","").Replace(")","").Replace("]","");
+                                        foreach($param in $playbookData.parameters.PsObject.Properties)
+                                        {
+                                            if($functionAppList.ContainsKey($param.Value.defaultValue))
+                                            {
+                                                $playbookDependencies += [PSCustomObject] @{
+                                                        kind = "AzureFunction";
+                                                        contentId = $functionAppList[$param.Value.defaultValue].id;
+                                                        version = $functionAppList[$param.Value.defaultValue].version;
+                                                }
+                                            }
+                                        }
+                                                
+                                            
+                                    # $playbookDependencies += [PSCustomObject] @{
+                                    #                     kind = "AzureFunction";
+                                    #                     contentId = $functionAppList[$templateVar.Value.defaultValue].id;
+                                    #                     version = $functionAppList[$templateVar.Value.defaultValue].version;
+                                
+                        
+                        }
                         }
 
 
@@ -1008,7 +1016,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $customConnectorsList.add($customConnectorContentId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$playbookCounter')]"});
                             }
                             if ($IsFunctionAppResource) {
-                                $functionAppList.add($functionAppsPlaybookId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$playbookCounter')]"});
+                                $functionAppList.add($functionAppsPlaybookId, @{ id=$playbookData.parameters.FunctionAppName.defaultValue; version="[variables('playbookVersion$playbookCounter')]"});
                             }
 
                             Write-Host $playbookDependencies
