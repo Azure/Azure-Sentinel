@@ -26,7 +26,7 @@ Microsoft Sentinel's Logstash output plugin supports the following versions
 - Logstash 7 Between 7.0 and 7.17.6
 - Logstash 8 Between 8.0 and 8.4.2
 
-Please note that when using Logstash 8, it is recommended to disable ECS in pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
+Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
 
 ## 2. Create a sample file
@@ -48,7 +48,7 @@ Note: make sure that the path exists before creating the sample file.
 ### Configurations:
 The following parameters are optional and should be used to create a sample file.
 - **create_sample_file** - Boolean, False by default. When enabled, up to 10 events will be written to a sample json file.
-- **sample_file_path** - Number, Empty by default. Required when create_sample_file is enabled. Should include a valid path where to place the sample file generated.
+- **sample_file_path** - Number, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.
 
 ### Complete example
 1. set the pipeline.conf with the following configuration:
@@ -203,7 +203,7 @@ Now you are able to run logstash with the example configuration and send mock da
 
 For example: 
 ```
-logger -p local4.warn --rfc3164 --tcp -t CEF: "0|Microsoft|Device|cef-test|example|data|1|here is some more data for the example" -P 514 -d -n 127.0.0.1
+logger -p local4.warn --rfc3164 --tcp -t CEF "0|Microsoft|Device|cef-test|example|data|1|here is some more data for the example" -P 514 -d -n 127.0.0.1
 ```
 
 Which will produce this content in the sample file:
