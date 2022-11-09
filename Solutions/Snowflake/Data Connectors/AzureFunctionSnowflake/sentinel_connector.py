@@ -20,6 +20,7 @@ class AzureSentinelConnector:
         self._queue = []
         self._bulks_list = []
         self.successfull_sent_events_number = 0
+        self.failed_sent_events_number = 0
 
     def send(self, event):
         self._queue.append(event)
