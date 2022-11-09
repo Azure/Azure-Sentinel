@@ -120,7 +120,7 @@ output {
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
-- **compress_data** - Boolean, false by default. The event data will be compressed before using the API. This ability is recommended to be used for a high throughput pipelines. 
+- **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
 
 Security notice: We recommend not to implicitly state client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, and dcr_immutable_id in your Logstash configuration for security reasons.
                  It is best to store this sensitive information in a Logstash KeyStore as described here- ['Get Started Logstash User'](<https://www.elastic.co/guide/en/elasticsearch/reference/current/get-started-logstash-user.html>) ['Secrets Keystore'](<https://www.elastic.co/guide/en/logstash/current/keystore.html>)
