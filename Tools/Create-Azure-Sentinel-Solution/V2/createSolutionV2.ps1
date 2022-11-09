@@ -479,7 +479,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         # $functionappfiledata = Get-Content "C:\GitHub\Azure-Sentinel\Solutions\Fortinet-FortiGate\Playbooks\FunctionApp\azuredeploy.json" | ConvertFrom-Json
                         # $functionAppsPlaybookId = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/sites".ToLower())}) ? $functionappfiledata.parameters.FunctionAppName.defaultValue:''
                         $DependencyCriteria += [PSCustomObject]@{
-                            kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "FunctionApp" : "Playbook";;
+                            kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "AzureFunction" : "Playbook";;
                             contentId = "[variables('_$fileName')]";
                             version   = "[variables('playbookVersion$playbookCounter')]";
                         };
@@ -995,7 +995,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 tags       = [PSCustomObject]@{
                                     "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
                                     "hidden-sentinelContentType" = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" 
-                                        : $IsFunctionAppResource ? "FunctionApp" : "Playbook";
+                                        : $IsFunctionAppResource ? "AzureFunction" : "Playbook";
                                 };
                                 properties = [PSCustomObject]@{
                                     description = $IsLogicAppsCustomConnector -or $IsFunctionAppResource ? $playbookName : "$($playbookName) playbook";
@@ -1024,13 +1024,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
                                 name       = $IsLogicAppsCustomConnector ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('LogicAppsCustomConnector-', last(split(variables('playbookId'),'/'))))]" : 
-                                $IsFunctionAppResource ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('FunctionApp', last(split(variables('playbookId'),'/'))))]" :
+                                $IsFunctionAppResource ? "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AzureFunction-', last(split(variables('playbookId'),'/'))))]" :
                                 "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId$playbookCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
                                     parentId  = $IsLogicAppsCustomConnector -or $IsFunctionAppResource ? "[[variables('playbookId')]" : "[variables('playbookId$playbookCounter')]"
                                     contentId = "[variables('_playbookContentId$playbookCounter')]";
                                     kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ?
-                                    "FunctionApp" : "Playbook";
+                                    "AzureFunction" : "Playbook";
                                     version   = "[variables('playbookVersion$playbookCounter')]";
                                     source    = [PSCustomObject]@{
                                         kind     = "Solution";
@@ -1085,7 +1085,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 location   = "[parameters('workspace-location')]";
                                 tags       = [PSCustomObject]@{
                                     "hidden-sentinelWorkspaceId" = "[variables('workspaceResourceId')]";
-                                    "hidden-sentinelContentType" = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "FunctionApp" : "Playbook";
+                                    "hidden-sentinelContentType" = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "AzureFunction" : "Playbook";
                                 };
                                 dependsOn  = @(
                                     "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName$playbookCounter'))]"
