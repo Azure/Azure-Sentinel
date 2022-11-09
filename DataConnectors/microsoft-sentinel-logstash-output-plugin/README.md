@@ -123,7 +123,7 @@ output {
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
 
 Security notice: We recommend not to implicitly state client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, and dcr_immutable_id in your Logstash configuration for security reasons.
-                 It is best to store this sensitive information in a Logstash KeyStore as described here- ['Get Started Logstash User'](<https://www.elastic.co/guide/en/elasticsearch/reference/current/get-started-logstash-user.html>) ['Secrets Keystore'](<https://www.elastic.co/guide/en/logstash/current/keystore.html>)
+                 It is best to store this sensitive information in a Logstash KeyStore as described here- ['Secrets Keystore'](<https://www.elastic.co/guide/en/logstash/current/keystore.html>)
 
 
 ## 5. Basic logs transmission
