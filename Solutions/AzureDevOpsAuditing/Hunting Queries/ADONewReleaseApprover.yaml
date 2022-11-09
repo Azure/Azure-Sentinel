@@ -1,0 +1,42 @@
+id: 0c149cc9-78ba-4be1-9f7b-018288e3a829
+name: Azure DevOps - New Release Approver
+description: |
+  'Releases in Azure Pipelines often require a user authorization to perform the release. An attacker that has compromised a build may look to self-approve a release using a compromised account to avoid user focus on that release. This query looks for release approvers in pipelines where they have not approved a release in the last 30 days. This query can have a significant false positive rate so its best suited as a hunting query rather than a detection.'
+requiredDataConnectors: []
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = 30d;
+  AzureDevOpsAuditing
+  | where TimeGenerated > ago(lookback) and TimeGenerated < starttime
+  | where OperationName in ("Release.ApprovalCompleted", "Release.ApprovalsCompleted")
+  | extend PipelineName = tostring(Data.PipelineName)
+  | extend ApprovalType = tostring(Data.ApprovalType)
+  | extend StageName = tostring(Data.StageName)
+  | extend ReleaseName = tostring(Data.ReleaseName)
+  | summarize by PipelineName, ActorUPN, ApprovalType
+  | join kind=rightanti (
+  AzureDevOpsAuditing
+  | where TimeGenerated between(starttime..endtime)
+  | where OperationName in ("Release.ApprovalCompleted", "Release.ApprovalsCompleted")
+  | extend PipelineName = tostring(Data.PipelineName)
+  | extend ApprovalType = tostring(Data.ApprovalType)
+  | extend StageName = tostring(Data.StageName)
+  | extend ReleaseName = tostring(Data.ReleaseName)) on ActorUPN
+  | project-reorder TimeGenerated, PipelineName, ActorUPN, ApprovalType, StageName, ReleaseName, IpAddress, UserAgent, AuthenticationMechanism
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+
+
