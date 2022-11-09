@@ -1,3 +1,5 @@
+Import-Module powershell-yaml
+
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
 $mainTemplateArtifact = [PSCustomObject]@{
@@ -161,13 +163,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $customConnectorsList = @{};
     $metadataAuthor = $contentToImport.Author.Split(" - ");
     $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
-                if($null -ne $metadataAuthor[1])
-                {
-                    $baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
-                    $baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
-                }
+    $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
+    $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
+    if($null -ne $metadataAuthor[1])
+    {
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
+    }
 
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
@@ -403,8 +405,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
-                                    dependencies = $workbookDependencies;
                                 }
+                            }
+
+                            if($WorkbookDependencyCriteria.Count -gt 0)
+                            {
+                                $workbookMetadata | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $workbookDependencies                 
                             }
 
                             if($workbookDescriptionText -ne "")
