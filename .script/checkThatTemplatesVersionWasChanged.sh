@@ -7,7 +7,7 @@ for (( i=0; i<${#MAPFILE[@]}; i++ ))
     #And making sure that in every file that its filename contains the word "Detection", the version was updated
     do
     	echo processing the file ${MAPFILE[$i]}.
-	if [[ "${MAPFILE[$i]}" == *"Detections/"* || "${MAPFILE[$i]}" == *"Analytic Rules/"* ]] && [[ "${file: -5}" == *".yaml"* || "${file: -4}" == *".yml"* ]];
+	if [[ "${MAPFILE[$i]}" == *"Detections/"* || "${MAPFILE[$i]}" == *"Analytic Rules/"* ]] && [[ "${MAPFILE[$i]: -5}" == *".yaml"* || "${MAPFILE[$i]: -4}" == *".yml"* ]];
 	then
 		echo ${MAPFILE[$i]} is a detection
 		diffs=$(echo $(git diff origin/master -U0 --ignore-space-change "${MAPFILE[$i]}"))
