@@ -151,7 +151,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.json"
     $metadataPath = "$PSScriptRoot/../../../Solutions/$($contentToImport.Name)/$($contentToImport.Metadata)"
 
-    $workbookMetadataPath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/"
+    $workbookMetadataPath = "$PSScriptRoot/../../../"
     # Base JSON Objects
     $baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
     $baseCreateUiDefinition = Get-Content -Raw $baseCreateUiDefinitionPath | Out-String | ConvertFrom-Json
@@ -403,6 +403,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
+                                    dependencies = $workbookDependencies;
                                 }
                             }
 
@@ -1914,7 +1915,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
                             function Remove-EmptyArrays($Object) {
-                                ($Object.GetEnumerator() | ? {
+                                (@($Object).GetEnumerator() | ? {
                                     if($_.GetType().fullname -eq "System.Collections.Hashtable"){
                                         -not $_.Values
                                     }
