@@ -15,4 +15,4 @@ More Specific to Detections:
 * If you are contributing analytic rule templates as part of a solution, follow [guidance for solutions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions#step-1--create-your-content) to include those in the right folder paths. Do NOT include content to be packaged in solutions under the Detections folder. 
 
 # Feedback
-For questions or feedback, please contact AzureSentinel@microsoft.com
+For questions or feedback, please contact AzureSentinel@microsoft.com1

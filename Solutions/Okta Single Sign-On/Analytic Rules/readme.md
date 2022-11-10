@@ -20,7 +20,7 @@
 # Overview
 
 Okta is an enterprise-grade, identity management service, built for the cloud, but compatible with many on-premises applications. 
-With Okta, IT can manage any employee's access to any application or device. Okta runs in the cloud, on a secure, reliable, extensively audited platform, which integrates deeply with on-premises applications, directories, and identity management systems.
+With Okta, IT can manage any employee's accesss to any application or device. Okta runs in the cloud, on a secure, reliable, extensively audited platform, which integrates deeply with on-premises applications, directories, and identity management systems.
 
 ## Deploy Custom Connector + 3 Playbook templates
 This package includes:

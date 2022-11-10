@@ -25,7 +25,7 @@ With Okta, IT can manage any employee's access to any application or device. Okt
 ## Deploy Custom Connector + 3 Playbook templates
 This package includes:
 * Custom connector for Okta
-* Three playbook templates leverage Okta custom connector
+* Three playbook templates leverage Okta custom codsnnector
 
 You can choose to deploy the whole package : connector + all three playbook templates, or each one seperately from it's specific folder.
 
