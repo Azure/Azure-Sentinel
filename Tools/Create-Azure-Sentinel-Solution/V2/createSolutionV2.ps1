@@ -336,8 +336,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $workbookDependencies = [PSCustomObject]@{
                                     operator = "AND";
-                                    criteria = $WorkbookDependencyCriteria;
                                 };
+
+                                if($WorkbookDependencyCriteria.Count -gt 0)
+                                {
+                                    $workbookDependencies | Add-Member -NotePropertyName "criteria" -NotePropertyValue $WorkbookDependencyCriteria                 
+                                }
+
                                 $newWorkbook.metadata | Add-Member -MemberType NoteProperty -Name "description" -Value "$($dependencies.description)"
                             }
                             catch {
@@ -405,12 +410,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
+                                    dependencies = $workbookDependencies;
                                 }
-                            }
-
-                            if($WorkbookDependencyCriteria.Count -gt 0)
-                            {
-                                $workbookMetadata | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $workbookDependencies                 
                             }
 
                             if($workbookDescriptionText -ne "")
