@@ -1023,11 +1023,11 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $playbookMetadata = [PSCustomObject]@{
                                 type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
                                 apiVersion = "2022-01-01-preview";
-                                name       = $IsLogicAppsCustomConnector ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('LogicAppsCustomConnector-', last(split(variables('playbookId'),'/'))))]" : 
-                                $IsFunctionAppResource ? "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AzureFunction-', last(split(variables('playbookId'),'/'))))]" :
+                                name       = $IsLogicAppsCustomConnector ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('LogicAppsCustomConnector-', last(split(variables('playbookId$playbookCounter'),'/'))))]" : 
+                                $IsFunctionAppResource ? "[[concat(variables('workspace-name'),'/Microsoft.SecurityInsights/',concat('AzureFunction-', last(split(variables('playbookId$playbookCounter'),'/'))))]" :
                                 "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId$playbookCounter'),'/'))))]";
                                 properties = [PSCustomObject]@{
-                                    parentId  = $IsLogicAppsCustomConnector -or $IsFunctionAppResource ? "[[variables('playbookId')]" : "[variables('playbookId$playbookCounter')]"
+                                    parentId  = $IsLogicAppsCustomConnector -or $IsFunctionAppResource ? "[[variables('playbookId$playbookCounter')]" : "[variables('playbookId$playbookCounter')]"
                                     contentId = "[variables('_playbookContentId$playbookCounter')]";
                                     kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ?
                                     "AzureFunction" : "Playbook";
@@ -1038,17 +1038,16 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         sourceId = "[variables('_solutionId')]"
                                     };
                                     author    = $authorDetails;
-                                    support   = $baseMetadata.support
-                                    dependencies = $playbookDependencies
+                                    support   = $baseMetadata.support;
                                 }
                             }
 
-                            # if ($playbookDependencies) {
-                            #     $criteria = [PSCustomObject]@{
-                            #         criteria = $playbookDependencies
-                            #     };
-                            #     $playbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $criteria
-                            # }
+                            if ($playbookDependencies) {
+                                $criteria = [PSCustomObject]@{
+                                    criteria = $playbookDependencies
+                                };
+                                $playbookMetadata.properties | Add-Member -NotePropertyName "dependencies" -NotePropertyValue $criteria
+                            }
 
                             $playbookVariables = [PSCustomObject]@{};
                             foreach($var in $playbookData.variables.PsObject.Properties)
@@ -1058,13 +1057,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $playbookVariables | Add-Member -NotePropertyName "workspace-location-inline" -NotePropertyValue "[concat('[resourceGroup().locatio', 'n]')]";
                             if ($IsLogicAppsCustomConnector) {
-                                $playbookVariables | Add-Member -NotePropertyName "playbookContentId" -NotePropertyValue $fileName;
-                                $playbookVariables | Add-Member -NotePropertyName "playbookId" -NotePropertyValue "[[resourceId('Microsoft.Web/customApis', parameters('$logicAppsPlaybookId'))]"
+                                $playbookVariables | Add-Member -NotePropertyName "playbookContentId$playbookCounter" -NotePropertyValue $fileName;
+                                $playbookVariables | Add-Member -NotePropertyName "playbookId$playbookCounter" -NotePropertyValue "[[resourceId('Microsoft.Web/customApis', parameters('$logicAppsPlaybookId'))]"
                             }
 
                             if ($IsFunctionAppResource) {
-                                $playbookVariables | Add-Member -NotePropertyName "playbookContentId" -NotePropertyValue $fileName;
-                                $playbookVariables | Add-Member -NotePropertyName "playbookId" -NotePropertyValue "[[resourceId('Microsoft.Web/sites', parameters('$functionAppsPlaybookId'))]"
+                                $playbookVariables | Add-Member -NotePropertyName "playbookContentId$playbookCounter" -NotePropertyValue $fileName;
+                                $playbookVariables | Add-Member -NotePropertyName "playbookId$playbookCounter" -NotePropertyValue "[[resourceId('Microsoft.Logic/workflows', variables('playbookContentId$playbookCounter'))]"
                             }
 
                             $playbookVariables | Add-Member -NotePropertyName "workspace-name" -NotePropertyValue "[parameters('workspace')]"
