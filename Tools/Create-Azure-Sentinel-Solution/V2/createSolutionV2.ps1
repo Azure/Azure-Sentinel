@@ -403,6 +403,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
+                                    dependencies = $workbookDependencies;
                                 }
                             }
 
@@ -1914,7 +1915,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
                             function Remove-EmptyArrays($Object) {
-                                ($Object.GetEnumerator() | ? {
+                                (@($Object).GetEnumerator() | ? {
                                     if($_.GetType().fullname -eq "System.Collections.Hashtable"){
                                         -not $_.Values
                                     }
