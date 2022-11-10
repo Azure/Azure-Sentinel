@@ -31,10 +31,6 @@
             "metadata": {
                 "description": "The primary or secondary key of the Azure Log Analytics workspace."
             }
-        },
-        "UserName": {
-            "defaultValue": "<username>@<domain>",
-            "type": "string"
         }
     },
     "variables": {
@@ -47,7 +43,7 @@
             "name": "[variables('AzureLogAnalyticsConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[parameters('UserName')]",
+                "displayName": "LogAnalyticsDataCollector",
                 "parameterValues": {
                     "username": "[parameters('LogAnalyticsWorkspaceID')]",
                     "password": "[parameters('LogAnalyticsWorkspaceKey')]"
@@ -79,15 +75,12 @@
                             "type": "Object"
                         },
                         "Application ID": {
-                            "defaultValue": "[parameters('application_ID')]",
                             "type": "String"
                         },
                         "Secret": {
-                            "defaultValue": "[parameters('application_secret')]",
-                            "type": "String"
+                            "type": "SecureString"
                         },
                         "Tenant ID": {
-                            "defaultValue": "[parameters('Tenant_ID')]",
                             "type": "String"
                         }
                     },
@@ -362,34 +355,34 @@
                                 "path": "/api/logs"
                             }
                         },
-                            "For_each": {
-                                "foreach": "@body('M365_Secure_Score_Parse_JSON')?['value']",
-                                "actions": {
-                                    "M365_Secure_Score_Controls_Send_Data": {
-                                        "runAfter": {},
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "body": "@{items('For_each')?['controlScores']}",
-                                            "headers": {
-                                                "Log-Type": "M365SecureScoreControls"
-                                            },
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                }
-                                            },
-                                            "method": "post",
-                                            "path": "/api/logs"
-                                        }
+                        "For_each": {
+                            "foreach": "@body('M365_Secure_Score_Parse_JSON')?['value']",
+                            "actions": {
+                                "M365_Secure_Score_Controls_Send_Data": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{items('For_each')?['controlScores']}",
+                                        "headers": {
+                                            "Log-Type": "M365SecureScoreControls"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
                                     }
-                                },
-                                "runAfter": {
-                                    "M365_Secure_Score_Send_Data": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "Foreach"
+                                }
                             },
+                            "runAfter": {
+                                "M365_Secure_Score_Send_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
                         "MDE_Exposure_Score_HTTP": {
                             "runAfter": {
                                 "MDE_Secure_Score_Send_Data": [
@@ -742,6 +735,169 @@
                                 "method": "post",
                                 "path": "/api/logs"
                             }
+                        },
+                        "MDE_Software_Vulnerabilities_HTTP": {
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.securitycenter.windows.com",
+                                    "clientId": "@parameters('Application ID')",
+                                    "secret": "@parameters('Secret')",
+                                    "tenant": "@parameters('Tenant ID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://api.securitycenter.windows.com/api/machines/SoftwareVulnerabilitiesByMachine"
+                            },
+                            "runAfter": {
+                                "MDE_Vulnerabilities_Send_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "MDE_Software_Vulnerabilities_Parse_JSON": {
+                            "inputs": {
+                                "content": "@body('MDE_Software_Vulnerabilities_HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "cveId": {
+                                                        "type": "string"
+                                                    },
+                                                    "cvssScore": {
+                                                        "type": "number"
+                                                    },
+                                                    "deviceId": {
+                                                        "type": "string"
+                                                    },
+                                                    "deviceName": {
+                                                        "type": "string"
+                                                    },
+                                                    "diskPaths": {
+                                                        "type": "array"
+                                                    },
+                                                    "endOfSupportDate": {},
+                                                    "endOfSupportStatus": {},
+                                                    "exploitabilityLevel": {
+                                                        "type": "string"
+                                                    },
+                                                    "firstSeenTimestamp": {
+                                                        "type": "string"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "lastSeenTimestamp": {
+                                                        "type": "string"
+                                                    },
+                                                    "osArchitecture": {
+                                                        "type": "string"
+                                                    },
+                                                    "osPlatform": {
+                                                        "type": "string"
+                                                    },
+                                                    "osVersion": {
+                                                        "type": "string"
+                                                    },
+                                                    "rbacGroupId": {
+                                                        "type": "integer"
+                                                    },
+                                                    "rbacGroupName": {
+                                                        "type": "string"
+                                                    },
+                                                    "recommendationReference": {
+                                                        "type": "string"
+                                                    },
+                                                    "recommendedSecurityUpdate": {},
+                                                    "recommendedSecurityUpdateId": {},
+                                                    "recommendedSecurityUpdateUrl": {},
+                                                    "registryPaths": {
+                                                        "type": "array"
+                                                    },
+                                                    "securityUpdateAvailable": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "softwareName": {
+                                                        "type": "string"
+                                                    },
+                                                    "softwareVendor": {
+                                                        "type": "string"
+                                                    },
+                                                    "softwareVersion": {
+                                                        "type": "string"
+                                                    },
+                                                    "vulnerabilitySeverityLevel": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "deviceId",
+                                                    "rbacGroupId",
+                                                    "rbacGroupName",
+                                                    "deviceName",
+                                                    "osPlatform",
+                                                    "osVersion",
+                                                    "osArchitecture",
+                                                    "softwareVendor",
+                                                    "softwareName",
+                                                    "softwareVersion",
+                                                    "cveId",
+                                                    "vulnerabilitySeverityLevel",
+                                                    "recommendedSecurityUpdate",
+                                                    "recommendedSecurityUpdateId",
+                                                    "recommendedSecurityUpdateUrl",
+                                                    "diskPaths",
+                                                    "registryPaths",
+                                                    "lastSeenTimestamp",
+                                                    "firstSeenTimestamp",
+                                                    "endOfSupportStatus",
+                                                    "endOfSupportDate",
+                                                    "exploitabilityLevel",
+                                                    "recommendationReference",
+                                                    "cvssScore",
+                                                    "securityUpdateAvailable"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "MDE_Software_Vulnerabilities_HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "MDE_Software_Vulnerabilities_Send_Data": {
+                            "inputs": {
+                                "body": "@{body('MDE_Software_Vulnerabilities_Parse_JSON')?['value']}",
+                                "headers": {
+                                    "Log-Type": "MDfESoftwareVulnerabilities"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            },
+                            "runAfter": {
+                                "MDE_Software_Vulnerabilities_Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
                         }
                     },
                     "outputs": {}
@@ -755,6 +911,15 @@
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                             }
                         }
+                    },
+                    "Application ID": {
+                        "value": "[parameters('application_ID')]"
+                    },
+                    "Secret": {
+                        "value": "[parameters('application_secret')]"
+                    },
+                    "Tenant ID": {
+                        "value": "[parameters('Tenant_ID')]"
                     }
                 }
             }
