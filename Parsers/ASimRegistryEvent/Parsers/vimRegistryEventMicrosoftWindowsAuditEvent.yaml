@@ -1,0 +1,93 @@
+Parser:
+  Title: Registry Event ASIM parser for Microsoft Windows Events (registry audit event)
+  Version: '0.1.0'
+  LastUpdated: Nov 10th, 2022
+Product:
+  Name: Security Events
+Normalization:
+  Schema: RegistryEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Registry Schema
+  Link: https://aka.ms/ASimRegistryEventDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+        This ASIM parser supports normalizing Microsoft Windows events (event number 4663), to the ASIM Registry Event normalized schema.
+ParserName: vimRegistryEventMicrosoftWindowsAuditEvent
+ParserQuery: |
+  let Parser=()
+  { 
+  let ASIM_GetWindowsUserType = (username:string, sid:string) { 
+      case ( 
+          username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", 
+          isempty(username) or sid == "S-1-0-0", "", 
+          "Regular"
+      )
+  };
+  let ASIM_GetAccountType = (sid:string) { 
+      iif ( 
+          sid in ("S-1-0-0","S-1-5-18", "S-1-5-19", "S-1-5-20"), "Simple", 
+          "Windows"
+      )
+  };
+  let EventTypeLookup = datatable (AccessMask:string,EventType:string)
+  [
+      "0x1", "RegistryValueRead"
+      , "0x10", "MetadataModified"
+      , "0x10000", "ObjectDeleted"
+      , "0x2", "RegistryValueSet"
+      , "0x20000", "MetadataAccessed"
+      , "0x20006", "MetadataAccessed"
+      , "0x40000", "MetadataModified"
+      , "0x8", "RegistrySubkeyEnumerated"
+      , "0x80000", "MetadataModified"
+  ];
+  union isfuzzy=false (
+      WindowsEvent
+      | where EventID == 4663
+          and EventData.ObjectType == "Key"
+      | extend AccessMask = tostring(EventData.AccessMask)
+      | lookup EventTypeLookup on AccessMask
+      | extend ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName)
+          , ActorUserId = tostring(EventData.SubjectUserSid)
+          , ActorSessionId = tostring(EventData.SubjectLogonId)
+          , ActingProcessName = tostring(EventData.ProcessName)
+          , ActingProcessId = tostring(toint(tolong(EventData.ProcessId)))
+          , RegistryKey = iif(EventData.ObjectName startswith @"\REGISTRY\MACHINE", replace_string(tostring(EventData.ObjectName), @"\REGISTRY\MACHINE","HKEY_LOCAL_MACHINE")
+            ,replace_string(tostring(EventData.ObjectName), @"\REGISTRY\USER","HKEY_USERS"))
+      | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, AccessMask
+  ), (
+      SecurityEvent
+      | where EventID == 4663
+          and ObjectType == "Key"
+      | lookup EventTypeLookup on AccessMask
+      | extend ActorUsername = strcat(SubjectDomainName, @'\', SubjectUserName)
+          , ActingProcessId = tostring(toint(tolong(ProcessId)))
+          , RegistryKey = iif(ObjectName startswith @"\REGISTRY\MACHINE", replace_string(ObjectName, @"\REGISTRY\MACHINE","HKEY_LOCAL_MACHINE")
+            ,replace_string(ObjectName, @"\REGISTRY\USER","HKEY_USERS"))  
+      | project-rename ActorUserId = SubjectUserSid
+          , ActorSessionId = SubjectLogonId
+          , ActingProcessName = ProcessName
+      | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, AccessMask
+  )
+  | extend ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
+      , ActorUsernameType = ASIM_GetAccountType(ActorUserId)
+  | project-rename DvcFQDN = Computer
+  | extend User = ActorUsername
+      , Process = ActingProcessName
+      , Dvc = DvcFQDN
+      , EventStartTime = TimeGenerated
+      , EventEndTime = TimeGenerated
+      , EventOriginalType = tostring(EventID)
+  | extend EventSchemaVersion = "0.1" 
+      , EventSchema = "RegistryEvent"
+      , EventCount = toint(1)
+      , EventResult = "Success"
+      , EventVendor = "Microsoft"
+      , EventProduct = "Security Events" 
+      , DvcOs = "Windows"
+      , ActorUserIdType = "SID"
+      , DvcDomainType = "FQDN"
+  };
+  Parser
