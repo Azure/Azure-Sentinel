@@ -1016,7 +1016,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $customConnectorsList.add($customConnectorContentId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$playbookCounter')]"});
                             }
                             if ($IsFunctionAppResource) {
-                                $functionAppList.add($functionAppsPlaybookId, @{ id=$playbookData.parameters.FunctionAppName.defaultValue; version="[variables('playbookVersion$playbookCounter')]"});
+                                $functionAppList.add($functionAppsPlaybookId, @{ id="[variables('_$filename')]"; version="[variables('playbookVersion$playbookCounter')]"});
                             }
 
                             Write-Host $playbookDependencies
