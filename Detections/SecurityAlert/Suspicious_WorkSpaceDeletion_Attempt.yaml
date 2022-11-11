@@ -25,35 +25,35 @@ relevantTechniques:
   - T1078
   - T1489
 query: |
-  SecurityAlert
-  | where ProductName == "Azure Active Directory Identity Protection"
-  | where AlertName == "Sign-in from an infected device"
-  | mv-expand Entity = todynamic(Entities)
-  | where Entity.Type == "account"
-  | extend AadTenantId = tostring(Entity.AadTenantId)
-  | extend AadUserId = tostring(Entity.AadUserId)
-  | extend IpAddress = tostring(parse_json(Entities)[2].Address)
-  | join kind=inner (
-  IdentityInfo
-  | distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName
-  | extend UserAccount = AccountUPN
-  | extend UserName = AccountDisplayName
-  | where isnotempty(AccountDisplayName) and isnotempty(UserAccount)
-  | project AccountTenantId, AccountObjectId, UserAccount, UserName
-  )
-  on
-  $left.AadTenantId == $right.AccountTenantId,
-  $left.AadUserId == $right.AccountObjectId
-  | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
-  | project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress,TimeGenerated
-  | join kind=inner 
-  (
-  AzureActivity
-  where OperationNameValue hassuffix ("/workspaces/computes/delete")
-  | where ActivityStatusValue =~ "Succeeded"
-  | project TimeGenerated, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId
-  ) on IpAddress, UserAccount
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserAccount, IPCustomEntity = IpAddress
+ SecurityAlert
+    | where ProductName == "Azure Active Directory Identity Protection"
+    | where AlertName == "Sign-in from an infected device"
+    | mv-expand Entity = todynamic(Entities)
+    | where Entity.Type == "account"
+    | extend AadTenantId = tostring(Entity.AadTenantId)
+    | extend AadUserId = tostring(Entity.AadUserId)
+    | extend IpAddress = tostring(parse_json(Entities)[2].Address)
+    | join kind=inner (
+    IdentityInfo
+    | distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName
+    | extend UserAccount = AccountUPN
+    | extend UserName = AccountDisplayName
+    | where isnotempty(AccountDisplayName) and isnotempty(UserAccount)
+    | project AccountTenantId, AccountObjectId, UserAccount, UserName
+    )
+    on
+    $left.AadTenantId == $right.AccountTenantId,
+    $left.AadUserId == $right.AccountObjectId
+    | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
+    | project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress,TimeGenerated, UserName
+    | join kind=inner 
+    (
+    AzureActivity
+    | where OperationNameValue hassuffix ("/workspaces/computes/delete")
+    | where ActivityStatusValue =~ "Succeeded"
+    | project TimeGenerated, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId
+    ) on IpAddress, UserAccount
+    | extend timestamp = TimeGenerated, AccountCustomEntity = UserAccount, IPCustomEntity = IpAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
