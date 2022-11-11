@@ -1,0 +1,14 @@
+# Network Session Solution for Microsoft Sentinel Summarization capability
+
+This logic app helps to summarize Network session data into custom tables. This would incur additional cost.
+
+ ## Summary
+ To ensure good performance of Network session solution, summarization capability can be used. This would create various custom tables containing analytics based on different parameters of ASIM Network Session Schema.
+
+### Deployment instructions 
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploySummarizationPublic)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/deploySummarizationGov)
+
+2. Fill in the required parameter:
+    * Playbook Name: Enter the playbook name here (Ex: SummarizeData)
