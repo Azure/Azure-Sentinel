@@ -159,14 +159,21 @@ let ActionMappingTable = datatable(ACTION:string ,ActionName:string) [ 1, 'CREAT
                          211, 'DROP REWRITE EQUIVALENCE'];
 Syslog
 | where SyslogMessage contains "Oracle Unified Audit"
+| extend MessageLength = strlen(SyslogMessage)
+	   , Privilege = column_ifexists("PRIVILEGE","")
+	   , ClientTerminal = column_ifexists("CLIENT TERMINAL","")
+	   , Status = column_ifexists("STATUS","")
+	   , Statement = column_ifexists("STATEMENT","")
+	   , SrcDvcHostname = column_ifexists("HostName","")
+	   , SrcIpAddr = column_ifexists("HostIP","")
+	   , SrcPortNumber = column_ifexists("PORT","")
 | parse SyslogMessage with * "LENGTH: '" LENGTH "'" *
 | parse-kv SyslogMessage as (TYPE:string, DBID:string, SESID:string, CLIENTID:string, ENTRYID:int, STMTID:int, DBUSER:string, CURUSER:string, ACTION:string, RETCODE:int, SCHEMA:string, OBJNAME:string) with (pair_delimiter=' ', kv_delimiter=':', quote='"')
 | lookup ActionMappingTable on ACTION
 | extend DbAction = case(isnotempty(ActionName), ActionName, "UNKNOWN ACTION")
 | extend EventVendor = 'Oracle'
 | extend EventProduct = "Oracle Audit"
-|project-rename MessageLength = LENGTH
-                , DbAction = DbAction
+|project-rename  DbAction = DbAction
                 , DstUserName = DBUSER
                 , SrcUserName = CURUSER
                 , DbId = DBID
@@ -174,3 +181,29 @@ Syslog
                 , EntryId = ENTRYID
                 , ReturnCode = RETCODE
                 , ObjName = OBJNAME
+                , Action = ACTION
+				,ActionLength = LENGTH
+| project TimeGenerated
+        , EventVendor
+        , EventProduct
+        , SeverityLevel
+        , MessageLength
+        , Action
+        , ActionLength
+        , DbAction
+        , DstUserName
+        , Privilege
+        , SrcUserName
+        , ClientTerminal
+        , Status
+        , DbId
+        , SessionId
+        , EntryId
+        , Statement
+        , SrcDvcHostname
+        , SrcIpAddr
+        , SrcPortNumber
+        , ReturnCode
+       // , ObjCreator
+        , ObjName
+        //, OsUserId
