@@ -5,12 +5,13 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-1. [Deploy Custom Connector + 3 Playbook templates](#deployall)
-1. [Authentication](#authentication)
-1. [Prerequisites](#prerequisites)
-1. [Deployment](#deployment)
-1. [Post Deployment Steps](#postdeployment)
-1. [Known issues and limitations](#knownissues)
+2. [Deploy Custom Connector + 3 Playbook templates](#deployall)
+3. [Custom Connector and playbooks OnPrem versions](#onprem)
+4. [Authentication](#authentication)
+5. [Prerequisites](#prerequisites)
+6. [Deployment](#deployment)
+7. [Post Deployment Steps](#postdeployment)
+8. [Known issues and limitations](#knownissues)
 
 
 
@@ -18,9 +19,9 @@
 
 # Overview
 
-PAN‑OS is the software that runs all Palo Alto Networks next-generation firewalls. This integration will allow your SOC to leverage automation to block traffic to/from specific IP or URL as a response to Microsoft Sentinel incidents.
+PAN‑OS is the software that runs all Palo Alto Networks next-generation firewalls. This integration will allow your SOC to leverage automation to block traffic to/from specific IP or URL as a response to Azure Sentinel incidents.
 
-**PAN-OS custom connector** includes [various actions](./PaloAltoCustomConnector#actions-supported-by-palo-alto-custom-connector) which allow you to create your own playbooks from scratch. In addition to the connector, there are 3 OOTB **playbooks templates** which leverage it so you can start automating Blocking of IPs an URLs with minimum configurations and effort. The OOTB scenarios are leveraging **address objects groups**, which are pre-configured to be refferenced to Security Policy rules. The playbooks will add IPs and URLs as address objects to these groups, so the policies will apply on them.
+**PAN-OS custom connector** includes [various actions](./PaloAltoCustomConnector#actions-supported-by-palo-alto-custom-connector) which allow you to create your own playbooks from scratch. In addition to the connector, there are 3 OOTB **playbooks templates** which leverage it so you can start automating Blocking of IPs an URLs with minimum configurations and effort. The OOTB scenarios are leveraging **address objects groups**, which are pre-configured to be referenced to Security Policy rules. The playbooks will add IPs and URLs as address objects to these groups, so the policies will apply on them.
 
 <a name="deployall">
 
@@ -29,11 +30,21 @@ This package includes:
 * Custom connector for PAN-OS.
 * Three playbook templates leverage PAN-OS custom connector.
 
-You can choose to deploy the whole package connector + all three playbook templates, or each one seperately from it's specific folder.
+You can choose to deploy the whole package connector + all three playbook templates, or each one separately from it's specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPaloAltoCustomConnector%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPaloAltoCustomConnector%2Fazuredeploy.json)
 
+## Custom Connector and playbooks OnPrem versions
+<a name="onprem">
 
+This package supports OnPrem versions of [Custom Connector](./PaloAltoCustomConnectorOnPrem/readme.md) and corresponding playbooks:
+ - [BlockIP](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockIP)
+ - [BlockURL](./PlaybooksOnPrem/PaloAlto-PAN-OS-BlockURL)
+ - [GetSystemInfo](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetSystemInfo)
+ - [GetThreatPCAP](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetThreatPCAP)
+ - [GetURLCategoryInfo](./PlaybooksOnPrem/PaloAlto-PAN-OS-GetURLCategoryInfo)
+
+They can be deployed separately.
 
 <a name="authentication">
 
@@ -73,14 +84,14 @@ This connector supports [API Key authentication](https://paloaltolactest.traffic
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Microsoft Sentinel connection resource
+1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for other connections such as Teams connection and PAN-OS API  Connection (For authorizing the PAN-OS API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account. 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
 
 
