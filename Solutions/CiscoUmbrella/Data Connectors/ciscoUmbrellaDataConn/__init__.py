@@ -541,7 +541,7 @@ class AzureSentinelConnector:
             logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
             self.successfull_sent_events_number += events_number
         else:
-            logging.error("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
+            logging.error("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status_code))
             self.failed_sent_events_number += events_number
 
     def _check_size(self, queue):
