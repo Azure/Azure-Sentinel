@@ -32,7 +32,7 @@ This Function App Connector is to connect AWS Athena API.
     - AWS Secret Access Key
     - AWS Region
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustarIPGeoPoint_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FNeustar%2520IP%2520GeoPoint%2FPlaybooks%2FNeustarIPGeoPoint_FunctionAppConnector%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Faws-athena%2FSolutions%2FAWSAthena%2FPlaybooks%2FCustomConnector%2FAWSAthena_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Faws-athena%2FSolutions%2FAWSAthena%2FPlaybooks%2FCustomConnector%2FAWSAthena_FunctionAppConnector%2Fazuredeploy.json)
 
 ### Function App Settings (Access Key ID, Secret Access Key and Region) Update Instruction
 1. Select the Function App.
