@@ -1,0 +1,208 @@
+Parser:
+  Title:  Network Session ASIM filtering parser for Microsoft Defender for IoT micro agent
+  Version: '0.2.1'
+  LastUpdated: Oct 30, 2022
+Product:
+  Name: Microsoft Defender for IoT
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Microsoft Defender for IoT micro agent logs to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionMD4IoTAgent
+EquivalentBuiltInParser: _Im_NetworkSession_MD4IoTAgent
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null), 
+        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
+        dstportnumber:int=int(null), 
+        hostname_has_any:dynamic=dynamic([]), 
+        dvcaction:dynamic=dynamic([]), 
+        eventresult:string='*', 
+        disabled:bool=false)
+  {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let ip_any  =  set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix, srcipaddr_has_any_prefix); 
+    let DirectionNetworkEvents =
+    SecurityIoTRawEvent 
+    | where (isnull(starttime) or TimeGenerated>=starttime) 
+        and (isnull(endtime) or TimeGenerated<=endtime)
+    | where not(disabled)
+    | where RawEventName == "NetworkActivity"
+    // ***************  Prefilterring *****************************************************************
+    |where  (eventresult=='*' or eventresult=='Success')
+        and (array_length(hostname_has_any)==0) 
+        and (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+        and EventDetails has tostring(dstportnumber)
+        and (array_length (ip_any)==0 or has_any_ipv4_prefix(EventDetails,ip_any))
+        // *************** Prefilterring *****************************************************************
+    | parse EventDetails with * ',"LocalPort":' LocalPort:int ',"RemotePort":' RemotePort:int ',' *
+    | extend outbound = LocalPort > RemotePort
+    | where (isnull(dstportnumber) or (not(outbound) and dstportnumber == LocalPort) or (outbound and dstportnumber == RemotePort) ) 
+    ;
+    let parser = (T: (EventDetails: string)) {
+      T 
+      | parse EventDetails with 
+        '{"LocalAddress":"' LocalAddress:string '",'
+        '"RemoteAddress":"' RemoteAddress:string '",'
+        *
+        '"BytesIn":' BytesIn:long ','
+        '"BytesOut":' BytesOut:long ','
+        '"Protocol":"' Protocol:string '",'
+        '"ProcessId":' ProcessId:string ','
+        '"UserId":' UserId:string ','
+        '"ApplicationProtocol":"' ApplicationProtocol:string '",'
+        * // '"AzureResourceId":"' AzureResourceId:string '",'
+        '"DeviceId":"' DeviceId:string '",'
+        '"MessageSource":"' MessageSource:string '",'
+        '"OriginalEventId":"' OriginalEventId:string '",'
+        '"TimestampUTC":"' TimestampUTC:datetime '",'
+        *
+    }
+    ; 
+    let OutboundNetworkEvents = 
+      DirectionNetworkEvents
+      | where outbound
+      // ***************  Postfilterring *****************************************************************
+      | where (isnull(dstportnumber) or dstportnumber==LocalPort)
+      // ***************  Postfilterring *****************************************************************
+      | invoke parser ()
+      | extend temp_isSrcMatch=has_any_ipv4_prefix(LocalAddress,src_or_any)
+             , temp_isDstMatch=has_any_ipv4_prefix(RemoteAddress,dst_or_any)
+      | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+    ) 
+    | where ASimMatchingIpAddr != "No match"
+    | project-away temp_*
+      | project-rename
+        SrcBytes = BytesOut,
+        DstBytes = BytesIn,
+        SrcPortNumber = LocalPort,
+        DstIpAddr = RemoteAddress,
+        DstPortNumber = RemotePort,
+        SrcProcessId = ProcessId
+      | extend
+        SrcIpAddr = LocalAddress,
+        SrcDvcIdType = "MD4IoTid",
+        SrcUserId = UserId,
+        SrcUserIdType = "UID",
+        SrcDvcId = DeviceId,
+        Process = SrcProcessId, // alias
+        SrcDvcOs = iif (MessageSource == "Linux", "Linux", "Windows")
+    ;
+    let InboundNetworkEvents = 
+      DirectionNetworkEvents
+      | where not(outbound)
+      // ***************  Postfilterring *****************************************************************
+      | where (isnull(dstportnumber) or dstportnumber==RemotePort)
+      // ***************  Postfilterring *****************************************************************
+      | invoke parser ()
+      | extend temp_isSrcMatch=( // only one of each pair has_any_ipv4_prefix is calculated
+                        has_any_ipv4_prefix(RemoteAddress,src_or_any)
+                    ) 
+           , temp_isDstMatch=(
+                     has_any_ipv4_prefix(LocalAddress,dst_or_any) 
+                    ) 
+      | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+    ) 
+    | project-away temp_*
+    | where ASimMatchingIpAddr != "No match"
+      | project-rename
+        DstBytes = BytesOut,
+        SrcBytes = BytesIn,
+        DstPortNumber = LocalPort,
+        SrcIpAddr = RemoteAddress,
+        SrcPortNumber = RemotePort,
+        DstProcessId = ProcessId
+      | extend
+        DstIpAddr = LocalAddress,
+        DstDvcIdType = "MD4IoTid",
+        DstUserId = UserId,
+        DstUserIdType = "UID",
+        DstDvcId = DeviceId,
+        Process = DstProcessId, // alias
+        DstDvcOs = iif (MessageSource == "Linux", "Linux", "Windows")
+    ;
+    let NetworkSessionMD4IoT = 
+      union InboundNetworkEvents, OutboundNetworkEvents
+      | extend
+        EventCount = int(1),
+        EventProduct = 'Azure Defender for IoT', 
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.2.3',
+        EventSchema = "NetworkSession", 
+        EventType = 'NetworkSession',
+        EventStartTime = TimeGenerated, 
+        EventEndTime = TimeGenerated, 
+        EventResult = 'Success',
+        EventSeverity = 'Informational'
+      | project-rename
+        EventProductVersion = AgentVersion, // Not available in Windows
+        _ResourceId = AssociatedResourceId, 
+        _SubscriptionId = AzureSubscriptionId, 
+        EventOriginalUid = OriginalEventId,  // OK pending question
+        DvcOs = MessageSource,
+        NetworkProtocol = Protocol,
+        NetworkApplicationProtocol = ApplicationProtocol,
+        DvcId = DeviceId,
+        DvcIpAddr = LocalAddress
+      | project-away outbound
+      | extend
+        Dvc = DvcId,
+        DvcIdType = "MD4IoTid",
+        User = UserId,
+        IpAddr = SrcIpAddr,
+        Src = SrcIpAddr,
+        Dst = DstIpAddr
+    ;
+    NetworkSessionMD4IoT};
+    parser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

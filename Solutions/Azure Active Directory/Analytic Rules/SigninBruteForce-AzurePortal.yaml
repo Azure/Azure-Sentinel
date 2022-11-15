@@ -3,7 +3,7 @@ name: Brute force attack against Azure Portal
 description: |
   'Identifies evidence of brute force activity against Azure Portal by highlighting multiple authentication failures 
   and by a successful authentication within a given time window. 
-  Default Failure count is 5 and default Time Window is 20 minutes.
+  Default Failure count is 10 and default Time Window is 20 minutes.
   References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes.'
 severity: Medium
 requiredDataConnectors:
@@ -24,7 +24,7 @@ relevantTechniques:
   - T1110
 query: |
  let timeRange = 24h;
- let failureCountThreshold = 5;
+ let failureCountThreshold = 10;
  let authenticationWindow = 20m;
  let aadFunc = (tableName:string){
   table(tableName)
@@ -43,14 +43,12 @@ query: |
       Region = tostring(LocationDetails.countryOrRegion)
  // Split out failure versus non-failure types
  | extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140", "70043", "70044"), "Success", "Failure")  
- // bin outcomes based on authenticationWindow
- | summarize take_anyif(UserPrincipalName, not(UserPrincipalName matches regex @"[a-f\d]+\-[a-f\d]+\-[a-f\d]+\-[a-f\d]+\-[a-f\d]+")),
-      take_anyif(UserDisplayName, isnotempty(UserDisplayName)),  FailureOrSuccessCount = count() by  FailureOrSuccess, UserId, UserDisplayName, AppDisplayName, IPAddress, Browser, OS, State, City, Region, Type, CorrelationId, bin(TimeGenerated, authenticationWindow), ResultType
  // sort for sessionizing - by UserPrincipalName and time of the authentication outcome
  | sort by UserPrincipalName asc, TimeGenerated asc
- | serialize 
  // sessionize into failure groupings until either the account changes or there is a success
  | extend SessionStartedUtc = row_window_session(TimeGenerated, timeRange, authenticationWindow, UserPrincipalName != prev(UserPrincipalName) or prev(FailureOrSuccess) == "Success")
+ // bin outcomes based on authenticationWindow
+ | summarize FailureOrSuccessCount = count() by  FailureOrSuccess, UserId, UserDisplayName, AppDisplayName, IPAddress, Browser, OS, State, City, Region, Type, CorrelationId, bin(TimeGenerated, authenticationWindow), ResultType, UserPrincipalName,SessionStartedUtc
  // count the failures in each session
  | summarize FailureCountBeforeSuccess=sumif(FailureOrSuccessCount, FailureOrSuccess == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), makelist(FailureOrSuccess), IPAddress = make_set(IPAddress), make_set(Browser), make_set(City), make_set(State), make_set(Region), make_set(ResultType) by SessionStartedUtc, UserPrincipalName, CorrelationId, AppDisplayName, UserId, Type
  // the session must not start with a success, and must end with one
@@ -76,5 +74,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 2.0.0
+version: 2.1.0
 kind: Scheduled
