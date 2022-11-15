@@ -68,7 +68,7 @@ relevantTechniques:
   - T1203
 
 query: |
-  let lookback = 14d;
+  let lookback = 10m;
   let mapping = _ASIM_GetWatchlistRaw("NetworkSession_Monitor_Configuration")
   | extend Ports = split(tostring(WatchlistItem["Ports"]),","),
           App = split(tostring(WatchlistItem["App"]),","),
@@ -77,34 +77,19 @@ query: |
           Action = split(tostring(WatchlistItem["Action"]),","),
           Type = tostring(WatchlistItem["Type"]),
           ThresholdType = tostring(WatchlistItem["ThresholdType"]),
+          Threshold = toint(WatchlistItem["Threshold"]),
           Severity = tostring(WatchlistItem["Severity"]),
           Tactic = tostring(WatchlistItem["Tactic"]),
           Name = tostring(WatchlistItem["Name"]),
           Description = tostring(WatchlistItem["Description"])
-  | project Ports, App, Protocol, Direction, Action, Type, ThresholdType, Severity, Tactic, Name, Description
-  | where Type == "Hunting" and ThresholdType == "Anomaly" and Severity != "Disabled"
+  | project Ports, App, Protocol, Direction, Action, Type, ThresholdType, Threshold, Severity, Tactic, Name, Description
+  | where Type == "Hunting" and ThresholdType == "Static" and Severity != "Disabled"
   | mv-expand Ports
   | mv-expand App
   | mv-expand Protocol
   | mv-expand Direction
   | mv-expand Action
   | extend Ports = tostring(Ports), App = tostring(App), Protocol = tostring(Protocol), Direction = tostring(Direction), Action = tostring(Action);
-  let AnomalyThreshold = 2.5;
-  let eps = materialize (_Im_NetworkSession | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
-  let maxSummarizedTime = toscalar (
-      union isfuzzy=true 
-          (
-              NetworkCustomAnalytics_protocol_CL
-                  | where EventTime_t > ago(lookback)
-                  | summarize max_TimeGenerated=max(EventTime_t)
-                  | extend max_TimeGenerated = datetime_add('minute',10,max_TimeGenerated)
-          ),
-          (
-              print(ago(lookback))
-              | project max_TimeGenerated = print_0
-          )
-        | summarize maxTimeGenerated = max(max_TimeGenerated) 
-      );
   let nosummary = materialize(
                 union isfuzzy=true 
                   (
@@ -120,27 +105,9 @@ query: |
                 );
   let allData = union isfuzzy=true 
       (
-          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) > 1000 | join (nosummary) on nosum) | join (
-          _Im_NetworkSession(starttime=todatetime(ago(2d)), endtime=now())
-          | where TimeGenerated > maxSummarizedTime
-          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
-          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
-          ) on exists
-          | project-away exists, maxv, nosum*
-      ),
-      (
-          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (nosummary) on nosum) | join (
-          _Im_NetworkSession(starttime=todatetime(ago(3d)), endtime=now())
-          | where TimeGenerated > maxSummarizedTime
-          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
-          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
-          ) on exists
-          | project-away exists, maxv, nosum*
-      ),
-      (
-          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) <= 500 | join (nosummary) on nosum) | join (
-          _Im_NetworkSession(starttime=todatetime(ago(3d)), endtime=now())
-          | where TimeGenerated > maxSummarizedTime
+          (datatable(exists:int, nosum:bool)[1,false] | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=bin(now(-10m),10m), endtime=bin(now(),10m))
+          | where TimeGenerated > bin(now(-10m),10m)
           | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
           | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
           ) on exists
@@ -148,32 +115,20 @@ query: |
       ),
       (
           NetworkCustomAnalytics_protocol_CL
-          | where EventTime_t > lookback
+          | where EventTime_t == toscalar(NetworkCustomAnalytics_protocol_CL | summarize max(EventTime_t))
           | project-rename NetworkProtocol=NetworkProtocol_s, DstPortNumber=DstPortNumber_d, DstAppName=DstAppName_s, NetworkDirection=NetworkDirection_s, DvcAction=DvcAction_s, Count=count__d, EventTime=EventTime_t
-          | extend Count = toint(Count),DstPortNumber = toint(DstPortNumber) 
+          | extend Count = toint(Count),DstPortNumber = toint(DstPortNumber)
       )
   ;
   allData
-  | where isnotempty(DstPortNumber)
-  | make-series Total=count() on EventTime from ago(lookback) to now() step 1d by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, AnomalyThreshold, -1, 'linefit')
-  | mv-expand anomalies, score, baseline, EventTime, Total
-  | extend anomalies = toint(anomalies), score = toint(score), baseline = toint(baseline), EventTime = todatetime(EventTime), Total = tolong(Total)
-  | where EventTime >= ago(1d)
-  | extend DstPortNumber = trim_end(".0",tostring(DstPortNumber))
-  | where score > 2*AnomalyThreshold
-  | join kind=inner ['mapping'] where Ports == DstPortNumber
-  | where (Protocol == "*" or Protocol has NetworkProtocol)
+        | where isnotempty(DstPortNumber)
+        | summarize Sum=sum(Count) by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction 
+        | join kind=inner ['mapping'] where Ports has tostring(DstPortNumber)
+        | where Sum > Threshold 
+                  and (Protocol == "*" or Protocol has NetworkProtocol)
                   and (Direction == "*" or Direction has NetworkDirection)
                   and (Action == "*" or Action has DvcAction)
-  | summarize NetworkProtocols=make_set_if(NetworkProtocol,isnotempty(NetworkProtocol),20), 
-                    DstPortNumbers=make_set_if(DstPortNumber,isnotempty(DstPortNumber),20), 
+        | project Name, Description, NetworkProtocol, DstPortNumber, NetworkDirection, DvcAction, Severity, Tactic
+        | summarize NetworkProtocols=make_set_if(NetworkProtocol,isnotempty(NetworkProtocol),20), 
                     NetworkDirections=make_set_if(NetworkDirection,isnotempty(NetworkDirection),5), 
-                    DvcActions=make_set_if(DvcAction,isnotempty(DvcAction),10), 
-                    Descriptions=make_set_if(Description,isnotempty(Description),5), 
-                    Severities=make_set_if(Severity,isnotempty(Severity),5), 
-                    Tactics=make_set_if(Tactic,isnotempty(Tactic),5) by Name
-        | extend Severity = case(Severities has "High", "High",
-                                Severities has "Medium", "Medium",
-                                "Low"),
-                Tactic = iff(array_length(Tactics) > 0, Tactics[0], "")
+                    DvcActions=make_set_if(DvcAction,isnotempty(DvcAction),10) by Name, Severity, Tactic, DstPortNumber, Description
