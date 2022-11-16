@@ -73,26 +73,21 @@ relevantTechniques:
   - T1190
 query: |
   let lookback = 14d;
-  let mapping = _ASIM_GetWatchlistRaw("NetworkSession_Monitor_Configuration")
-  | extend Ports = split(tostring(WatchlistItem["Ports"]),","),
-          App = split(tostring(WatchlistItem["App"]),","),
-          Protocol = split(tostring(WatchlistItem["Protocol"]),","),
-          Direction = split(tostring(WatchlistItem["Direction"]),","),
-          Action = split(tostring(WatchlistItem["Action"]),","),
-          Type = tostring(WatchlistItem["Type"]),
-          ThresholdType = tostring(WatchlistItem["ThresholdType"]),
-          Severity = tostring(WatchlistItem["Severity"]),
-          Tactic = tostring(WatchlistItem["Tactic"]),
-          Name = tostring(WatchlistItem["Name"]),
-          Description = tostring(WatchlistItem["Description"])
-  | project Ports, App, Protocol, Direction, Action, Type, ThresholdType, Severity, Tactic, Name, Description
-  | where Type == "Detection" and ThresholdType == "Anomaly" and Severity != "Disabled"
+  let mapping = _GetWatchlist('NetworkSession_Monitor_Configuration')
+  | where Type == "Detection" and ThresholdType == "Anomaly" and Severity != "Disabled"  
+  | extend Ports = split(Ports,","),
+          App = split(App,","),
+          Protocol = split(Protocol,","),
+          Direction = split(Direction,","),
+          Action = split(Action,",")
+  | project Ports, App, Protocol, Direction, Action, Type, ThresholdType, Threshold, Severity, Tactic, Name, Description
   | mv-expand Ports
   | mv-expand App
   | mv-expand Protocol
   | mv-expand Direction
   | mv-expand Action
-  | extend Ports = tostring(Ports), App = tostring(App), Protocol = tostring(Protocol), Direction = tostring(Direction), Action = tostring(Action);
+  | extend Ports = tostring(Ports), App = tostring(App), Protocol = tostring(Protocol), Direction = tostring(Direction), Action = tostring(Action), Threshold = toint(Threshold)
+  ;
   let AnomalyThreshold = 2.5;
   let eps = materialize (_Im_NetworkSession | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
   let maxSummarizedTime = toscalar (
@@ -112,7 +107,8 @@ query: |
   let nosummary = materialize(
                 union isfuzzy=true 
                   (
-                      NetworkCustomAnalytics_protocol_CL 
+                      NetworkCustomAnalytics_protocol_CL
+                      | where EventTime_t > ago(1d) 
                       | project v = int(2)
                   ),
                   (
@@ -143,7 +139,7 @@ query: |
       ),
       (
           (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) <= 500 | join (nosummary) on nosum) | join (
-          _Im_NetworkSession(starttime=todatetime(ago(3d)), endtime=now())
+          _Im_NetworkSession(starttime=todatetime(ago(4d)), endtime=now())
           | where TimeGenerated > maxSummarizedTime
           | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
           | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
@@ -152,7 +148,7 @@ query: |
       ),
       (
           NetworkCustomAnalytics_protocol_CL
-          | where EventTime_t > lookback
+          | where EventTime_t > ago(lookback)
           | project-rename NetworkProtocol=NetworkProtocol_s, DstPortNumber=DstPortNumber_d, DstAppName=DstAppName_s, NetworkDirection=NetworkDirection_s, DvcAction=DvcAction_s, Count=count__d, EventTime=EventTime_t
           | extend Count = toint(Count),DstPortNumber = toint(DstPortNumber) 
       )
@@ -169,31 +165,22 @@ query: |
   | join kind=inner ['mapping'] where Ports == DstPortNumber
   | where (Protocol == "*" or Protocol has NetworkProtocol)
                   and (Direction == "*" or Direction has NetworkDirection)
-                  and (Action == "*" or Action has DvcAction)
+                  and (Action == "*" or Action has DvcAction)  
+  | project Name, Description, NetworkProtocol, DstPortNumber, NetworkDirection, DvcAction, Severity, Tactic
   | summarize NetworkProtocols=make_set_if(NetworkProtocol,isnotempty(NetworkProtocol),20), 
-                    DstPortNumbers=make_set_if(DstPortNumber,isnotempty(DstPortNumber),20), 
-                    NetworkDirections=make_set_if(NetworkDirection,isnotempty(NetworkDirection),5), 
-                    DvcActions=make_set_if(DvcAction,isnotempty(DvcAction),10), 
-                    Descriptions=make_set_if(Description,isnotempty(Description),5), 
-                    Severities=make_set_if(Severity,isnotempty(Severity),5), 
-                    Tactics=make_set_if(Tactic,isnotempty(Tactic),5) by Name
-        | extend Severity = case(Severities has "High", "High",
-                                Severities has "Medium", "Medium",
-                                "Low"),
-                Tactic = iff(array_length(Tactics) > 0, Tactics[0], "")
+                      NetworkDirections=make_set_if(NetworkDirection,isnotempty(NetworkDirection),5), 
+                      DvcActions=make_set_if(DvcAction,isnotempty(DvcAction),10) by Name, Severity, Tactic, DstPortNumber, Description
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
   AllNetworkProtocols: NetworkProtocols
   AllNetworkDirections: NetworkDirections
   AllDvcAction: DvcActions
-  AllDstPortNumber: DstPortNumbers
-  Tactics: Tactics
-  Severities: Severities
+  DstPortNumber: DstPortNumber
 
 alertDetailsOverride:
   alertDisplayNameFormat: Detected {{Name}}
-  alertDescriptionFormat: '{{Descriptions}}'
+  alertDescriptionFormat: '{{Description}}'
   alertTacticsColumnName: Tactic
   alertSeverityColumnName: Severity
 version: 1.0.0
