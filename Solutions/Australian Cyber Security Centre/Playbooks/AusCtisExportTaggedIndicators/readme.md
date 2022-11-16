@@ -2,7 +2,7 @@
 
 ## Summary
 
-This playbook gets triggered every hour and perform the following actions:
+This playbook gets triggered every day and perform the following actions:
 
 1. Get all the threat intelligence indicators from Sentinel Workspace with given tag.
 2. Filter all the indicators whose export in not completed. 
