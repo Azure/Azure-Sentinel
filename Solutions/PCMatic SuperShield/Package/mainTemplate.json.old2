@@ -1,0 +1,3139 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+    "keyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Specifies the name of the key vault."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Specifies the Azure location where the key vault should be created."
+      }
+    },
+    "enabledForDeployment": {
+      "type": "bool",
+      "defaultValue": false,
+      "allowedValues": [
+        true,
+        false
+      ],
+      "metadata": {
+        "description": "Specifies whether Azure Virtual Machines are permitted to retrieve certificates stored as secrets from the key vault."
+      }
+    },
+    "enabledForDiskEncryption": {
+      "type": "bool",
+      "defaultValue": false,
+      "allowedValues": [
+        true,
+        false
+      ],
+      "metadata": {
+        "description": "Specifies whether Azure Disk Encryption is permitted to retrieve secrets from the vault and unwrap keys."
+      }
+    },
+    "enabledForTemplateDeployment": {
+      "type": "bool",
+      "defaultValue": false,
+      "allowedValues": [
+        true,
+        false
+      ],
+      "metadata": {
+        "description": "Specifies whether Azure Resource Manager is permitted to retrieve secrets from the key vault."
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet."
+      }
+    },
+    "objectId": {
+      "type": "string",
+      "metadata": {
+        "description": "Specifies the object ID of a user, service principal or security group in the Azure Active Directory tenant for the vault. The object ID must be unique for the list of access policies. Get it by using Get-AzADUser or Get-AzADServicePrincipal cmdlets."
+      }
+    },
+    "keysPermissions": {
+      "type": "array",
+      "defaultValue": [
+        "list"
+      ],
+      "metadata": {
+        "description": "Specifies the permissions to keys in the vault. Valid values are: all, encrypt, decrypt, wrapKey, unwrapKey, sign, verify, get, list, create, update, import, delete, backup, restore, recover, and purge."
+      }
+    },
+    "secretsPermissions": {
+      "type": "array",
+      "defaultValue": [
+        "list"
+      ],
+      "metadata": {
+        "description": "Specifies the permissions to secrets in the vault. Valid values are: all, get, list, set, delete, backup, restore, recover, and purge."
+      }
+    },
+    "skuName": {
+      "type": "string",
+      "defaultValue": "Standard",
+      "allowedValues": [
+        "Standard",
+        "Premium"
+      ],
+      "metadata": {
+        "description": "Specifies whether the key vault is a standard vault or a premium vault."
+      }
+    },
+    "secretName": {
+      "type": "string",
+      "metadata": {
+        "description": "Specifies the name of the secret that you want to create."
+      }
+    },
+    "secretValue": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Specifies the value of the secret that you want to create."
+      }
+    },
+    "workspace": {
+      "type": "String"
+    },
+    "workbookDisplayName": {
+      "type": "string",
+      "defaultValue": "Incident overview - pcmatic",
+      "metadata": {
+        "description": "The friendly name for the workbook that is used in the Gallery or Saved List.  This name must be unique within a resource group."
+      }
+    },
+    "workbookType": {
+      "type": "string",
+      "defaultValue": "sentinel",
+      "metadata": {
+        "description": "The gallery that the workbook will been shown under. Supported values include workbook, tsg, etc. Usually, this is 'workbook'"
+      }
+    },
+    "workbookSourceId": {
+      "type": "string",
+      "defaultValue": "/subscriptions/b4c56e1b-e902-4c40-9681-12b933c3ba73/resourcegroups/pcmatic-logs/providers/microsoft.operationalinsights/workspaces/pcmatic",
+      "metadata": {
+        "description": "The id of resource instance to which the workbook will be associated"
+      }
+    },
+    "workbookId": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "The unique guid for this workbook instance"
+      }
+    },
+    "connections_keyvault_name": {
+        "defaultValue": "keyvault",
+        "type": "String"
+    },
+    "workflows_RemoveProcess_name": {
+        "defaultValue": "RemoveProcess",
+        "type": "String"
+    },
+    "connections_azuresentinel_name": {
+        "defaultValue": "azuresentinel",
+        "type": "String"
+    },
+    "workflows_BlockAllowProcess_name": {
+        "defaultValue": "BlockAllowProcess",
+        "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2019-09-01",
+      "name": "[parameters('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "enabledForDeployment": "[parameters('enabledForDeployment')]",
+        "enabledForDiskEncryption": "[parameters('enabledForDiskEncryption')]",
+        "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
+        "tenantId": "[parameters('tenantId')]",
+        "accessPolicies": [
+          {
+            "objectId": "[parameters('objectId')]",
+            "tenantId": "[parameters('tenantId')]",
+            "permissions": {
+              "keys": "[parameters('keysPermissions')]",
+              "secrets": "[parameters('secretsPermissions')]"
+            }
+          }
+        ],
+        "sku": {
+          "name": "[parameters('skuName')]",
+          "family": "A"
+        },
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2019-09-01",
+      "name": "[concat(parameters('keyVaultName'), '/', parameters('secretName'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('secretValue')]"
+      }
+    },
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ddbe2787-e6c0-4f59-8d5c-5a43614d8138')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ddbe2787-e6c0-4f59-8d5c-5a43614d8138')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-10-01-preview",
+      "properties": {
+          "displayName": "Known Bad Process",
+          "description": "",
+          "severity": "High",
+          "enabled": true,
+          "query": "SuperShieldActivity\n| where Severity == 0\n| where IsUnknown == 0 or IsUnknown == \"false\"\n\n",
+          "queryFrequency": "PT5M",
+          "queryPeriod": "PT10M",
+          "triggerOperator": "GreaterThan",
+          "triggerThreshold": 0,
+          "suppressionDuration": "PT5H",
+          "suppressionEnabled": false,
+          "tactics": [
+              "Execution"
+          ],
+          "techniques": [
+              "T1204",
+              "T0863"
+          ],
+          "alertRuleTemplateName": null,
+          "incidentConfiguration": {
+              "createIncident": true,
+              "groupingConfiguration": {
+                  "enabled": true,
+                  "reopenClosedIncident": false,
+                  "lookbackDuration": "PT5H",
+                  "matchingMethod": "Selected",
+                  "groupByEntities": [
+                      "FileHash"
+                  ],
+                  "groupByAlertDetails": [
+                      "Severity"
+                  ],
+                  "groupByCustomDetails": [
+                      "product"
+                  ]
+              }
+          },
+          "eventGroupingSettings": {
+              "aggregationKind": "AlertPerResult"
+          },
+          "alertDetailsOverride": null,
+          "customDetails": {
+              "parentPath": "ParentPath",
+              "deviceExternalID": "DeviceExternalID",
+              "isUnknown": "IsUnknown",
+              "isScript": "IsScript",
+              "userDecided": "UserDecided",
+              "userDecidedDescr": "UserDecidedDesc",
+              "vendor": "Vendor",
+              "product": "Product",
+              "productDescription": "ProductDescription",
+              "productVersion": "ProductVersion",
+              "fileCopyright": "FileCopyright",
+              "isSigned": "IsSigned",
+              "digitalSigAuthority": "DigitalSigAuthority",
+              "digitalSigVendor": "DigitalSigVendor",
+              "os": "OS",
+              "osArch": "OSArch",
+              "osPlatform": "OSPlatform",
+              "osRelease": "OSRelease",
+              "osKernel": "OSKernel",
+              "md5": "MD5"
+          },
+          "entityMappings": 
+          [
+            {
+                "entityType": "FileHash",
+                "fieldMappings": [
+                    {
+                        "identifier": "Value",
+                        "columnName": "FileHash"
+                    }
+                ]
+            },
+            {
+                "entityType": "Host",
+                "fieldMappings": [
+                    {
+                        "identifier": "HostName",
+                        "columnName": "Host"
+                    }
+                ]
+            },
+            {
+                "entityType": "File",
+                "fieldMappings": [
+                    {
+                        "identifier": "Name",
+                        "columnName": "FileName"
+                    },
+                    {
+                        "identifier": "Directory",
+                        "columnName": "FilePath"
+                    }
+                ]
+            },
+            {
+                "entityType": "IP",
+                "fieldMappings": [
+                    {
+                        "identifier": "Address",
+                        "columnName": "DeviceAddress"
+                    }
+                ]
+            },
+            {
+                "entityType": "Process",
+                "fieldMappings": [
+                    {
+                        "identifier": "CommandLine",
+                        "columnName": "CmdLineArgs"
+                    }
+                ]
+            }
+          ],
+          "sentinelEntitiesMappings": null
+      }
+    },
+    {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('connections_azuresentinel_name')]",
+            "location": "eastus",
+            "kind": "V1",
+            "properties": {
+                "displayName": "john.farley@t1dt3.onmicrosoft.com",
+                "statuses": [
+                    {
+                        "status": "Connected"
+                    }
+                ],
+                "customParameterValues": {},
+                "nonSecretParameterValues": {
+                    "token:TenantId": "06980532-a990-4ad1-8a8c-f227a94234c6",
+                    "token:grantType": "code"
+                },
+                "createdTime": "2022-05-19T15:45:33.3869264Z",
+                "changedTime": "2022-11-07T00:01:25.1735575Z",
+                "api": {
+                    "name": "azuresentinel",
+                    "displayName": "Microsoft Sentinel",
+                    "description": "Cloud-native SIEM with a built-in AI so you can focus on what matters most",
+                    "iconUri": "https://connectoricons-prod.azureedge.net/releases/v1.0.1599/1.0.1599.3017/azuresentinel/icon.png",
+                    "brandColor": "#0072C6",
+                    "id": "/subscriptions/b4c56e1b-e902-4c40-9681-12b933c3ba73/providers/Microsoft.Web/locations/eastus/managedApis/azuresentinel",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "testLinks": []
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('connections_keyvault_name')]",
+            "location": "eastus",
+            "kind": "V1",
+            "properties": {
+                "displayName": "john.farley@t1dt3.onmicrosoft.com",
+                "statuses": [
+                    {
+                        "status": "Connected"
+                    }
+                ],
+                "customParameterValues": {},
+                "nonSecretParameterValues": {
+                    "token:TenantId": "06980532-a990-4ad1-8a8c-f227a94234c6",
+                    "token:grantType": "code",
+                    "vaultName": "ApiKeyVaultTest"
+                },
+                "createdTime": "2022-08-12T12:40:44.2022833Z",
+                "changedTime": "2022-11-06T19:04:28.2918476Z",
+                "api": {
+                    "name": "keyvault",
+                    "displayName": "Azure Key Vault",
+                    "description": "Azure Key Vault is a service to securely store and access secrets.",
+                    "iconUri": "https://connectoricons-prod.azureedge.net/releases/v1.0.1597/1.0.1597.3005/keyvault/icon.png",
+                    "brandColor": "#0079d6",
+                    "id": "/subscriptions/b4c56e1b-e902-4c40-9681-12b933c3ba73/providers/Microsoft.Web/locations/eastus/managedApis/keyvault",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "testLinks": []
+            }
+        },
+        {
+          "type": "Microsoft.Logic/workflows",
+          "apiVersion": "2017-07-01",
+          "name": "[parameters('workflows_BlockAllowProcess_name')]",
+          "location": "eastus",
+          "dependsOn": [
+              "[resourceId('Microsoft.Web/connections', parameters('connections_azuresentinel_name'))]",
+              "[resourceId('Microsoft.Web/connections', parameters('connections_keyvault_name'))]"
+          ],
+          "tags": {
+              "pcmatic": "block_process"
+          },
+          "identity": {
+              "type": "SystemAssigned"
+          },
+          "properties": {
+              "state": "Enabled",
+              "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                      "$connections": {
+                          "defaultValue": {},
+                          "type": "Object"
+                      }
+                  },
+                  "triggers": {
+                      "Microsoft_Sentinel_incident": {
+                          "type": "ApiConnectionWebhook",
+                          "inputs": {
+                              "body": {
+                                  "callback_url": "@{listCallbackUrl()}"
+                              },
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                              },
+                              "path": "/incident-creation"
+                          }
+                      }
+                  },
+                  "actions": {
+                      "API_User": {
+                          "runAfter": {},
+                          "type": "ApiConnection",
+                          "inputs": {
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                  }
+                              },
+                              "method": "get",
+                              "path": "/secrets/@{encodeURIComponent('apiUser32')}/value"
+                          }
+                      },
+                      "Add_comment_to_incident_(V3)": {
+                          "runAfter": {
+                              "Post_to_API": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                              "body": {
+                                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                                  "message": "<p>@{variables('blockAllow')}ed for @{variables('processFor')} by @{variables('processBy')} on @{variables('osPlatform')}.&nbsp;</p>"
+                              },
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment"
+                          }
+                      },
+                      "Auth": {
+                          "runAfter": {
+                              "API_User": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Http",
+                          "inputs": {
+                              "body": "@json(body('API_User')?['value'])",
+                              "method": "POST",
+                              "uri": "https://ss-api-v1.pcpitstop.com/api/v1/login/auth"
+                          }
+                      },
+                      "Check_Tag_Data": {
+                          "actions": {
+                              "Terminate": {
+                                  "runAfter": {},
+                                  "type": "Terminate",
+                                  "inputs": {
+                                      "runError": {
+                                          "code": "500",
+                                          "message": "Block/Allow variables not set"
+                                      },
+                                      "runStatus": "Failed"
+                                  }
+                              }
+                          },
+                          "runAfter": {
+                              "Parse_Tags": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "expression": {
+                              "or": [
+                                  {
+                                      "equals": [
+                                          "@variables('blockAllow')",
+                                          ""
+                                      ]
+                                  },
+                                  {
+                                      "equals": [
+                                          "@variables('processFor')",
+                                          ""
+                                      ]
+                                  },
+                                  {
+                                      "equals": [
+                                          "@variables('processBy')",
+                                          ""
+                                      ]
+                                  }
+                              ]
+                          },
+                          "type": "If"
+                      },
+                      "Custom_details": {
+                          "runAfter": {
+                              "Parse_custom_details": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Select",
+                          "inputs": {
+                              "from": "@body('Parse_custom_details')",
+                              "select": {
+                                  "accountID": "@json(item()?['details'])?['accountID']?[0]",
+                                  "cmdLineArgs": "@json(item()?['details'])?['cmdLineArgs']?[0]",
+                                  "companyGroupID": "@json(item()?['details'])?['groupID']?[0]",
+                                  "companyGroupName": "@json(item()?['details'])?['groupName']?[0]",
+                                  "companyID": "@json(item()?['details'])?['companyID']?[0]",
+                                  "companyName": "@json(item()?['details'])?['companyName']?[0]",
+                                  "deviceExternalID": "@json(item()?['details'])?['deviceExternalID']?[0]",
+                                  "isScript": "@json(item()?['details'])?['isScript']?[0]",
+                                  "isUnknown": "@json(item()?['details'])?['isUnknown']?[0]",
+                                  "md5": "@json(item()?['details'])?['md5']?[0]",
+                                  "osPlatform": "@json(item()?['details'])?['osPlatform']?[0]",
+                                  "parentPath": "@json(item()?['details'])?['parentPath']?[0]",
+                                  "product": "@json(item()?['details'])?['product']?[0]",
+                                  "userDecided": "@json(item()?['details'])?['userDecided']?[0]"
+                              }
+                          }
+                      },
+                      "Foreach_entitiesArr": {
+                          "foreach": "@variables('entitiesArr')",
+                          "actions": {
+                              "set_clArgs": {
+                                  "actions": {
+                                      "Set_variable_7": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "clArgs",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['commandLine']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_path": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['commandLine']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_deviceName": {
+                                  "actions": {
+                                      "Set_variable_2": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "deviceName",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['hostName']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_ipAddress": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['hostName']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_displayText_to_fileName_if_displayText_is_still_empty": {
+                                  "actions": {
+                                      "Set_variable_10": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "displayText",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['fileName']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_hash_for_mac-linux": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "equals": [
+                                                  "@variables('displayText')",
+                                                  ""
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@items('Foreach_entitiesArr')?['kind']",
+                                                  "File"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_hash_for_mac-linux": {
+                                  "actions": {
+                                      "Set_hash": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "hash",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['hashValue']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_clArgs": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "equals": [
+                                                  "@items('Foreach_entitiesArr')?['kind']",
+                                                  "FileHash"
+                                              ]
+                                          },
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['hashValue']",
+                                                      ""
+                                                  ]
+                                              }
+                                          },
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@variables('osPlatform')",
+                                                      "win"
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_ipAddress": {
+                                  "actions": {
+                                      "Set_variable": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "ipAddress",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['address']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {},
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['status_code']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_path": {
+                                  "actions": {
+                                      "Set_variable_6": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "path",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['directory']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_deviceName": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['fileName']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              }
+                          },
+                          "runAfter": {
+                              "set_displayText": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Foreach"
+                      },
+                      "Parse_Incident_Body": {
+                          "runAfter": {
+                              "Check_Tag_Data": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "ParseJson",
+                          "inputs": {
+                              "content": "@triggerBody()",
+                              "schema": {
+                                  "properties": {
+                                      "eventUniqueId": {
+                                          "type": "string"
+                                      },
+                                      "object": {
+                                          "properties": {
+                                              "etag": {
+                                                  "type": "string"
+                                              },
+                                              "id": {
+                                                  "type": "string"
+                                              },
+                                              "name": {
+                                                  "type": "string"
+                                              },
+                                              "properties": {
+                                                  "properties": {
+                                                      "additionalData": {
+                                                          "properties": {
+                                                              "alertProductNames": {
+                                                                  "items": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "type": "array"
+                                                              },
+                                                              "alertsCount": {
+                                                                  "type": "integer"
+                                                              },
+                                                              "bookmarksCount": {
+                                                                  "type": "integer"
+                                                              },
+                                                              "commentsCount": {
+                                                                  "type": "integer"
+                                                              },
+                                                              "tactics": {
+                                                                  "items": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "type": "array"
+                                                              },
+                                                              "techniques": {
+                                                                  "items": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "type": "array"
+                                                              }
+                                                          },
+                                                          "type": "object"
+                                                      },
+                                                      "alerts": {
+                                                          "items": {
+                                                              "properties": {
+                                                                  "id": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "kind": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "name": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "properties": {
+                                                                      "properties": {
+                                                                          "additionalData": {
+                                                                              "properties": {
+                                                                                  "Alert generation status": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Analytic Rule Ids": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Analytic Rule Name": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Correlation Id": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Custom Details": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Data Sources": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Event Grouping": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "OriginalQuery": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "ProcessedBySentinel": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query End Time UTC": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query Period": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query Start Time UTC": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Search Query Results Overall Count": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Trigger Operator": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Trigger Threshold": {
+                                                                                      "type": "string"
+                                                                                  }
+                                                                              },
+                                                                              "type": "object"
+                                                                          },
+                                                                          "alertDisplayName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "alertType": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "confidenceLevel": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "endTimeUtc": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "friendlyName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "processingEndTime": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "productComponentName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "productName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "providerAlertId": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "resourceIdentifiers": {
+                                                                              "items": {
+                                                                                  "properties": {
+                                                                                      "type": {
+                                                                                          "type": "string"
+                                                                                      },
+                                                                                      "workspaceId": {
+                                                                                          "type": "string"
+                                                                                      }
+                                                                                  },
+                                                                                  "required": [
+                                                                                      "type",
+                                                                                      "workspaceId"
+                                                                                  ],
+                                                                                  "type": "object"
+                                                                              },
+                                                                              "type": "array"
+                                                                          },
+                                                                          "severity": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "startTimeUtc": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "status": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "systemAlertId": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "tactics": {
+                                                                              "items": {
+                                                                                  "type": "string"
+                                                                              },
+                                                                              "type": "array"
+                                                                          },
+                                                                          "timeGenerated": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "vendorName": {
+                                                                              "type": "string"
+                                                                          }
+                                                                      },
+                                                                      "type": "object"
+                                                                  },
+                                                                  "type": {
+                                                                      "type": "string"
+                                                                  }
+                                                              },
+                                                              "required": [
+                                                                  "id",
+                                                                  "name",
+                                                                  "type",
+                                                                  "kind",
+                                                                  "properties"
+                                                              ],
+                                                              "type": "object"
+                                                          },
+                                                          "type": "array"
+                                                      },
+                                                      "bookmarks": {
+                                                          "type": "array"
+                                                      },
+                                                      "comments": {
+                                                          "type": "array"
+                                                      },
+                                                      "createdTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "description": {
+                                                          "type": "string"
+                                                      },
+                                                      "firstActivityTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "incidentNumber": {
+                                                          "type": "integer"
+                                                      },
+                                                      "incidentUrl": {
+                                                          "type": "string"
+                                                      },
+                                                      "labels": {
+                                                          "type": "array"
+                                                      },
+                                                      "lastActivityTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "lastModifiedTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "owner": {
+                                                          "properties": {
+                                                              "assignedTo": {},
+                                                              "email": {},
+                                                              "objectId": {},
+                                                              "userPrincipalName": {}
+                                                          },
+                                                          "type": "object"
+                                                      },
+                                                      "providerIncidentId": {
+                                                          "type": "string"
+                                                      },
+                                                      "providerName": {
+                                                          "type": "string"
+                                                      },
+                                                      "relatedAnalyticRuleIds": {
+                                                          "items": {
+                                                              "type": "string"
+                                                          },
+                                                          "type": "array"
+                                                      },
+                                                      "relatedEntities": {
+                                                          "items": {
+                                                              "properties": {
+                                                                  "id": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "kind": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "name": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "properties": {
+                                                                      "properties": {
+                                                                          "address": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "friendlyName": {
+                                                                              "type": "string"
+                                                                          }
+                                                                      },
+                                                                      "type": "object"
+                                                                  },
+                                                                  "type": {
+                                                                      "type": "string"
+                                                                  }
+                                                              },
+                                                              "required": [
+                                                                  "id",
+                                                                  "name",
+                                                                  "type",
+                                                                  "kind",
+                                                                  "properties"
+                                                              ],
+                                                              "type": "object"
+                                                          },
+                                                          "type": "array"
+                                                      },
+                                                      "severity": {
+                                                          "type": "string"
+                                                      },
+                                                      "status": {
+                                                          "type": "string"
+                                                      },
+                                                      "title": {
+                                                          "type": "string"
+                                                      }
+                                                  },
+                                                  "type": "object"
+                                              },
+                                              "type": {
+                                                  "type": "string"
+                                              }
+                                          },
+                                          "type": "object"
+                                      },
+                                      "objectEventType": {
+                                          "type": "string"
+                                      },
+                                      "objectSchemaType": {
+                                          "type": "string"
+                                      },
+                                      "workspaceId": {
+                                          "type": "string"
+                                      },
+                                      "workspaceInfo": {
+                                          "properties": {
+                                              "ResourceGroupName": {
+                                                  "type": "string"
+                                              },
+                                              "SubscriptionId": {
+                                                  "type": "string"
+                                              },
+                                              "WorkspaceName": {
+                                                  "type": "string"
+                                              }
+                                          },
+                                          "type": "object"
+                                      }
+                                  },
+                                  "type": "object"
+                              }
+                          }
+                      },
+                      "Parse_JWT": {
+                          "runAfter": {
+                              "Auth": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "ParseJson",
+                          "inputs": {
+                              "content": "@body('Auth')",
+                              "schema": {
+                                  "properties": {
+                                      "accountId": {
+                                          "type": "integer"
+                                      },
+                                      "account_id": {
+                                          "type": "integer"
+                                      },
+                                      "accounts": {
+                                          "type": "array"
+                                      },
+                                      "jwtToken": {
+                                          "type": "string"
+                                      },
+                                      "jwt_token": {
+                                          "type": "string"
+                                      }
+                                  },
+                                  "type": "object"
+                              }
+                          }
+                      },
+                      "Parse_Tags": {
+                          "foreach": "@triggerBody()?['object']?['properties']?['labels']",
+                          "actions": {
+                              "Parse_JSON_2": {
+                                  "runAfter": {},
+                                  "type": "ParseJson",
+                                  "inputs": {
+                                      "content": "@items('Parse_Tags')",
+                                      "schema": {
+                                          "properties": {
+                                              "labelName": {
+                                                  "type": "string"
+                                              },
+                                              "labelType": {
+                                                  "type": "string"
+                                              }
+                                          },
+                                          "type": "object"
+                                      }
+                                  }
+                              },
+                              "Set_blockAllow": {
+                                  "actions": {
+                                      "Set_variable_3": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "blockAllow",
+                                              "value": "@body('Parse_JSON_2')?['labelName']"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "Parse_JSON_2": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "or": [
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "block"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "allow"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "Set_processBy": {
+                                  "actions": {
+                                      "Set_variable_4": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "processBy",
+                                              "value": "@body('Parse_JSON_2')?['labelName']"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "Set_blockAllow": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "or": [
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "hash"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "path"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "sign"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "script"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "Set_processFor": {
+                                  "actions": {
+                                      "Set_variable_5": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "processFor",
+                                              "value": "@body('Parse_JSON_2')?['labelName']"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "Set_processBy": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "or": [
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "account"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "company"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "group"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "device"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              }
+                          },
+                          "runAfter": {
+                              "processFor": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Foreach"
+                      },
+                      "Parse_custom_details": {
+                          "runAfter": {
+                              "Parse_Incident_Body": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Select",
+                          "inputs": {
+                              "from": "@body('Parse_Incident_Body')?['object']?['properties']?['alerts']",
+                              "select": {
+                                  "details": "@item()?['properties']?['additionalData']?['Custom Details']"
+                              }
+                          }
+                      },
+                      "Post_to_API": {
+                          "runAfter": {
+                              "Set_up_request_body": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Http",
+                          "inputs": {
+                              "body": "@{outputs('Compose_2')}@{outputs('Compose')}@{outputs('Compose_3')}",
+                              "headers": {
+                                  "Authorization": "Bearer @{variables('jwtToken')}",
+                                  "Content-Type": "application/json"
+                              },
+                              "method": "POST",
+                              "retryPolicy": {
+                                  "type": "none"
+                              },
+                              "uri": "https://ss-api-insider.pcpitstop.com/api/v1/@{variables('processFor')}/@{variables('levelId')}lists/@{variables('osPlatform')}/@{variables('blockAllow')}/@{variables('processBy')}"
+                          }
+                      },
+                      "Set_levelId": {
+                          "runAfter": {
+                              "cmdLineArgs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "cases": {
+                              "Case": {
+                                  "case": "account",
+                                  "actions": {}
+                              },
+                              "Case_2": {
+                                  "case": "company",
+                                  "actions": {
+                                      "Set_company_ID": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "levelId",
+                                              "value": "@{concat(body('Custom_details')?[0]?['companyID'],'/')}"
+                                          }
+                                      }
+                                  }
+                              },
+                              "Case_3": {
+                                  "case": "group",
+                                  "actions": {
+                                      "Set_company_group_ID": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "levelId",
+                                              "value": "@{concat(body('Custom_details')?[0]?['companyGroupID'],'/')}"
+                                          }
+                                      }
+                                  }
+                              }
+                          },
+                          "default": {
+                              "actions": {
+                                  "Set_variable_8": {
+                                      "runAfter": {},
+                                      "type": "SetVariable",
+                                      "inputs": {
+                                          "name": "levelId",
+                                          "value": "@{concat(body('Custom_details')?[0]?['deviceExternalID'],'/')}"
+                                      }
+                                  }
+                              }
+                          },
+                          "expression": "@variables('processFor')",
+                          "type": "Switch"
+                      },
+                      "Set_osPlatform": {
+                          "actions": {
+                              "Set_variable_9": {
+                                  "runAfter": {},
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                      "name": "osPlatform",
+                                      "value": "win"
+                                  }
+                              }
+                          },
+                          "runAfter": {
+                              "osPlatform": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "expression": {
+                              "and": [
+                                  {
+                                      "equals": [
+                                          "@variables('osPlatform')",
+                                          "Windows"
+                                      ]
+                                  }
+                              ]
+                          },
+                          "type": "If"
+                      },
+                      "Set_up_request_body": {
+                          "runAfter": {
+                              "Foreach_entitiesArr": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "cases": {
+                              "Case": {
+                                  "case": "path",
+                                  "actions": {
+                                      "Compose_2": {
+                                          "runAfter": {},
+                                          "type": "Compose",
+                                          "inputs": {
+                                              "description": "@variables('displayText')",
+                                              "integration": "sentinel",
+                                              "path": "@variables('path')"
+                                          }
+                                      }
+                                  }
+                              },
+                              "Case_2": {
+                                  "case": "script",
+                                  "actions": {
+                                      "Compose": {
+                                          "runAfter": {},
+                                          "type": "Compose",
+                                          "inputs": {
+                                              "clArgs": "@variables('clArgs')",
+                                              "description": "@variables('displayText')",
+                                              "integration": "sentinel"
+                                          }
+                                      }
+                                  }
+                              }
+                          },
+                          "default": {
+                              "actions": {
+                                  "Compose_3": {
+                                      "runAfter": {},
+                                      "type": "Compose",
+                                      "inputs": {
+                                          "description": "@variables('displayText')",
+                                          "hash": "@variables('hash')",
+                                          "integration": "sentinel"
+                                      }
+                                  }
+                              }
+                          },
+                          "expression": "@variables('processBy')",
+                          "type": "Switch"
+                      },
+                      "accountId": {
+                          "runAfter": {
+                              "jwtToken": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "accountId",
+                                      "type": "integer",
+                                      "value": "@body('Parse_JWT')?['account_id']"
+                                  }
+                              ]
+                          }
+                      },
+                      "blockAllow": {
+                          "runAfter": {
+                              "accountId": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "blockAllow",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "clArgs": {
+                          "runAfter": {
+                              "path": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "clArgs",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "cmdLineArgs": {
+                          "runAfter": {
+                              "levelId": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "cmdLineArgs",
+                                      "type": "string",
+                                      "value": "@{body('Custom_details')?[0]?['cmdLineArgs']}"
+                                  }
+                              ]
+                          }
+                      },
+                      "deviceName": {
+                          "runAfter": {
+                              "ipAddress": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "deviceName",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "displayText": {
+                          "runAfter": {
+                              "Set_osPlatform": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "displayText",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "entitiesArr": {
+                          "runAfter": {
+                              "clArgs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "entitiesArr",
+                                      "type": "array",
+                                      "value": "@body('Parse_Incident_Body')?['object']?['properties']?['relatedEntities']"
+                                  }
+                              ]
+                          }
+                      },
+                      "hash": {
+                          "runAfter": {
+                              "displayText": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "hash",
+                                      "type": "string",
+                                      "value": "@{body('Custom_details')?[0]?['md5']}"
+                                  }
+                              ]
+                          }
+                      },
+                      "ipAddress": {
+                          "runAfter": {
+                              "Set_levelId": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "ipAddress",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "jwtToken": {
+                          "runAfter": {
+                              "Parse_JWT": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "jwtToken",
+                                      "type": "string",
+                                      "value": "@body('Parse_JWT')?['jwt_token']"
+                                  }
+                              ]
+                          }
+                      },
+                      "levelId": {
+                          "runAfter": {
+                              "hash": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "levelId",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "osPlatform": {
+                          "runAfter": {
+                              "Custom_details": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "osPlatform",
+                                      "type": "string",
+                                      "value": "@{body('Custom_details')?[0]?['osPlatform']}"
+                                  }
+                              ]
+                          }
+                      },
+                      "path": {
+                          "runAfter": {
+                              "deviceName": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "path",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "processBy": {
+                          "runAfter": {
+                              "blockAllow": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "processBy",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "processFor": {
+                          "runAfter": {
+                              "processBy": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "processFor",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "set_displayText": {
+                          "actions": {
+                              "set_displayText_to_processName": {
+                                  "runAfter": {},
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                      "name": "displayText",
+                                      "value": "@{body('Custom_details')?[0]?['processName']}"
+                                  }
+                              }
+                          },
+                          "runAfter": {
+                              "entitiesArr": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "else": {
+                              "actions": {
+                                  "set_displayText_to_product": {
+                                      "runAfter": {},
+                                      "type": "SetVariable",
+                                      "inputs": {
+                                          "name": "displayText",
+                                          "value": "@{body('Custom_details')?[0]?['product']}"
+                                      }
+                                  }
+                              }
+                          },
+                          "expression": {
+                              "and": [
+                                  {
+                                      "equals": [
+                                          "@body('Custom_details')?[0]?['product']",
+                                          null
+                                      ]
+                                  }
+                              ]
+                          },
+                          "type": "If"
+                      }
+                  },
+                  "outputs": {}
+              },
+              "parameters": {
+                  "$connections": {
+                      "value": {
+                          "azuresentinel": {
+                              "connectionId": "[resourceId('Microsoft.Web/connections', parameters('connections_azuresentinel_name'))]",
+                              "connectionName": "azuresentinel",
+                              "id": "/subscriptions/b4c56e1b-e902-4c40-9681-12b933c3ba73/providers/Microsoft.Web/locations/eastus/managedApis/azuresentinel"
+                          },
+                          "keyvault": {
+                              "connectionId": "[resourceId('Microsoft.Web/connections', parameters('connections_keyvault_name'))]",
+                              "connectionName": "keyvault",
+                              "id": "/subscriptions/b4c56e1b-e902-4c40-9681-12b933c3ba73/providers/Microsoft.Web/locations/eastus/managedApis/keyvault"
+                          }
+                      }
+                  }
+              }
+          }
+      },
+      {
+          "type": "Microsoft.Logic/workflows",
+          "apiVersion": "2017-07-01",
+          "name": "[parameters('workflows_RemoveProcess_name')]",
+          "location": "eastus",
+          "dependsOn": [
+              "[resourceId('Microsoft.Web/connections', parameters('connections_azuresentinel_name'))]",
+              "[resourceId('Microsoft.Web/connections', parameters('connections_keyvault_name'))]"
+          ],
+          "tags": {
+              "pcmatic": "block_process"
+          },
+          "identity": {
+              "type": "SystemAssigned"
+          },
+          "properties": {
+              "state": "Enabled",
+              "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                      "$connections": {
+                          "defaultValue": {},
+                          "type": "Object"
+                      }
+                  },
+                  "triggers": {
+                      "Microsoft_Sentinel_incident": {
+                          "type": "ApiConnectionWebhook",
+                          "inputs": {
+                              "body": {
+                                  "callback_url": "@{listCallbackUrl()}"
+                              },
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                              },
+                              "path": "/incident-creation"
+                          }
+                      }
+                  },
+                  "actions": {
+                      "API_User": {
+                          "runAfter": {},
+                          "type": "ApiConnection",
+                          "inputs": {
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                  }
+                              },
+                              "method": "get",
+                              "path": "/secrets/@{encodeURIComponent('apiUser32')}/value"
+                          }
+                      },
+                      "Add_comment_to_incident_(V3)": {
+                          "runAfter": {
+                              "Post_to_API": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                              "body": {
+                                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                                  "message": "<p>Process removed from black/whitelists.</p>"
+                              },
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment"
+                          }
+                      },
+                      "Auth": {
+                          "runAfter": {
+                              "API_User": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Http",
+                          "inputs": {
+                              "body": "@json(body('API_User')?['value'])",
+                              "method": "POST",
+                              "uri": "https://ss-api-v1.pcpitstop.com/api/v1/login/auth"
+                          }
+                      },
+                      "Check_Tag_Data": {
+                          "actions": {
+                              "Terminate": {
+                                  "runAfter": {},
+                                  "type": "Terminate",
+                                  "inputs": {
+                                      "runError": {
+                                          "code": "500",
+                                          "message": "Block/Allow variables not set"
+                                      },
+                                      "runStatus": "Failed"
+                                  }
+                              }
+                          },
+                          "runAfter": {
+                              "Parse_Tags": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "expression": {
+                              "or": [
+                                  {
+                                      "equals": [
+                                          "@variables('blockAllow')",
+                                          ""
+                                      ]
+                                  },
+                                  {
+                                      "equals": [
+                                          "@variables('processFor')",
+                                          ""
+                                      ]
+                                  },
+                                  {
+                                      "equals": [
+                                          "@variables('processBy')",
+                                          ""
+                                      ]
+                                  }
+                              ]
+                          },
+                          "type": "If"
+                      },
+                      "Custom_details": {
+                          "runAfter": {
+                              "Parse_custom_details": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Select",
+                          "inputs": {
+                              "from": "@body('Parse_custom_details')",
+                              "select": {
+                                  "accountID": "@json(item()?['details'])?['accountID']?[0]",
+                                  "cmdLineArgs": "@json(item()?['details'])?['cmdLineArgs']?[0]",
+                                  "companyGroupID": "@json(item()?['details'])?['groupID']?[0]",
+                                  "companyGroupName": "@json(item()?['details'])?['groupName']?[0]",
+                                  "companyID": "@json(item()?['details'])?['companyID']?[0]",
+                                  "companyName": "@json(item()?['details'])?['companyName']?[0]",
+                                  "deviceExternalID": "@json(item()?['details'])?['deviceExternalID']?[0]",
+                                  "isScript": "@json(item()?['details'])?['isScript']?[0]",
+                                  "isUnknown": "@json(item()?['details'])?['isUnknown']?[0]",
+                                  "md5": "@json(item()?['details'])?['md5']?[0]",
+                                  "osPlatform": "@json(item()?['details'])?['osPlatform']?[0]",
+                                  "parentPath": "@json(item()?['details'])?['parentPath']?[0]",
+                                  "product": "@json(item()?['details'])?['product']?[0]",
+                                  "userDecided": "@json(item()?['details'])?['userDecided']?[0]"
+                              }
+                          }
+                      },
+                      "Foreach_entitiesArr": {
+                          "foreach": "@variables('entitiesArr')",
+                          "actions": {
+                              "set_clArgs": {
+                                  "actions": {
+                                      "Set_variable_7": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "clArgs",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['commandLine']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_path": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['commandLine']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_deviceName": {
+                                  "actions": {
+                                      "Set_variable_2": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "deviceName",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['hostName']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_ipAddress": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['hostName']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_displayText_to_fileName_if_displayText_is_still_empty": {
+                                  "actions": {
+                                      "Set_variable_10": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "displayText",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['fileName']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_hash_for_mac-linux": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "equals": [
+                                                  "@variables('displayText')",
+                                                  ""
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@items('Foreach_entitiesArr')?['kind']",
+                                                  "File"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_hash_for_mac-linux": {
+                                  "actions": {
+                                      "Set_hash": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "hash",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['hashValue']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_clArgs": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "equals": [
+                                                  "@items('Foreach_entitiesArr')?['kind']",
+                                                  "FileHash"
+                                              ]
+                                          },
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['hashValue']",
+                                                      ""
+                                                  ]
+                                              }
+                                          },
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@variables('osPlatform')",
+                                                      "win"
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_ipAddress": {
+                                  "actions": {
+                                      "Set_variable": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "ipAddress",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['address']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {},
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['status_code']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "set_path": {
+                                  "actions": {
+                                      "Set_variable_6": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "path",
+                                              "value": "@{items('Foreach_entitiesArr')?['properties']?['directory']}"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "set_deviceName": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "not": {
+                                                  "equals": [
+                                                      "@items('Foreach_entitiesArr')?['properties']?['fileName']",
+                                                      null
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              }
+                          },
+                          "runAfter": {
+                              "set_displayText": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Foreach"
+                      },
+                      "Parse_Incident_Body": {
+                          "runAfter": {
+                              "Check_Tag_Data": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "ParseJson",
+                          "inputs": {
+                              "content": "@triggerBody()",
+                              "schema": {
+                                  "properties": {
+                                      "eventUniqueId": {
+                                          "type": "string"
+                                      },
+                                      "object": {
+                                          "properties": {
+                                              "etag": {
+                                                  "type": "string"
+                                              },
+                                              "id": {
+                                                  "type": "string"
+                                              },
+                                              "name": {
+                                                  "type": "string"
+                                              },
+                                              "properties": {
+                                                  "properties": {
+                                                      "additionalData": {
+                                                          "properties": {
+                                                              "alertProductNames": {
+                                                                  "items": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "type": "array"
+                                                              },
+                                                              "alertsCount": {
+                                                                  "type": "integer"
+                                                              },
+                                                              "bookmarksCount": {
+                                                                  "type": "integer"
+                                                              },
+                                                              "commentsCount": {
+                                                                  "type": "integer"
+                                                              },
+                                                              "tactics": {
+                                                                  "items": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "type": "array"
+                                                              },
+                                                              "techniques": {
+                                                                  "items": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "type": "array"
+                                                              }
+                                                          },
+                                                          "type": "object"
+                                                      },
+                                                      "alerts": {
+                                                          "items": {
+                                                              "properties": {
+                                                                  "id": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "kind": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "name": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "properties": {
+                                                                      "properties": {
+                                                                          "additionalData": {
+                                                                              "properties": {
+                                                                                  "Alert generation status": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Analytic Rule Ids": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Analytic Rule Name": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Correlation Id": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Custom Details": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Data Sources": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Event Grouping": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "OriginalQuery": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "ProcessedBySentinel": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query End Time UTC": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query Period": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Query Start Time UTC": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Search Query Results Overall Count": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Trigger Operator": {
+                                                                                      "type": "string"
+                                                                                  },
+                                                                                  "Trigger Threshold": {
+                                                                                      "type": "string"
+                                                                                  }
+                                                                              },
+                                                                              "type": "object"
+                                                                          },
+                                                                          "alertDisplayName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "alertType": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "confidenceLevel": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "endTimeUtc": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "friendlyName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "processingEndTime": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "productComponentName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "productName": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "providerAlertId": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "resourceIdentifiers": {
+                                                                              "items": {
+                                                                                  "properties": {
+                                                                                      "type": {
+                                                                                          "type": "string"
+                                                                                      },
+                                                                                      "workspaceId": {
+                                                                                          "type": "string"
+                                                                                      }
+                                                                                  },
+                                                                                  "required": [
+                                                                                      "type",
+                                                                                      "workspaceId"
+                                                                                  ],
+                                                                                  "type": "object"
+                                                                              },
+                                                                              "type": "array"
+                                                                          },
+                                                                          "severity": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "startTimeUtc": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "status": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "systemAlertId": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "tactics": {
+                                                                              "items": {
+                                                                                  "type": "string"
+                                                                              },
+                                                                              "type": "array"
+                                                                          },
+                                                                          "timeGenerated": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "vendorName": {
+                                                                              "type": "string"
+                                                                          }
+                                                                      },
+                                                                      "type": "object"
+                                                                  },
+                                                                  "type": {
+                                                                      "type": "string"
+                                                                  }
+                                                              },
+                                                              "required": [
+                                                                  "id",
+                                                                  "name",
+                                                                  "type",
+                                                                  "kind",
+                                                                  "properties"
+                                                              ],
+                                                              "type": "object"
+                                                          },
+                                                          "type": "array"
+                                                      },
+                                                      "bookmarks": {
+                                                          "type": "array"
+                                                      },
+                                                      "comments": {
+                                                          "type": "array"
+                                                      },
+                                                      "createdTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "description": {
+                                                          "type": "string"
+                                                      },
+                                                      "firstActivityTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "incidentNumber": {
+                                                          "type": "integer"
+                                                      },
+                                                      "incidentUrl": {
+                                                          "type": "string"
+                                                      },
+                                                      "labels": {
+                                                          "type": "array"
+                                                      },
+                                                      "lastActivityTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "lastModifiedTimeUtc": {
+                                                          "type": "string"
+                                                      },
+                                                      "owner": {
+                                                          "properties": {
+                                                              "assignedTo": {},
+                                                              "email": {},
+                                                              "objectId": {},
+                                                              "userPrincipalName": {}
+                                                          },
+                                                          "type": "object"
+                                                      },
+                                                      "providerIncidentId": {
+                                                          "type": "string"
+                                                      },
+                                                      "providerName": {
+                                                          "type": "string"
+                                                      },
+                                                      "relatedAnalyticRuleIds": {
+                                                          "items": {
+                                                              "type": "string"
+                                                          },
+                                                          "type": "array"
+                                                      },
+                                                      "relatedEntities": {
+                                                          "items": {
+                                                              "properties": {
+                                                                  "id": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "kind": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "name": {
+                                                                      "type": "string"
+                                                                  },
+                                                                  "properties": {
+                                                                      "properties": {
+                                                                          "address": {
+                                                                              "type": "string"
+                                                                          },
+                                                                          "friendlyName": {
+                                                                              "type": "string"
+                                                                          }
+                                                                      },
+                                                                      "type": "object"
+                                                                  },
+                                                                  "type": {
+                                                                      "type": "string"
+                                                                  }
+                                                              },
+                                                              "required": [
+                                                                  "id",
+                                                                  "name",
+                                                                  "type",
+                                                                  "kind",
+                                                                  "properties"
+                                                              ],
+                                                              "type": "object"
+                                                          },
+                                                          "type": "array"
+                                                      },
+                                                      "severity": {
+                                                          "type": "string"
+                                                      },
+                                                      "status": {
+                                                          "type": "string"
+                                                      },
+                                                      "title": {
+                                                          "type": "string"
+                                                      }
+                                                  },
+                                                  "type": "object"
+                                              },
+                                              "type": {
+                                                  "type": "string"
+                                              }
+                                          },
+                                          "type": "object"
+                                      },
+                                      "objectEventType": {
+                                          "type": "string"
+                                      },
+                                      "objectSchemaType": {
+                                          "type": "string"
+                                      },
+                                      "workspaceId": {
+                                          "type": "string"
+                                      },
+                                      "workspaceInfo": {
+                                          "properties": {
+                                              "ResourceGroupName": {
+                                                  "type": "string"
+                                              },
+                                              "SubscriptionId": {
+                                                  "type": "string"
+                                              },
+                                              "WorkspaceName": {
+                                                  "type": "string"
+                                              }
+                                          },
+                                          "type": "object"
+                                      }
+                                  },
+                                  "type": "object"
+                              }
+                          }
+                      },
+                      "Parse_JWT": {
+                          "runAfter": {
+                              "Auth": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "ParseJson",
+                          "inputs": {
+                              "content": "@body('Auth')",
+                              "schema": {
+                                  "properties": {
+                                      "accountId": {
+                                          "type": "integer"
+                                      },
+                                      "account_id": {
+                                          "type": "integer"
+                                      },
+                                      "accounts": {
+                                          "type": "array"
+                                      },
+                                      "jwtToken": {
+                                          "type": "string"
+                                      },
+                                      "jwt_token": {
+                                          "type": "string"
+                                      }
+                                  },
+                                  "type": "object"
+                              }
+                          }
+                      },
+                      "Parse_Tags": {
+                          "foreach": "@triggerBody()?['object']?['properties']?['labels']",
+                          "actions": {
+                              "Parse_JSON_2": {
+                                  "runAfter": {},
+                                  "type": "ParseJson",
+                                  "inputs": {
+                                      "content": "@items('Parse_Tags')",
+                                      "schema": {
+                                          "properties": {
+                                              "labelName": {
+                                                  "type": "string"
+                                              },
+                                              "labelType": {
+                                                  "type": "string"
+                                              }
+                                          },
+                                          "type": "object"
+                                      }
+                                  }
+                              },
+                              "Set_blockAllow": {
+                                  "actions": {
+                                      "Set_variable_3": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "blockAllow",
+                                              "value": "@body('Parse_JSON_2')?['labelName']"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "Parse_JSON_2": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "or": [
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "block"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "allow"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "Set_processBy": {
+                                  "actions": {
+                                      "Set_variable_4": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "processBy",
+                                              "value": "@body('Parse_JSON_2')?['labelName']"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "Set_blockAllow": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "or": [
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "hash"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "path"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "sign"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "script"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "Set_processFor": {
+                                  "actions": {
+                                      "Set_variable_5": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "processFor",
+                                              "value": "@body('Parse_JSON_2')?['labelName']"
+                                          }
+                                      }
+                                  },
+                                  "runAfter": {
+                                      "Set_processBy": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "expression": {
+                                      "or": [
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "account"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "company"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "group"
+                                              ]
+                                          },
+                                          {
+                                              "equals": [
+                                                  "@body('Parse_JSON_2')?['labelName']",
+                                                  "device"
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "type": "If"
+                              }
+                          },
+                          "runAfter": {
+                              "processFor": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Foreach"
+                      },
+                      "Parse_custom_details": {
+                          "runAfter": {
+                              "Parse_Incident_Body": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Select",
+                          "inputs": {
+                              "from": "@body('Parse_Incident_Body')?['object']?['properties']?['alerts']",
+                              "select": {
+                                  "details": "@item()?['properties']?['additionalData']?['Custom Details']"
+                              }
+                          }
+                      },
+                      "Post_to_API": {
+                          "runAfter": {
+                              "Set_up_request_body": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Http",
+                          "inputs": {
+                              "body": "@{outputs('Compose_2')}@{outputs('Compose')}@{outputs('Compose_3')}",
+                              "headers": {
+                                  "Authorization": "Bearer @{variables('jwtToken')}",
+                                  "Content-Type": "application/json"
+                              },
+                              "method": "DELETE",
+                              "retryPolicy": {
+                                  "type": "none"
+                              },
+                              "uri": "https://ss-api-insider.pcpitstop.com/api/v1/@{variables('processFor')}/@{variables('levelId')}lists/@{variables('osPlatform')}/@{variables('blockAllow')}/@{variables('processBy')}"
+                          }
+                      },
+                      "Set_levelId": {
+                          "runAfter": {
+                              "cmdLineArgs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "cases": {
+                              "Case": {
+                                  "case": "account",
+                                  "actions": {}
+                              },
+                              "Case_2": {
+                                  "case": "company",
+                                  "actions": {
+                                      "Set_company_ID": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "levelId",
+                                              "value": "@{concat(body('Custom_details')?[0]?['companyID'],'/')}"
+                                          }
+                                      }
+                                  }
+                              },
+                              "Case_3": {
+                                  "case": "group",
+                                  "actions": {
+                                      "Set_company_group_ID": {
+                                          "runAfter": {},
+                                          "type": "SetVariable",
+                                          "inputs": {
+                                              "name": "levelId",
+                                              "value": "@{concat(body('Custom_details')?[0]?['companyGroupID'],'/')}"
+                                          }
+                                      }
+                                  }
+                              }
+                          },
+                          "default": {
+                              "actions": {
+                                  "Set_variable_8": {
+                                      "runAfter": {},
+                                      "type": "SetVariable",
+                                      "inputs": {
+                                          "name": "levelId",
+                                          "value": "@{concat(body('Custom_details')?[0]?['deviceExternalID'],'/')}"
+                                      }
+                                  }
+                              }
+                          },
+                          "expression": "@variables('processFor')",
+                          "type": "Switch"
+                      },
+                      "Set_osPlatform": {
+                          "actions": {
+                              "Set_variable_9": {
+                                  "runAfter": {},
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                      "name": "osPlatform",
+                                      "value": "win"
+                                  }
+                              }
+                          },
+                          "runAfter": {
+                              "osPlatform": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "expression": {
+                              "and": [
+                                  {
+                                      "equals": [
+                                          "@variables('osPlatform')",
+                                          "Windows"
+                                      ]
+                                  }
+                              ]
+                          },
+                          "type": "If"
+                      },
+                      "Set_up_request_body": {
+                          "runAfter": {
+                              "Foreach_entitiesArr": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "cases": {
+                              "Case": {
+                                  "case": "path",
+                                  "actions": {
+                                      "Compose_2": {
+                                          "runAfter": {},
+                                          "type": "Compose",
+                                          "inputs": {
+                                              "description": "@variables('displayText')",
+                                              "integration": "sentinel",
+                                              "path": "@variables('path')"
+                                          }
+                                      }
+                                  }
+                              },
+                              "Case_2": {
+                                  "case": "script",
+                                  "actions": {
+                                      "Compose": {
+                                          "runAfter": {},
+                                          "type": "Compose",
+                                          "inputs": {
+                                              "clArgs": "@variables('clArgs')",
+                                              "description": "@variables('displayText')",
+                                              "integration": "sentinel"
+                                          }
+                                      }
+                                  }
+                              }
+                          },
+                          "default": {
+                              "actions": {
+                                  "Compose_3": {
+                                      "runAfter": {},
+                                      "type": "Compose",
+                                      "inputs": {
+                                          "description": "@variables('displayText')",
+                                          "hash": "@variables('hash')",
+                                          "integration": "sentinel"
+                                      }
+                                  }
+                              }
+                          },
+                          "expression": "@variables('processBy')",
+                          "type": "Switch"
+                      },
+                      "accountId": {
+                          "runAfter": {
+                              "jwtToken": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "accountId",
+                                      "type": "integer",
+                                      "value": "@body('Parse_JWT')?['account_id']"
+                                  }
+                              ]
+                          }
+                      },
+                      "blockAllow": {
+                          "runAfter": {
+                              "accountId": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "blockAllow",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "clArgs": {
+                          "runAfter": {
+                              "path": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "clArgs",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "cmdLineArgs": {
+                          "runAfter": {
+                              "levelId": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "cmdLineArgs",
+                                      "type": "string",
+                                      "value": "@{body('Custom_details')?[0]?['cmdLineArgs']}"
+                                  }
+                              ]
+                          }
+                      },
+                      "deviceName": {
+                          "runAfter": {
+                              "ipAddress": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "deviceName",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "displayText": {
+                          "runAfter": {
+                              "Set_osPlatform": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "displayText",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "entitiesArr": {
+                          "runAfter": {
+                              "clArgs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "entitiesArr",
+                                      "type": "array",
+                                      "value": "@body('Parse_Incident_Body')?['object']?['properties']?['relatedEntities']"
+                                  }
+                              ]
+                          }
+                      },
+                      "hash": {
+                          "runAfter": {
+                              "displayText": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "hash",
+                                      "type": "string",
+                                      "value": "@{body('Custom_details')?[0]?['md5']}"
+                                  }
+                              ]
+                          }
+                      },
+                      "ipAddress": {
+                          "runAfter": {
+                              "Set_levelId": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "ipAddress",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "jwtToken": {
+                          "runAfter": {
+                              "Parse_JWT": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "jwtToken",
+                                      "type": "string",
+                                      "value": "@body('Parse_JWT')?['jwt_token']"
+                                  }
+                              ]
+                          }
+                      },
+                      "levelId": {
+                          "runAfter": {
+                              "hash": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "levelId",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "osPlatform": {
+                          "runAfter": {
+                              "Custom_details": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "osPlatform",
+                                      "type": "string",
+                                      "value": "@{body('Custom_details')?[0]?['osPlatform']}"
+                                  }
+                              ]
+                          }
+                      },
+                      "path": {
+                          "runAfter": {
+                              "deviceName": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "path",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "processBy": {
+                          "runAfter": {
+                              "blockAllow": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "processBy",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "processFor": {
+                          "runAfter": {
+                              "processBy": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable",
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "processFor",
+                                      "type": "string"
+                                  }
+                              ]
+                          }
+                      },
+                      "set_displayText": {
+                          "actions": {
+                              "set_displayText_to_processName": {
+                                  "runAfter": {},
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                      "name": "displayText",
+                                      "value": "@{body('Custom_details')?[0]?['processName']}"
+                                  }
+                              }
+                          },
+                          "runAfter": {
+                              "entitiesArr": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "else": {
+                              "actions": {
+                                  "set_displayText_to_product": {
+                                      "runAfter": {},
+                                      "type": "SetVariable",
+                                      "inputs": {
+                                          "name": "displayText",
+                                          "value": "@{body('Custom_details')?[0]?['product']}"
+                                      }
+                                  }
+                              }
+                          },
+                          "expression": {
+                              "and": [
+                                  {
+                                      "equals": [
+                                          "@body('Custom_details')?[0]?['product']",
+                                          null
+                                      ]
+                                  }
+                              ]
+                          },
+                          "type": "If"
+                      }
+                  },
+                  "outputs": {}
+              },
+              "parameters": {
+                  "$connections": {
+                      "value": {
+                          "azuresentinel": {
+                              "connectionId": "[resourceId('Microsoft.Web/connections', parameters('connections_azuresentinel_name'))]",
+                              "connectionName": "azuresentinel",
+                              "id": "/subscriptions/b4c56e1b-e902-4c40-9681-12b933c3ba73/providers/Microsoft.Web/locations/eastus/managedApis/azuresentinel"
+                          },
+                          "keyvault": {
+                              "connectionId": "[resourceId('Microsoft.Web/connections', parameters('connections_keyvault_name'))]",
+                              "connectionName": "keyvault",
+                              "id": "/subscriptions/b4c56e1b-e902-4c40-9681-12b933c3ba73/providers/Microsoft.Web/locations/eastus/managedApis/keyvault"
+                          }
+                      }
+                  }
+              }
+          }
+      }
+  ],
+  "outputs": {
+    "workbookId": {
+      "type": "string",
+      "value": "[resourceId( 'microsoft.insights/workbooks', parameters('workbookId'))]"
+    }
+  }
+}
