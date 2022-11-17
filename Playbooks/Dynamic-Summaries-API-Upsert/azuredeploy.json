@@ -1,0 +1,248 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "",
+        "description":  "",
+        "prerequisites":  "",
+        "postDeployment":  [
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "",
+        "entities":  [
+        ],
+        "tags":  [
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  ""
+        }
+    },
+    "parameters":  {
+        "PlaybookName": {
+            "defaultValue": "<PlaybookName>",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "IntegrationAccountName": {
+            "defaultValue": "<Integration Account Name>",
+            "type": "string"
+        },
+        "KQL": {
+            "defaultValue": "<Summary KQL query>",
+            "type": "string"
+        },
+        "ResourceGroupNameForSourceLogAnalytics": {
+            "defaultValue": "<Resource Group name for source Log Analytics>",
+            "type": "string"
+        },
+        "WorkspaceNameForSourceLogAnalytics": {
+            "defaultValue": "<source Log Analytics workspace name>",
+            "type": "string"
+        },
+        "ResourceGroupNameForDynamicSummaries": {
+            "defaultValue": "<Resource Group name for Dynamic summaries>",
+            "type": "string"
+        },
+        "WorkspaceNameForDynamicSummaries": {
+            "defaultValue": "<Log Analytics workspace name for Dynamic summaries>",
+            "type": "string"
+        },
+        "RunFrequency": {
+            "defaultValue": "<Day, Week, Month>",
+            "type": "string"
+        },
+        "RunInterval": {
+            "defaultValue": 1,
+            "type": "int"
+        },
+        "DynamicSummaryGUID": {
+            "defaultValue": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+            "type": "string"
+        },
+        "DynamicSummaryName": {
+            "defaultValue": "My dynamic summary",
+            "type": "string"
+        },
+        "DynamicSummaryDescription": {
+            "defaultValue": "This dynamic summary is for hunting.",
+            "type": "string"
+        }
+    },
+  "variables": {
+    "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
+    "connections_azuremonitorlogs_externalid": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', 'nbauto', '/providers/Microsoft.Web/connections/azuremonitorlogs')]",
+    "SubscriptionId": "[concat(subscription().subscriptionId)]",
+    "TenantId": "[concat(subscription().tenantId)]",
+    "IntegrationAccount_Id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/integrationAccounts/', parameters('IntegrationAccountName'))]",
+    "DynamicSummariesAPIUri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('ResourceGroupNameforDynamicSummaries'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceNameforDynamicSummaries'), '/providers/Microsoft.SecurityInsights/dynamicSummaries/', parameters('DynamicSummaryGUID'), '?api-version=2023-03-01-preview')]",
+    "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+  },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "integrationAccount": {
+                    "name": "[parameters('IntegrationAccountName')]",
+                    "id": "[variables('IntegrationAccount_Id')]",
+                    "type":  "Microsoft.Logic/integrationAccounts"
+                },
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Recurrence":  {
+                            "recurrence":  {
+                                "frequency":  "[parameters('RunFrequency')]",
+                                "interval":  "[parameters('RunInterval')]"
+                            },
+                            "evaluatedRecurrence":  {
+                                "frequency":  "[parameters('RunFrequency')]",
+                                "interval":  "[parameters('RunInterval')]"
+                            },
+                            "type":  "Recurrence"
+                        }
+                    },
+                    "actions":  {
+                        "Dynamic_Summaries_data_object_builder": {
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "JavaScriptCode",
+                            "inputs": {
+                                "code": "var result = workflowContext.actions.Run_query_and_list_results.outputs.body.value\r\n\r\nvar summary = {};\r\nsummary.azureTenantId = workflowContext.actions.Compose_tenant_ID.outputs\r\nsummary.summaryName = workflowContext.actions.Compose_summary_name.outputs;\r\nsummary.summaryDescription = workflowContext.actions.Compose_summary_description.outputs;\r\n\r\nsummary.sourceInfo = {\"source\": \"playbook\"};\r\n\r\nitems = [];\r\nraw = \"\";\r\npacked = \"\";\r\nfor (var i = 0; i < result.length; i++)\r\n{\r\n    packed = {\"ResourceId\": result[i].ResourceId, \"ResourceType\": result[i].ResourceType};\r\n    raw = {\"ObservableType\":result[i].observableType, \"ObservableValue\": result[i].observableValue, \"SearchKey\":result[i].searchKey, \"EventTimeUTC\":result[i].eventTimeUTC, \"PackedContent\": packed};\r\n    items.push(raw);\r\n}\r\n\r\nsummary.rawContent = JSON.stringify(items);\r\n\r\nreturn \"{ \\\"properties\\\": \" +  JSON.stringify(summary) + \"}\";\r\n"
+                            }
+                        },
+                        "Compose_summary_description": {
+                            "runAfter": {
+                                "Compose_summary_name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "[parameters('DynamicSummaryDescription')]"
+                        },
+                        "Compose_summary_name": {
+                            "runAfter": {
+                                "Compose_tenant_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "[parameters('DynamicSummaryName')]"
+                        },
+                        "Compose_tenant_ID": {
+                            "runAfter": {},
+                            "type": "Compose",
+                            "inputs": "[variables('TenantId')]" 
+                        },
+                        "HTTP_PUT_to_Dynamic_Summaries_API":  {
+                            "runAfter":  {
+                                "Dynamic_Summaries_data_object_builder":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "authentication":  {
+                                    "type":  "ManagedServiceIdentity"
+                                },
+                                "body":  "@body('Dynamic_Summaries_data_object_builder')",
+                                "headers":  {
+                                    "content-type":  "application/json"
+                                },
+                                "method":  "PUT",
+                                "uri":  "[variables('DynamicSummariesAPIUri')]"
+                            }
+                        },                        
+                        "Run_query_and_list_results":  {
+                            "runAfter":  {
+                                "Compose_summary_description":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "[parameters('KQL')]",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/queryData",
+                                "queries":  {
+                                    "resourcegroups": "[parameters('ResourceGroupNameforSourceLogAnalytics')]",
+                                    "resourcename": "[parameters('WorkspaceNameforSourceLogAnalytics')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[variables('SubscriptionId')]",
+                                    "timerange": "'2020-01-01'...'2025-12-31'"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[variables('connections_azuremonitorlogs_externalid')]",
+                                "connectionName": "azuremonitorlogs",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                },
+                "accessControl":  {
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "tags":  {
+                "hidden-SentinelTemplateName":  "dynsumtemplate",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzuremonitorlogsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        }
+    ]
+}
