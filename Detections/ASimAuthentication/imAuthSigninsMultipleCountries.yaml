@@ -19,15 +19,16 @@ tags:
   - Schema: ASIMAuthentication
     SchemaVersion: 0.1.0
 query: |
-  let timeframe = ago(3h);
+  let searchTimeframe = ago(3h);
   let threshold = 2;
+  let ipWhitelist = dynamic([]);
   imAuthentication
-  | where TimeGenerated > timeframe
-  | where EventType=='Logon' and EventResult=='Success'
+  | where TimeGenerated > searchTimeframe
+  | where not(SrcIpAddr has_any (ipWhitelist))
+  | where EventType == 'Logon' and EventResult == 'Success'
   | where isnotempty(SrcGeoCountry)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Vendors=make_set(EventVendor), Products=make_set(EventProduct)
-    , NumOfCountries = dcount(SrcGeoCountry)
-    by TargetUserId, TargetUsername, TargetUserType
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Vendors=make_set(EventVendor), Products=make_set(EventProduct), IPs = make_set(SrcDvcIpAddr), Countries = make_set(SrcGeoCountry), NumOfCountries = dcount(SrcGeoCountry)
+      by TargetUserId, TargetUsername, TargetUserType
   | where NumOfCountries >= threshold
   | extend timestamp = StartTime, AccountCustomEntity = TargetUsername
 
