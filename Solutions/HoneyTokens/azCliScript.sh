@@ -15,7 +15,7 @@ funcUrl=https://$funcName.azurewebsites.net
 #az login --tenant $tenantId
 
 # register a new AAD app, and configure it
-appId=$(az ad app create --display-name $appName --web-home-page-url $funcUrl --sign-in-audience AzureADMyOrg --query appId --enable-id-token-issuance true | sed 's/.\(.*\)/\1/' | sed 's/\(.*\)./\1/')
+appId=$(az ad app create --display-name $appName --web-home-page-url $funcUrl --sign-in-audience AzureADMyOrg --query appId | sed 's/.\(.*\)/\1/' | sed 's/\(.*\)./\1/')
 secret=$(az ad app credential reset --id $appId --append --query password | sed 's/.\(.*\)/\1/' | sed 's/\(.*\)./\1/')
 objId=$(az ad app show --id $appId --query id | sed 's/.\(.*\)/\1/' | sed 's/\(.*\)./\1/')
 az rest --method PATCH --uri "https://graph.microsoft.com/v1.0/applications/$objId" --headers 'Content-Type=application/json' --body "{\"web\":{\"redirectUris\":[\"$funcUrl/.auth/login/aad/callback\"]}}"

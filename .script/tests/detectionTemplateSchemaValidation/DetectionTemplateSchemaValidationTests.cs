@@ -174,7 +174,7 @@ namespace Kqlvalidations.Tests
             // Get file present in detection folder or else check in solution analytics rules folder
             try
             {
-                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detections")).Single();
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
             }
             catch (Exception e) when (e.Message.Contains("Sequence contains no elements"))
             {

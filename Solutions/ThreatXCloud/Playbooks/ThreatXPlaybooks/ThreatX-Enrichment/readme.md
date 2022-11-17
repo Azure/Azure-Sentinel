@@ -1,6 +1,6 @@
 # ThreatX-enrichment Info Playbook
  ## Summary
- When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
+ When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the list of Ip's from incident entites .
  2. Make the APi call to get the latest threat information/details from cloud console and update the same incidents comments with result.
 
@@ -25,7 +25,7 @@
 ### Post-Deployment instructions 
 #### a. Authorize connections (Perform this action if needed)
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Microsoft Sentinel connection resource
+1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -33,7 +33,7 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for ThreatX Api  Connection (For authorizing the ThreatX API connection, API Key needs to be provided)
 
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address. 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address. 
 2. Configure the automation rules to trigger this playbook , mapping of IP and URL entities is necessary
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role

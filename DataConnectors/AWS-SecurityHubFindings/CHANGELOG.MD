@@ -6,5 +6,3 @@
 ## 1.1
 - Fixed issue with regular expression module
 
-## 2.0
-- Added new authentication method, using Azure AD as IdP and the Managed Identity of the function to perform "AssumeRoleWithWebIdentity"

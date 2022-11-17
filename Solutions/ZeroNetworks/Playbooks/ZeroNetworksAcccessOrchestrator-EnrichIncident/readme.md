@@ -6,7 +6,7 @@ This playbook will take each Host entity and get its Asset status from Zero Netw
 
 When a new Microsoft Sentinel incident is created,this playbook gets triggered and performs below actions
 1. For the hosts, we get their asset satus from the REST API.
-2. A comment is added to Microsoft Sentinel incident.
+2. A comment is added to Azure Sentinel incident.
 
 **Playbook overview:**
 

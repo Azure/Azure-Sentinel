@@ -77,7 +77,7 @@ AWS Access Key Id and AWS Secret Access Key are required. Check the [documentati
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Microsoft Sentinel connection resource
+1. Click the Azure Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in

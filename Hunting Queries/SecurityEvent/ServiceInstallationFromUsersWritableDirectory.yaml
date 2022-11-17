@@ -1,4 +1,36 @@
-id: 90b0efe8-56d4-46eb-9ac2-f4d72cca5c07
+id: 5a9ccb48-1316-46e1-89d1-aca0355c305e
 name: Service installation from user writable directory
 description: |
-   'As part of content migration, this file is moved to new location. you can find here:  https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows Security Events'
+   'This query detects a service installation that is originated from a user writable directory.
+   Ref: https://attack.mitre.org/techniques/T1569/002/'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1569.002
+query: |
+  // Enter a reference list for writable user paths"
+  let WritableUserPaths = dynamic (["\"C:\\Users\\","\"C:\\ProgramData\\"]);
+  Event
+  | where Source == "Service Control Manager" and EventID == 7045
+  | parse EventData with * 'ServiceName">' ServiceName "<" * 'ImagePath">' ImagePath "<" *
+  | where ImagePath has_any (WritableUserPaths)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, ImagePath, ServiceName, UserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: ImagePath
+version: 1.0.0
+kind: Scheduled

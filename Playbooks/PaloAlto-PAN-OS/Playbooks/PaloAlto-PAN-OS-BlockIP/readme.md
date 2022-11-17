@@ -21,7 +21,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 
 ### Prerequisites 
 1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
-2. Generate an API key.[Refer this link on how to generate the API Key](https://docs.paloaltonetworks.com/pan-os/9-1/pan-os-panorama-api/get-started-with-the-pan-os-xml-api/get-your-api-key)
+2. Generate an API key.[Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
 3. Address group should be created for PAN-OS and this should be used while creating playbooks. 
 
 

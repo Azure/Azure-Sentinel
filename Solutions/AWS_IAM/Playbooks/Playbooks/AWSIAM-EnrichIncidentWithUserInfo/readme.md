@@ -29,7 +29,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Microsoft Sentinel connection resource
+1. Click the Azure Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
@@ -38,5 +38,5 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Microsoft sentinel, analytical rules should be configured to trigger an incident that contains user name in AWS. In the *Entity maping* section of the analytics rule creation workflow, user name should be mapped to **Name** identitfier of the **Account** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
+1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains user name in AWS. In the *Entity maping* section of the analytics rule creation workflow, user name should be mapped to **Name** identitfier of the **Account** entity type. Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook. Check the [documentation](https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook) to learn more about automation rules.

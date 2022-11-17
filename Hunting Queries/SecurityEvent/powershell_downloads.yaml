@@ -1,4 +1,40 @@
-id: 8519a7d1-db41-4f60-93af-aac86c8231c8
+id: d83f40fc-bbcc-4020-8d45-ad2d82355cb2
 name: PowerShell downloads
 description: |
-  'As part of content migration, this file is moved to new location. you can find here:  https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows Security Events'
+  'Finds PowerShell execution events that could involve a download'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - CommandAndControl
+query: |
+
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  | project  TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,        AccountDomain=SubjectDomainName,
+    FileName=tostring(split(NewProcessName, '\\')[-1]),
+  ProcessCommandLine = CommandLine, 
+  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+  processEvents};
+  ProcessCreationEvents
+  | where FileName in~ ("powershell.exe", "powershell_ise.exe","pwsh.exe")
+  | where ProcessCommandLine has "Net.WebClient"
+     or ProcessCommandLine has "DownloadFile"
+     or ProcessCommandLine has "Invoke-WebRequest"
+     or ProcessCommandLine has "Invoke-Shellcode"
+     or ProcessCommandLine contains "http:"
+  | project TimeGenerated, ComputerName, AccountName, InitiatingProcessFileName, FileName, ProcessCommandLine
+  | top 100 by TimeGenerated
+  | extend timestamp = TimeGenerated, HostCustomEntity = ComputerName, AccountCustomEntity = AccountName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

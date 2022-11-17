@@ -1,6 +1,6 @@
 # OpenCTI- Add Indicators in OpenCTI Playbook
  ## Summary
- When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
+ When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Searches for the matching indicator info of Entities (Accounts, Host, IP Address, FileHash, URL) in OpenCTI 
  2. If indicators are not found, this playbook adds the new indicators to OpenCTI databse (Separate indicators for each Accounts, Host, IP Address, FileHash, URL that are presnet in Sentinel incident)
     ![Comment example](./images/IncidentCommentCreateindicator.png)
@@ -25,12 +25,12 @@
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Microsoft Sentinel connection resource
+1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for OpenCTI Api  Connection (For authorizing the OpenCTI GraphQL API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account or host or URL or FileHash or IP Address. 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account or host or URL or FileHash or IP Address. 
 2. Configure the automation rules to trigger this playbook

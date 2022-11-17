@@ -1,8 +1,5 @@
 # Ingest AWS Security Hub Events to Azure Sentinel
-
 Author: Sreedhar Ande  
-
-## Introduction
 
 AWS SecurityHub is a service that centralizes and organizes alerts and findings from across services. Services include GuardDuty, Macie, IAM Access Analyzer, and AWS Firewall Manager. You can use SecurityHub to continuously monitor your environment and perform automated compliance checks.  
 
@@ -11,39 +8,22 @@ Ingest all the SecurityHub findings returned by SecurityHub API, ingests only fr
 
 ## Deploy AWS SecurityHub Data connector
 
-### Azure
-
 1. Click  "Deploy To Azure" (For both Commercial & Azure GOV)  
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-SecurityHubFindings%2Fazuredeploy_awssecurityhub.json)
 
-2. Fill in the required fields:
-```
-WorkspaceId = Id of the Log Analytics-workspace you want to send logs to.
-WorkspaceKey = The access key of the Log Analytics-workspace you want to send logs to.
-AWSRegion = AWS Region your AWS Account is set to.
-AWSRoleArn = RoleArn is a combination of AWSAccountNumber and RoleName ("arn:aws:iam::<AWSAccountNumber>:role/SecurityHubIntegrationRole").
-AWSRoleSessionName = Name of the session variable. //Leave default
-```
-3. In the function under Settings, go to Identity and turn on Managed Identity.
-4. Go to Azure AD, Enterprise Applications and find the Managed Identity. Note the ApplicationId (ClientId).
-5. Under Settings, go to Configuration and paste the ApplicationId (ClientId) into the ClientID parameter.
-
-### AWS
-
-1. [Obtain the thumbprint for Azure AD](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html).
-*The openid endpoint for Azure AD can be found at https://login.microsoftonline.com/$tenantId/v2.0/.well-known/openid-configuration*
-2. Deploy the [CloudFormation template](https://raw.githubusercontent.com/infernuxmonster/Azure-Sentinel/AWS-SecurityHub-AuthUpgrade/DataConnectors/AWS-SecurityHubFindings/CloudFormation.template.json) and fill in the required fields:
-```
-IdP ID (TenantId)
-ClientID (ApplicationId of the Managed Identity created for the Azure Function)
-Thumbprint (Obtained in step 1)
-```
-Leave everything else to default.
-
-### Azure
-
-1. For the first time run, change the FreshEventTimeStamp variable in configuration to a higher value (in minutes) to populate the log - recommended 3600.
-2. After the function runs, change the above value back to 10.
+2. Select the preferred **Subscription**, **Resource Group** and **Location**  
+   **Note**  
+   Best practice : Create new Resource Group while deploying - all the resources of your custom Data connector will reside in the newly created Resource 
+   Group
+3. Enter the following value in the ARM template deployment
+	```	
+	"Workspace Id": Azure Log Analytics Workspace Id​
+	"Workspace Key": Azure Log Analytics Workspace Key
+	"AWS Access Key Id": AWS Access Key
+	"AWS Secret Key ID": AWS Secret Key
+	"AWS Region Name" : AWS SecurityHub Region
+	"CustomLogTableName": Azure Log Analytics Custom Log Table Name	
+	```
 
 ## Post Deployment Steps
 
@@ -54,7 +34,7 @@ Leave everything else to default.
    c.	Click on "Schedule" under "Application Settings"
    d.	Update your own schedule using cron expression.
    ```
-**Note: For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 10 minutes is `0 */10 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 10, for any hour, day of the month, month, day of the week, or year".**
+   **Note: For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 10 minutes is `0 */10 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 10, for any hour, day of the month, month, day of the week, or year".**
    
 2. Parameterized finding attributes using a environment variable "SecurityHubFilters" which is used to define a condition to filter the returned findings. You can filter by up to 10 finding attributes. For each attribute, you can provide up to 20 filter values.
    ```
@@ -93,7 +73,7 @@ Leave everything else to default.
    Schedule=0 */30 * * * *  
    
       
-4. All secrets will be placed as "Secrets" in the Azure KeyVault `awssecurityhub<<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
+4. AWSAccessKey, AWSSecretAccessKey and Workspace Key will be placed as "Secrets" in the Azure KeyVault `awssecurityhub<<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
 
 	```
 		a. Go to Azure KeyVault "awssecurityhub<<uniqueid>>"

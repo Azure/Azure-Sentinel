@@ -2,11 +2,11 @@
 
  ## Summary
 
-This playbook allows the SOC to automatically response to Microsoft Sentinel incidents which includes IPs, by adding the IPs to the TI Allow list in Azure Firewall Policy.
+This playbook allows the SOC to automatically response to Azure Sentinel incidents which includes IPs, by adding the IPs to the TI Allow list in Azure Firewall Policy.
  [Learn more about Threat Intelligence in Azure Firewall Policies](https://docs.microsoft.com/azure/firewall/threat-intel)
 
 
-When a new Microsoft Sentinel is created,this playbook gets triggered and performs below actions:
+When a new Azure Sentinel is created,this playbook gets triggered and performs below actions:
 1.  An adaptive card is sent to the SOC channel providing IP address, Virus Total report , showing list of existing firewalls in the Resource group and providing an option to block IP address or Ignore.
 2. If SOC user confirms yes, the IP Address gets added to Threat Intel Allow list and incident will get updates with endpoint information, summary of the action taken.
 3. Else, incident will get updates with endpoint information and summary of the action taken. 
@@ -21,14 +21,14 @@ When a new Microsoft Sentinel is created,this playbook gets triggered and perfor
 ![Comment example](./Incident_Comment.png)
 
 ### Prerequisites 
-1. **This playbook template is based on Microsoft Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
+1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
 1. Azure Firewall connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
 1. Azure Firewall connector need to be authenticated with a Service Principal that has permissions over Azure Firewall. Relevant instructions can be found in the connector doc page.
 1. This playbook will add new rules to existing Network Collections in Azure Firewalls in your subscription. Make sure you have such prior to running the playbook. 
 1. **Permissions required for this playbook** <br>
-This playbook **Gets** and **Updates** Azure Firewall Policies in the subscription of Microsoft Sentinel. The registered application/Service Principal that is authenticated to the connector needs to have the following RBAC Roles:
+This playbook **Gets** and **Updates** Azure Firewall Policies in the subscription of Azure Sentinel. The registered application/Service Principal that is authenticated to the connector needs to have the following RBAC Roles:
 
-	* **Contributor** on the Azure Firewall Policies in the Microsoft Sentinel resource group.
+	* **Contributor** on the Azure Firewall Policies in the Azure Sentinel resource group.
 
 1. To use VirusTotal connector, get your Virus Totan API key. [ how to generate the API Key](https://developers.virustotal.com/v3.0/reference#getting-started)
 
@@ -52,7 +52,7 @@ This playbook **Gets** and **Updates** Azure Firewall Policies in the subscripti
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Microsoft Sentinel connection resource
+1.	Click the Azure Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -69,11 +69,11 @@ Once deployment is complete, you will need to authorize each connection.
       d. Click Change connection -- Enter Connection name, ClientId, SecretKey and TenantId captured from AAD. 
 
 #### b. Configurations in Sentinel
-1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.
+1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
 ## Playbook steps explained
-### When Microsoft Sentinel incident creation rule is triggered
+### When Azure Sentinel incident creation rule is triggered
 
 ### Variables 
 

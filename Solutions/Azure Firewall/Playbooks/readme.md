@@ -17,7 +17,7 @@
 
 ## Overview
 Azure Firewall is a cloud-based network security service, sitting at the edge of the Azure virtual network resources, to provide additional security beyond what is offered by NSGs. <br>
-This integration allows to automate response to Microsoft Sentinel incidents which contains IPs. It contains the basic connector component, with which you can create your own playbooks that interact with Azure Firewall, Azure Firewall Policy and IP Groups. <br>
+This integration allows to automate response to Azure Sentinel incidents which contains IPs. It contains the basic connector component, with which you can create your own playbooks that interact with Azure Firewall, Azure Firewall Policy and IP Groups. <br>
 It also contains 3 playbook templates, ready to quick use, that allow direct response on Azure Firewall from Microsoft Teams together and VirusTotal enrichment.
 
 The playbooks in this integration work with:
@@ -53,7 +53,7 @@ You can choose to deploy the whole package: connector + all three playbook templ
 ## Authentication
 This connector supports Service Principal authentication type.
 ### Azure Active Directory Service principal
-To use your own application with the Microsoft Sentinel connector, perform the following steps:
+To use your own application with the Azure Sentinel connector, perform the following steps:
 
 1. Register the application with Azure AD and create a service principal. [Learn how](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal).
 
@@ -111,15 +111,15 @@ To use your own application with the Microsoft Sentinel connector, perform the f
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
- 1. Click the Microsoft Sentinel connection resource
+ 1. Click the Azure Sentinel connection resource
  2. Click edit API connection
  3. Click Authorize
  4. Sign in
  5. Click Save
  6. Repeat steps for other connection such as Teams connection and Virus Total (For authorizing the Virus Total API connection, the API Key needs to be provided)
 
-#### b. Configurations in Microsoft Sentinel
-1. Find Microsoft Sentinel Analytics rules that create alerts and incidents which includes IP entities.
+#### b. Configurations in Azure Sentinel
+1. Find Azure Sentinel Analytics rules that create alerts and incidents which includes IP entities.
 2. Configure automation rule(s) to trigger the playbooks
 
 
@@ -136,6 +136,6 @@ Once deployment is complete, you will need to authorize each connection.
 * [AzureFirewallCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewallConnector)
 
 Playbooks
-* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Microsoft Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-AddIPtoTIAllowList)
-* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Microsoft Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-BlockIP-addNewRule)
-* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Microsoft Sentinel Incident ](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-BlockIP-addToIPGroup)
+* [AzureFirewall-AddIPtoTIAllowList : This playbook uses the Azure Firewall connector to add IP Address to the Threat Intel Allow list based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-AddIPtoTIAllowList)
+* [AzureFirewall-BlockIP-addNewRule : This playbook uses the Azure Firewall connector to add IP Address to the Deny Network Rules collection based on the Azure Sentinel Incident](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-BlockIP-addNewRule)
+* [AzureFirewall-BlockIP-addToIPGroup : This playbook uses the Azure Firewall connector to add IP Address to the IP Groups based on the Azure Sentinel Incident ](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Azure%20Firewall/Playbooks/AzureFirewall-BlockIP-addToIPGroup)

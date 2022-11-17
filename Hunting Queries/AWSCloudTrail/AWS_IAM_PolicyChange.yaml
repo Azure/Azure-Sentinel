@@ -1,4 +1,35 @@
-id: f8a0808c-4c22-44a8-8aa4-a6caa35afc31
+id: e0a67cd7-b4e5-4468-aae0-26cb16a1bbd2
 name: Changes made to AWS IAM policy 
 description: |
-  'As part of content migration, this file is moved to new location. You can find here: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%Web%Services/Hunting%Queries/AWS_IAM_PolicyChange.yaml'  
+  Identity and Access Management (IAM) securely manages access to AWS services and resources. 
+  This query looks for when an API call is made to change an IAM, particularly those related to new policies being 
+  attached to users and roles, as well as changes to access methods and changes to account level policies. 
+  If these turn out to be noisy filter out the most common for your environment.  
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - PrivilegeEscalation
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1484
+query: |
+
+  AWSCloudTrail
+  | where  EventName in~ ("AttachGroupPolicy", "AttachRolePolicy", "AttachUserPolicy", "CreatePolicy",
+  "DeleteGroupPolicy", "DeletePolicy", "DeleteRolePolicy", "DeleteUserPolicy", "DetachGroupPolicy",
+  "PutUserPolicy", "PutGroupPolicy", "CreatePolicyVersion", "DeletePolicyVersion", "DetachRolePolicy", "CreatePolicy")
+  | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
+  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityAccountId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
