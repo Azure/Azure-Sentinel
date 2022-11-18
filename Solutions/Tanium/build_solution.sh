@@ -132,11 +132,44 @@ check-new-version() {
   fi
 }
 
+check-matching-playbook-declarations() {
+  local playbook_json_files
+  local declared_playbook_json_files
+  local undeclared_playbook_json_files
+  local missing_playbook_json_files
+
+  playbook_json_files=$(find Solutions/Tanium/Playbooks -name "azuredeploy.json" | sort | sed -e 's|Solutions/Tanium/||')
+  declared_playbook_json_files=$(jq -r ".Playbooks[]" Solutions/Tanium/Data/Solution_Tanium.json | sort)
+
+  # comm -23 : omit lines in common and lines only in the second file
+  undeclared_playbook_json_files=$(comm -23 <(echo "$playbook_json_files") <(echo "$declared_playbook_json_files"))
+  if [[ -n "$undeclared_playbook_json_files" ]]; then
+    _msg_error "Found undeclared playbook json files:"
+    _msg "$undeclared_playbook_json_files"
+    _msg
+    _msg "Did you forget to add them to Solutions/Tanium/Data/Solution_Tanium.json?"
+    _msg
+    exit 1
+  fi
+
+  # comm -13 : omit lines in common and lines only in the first file
+  missing_playbook_json_files=$(comm -13 <(echo "$playbook_json_files") <(echo "$declared_playbook_json_files"))
+  if [[ -n "$missing_playbook_json_files" ]]; then
+    _msg_error "Found declared playbook json files missing the actual file:"
+    _msg "$missing_playbook_json_files"
+    _msg
+    _msg "Did you forget to add them to Solutions/Tanium/Playbooks?"
+    _msg
+    exit 1
+  fi
+}
+
 check-prerequisites() {
   check-command "jq"
   check-command "git"
   check-command "pwsh" "powershell"
   check-new-version
+  check-matching-playbook-declarations
 }
 
 usage() {
