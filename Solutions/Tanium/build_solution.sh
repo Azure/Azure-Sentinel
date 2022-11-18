@@ -118,7 +118,7 @@ check-new-version() {
   declared_version=$(jq -r ".Version" Solutions/Tanium/Data/Solution_Tanium.json)
 
   if [[ "$_REBUILD" -eq 1 ]]; then
-    rm "Solutions/Tanium/Package/$declared_version.zip"
+    rm "Solutions/Tanium/Package/$declared_version.zip" || true
   fi
 
   if find Solutions/Tanium/Package -name '*.zip' | grep -q "$declared_version"; then
