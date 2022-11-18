@@ -116,6 +116,7 @@ check-command() {
 check-new-version() {
   local declared_version
   declared_version=$(jq -r ".Version" Solutions/Tanium/Data/Solution_Tanium.json)
+  DECLARED_VERSION=$declared_version
 
   if [[ "$_REBUILD" -eq 1 ]]; then
     rm "Solutions/Tanium/Package/$declared_version.zip" || true
@@ -192,7 +193,7 @@ main() {
     done
 
     check-prerequisites
-    _shout "Building Solutions/Tanium using $_TOOL_DIRECTORY"
+    _shout "Building Solutions/Tanium $DECLARED_VERSION using $_TOOL_DIRECTORY"
     declare logfile="/tmp/tanium_sentinel_create_package.log"
     declare tmpdir
     tmpdir=$(mktemp -d)
