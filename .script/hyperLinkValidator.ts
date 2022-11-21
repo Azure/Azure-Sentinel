@@ -52,6 +52,7 @@ let filePathFolderPrefixes = ["DataConnectors","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
+    console.log(`File path is ${filePath}`)
     return ValidateHyperlinks(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
