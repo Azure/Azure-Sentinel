@@ -6,7 +6,7 @@ import * as logger from "./utils/logger";
 
 
 
-export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
+export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
 
   const content = fs.readFileSync(filePath, "utf8");
 
@@ -23,14 +23,14 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
         throw new Error();
       }
     }
- 
   }
 
   //create a function to check if the link is valid
   async function isValidLink(link: string): Promise<boolean> {
     try {
       //import XMLHttpRequest from "xmlhttprequest"
-const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
+      console.log("link to valid is ", link)
+      const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
       request.send();
@@ -52,7 +52,7 @@ let filePathFolderPrefixes = ["DataConnectors","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
-    return IsValidDataConnectorSchema(filePath);
+    return ValidateHyperlinks(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
     console.log(`HyperLink Validation Failed. File path: ${filePath}. Error message: ${e.message}`);
