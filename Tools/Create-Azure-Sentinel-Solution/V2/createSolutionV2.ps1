@@ -483,7 +483,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             contentId = "[variables('_$fileName')]";
                             version   = "[variables('playbookVersion$playbookCounter')]";
                         };
-                        if($fileName.ToLower() -eq "FunctionApp"){
+                        if($fileName.ToLower() -match "FunctionApp"){
                             $functionAppsPlaybookId = $playbookData.parameters.FunctionAppName.defaultValue
                         }
 
