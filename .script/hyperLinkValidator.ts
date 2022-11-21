@@ -15,6 +15,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
   const links = content.match("(http|ftp|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])");
   if (links) {
     for (const link of links) {
+      console.log("hello world")
       console.log(link);
       //check if the link is valid
       const isValid = await isValidLink(link);
