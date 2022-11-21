@@ -13,9 +13,9 @@ namespace Kqlvalidations.Tests
             var basePath = Utils.GetTestDirectory(TestFolderDepth);
             var detectionsDir = new List<string> { Path.Combine(basePath, "Hunting Queries") };
             var solutionDirectories = Path.Combine(basePath, "Solutions");
-            var analyticsRulesDir = Directory.GetDirectories(solutionDirectories, "Hunting Queries", SearchOption.AllDirectories);
+            var huntingQueriesRulesDir = Directory.GetDirectories(solutionDirectories, "Hunting Queries", SearchOption.AllDirectories);
 
-            return analyticsRulesDir.Concat(detectionsDir).ToList();
+            return huntingQueriesRulesDir.Concat(detectionsDir).ToList();
         }
     }
 }
