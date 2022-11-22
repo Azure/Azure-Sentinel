@@ -1,0 +1,613 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Zoom Reports"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-zoomreports",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Zoom",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Zoom",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorVersion1": "2.0.0",
+    "parserVersion1": "2.0.0",
+    "parserContentId1": "Zoom-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "Zoom",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-Parser-',variables('_parserContentId1'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Zoom Reports data connector with template",
+        "displayName": "Zoom Reports template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Zoom Reports data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Zoom Reports",
+                  "publisher": "Zoom",
+                  "descriptionMarkdown": "The [Zoom](https://zoom.us/) Reports data connector provides the capability to ingest [Zoom Reports](https://marketplace.zoom.us/docs/api-reference/zoom-api/reports/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://marketplace.zoom.us/docs/api-reference/introduction) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
+                  "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on Kusto to work as expected. Follow the steps to use this Kusto functions alias **Zoom** in queries and workbooks [Follow steps to get this Kusto functions>](https://aka.ms/sentinel-ZoomAPI-parser).",
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "Zoom_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Zoom_CL",
+                      "baseQuery": "Zoom_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Zoom Events - All Activities.",
+                      "query": "Zoom\n | sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Zoom_CL",
+                      "lastDataReceivedQuery": "Zoom_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 2,
+                    "isPreview": false,
+                    "featureFlag": {
+                      "feature": "ZoomConnector",
+                      "featureStates": {
+                        "1": 2,
+                        "2": 2,
+                        "3": 2,
+                        "4": 2,
+                        "5": 2
+                      }
+                    }
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "delete": true,
+                          "read": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "REST API Credentials/permissions",
+                        "description": "**ZoomApiKey** and **ZoomApiSecret**. [See the documentation to learn more about API](https://marketplace.zoom.us/docs/guides/auth/jwt). Check all [requirements and follow  the instructions](https://marketplace.zoom.us/docs/guides/auth/jwt) for obtaining credentials."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to the Zoom API to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://aka.ms/sentinel-ZoomAPI-parser) to create the Kusto functions alias, **Zoom**"
+                    },
+                    {
+                      "description": "**STEP 1 - Configuration steps for the Zoom API**\n\n [Follow the instructions](https://marketplace.zoom.us/docs/guides/auth/jwt) to obtain the credentials."
+                    },
+                    {
+                      "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Zoom Reports data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following).",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "Use this method for automated deployment of the Zoom Audit data connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-ZoomAPI-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n> **NOTE:** Within the same resource group, you can't mix Windows and Linux apps in the same region. Select existing resource group without Windows apps in it or create new resource group.\n3. Enter the **ZoomApiKey**, **ZoomApiSecret** and deploy. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+                      "title": "Option 1 - Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": "Use the following step-by-step instructions to deploy the Zoom Reports data connector manually with Azure Functions (Deployment via Visual Studio Code).",
+                      "title": "Option 2 - Manual Deployment of Azure Functions"
+                    },
+                    {
+                      "description": "**1. Deploy a Function App**\n\n> **NOTE:** You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.\n\n1. Download the [Azure Function App](https://aka.ms/sentinel-ZoomAPI-functionapp) file. Extract archive to your local development computer.\n2. Start VS Code. Choose File in the main menu and select Open Folder.\n3. Select the top level folder from extracted files.\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\nIf you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**\nIf you're already signed in, go to the next step.\n5. Provide the following information at the prompts:\n\n\ta. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n\tb. **Select Subscription:** Choose the subscription to use.\n\n\tc. Select **Create new Function App in Azure** (Don't choose the Advanced option)\n\n\td. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. ZoomXXXXX).\n\n\te. **Select a runtime:** Choose Python 3.8.\n\n\tf. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n7. Go to Azure Portal for the Function App configuration."
+                    },
+                    {
+                      "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select ** New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tZoomApiKey\n\t\tZoomApiSecret\n\t\tWorkspaceID\n\t\tWorkspaceKey\n\t\tlogAnalyticsUri (optional)\n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n4. Once all application settings have been entered, click **Save**."
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Zoom Reports",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Zoom Reports",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Zoom Reports",
+          "publisher": "Zoom",
+          "descriptionMarkdown": "The [Zoom](https://zoom.us/) Reports data connector provides the capability to ingest [Zoom Reports](https://marketplace.zoom.us/docs/api-reference/zoom-api/reports/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://marketplace.zoom.us/docs/api-reference/introduction) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Zoom_CL",
+              "baseQuery": "Zoom_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Zoom_CL",
+              "lastDataReceivedQuery": "Zoom_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Zoom_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Zoom Events - All Activities.",
+              "query": "Zoom\n | sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 2,
+            "isPreview": false,
+            "featureFlag": {
+              "feature": "ZoomConnector",
+              "featureStates": {
+                "1": 2,
+                "2": 2,
+                "3": 2,
+                "4": 2,
+                "5": 2
+              }
+            }
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true,
+                  "read": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "REST API Credentials/permissions",
+                "description": "**ZoomApiKey** and **ZoomApiSecret**. [See the documentation to learn more about API](https://marketplace.zoom.us/docs/guides/auth/jwt). Check all [requirements and follow  the instructions](https://marketplace.zoom.us/docs/guides/auth/jwt) for obtaining credentials."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to the Zoom API to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://aka.ms/sentinel-ZoomAPI-parser) to create the Kusto functions alias, **Zoom**"
+            },
+            {
+              "description": "**STEP 1 - Configuration steps for the Zoom API**\n\n [Follow the instructions](https://marketplace.zoom.us/docs/guides/auth/jwt) to obtain the credentials."
+            },
+            {
+              "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Zoom Reports data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following).",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            },
+            {
+              "description": "Use this method for automated deployment of the Zoom Audit data connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-ZoomAPI-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n> **NOTE:** Within the same resource group, you can't mix Windows and Linux apps in the same region. Select existing resource group without Windows apps in it or create new resource group.\n3. Enter the **ZoomApiKey**, **ZoomApiSecret** and deploy. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+              "title": "Option 1 - Azure Resource Manager (ARM) Template"
+            },
+            {
+              "description": "Use the following step-by-step instructions to deploy the Zoom Reports data connector manually with Azure Functions (Deployment via Visual Studio Code).",
+              "title": "Option 2 - Manual Deployment of Azure Functions"
+            },
+            {
+              "description": "**1. Deploy a Function App**\n\n> **NOTE:** You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.\n\n1. Download the [Azure Function App](https://aka.ms/sentinel-ZoomAPI-functionapp) file. Extract archive to your local development computer.\n2. Start VS Code. Choose File in the main menu and select Open Folder.\n3. Select the top level folder from extracted files.\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\nIf you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**\nIf you're already signed in, go to the next step.\n5. Provide the following information at the prompts:\n\n\ta. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n\tb. **Select Subscription:** Choose the subscription to use.\n\n\tc. Select **Create new Function App in Azure** (Don't choose the Advanced option)\n\n\td. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. ZoomXXXXX).\n\n\te. **Select a runtime:** Choose Python 3.8.\n\n\tf. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n7. Go to Azure Portal for the Function App configuration."
+            },
+            {
+              "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select ** New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tZoomApiKey\n\t\tZoomApiSecret\n\t\tWorkspaceID\n\t\tWorkspaceKey\n\t\tlogAnalyticsUri (optional)\n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n4. Once all application settings have been entered, click **Save**."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on Kusto to work as expected. Follow the steps to use this Kusto functions alias **Zoom** in queries and workbooks [Follow steps to get this Kusto functions>](https://aka.ms/sentinel-ZoomAPI-parser)."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "Zoom Data Parser with template",
+        "displayName": "Zoom Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Zoom Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Zoom",
+                "category": "Samples",
+                "functionAlias": "Zoom",
+                "query": "\nlet Zoom_dates_report_view = view () {\r\n    Zoom_CL \r\n    | where event_type_s == \"dates\"\r\n    | summarize arg_max(TimeGenerated, *) by date_s\r\n};\r\nlet Zoom_other_reports_view = view () {\r\n    Zoom_CL \r\n    | where event_type_s != \"dates\"\r\n};\r\nlet Zoom_all_reports_view = view () { \r\n    union isfuzzy=true Zoom_dates_report_view, Zoom_other_reports_view\r\n    | extend\r\n    \t\t\tDate=column_ifexists('date_s', ''),\r\n    \t\t\tEventDay=column_ifexists('date_s', ''),\r\n    \t\t\tNewUsersCount=column_ifexists('new_users_d', ''),\r\n    \t\t\tMeetingsCount=column_ifexists('meetings_d', ''),\r\n    \t\t\tParticipantsCount=column_ifexists('participants_d', ''),\r\n    \t\t\tMeetingMinutes=column_ifexists('meeting_minutes_d', ''),\r\n    \t\t\tEventType=column_ifexists('event_type_s', ''),\r\n    \t\t\tEventName=column_ifexists('event_name_s', ''),\r\n    \t\t\tEventMessage=column_ifexists('event_name_s', ''),\r\n    \t\t\tId=column_ifexists('id_s', ''),\r\n    \t\t\tUserIdentity=column_ifexists('id_s', ''),\r\n    \t\t\tEmail=column_ifexists('email_s', ''),\r\n    \t\t\tUserEmail=column_ifexists('email_s', ''),\r\n    \t\t\tUserName=column_ifexists('user_name_s', ''),\r\n    \t\t\tUserType=column_ifexists('type_d', ''),\r\n    \t\t\tDept=column_ifexists('dept_s', ''),\r\n    \t\t\tDepartment=column_ifexists('dept_s', ''),\r\n    \t\t\tLastClientVersion=column_ifexists('last_client_version_s', ''),\r\n    \t\t\tDvcModelNumber=column_ifexists('last_client_version_s', ''),\r\n    \t\t\tEventEndTime=column_ifexists('last_login_time_t', ''),\r\n    \t\t\tLastLoginTime=column_ifexists('last_login_time_t', ''),\r\n    \t\t\tCreateTime=column_ifexists('create_time_t', ''),\r\n    \t\t\tEventCreationTime=column_ifexists('create_time_t', ''),\r\n    \t\t\tUsage=column_ifexists('usage_s', ''),\r\n    \t\t\tPlanUsage=column_ifexists('plan_usage_s', ''),\r\n    \t\t\tFreeUsage=column_ifexists('free_usage_s', ''),\r\n    \t\t\tTime=column_ifexists('time_t', ''),\r\n    \t\t\tEventOriginalTime=column_ifexists('time_t', ''),\r\n    \t\t\tOperator=column_ifexists('operator_s', ''),\r\n    \t\t\tCategoryType=column_ifexists('category_type_s', ''),\r\n    \t\t\tAction=column_ifexists('action_s', ''),\r\n    \t\t\tEventOriginalMessage=column_ifexists('operation_detail_s', ''),\r\n    \t\t\tOperationDetail=column_ifexists('operation_detail_s', ''),\r\n    \t\t\tEventResult=column_ifexists('type_s', ''),\r\n    \t\t\tIpAddress=column_ifexists('ip_address_s', ''),\r\n    \t\t\tSrcIpAddr=column_ifexists('ip_address_s', ''),\r\n    \t\t\tClientType=column_ifexists('client_type_s', ''),\r\n    \t\t\tSrcDvcModelName=column_ifexists('client_type_s', ''),\r\n    \t\t\tSrcDvcModelNumber=column_ifexists('version_s', ''),\r\n    \t\t\tVersion=column_ifexists('version_s', ''),\r\n    \t\t\tEventVendor=\"Zoom\",\r\n                EventProduct=\"Zoom Reports\"\r\n    | project\r\n                TimeGenerated, \r\n                EventVendor,\r\n                EventProduct,\r\n                Date,\r\n    \t\t\tEventDay,\r\n    \t\t\tNewUsersCount,\r\n    \t\t\tMeetingsCount,\r\n    \t\t\tParticipantsCount,\r\n    \t\t\tMeetingMinutes,\r\n    \t\t\tEventType,\r\n    \t\t\tEventName,\r\n    \t\t\tEventMessage,\r\n    \t\t\tId,\r\n    \t\t\tUserIdentity,\r\n    \t\t\tEmail,\r\n    \t\t\tUserEmail,\r\n    \t\t\tUserName,\r\n    \t\t\tUserType,\r\n    \t\t\tDept,\r\n    \t\t\tDepartment,\r\n    \t\t\tLastClientVersion,\r\n    \t\t\tDvcModelNumber,\r\n    \t\t\tEventEndTime,\r\n    \t\t\tLastLoginTime,\r\n    \t\t\tCreateTime,\r\n    \t\t\tEventCreationTime,\r\n    \t\t\tUsage,\r\n    \t\t\tPlanUsage,\r\n    \t\t\tFreeUsage,\r\n    \t\t\tTime,\r\n    \t\t\tEventOriginalTime,\r\n    \t\t\tOperator,\r\n    \t\t\tCategoryType,\r\n    \t\t\tAction,\r\n    \t\t\tEventOriginalMessage,\r\n    \t\t\tOperationDetail,\r\n    \t\t\tEventResult,\r\n    \t\t\tIpAddress,\r\n    \t\t\tSrcIpAddr,\r\n    \t\t\tClientType,\r\n    \t\t\tSrcDvcModelName,\r\n    \t\t\tSrcDvcModelNumber,\r\n    \t\t\tVersion\r\n};\r\nZoom_all_reports_view \r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Zoom"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Zoom Reports",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "Zoom",
+        "category": "Samples",
+        "functionAlias": "Zoom",
+        "query": "\nlet Zoom_dates_report_view = view () {\r\n    Zoom_CL \r\n    | where event_type_s == \"dates\"\r\n    | summarize arg_max(TimeGenerated, *) by date_s\r\n};\r\nlet Zoom_other_reports_view = view () {\r\n    Zoom_CL \r\n    | where event_type_s != \"dates\"\r\n};\r\nlet Zoom_all_reports_view = view () { \r\n    union isfuzzy=true Zoom_dates_report_view, Zoom_other_reports_view\r\n    | extend\r\n    \t\t\tDate=column_ifexists('date_s', ''),\r\n    \t\t\tEventDay=column_ifexists('date_s', ''),\r\n    \t\t\tNewUsersCount=column_ifexists('new_users_d', ''),\r\n    \t\t\tMeetingsCount=column_ifexists('meetings_d', ''),\r\n    \t\t\tParticipantsCount=column_ifexists('participants_d', ''),\r\n    \t\t\tMeetingMinutes=column_ifexists('meeting_minutes_d', ''),\r\n    \t\t\tEventType=column_ifexists('event_type_s', ''),\r\n    \t\t\tEventName=column_ifexists('event_name_s', ''),\r\n    \t\t\tEventMessage=column_ifexists('event_name_s', ''),\r\n    \t\t\tId=column_ifexists('id_s', ''),\r\n    \t\t\tUserIdentity=column_ifexists('id_s', ''),\r\n    \t\t\tEmail=column_ifexists('email_s', ''),\r\n    \t\t\tUserEmail=column_ifexists('email_s', ''),\r\n    \t\t\tUserName=column_ifexists('user_name_s', ''),\r\n    \t\t\tUserType=column_ifexists('type_d', ''),\r\n    \t\t\tDept=column_ifexists('dept_s', ''),\r\n    \t\t\tDepartment=column_ifexists('dept_s', ''),\r\n    \t\t\tLastClientVersion=column_ifexists('last_client_version_s', ''),\r\n    \t\t\tDvcModelNumber=column_ifexists('last_client_version_s', ''),\r\n    \t\t\tEventEndTime=column_ifexists('last_login_time_t', ''),\r\n    \t\t\tLastLoginTime=column_ifexists('last_login_time_t', ''),\r\n    \t\t\tCreateTime=column_ifexists('create_time_t', ''),\r\n    \t\t\tEventCreationTime=column_ifexists('create_time_t', ''),\r\n    \t\t\tUsage=column_ifexists('usage_s', ''),\r\n    \t\t\tPlanUsage=column_ifexists('plan_usage_s', ''),\r\n    \t\t\tFreeUsage=column_ifexists('free_usage_s', ''),\r\n    \t\t\tTime=column_ifexists('time_t', ''),\r\n    \t\t\tEventOriginalTime=column_ifexists('time_t', ''),\r\n    \t\t\tOperator=column_ifexists('operator_s', ''),\r\n    \t\t\tCategoryType=column_ifexists('category_type_s', ''),\r\n    \t\t\tAction=column_ifexists('action_s', ''),\r\n    \t\t\tEventOriginalMessage=column_ifexists('operation_detail_s', ''),\r\n    \t\t\tOperationDetail=column_ifexists('operation_detail_s', ''),\r\n    \t\t\tEventResult=column_ifexists('type_s', ''),\r\n    \t\t\tIpAddress=column_ifexists('ip_address_s', ''),\r\n    \t\t\tSrcIpAddr=column_ifexists('ip_address_s', ''),\r\n    \t\t\tClientType=column_ifexists('client_type_s', ''),\r\n    \t\t\tSrcDvcModelName=column_ifexists('client_type_s', ''),\r\n    \t\t\tSrcDvcModelNumber=column_ifexists('version_s', ''),\r\n    \t\t\tVersion=column_ifexists('version_s', ''),\r\n    \t\t\tEventVendor=\"Zoom\",\r\n                EventProduct=\"Zoom Reports\"\r\n    | project\r\n                TimeGenerated, \r\n                EventVendor,\r\n                EventProduct,\r\n                Date,\r\n    \t\t\tEventDay,\r\n    \t\t\tNewUsersCount,\r\n    \t\t\tMeetingsCount,\r\n    \t\t\tParticipantsCount,\r\n    \t\t\tMeetingMinutes,\r\n    \t\t\tEventType,\r\n    \t\t\tEventName,\r\n    \t\t\tEventMessage,\r\n    \t\t\tId,\r\n    \t\t\tUserIdentity,\r\n    \t\t\tEmail,\r\n    \t\t\tUserEmail,\r\n    \t\t\tUserName,\r\n    \t\t\tUserType,\r\n    \t\t\tDept,\r\n    \t\t\tDepartment,\r\n    \t\t\tLastClientVersion,\r\n    \t\t\tDvcModelNumber,\r\n    \t\t\tEventEndTime,\r\n    \t\t\tLastLoginTime,\r\n    \t\t\tCreateTime,\r\n    \t\t\tEventCreationTime,\r\n    \t\t\tUsage,\r\n    \t\t\tPlanUsage,\r\n    \t\t\tFreeUsage,\r\n    \t\t\tTime,\r\n    \t\t\tEventOriginalTime,\r\n    \t\t\tOperator,\r\n    \t\t\tCategoryType,\r\n    \t\t\tAction,\r\n    \t\t\tEventOriginalMessage,\r\n    \t\t\tOperationDetail,\r\n    \t\t\tEventResult,\r\n    \t\t\tIpAddress,\r\n    \t\t\tSrcIpAddr,\r\n    \t\t\tClientType,\r\n    \t\t\tSrcDvcModelName,\r\n    \t\t\tSrcDvcModelNumber,\r\n    \t\t\tVersion\r\n};\r\nZoom_all_reports_view \r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Zoom Reports",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Zoom Reports",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-04-21",
+        "providers": [
+          "Zoom"
+        ],
+        "categories": {
+          "domains": [
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
