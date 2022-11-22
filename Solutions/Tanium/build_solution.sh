@@ -156,7 +156,7 @@ check-matching-playbook-declarations() {
   # comm -13 : omit lines in common and lines only in the first file
   missing_playbook_json_files=$(comm -13 <(echo "$playbook_json_files") <(echo "$declared_playbook_json_files"))
   if [[ -n "$missing_playbook_json_files" ]]; then
-    _msg_error "Found declared playbook json files missing the actual file:"
+    _msg_error "Found declared playbook json files in Data/Solution_Tanium.json but missing the actual file:"
     _msg "$missing_playbook_json_files"
     _msg
     _msg "Did you forget to add them to Solutions/Tanium/Playbooks?"
