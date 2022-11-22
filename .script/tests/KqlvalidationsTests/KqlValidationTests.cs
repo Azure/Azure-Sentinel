@@ -8,6 +8,7 @@ using YamlDotNet.Serialization;
 using Microsoft.Azure.Sentinel.KustoServices.Implementation;
 using Kqlvalidations.Tests.FunctionSchemasLoaders;
 using System;
+using Newtonsoft.Json;
 
 namespace Kqlvalidations.Tests
 {
@@ -26,6 +27,29 @@ namespace Kqlvalidations.Tests
                .WithCustomFunctionSchemasLoader(new CommonFunctionsLoader())
                .Build();
         }
+
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
+        [ClassData(typeof(DataConnectorFilesTestData))]
+        public void Validate_DataConnectors_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            var dataConnector = ReadAndDeserializeJson(encodedFilePath);
+            var id = (string)dataConnector.Id;
+
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+            foreach (var connectivityCriteria in dataConnector.ConnectivityCriterias)
+            {
+                foreach (var queryStr in connectivityCriteria.Value)
+                {
+                    ValidateKql(id, queryStr);
+                }
+            }
+        }
+
 
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
@@ -179,6 +203,15 @@ namespace Kqlvalidations.Tests
             var deserializer = new DeserializerBuilder().Build();
             return deserializer.Deserialize<dynamic>(yaml);
         }
+
+        private DataConnectorSchema ReadAndDeserializeJson(string encodedFilePath)
+        {
+
+            var jsonString = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
+            DataConnectorSchema myDeserializedClass = JsonConvert.DeserializeObject<DataConnectorSchema>(jsonString);
+            return myDeserializedClass;
+        }
+
         private bool ShouldSkipTemplateValidation(string templateId)
         {
             return TemplatesToSkipValidationReader.WhiteListTemplates
