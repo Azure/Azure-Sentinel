@@ -2,8 +2,8 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Report Azure Active Directory Identity Protection Risky Sign-ins related to Dynatrace Application Security Attack",
-        "description": "This playbook will report Azure Active Directory Identity Protection Risky Sign-ins related to Dynatrace Application Security Attack back to Dynatrace.",
+        "title": "Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights",
+        "description": "This playbook will enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights.",
         "prerequisites": ["1. Dynatrace tenant (ex. xyz.dynatrace.com)",
              "2. Dynatrace Access Token."],
         "lastUpdateTime": "2022-10-19T00:00:00.000Z",
@@ -17,7 +17,7 @@
         "releaseNotes": [
             {
                 "version": "1.0.0",
-                "title": "Report Azure Active Directory Identity Protection Risky Sign-ins related to Dynatrace Application Security Attack",
+                "title": "Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights",
                 "notes": [
                     "Initial version"
                 ]
@@ -26,7 +26,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Enrich-DynatraceAppSecAttackAADIDPRiskySignins",
+            "defaultValue": "Enrich-DynatraceAppSecAttackMSDefender365",
             "type": "string",
             "metadata": {
                 "description": "Incident trigger"
@@ -85,7 +85,7 @@
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "tags": {
-                "hidden-SentinelTemplateName": "EnrichDynatraceAppSecAttackAADIDPRiskySignins-Incident",
+                "hidden-SentinelTemplateName": "EnrichDynatraceAppSecAttackMSDefender365-Incident",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
@@ -120,7 +120,7 @@
                                 },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
                                     }
                                 },
                                 "path": "/incident-creation"
@@ -133,14 +133,14 @@
                             "actions": {
                                 "Append_Extended_Properties_to_LogEntries": {
                                     "runAfter": {
-                                        "For_each_Security_Alert_Entity": [
+                                        "Set_Extended_Properties_log.source": [
                                             "Succeeded"
                                         ]
                                     },
                                     "type": "AppendToArrayVariable",
                                     "inputs": {
                                         "name": "logentries",
-                                        "value": "@addProperty(addProperty(json(items('For_Each_Security_Alert')?['ExtendedProperties']),'MicrosoftSentinelSystemAlertId',items('For_Each_Security_Alert')['SystemAlertId']),'timestamp',variables('Timestamp'))\n"
+                                        "value": "@outputs('Set_Extended_Properties_log.source')"
                                     }
                                 },
                                 "Append_Payload_Item_to_LogEntries": {
@@ -163,10 +163,10 @@
                                         "AlertType": "@{items('For_Each_Security_Alert')?['AlertType']}",
                                         "Description": "@{items('For_Each_Security_Alert')?['Description']}",
                                         "EndTime": "@{items('For_Each_Security_Alert')?['EndTime']}",
-                                        "MicrosoftSentinelSystemAlertId": "@{items('For_Each_Security_Alert')?['SystemAlertId']}",
                                         "ProductName": "@{items('For_Each_Security_Alert')?['ProductName']}",
                                         "ProviderName": "@{items('For_Each_Security_Alert')?['ProviderName']}",
                                         "StartTime": "@{items('For_Each_Security_Alert')?['StartTime']}",
+                                        "SystemAlertId": "@{items('For_Each_Security_Alert')?['SystemAlertId']}",
                                         "Tactics": "@{items('For_Each_Security_Alert')?['Tactics']}",
                                         "VendorName": "@{items('For_Each_Security_Alert')?['VendorName']}",
                                         "dt.entity.process_group_instance": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
@@ -180,12 +180,57 @@
                                     "foreach": "@json(items('For_Each_Security_Alert')?['Entities'])",
                                     "actions": {
                                         "Append_Entity_Item_to_LogEntries": {
-                                            "runAfter": {},
+                                            "runAfter": {
+                                                "Set_Entity_log.source": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "type": "AppendToArrayVariable",
                                             "inputs": {
                                                 "name": "logentries",
-                                                "value": "@addProperty(addProperty(items('For_each_Security_Alert_Entity'),'MicrosoftSentinelSystemAlertId',items('For_Each_Security_Alert')['SystemAlertId']),'timestamp',variables('Timestamp'))"
+                                                "value": "@outputs('Set_Entity_log.source')?['$']"
                                             }
+                                        },
+                                        "Set_Entity_SecurityAlertId": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "@addProperty(json(items('For_Each_Security_Alert')?['ExtendedProperties']),'SystemAlertId',items('For_Each_Security_Alert')['SystemAlertId'])"
+                                        },
+                                        "Set_Entity_Timestamp": {
+                                            "runAfter": {
+                                                "Set_Entity_SecurityAlertId": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@addProperty(outputs('Set_Entity_SecurityAlertId'),'timestamp',variables('Timestamp'))"
+                                        },
+                                        "Set_Entity_dt.entity.process_group_instance": {
+                                            "runAfter": {
+                                                "Set_Entity_Timestamp": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@addProperty(outputs('Set_Entity_Timestamp'),'dt.entity.process_group_instance',body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id'])"
+                                        },
+                                        "Set_Entity_dt.source_entity": {
+                                            "runAfter": {
+                                                "Set_Entity_dt.entity.process_group_instance": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@addProperty(outputs('Set_Entity_dt.entity.process_group_instance'),'dt.source_entity',body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id'])"
+                                        },
+                                        "Set_Entity_log.source": {
+                                            "runAfter": {
+                                                "Set_Entity_dt.source_entity": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@addProperty(outputs('Set_Entity_dt.source_entity'),'log.source',items('For_Each_Security_Alert')?['ProductName'])"
                                         }
                                     },
                                     "runAfter": {
@@ -194,6 +239,51 @@
                                         ]
                                     },
                                     "type": "Foreach"
+                                },
+                                "Set_Extended_Properties_SecurityAlertId": {
+                                    "runAfter": {
+                                        "For_each_Security_Alert_Entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@addProperty(json(items('For_Each_Security_Alert')?['ExtendedProperties']),'SystemAlertId',items('For_Each_Security_Alert')['SystemAlertId'])"
+                                },
+                                "Set_Extended_Properties_Timestamp": {
+                                    "runAfter": {
+                                        "Set_Extended_Properties_SecurityAlertId": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@addProperty(outputs('Set_Extended_Properties_SecurityAlertId'),'timestamp',variables('Timestamp'))"
+                                },
+                                "Set_Extended_Properties_dt.entity.process_group_instance": {
+                                    "runAfter": {
+                                        "Set_Extended_Properties_Timestamp": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@addProperty(outputs('Set_Extended_Properties_Timestamp'),'dt.entity.process_group_instance',body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id'])"
+                                },
+                                "Set_Extended_Properties_dt.source_entity": {
+                                    "runAfter": {
+                                        "Set_Extended_Properties_dt.entity.process_group_instance": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@addProperty(outputs('Set_Extended_Properties_dt.entity.process_group_instance'),'dt.source_entity',body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id'])"
+                                },
+                                "Set_Extended_Properties_log.source": {
+                                    "runAfter": {
+                                        "Set_Extended_Properties_dt.source_entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@addProperty(outputs('Set_Extended_Properties_dt.source_entity'),'log.source',items('For_Each_Security_Alert')?['ProductName'])"
                                 }
                             },
                             "runAfter": {
@@ -234,7 +324,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "let start_date=datetime_add(\"day\", -1, todatetime(\"@{variables('Timestamp')}\"));\nlet end_date=datetime_add(\"day\", 1,  todatetime(\"@{variables('Timestamp')}\"));\n\nSecurityAlert \n| where ProductName == \"Azure Active Directory Identity Protection\"\n| where TimeGenerated between (start_date .. end_date) and \n    ExtendedProperties contains \"@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}\"\n| top 10 by TimeGenerated;",
+                                "body": "let start_date=datetime_add(\"hour\", -1, todatetime(\"@{variables('Timestamp')}\"));\nlet end_date=datetime_add(\"hour\", 4,  todatetime(\"@{variables('Timestamp')}\"));\n\nSecurityAlert \n| where ProductName in (\"Microsoft Defender Advanced Threat Protection\",\"Office 365 Advanced Threat Protection\",\"Azure Advanced Threat Protection\",\"Microsoft Cloud App Security\",\"Microsoft 365 Defender\", \"Azure Active Directory Identity Protection\")\n| where TimeGenerated between (start_date .. end_date) and \n    ExtendedProperties contains \"@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}\"\n| top 10 by TimeGenerated;",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -279,8 +369,7 @@
                                 "variables": [
                                     {
                                         "name": "logentries",
-                                        "type": "array",
-                                        "value": []
+                                        "type": "array"
                                     }
                                 ]
                             }
@@ -615,8 +704,7 @@
                                 }
                             }
                         }
-                    },
-                    "outputs": {}
+                    }
                 },
                 "parameters": {
                     "$connections": {
