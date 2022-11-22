@@ -25,7 +25,7 @@ resource "google_pubsub_topic" "sentinel-topic" {
 
 resource "google_pubsub_subscription" "sentinel-subscription" {
   project = data.google_project.project.project_id
-  name  = "sentinel-subscription"
+  name  = "sentinel-subscription-auditlogs"
   topic = var.topic-name
   depends_on = [google_pubsub_topic.sentinel-topic]
 }
@@ -44,6 +44,10 @@ resource "google_project_iam_binding" "log-writer" {
   members = [
     google_logging_project_sink.sentinel-sink.writer_identity,
   ]
+}
+
+output "An_output_message"{
+  value = "Please copy the following values to Sentinel"
 }
 
 output "GCP_project_id" {
