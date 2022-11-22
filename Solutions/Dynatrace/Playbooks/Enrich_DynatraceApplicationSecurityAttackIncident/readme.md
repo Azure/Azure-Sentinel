@@ -1,7 +1,7 @@
 # Enrich_DynatraceApplicationSecurityAttackIncident
 author: Dynatrace
 
-This playbook uses the Dynatrace REST APIs to automatically enrich incidents created by Microsoft Sentinel. You need a valid Dynatrace Tenant and Access in order to use the playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
+This playbook uses the Dynatrace REST APIs to automatically enrich incidents created by Microsoft Sentinel. You need a valid Dynatrace Tenant and Access Token, the token should have Read attacks (attacks.read) scope in order to use the playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
 
 ** Post Install Notes:**
 

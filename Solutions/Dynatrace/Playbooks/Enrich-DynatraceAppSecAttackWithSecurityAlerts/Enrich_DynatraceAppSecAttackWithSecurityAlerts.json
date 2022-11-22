@@ -2,8 +2,8 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights",
-        "description": "This playbook will enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights.",
+        "title": "Enrich Dynatrace Application Security Attack with related Microsoft Sentinel Security Alerts",
+        "description": "This playbook will enrich Dynatrace Application Security Attack with related Microsoft Sentinel Security Alerts.",
         "prerequisites": ["1. Dynatrace tenant (ex. xyz.dynatrace.com)",
              "2. Dynatrace Access Token, the token should have Read attacks (attacks.read) and Ingest logs (logs.ingest) scopes."],
         "lastUpdateTime": "2022-10-19T00:00:00.000Z",
@@ -17,7 +17,7 @@
         "releaseNotes": [
             {
                 "version": "1.0.0",
-                "title": "Enrich Dynatrace Application Security Attack with related Microsoft Defender 365 insights",
+                "title": "Enrich Dynatrace Application Security Attack with related Microsoft Sentinel Security Alerts",
                 "notes": [
                     "Initial version"
                 ]
@@ -26,7 +26,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Enrich-DynatraceAppSecAttackMSDefender365",
+            "defaultValue": "Enrich-DynatraceAppSecAttackWithSecurityAlerts",
             "type": "string",
             "metadata": {
                 "description": "Incident trigger"
@@ -129,7 +129,7 @@
                     },
                     "actions": {
                         "For_Each_Security_Alert": {
-                            "foreach": "@body('Get_MSDefender365_Security_Alerts')?['value']",
+                            "foreach": "@body('Get_Related_Security_Alerts')?['value']",
                             "actions": {
                                 "Append_Extended_Properties_to_LogEntries": {
                                     "runAfter": {
@@ -233,7 +233,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Get_MSDefender365_Security_Alerts": [
+                                "Get_Related_Security_Alerts": [
                                     "Succeeded"
                                 ]
                             },
@@ -262,7 +262,7 @@
                                 "uri": "@{parameters('EnvironmentUrl')}/api/v2/attacks/@{first(body('Parse_Incident_Alert_Custom_Body_JSON')?['AttackIdentifier'])}"
                             }
                         },
-                        "Get_MSDefender365_Security_Alerts": {
+                        "Get_Related_Security_Alerts": {
                             "runAfter": {
                                 "Initialize_Timestamp": [
                                     "Succeeded"
@@ -270,10 +270,10 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "let start_date=datetime_add(\"hour\", -1, todatetime(\"@{variables('Timestamp')}\"));\nlet end_date=datetime_add(\"hour\", 4,  todatetime(\"@{variables('Timestamp')}\"));\nSecurityAlert \n| where ProductName in (\"Microsoft Defender Advanced Threat Protection\",\"Office 365 Advanced Threat Protection\",\"Azure Advanced Threat Protection\",\"Microsoft Cloud App Security\",\"Microsoft 365 Defender\", \"Azure Active Directory Identity Protection\")\n| where TimeGenerated between (start_date .. end_date) \n| top 10 by TimeGenerated;",
+                                "body": "let start_date=datetime_add(\"minute\", -5, todatetime(\"@{variables('Timestamp')}\"));\nlet end_date=datetime_add(\"minute\", 2,  todatetime(\"@{variables('Timestamp')}\"));\n\nSecurityAlert \n| where not(VendorName == \"Dynatrace\")\n| where TimeGenerated between (start_date .. end_date) and \n    ExtendedProperties contains \"@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}\"\n| top 50 by TimeGenerated;",
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuremonitorlogs_1']['connectionId']"
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
                                     }
                                 },
                                 "method": "post",

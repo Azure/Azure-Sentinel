@@ -1,7 +1,7 @@
-# Enrich-DynatraceAppSecAttackMSDefender365
+# Enrich-DynatraceAppSecAttackWithSecurityAlerts
 author: Dynatrace
 
-This playbook will Report Microsoft Defender 365 insights related to Dynatrace Application Security Attack back to Dynatrace. You need a valid Dynatrace Tenant and Access Token, the token should have Read attacks (attacks.read) and Ingest logs (logs.ingest) scopes in order to use the playbook, you will also need to install the [Microsoft Defender 365](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender) Sentinel connector to make use of this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
+This playbook will Report Microsoft Sentinel Security Alerts related to a Dynatrace Application Security Attack back to Dynatrace. You need a valid Dynatrace Tenant and Access Token, the token should have Read attacks (attacks.read) and Ingest logs (logs.ingest) scopes in order to use the playbook, you will also need to install the relevant Microsoft Sentinel Connectors which would generated security alerts consumed by this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
 
 ** Post Install Notes:**
 
