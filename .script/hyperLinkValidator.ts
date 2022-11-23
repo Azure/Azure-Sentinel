@@ -17,13 +17,13 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     }
     
     const content = fs.readFileSync(filePath, "utf8");
-
+  
     //get http or https links from the content
     //const links = content.match(/https?:\/\/[^\s]+/g);
     const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
     if (links) 
     {
-      console.log(links)
+      console.log(`List of all Links in given File ${filePath} are: `)
       var invalidLinks = new Array();
       for (var link of links) 
       {
@@ -44,7 +44,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
           logger.logError(`\n ${l}`);
         });
         
-        throw new Error();
+        throw new Error(`Total Invalid Links Count ${invalidLinks.length}. Invalid Links in given file path ${filePath} are as below: ${invalidLinks}`);
       }
     }
 
@@ -81,8 +81,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       return false;
     }
   }
-
-  return ExitCode.SUCCESS;
 }
 
 let fileTypeSuffixes = ["json"];
