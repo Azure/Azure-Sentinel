@@ -17,10 +17,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
     console.log(links)
     var invalidLinks = new Array();
     for (var link of links) {
-      console.log("hello world")
-      console.log(`Before filtering ${link}`);
       link = link.replace(/["']/g, "")
-      console.log(`After filtering ${link}`)
 
       //check if the link is valid
       const isValid = await isValidLink(link);
@@ -31,6 +28,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
       }
     }
 
+    console.log(`Total Invalid Links ${invalidLinks.length}`)
     if (invalidLinks.length > 0) {
       logger.logError(`List of Invalid link: ${invalidLinks}`);
       throw new Error();
@@ -48,15 +46,16 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
       request.send();
       console.log(request.status);
 
-      if (request.status == 404 || request.status == 400 || request.status == 500) {
+      if (request.status == 404) {
         return false;
       }
       else {
         var responseContent = request.responseText
-        if (responseContent != null && responseContent == "" && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found"))) {
+        if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
           return false;
         }
       }
+
       return true;
     } catch (error) {
       console.log(error);
