@@ -27,11 +27,7 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
   }
 
   let changedFiles = await pr.diff();
-
-  pr.forEach(item => {
-    console.log(item)
-  });
-
+  console.log(`Changed files are : ${changedFiles}`)
   //console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
