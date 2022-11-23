@@ -14,9 +14,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
   const links = content.match(/https?:\/\/[^\s]+/g);
   //const links = content.match("(http|ftp|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])");
   if (links) {
-    for (const link of links) {
+    for (var link of links) {
       console.log("hello world")
-      console.log(link);
+      console.log(`Before filtering ${link}`);
+      link = link.replace(/["']/g, "")
+      console.log(`After filtering ${link}`)
+
       //check if the link is valid
       const isValid = await isValidLink(link);
       if (!isValid) {
