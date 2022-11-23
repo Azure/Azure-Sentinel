@@ -71,7 +71,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
 
 
 let fileTypeSuffixes = ["json"];
-let filePathFolderPrefixes = ["DataConnectors","Solutions"];
+let filePathFolderPrefixes = ["DataConnectors","Solutions", "Data Connectors"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
