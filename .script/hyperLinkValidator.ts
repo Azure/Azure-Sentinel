@@ -12,7 +12,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
 
   //get http or https links from the content
   //const links = content.match(/https?:\/\/[^\s]+/g);
-  const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])/);
+  const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
   if (links) {
     console.log(links)
     var invalidLinks = new Array();
