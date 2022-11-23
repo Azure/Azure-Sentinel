@@ -9,7 +9,7 @@ import * as logger from "./utils/logger";
 export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
 
   const content = fs.readFileSync(filePath, "utf8");
-
+  console.log(content)
   //get http or https links from the content
   const links = content.match(/https?:\/\/[^\s]+/g);
   //const links = content.match("(http|ftp|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])");
@@ -39,6 +39,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
       request.open("GET", link, false);
       request.send();
       console.log(request.status);
+      console.log(`Request is ${request}`);
       return request.status !== 404;
     } catch (error) {
       console.log('invalid link')
