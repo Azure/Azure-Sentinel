@@ -46,19 +46,25 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
       request.send();
-      console.log(`responseText is ${request.responseText}`)
-      console.log(`responseXML is ${request.responseXML}`)
-      console.log(`statusText is ${request.statusText}`)
       console.log(request.status);
-      return request.status !== 404;
+
+      if (request.status == 404 || request.status == 400 || request.status == 500) {
+        return false;
+      }
+      else {
+        var responseContent = request.responseText
+        if (responseContent != null && responseContent == "" && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found"))) {
+          return false;
+        }
+      }
+      return true;
     } catch (error) {
-      console.log('invalid link')
       console.log(error);
       return false;
     }
   }    
   return ExitCode.SUCCESS;
-  }
+}
 
 
 
