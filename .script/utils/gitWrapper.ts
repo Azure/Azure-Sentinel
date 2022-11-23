@@ -10,21 +10,20 @@ export async function GetPRDetails() {
     console.log("Getting PR details");
     const config = cli.defaultConfig();
     pullRequestDetails = await devOps.createPullRequestProperties(config);
-    console.log(`Pull Request Properties are ${pullRequestDetails}`);
   }
   return pullRequestDetails;
 }
 
 export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
   const pr = await GetPRDetails();
-  console.log(`PR Details are ${pr}`);
+
   if (typeof pr === "undefined") {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
   }
  
   let changedFiles = await pr.diff();
-  console.log(`${changedFiles.length} files changed in current PR`);
+  //console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
     .filter(change => fileKinds.includes(change.kind))

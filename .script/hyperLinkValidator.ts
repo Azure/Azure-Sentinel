@@ -68,8 +68,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
   return ExitCode.SUCCESS;
 }
 
-
-
 let fileTypeSuffixes = ["json"];
 let filePathFolderPrefixes = ["DataConnectors","Solutions", "Data Connectors"];
 let fileKinds = ["Added", "Modified"];
