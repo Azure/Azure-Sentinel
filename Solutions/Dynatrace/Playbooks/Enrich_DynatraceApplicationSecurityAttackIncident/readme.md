@@ -5,8 +5,6 @@ This playbook uses the Dynatrace REST APIs to automatically enrich incidents cre
 
 ** Post Install Notes:**
 
-Authorize the web.connection APIs deployed into the ResourceGroup.
-
 The Logic App creates and uses a Managed System Identity (MSI) to update the Microsoft Sentinel Incident. 
 
 Assign RBAC 'Microsoft Sentinel Responder' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
