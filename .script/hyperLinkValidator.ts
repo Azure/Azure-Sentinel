@@ -23,7 +23,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
     if (links) 
     {
-      console.log(`List of all Links in given File ${filePath} are: `)
+      console.log(`List of all Links in given File ${filePath} are: ${links}`)
       var invalidLinks = new Array();
       for (var link of links) 
       {
