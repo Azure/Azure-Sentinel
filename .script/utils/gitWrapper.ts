@@ -21,22 +21,22 @@ export async function GetPRDetails() {
 export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
   const pr = await GetPRDetails();
 
-  var ss1 = pr.structuralDiff()
-  var ss2 = pr.targetBranch()
-  var ss3 = pr.sourceBranch()
-  var ss4 = pr.workingDir()
-
-  console.log(`structuralDiff Details are ${ss1}`)
-  console.log(`targetBranch Details are ${ss2}`)
-  console.log(`sourceBranch Details are ${ss3}`)
-  console.log(`workingDir Details are ${ss4}`)
-
   if (typeof pr === "undefined") {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
   }
 
   let changedFiles = await pr.diff();
+
+  var ss1 = pr.structuralDiff()
+  console.log(`structuralDiff Details are ${ss1}`)
+  var ss2 = pr.targetBranch()
+  console.log(`targetBranch Details are ${ss2}`)
+  var ss3 = pr.sourceBranch()
+  console.log(`sourceBranch Details are ${ss3}`)
+  var ss4 = pr.workingDir()
+  console.log(`workingDir Details are ${ss4}`)
+  
   //console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
