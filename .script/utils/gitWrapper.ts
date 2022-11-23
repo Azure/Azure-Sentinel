@@ -28,15 +28,10 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
 
   let changedFiles = await pr.diff();
 
-  var ss1 = pr.structuralDiff()
-  console.log(`structuralDiff Details are ${ss1}`)
-  var ss2 = pr.targetBranch()
-  console.log(`targetBranch Details are ${ss2}`)
-  var ss3 = pr.sourceBranch()
-  console.log(`sourceBranch Details are ${ss3}`)
-  var ss4 = pr.workingDir()
-  console.log(`workingDir Details are ${ss4}`)
-  
+  pr.forEach(item => {
+    console.log(item)
+  });
+
   //console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
