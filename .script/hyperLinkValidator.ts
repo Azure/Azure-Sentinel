@@ -14,18 +14,22 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
   //const links = content.match(/https?:\/\/[^\s]+/g);
   const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])/);
   if (links) {
+    var invalidLinks = new Array();
     for (var link of links) {
-      console.log("hello world")
-      console.log(`Before filtering ${link}`);
       link = link.replace(/["']/g, "")
-      console.log(`After filtering ${link}`)
 
       //check if the link is valid
       const isValid = await isValidLink(link);
       if (!isValid) {
-        logger.logError(`Invalid link: ${link}`);
-        throw new Error();
+        //logger.logError(`Invalid link: ${link}`);
+        //throw new Error();
+        invalidLinks.push(link)
       }
+    }
+
+    if (invalidLinks.length > 0) {
+      logger.logError(`List of Invalid link: ${invalidLinks}`);
+      throw new Error();
     }
   }
 
@@ -57,7 +61,6 @@ let filePathFolderPrefixes = ["DataConnectors","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
-    console.log(`File path is ${filePath}`)
     return ValidateHyperlinks(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
