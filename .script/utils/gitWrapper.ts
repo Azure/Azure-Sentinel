@@ -12,15 +12,7 @@ export async function GetPRDetails() {
     console.log(`config Details are ${config}`)
     pullRequestDetails = await devOps.createPullRequestProperties(config);
     console.log(`PR Details are ${pullRequestDetails}`)
-    var ss1 = pullRequestDetails.structuralDiff
-    var ss2 = pullRequestDetails.targetBranch
-    var ss3 = pullRequestDetails.sourceBranch
-    var ss4 = pullRequestDetails.workingDir
-
-    console.log(`structuralDiff Details are ${ss1}`)
-    console.log(`targetBranch Details are ${ss2}`)
-    console.log(`sourceBranch Details are ${ss3}`)
-    console.log(`workingDir Details are ${ss4}`)
+    
 
   }
   return pullRequestDetails;
@@ -28,6 +20,17 @@ export async function GetPRDetails() {
 
 export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[]) {
   const pr = await GetPRDetails();
+
+  var ss1 = pr.structuralDiff()
+  var ss2 = pr.targetBranch()
+  var ss3 = pr.sourceBranch()
+  var ss4 = pr.workingDir()
+
+  console.log(`structuralDiff Details are ${ss1}`)
+  console.log(`targetBranch Details are ${ss2}`)
+  console.log(`sourceBranch Details are ${ss3}`)
+  console.log(`workingDir Details are ${ss4}`)
+
   if (typeof pr === "undefined") {
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
