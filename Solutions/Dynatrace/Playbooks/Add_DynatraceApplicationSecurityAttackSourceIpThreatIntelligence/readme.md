@@ -9,9 +9,31 @@ Authorize the web.connection APIs deployed into the ResourceGroup.
 
 The Logic App creates and uses a Managed System Identity (MSI) to update the Microsoft Sentinel Incident. 
 
-Assign RBAC 'Microsoft Sentinel Responder' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
+Assign RBAC 'Microsoft Sentinel Reader' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
 
 To create new Threat Indicators for Microsoft Threat Intelligence we leverage the Microsoft Graph Security connector, please ensure you meet the prerequisites to connect with The [Microsoft Graph Security connector](https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/#prerequisites-to-connect-with-the-microsoft-graph-security-connector)
+
+Basic steps for the Microsoft Graph Security connector permissions are as follows :
+
+1. Perform role assignment for the playbook managed indentity, assign the ThreatIndicators.ReadWrite.OwnedBy permission  
+
+    # Install the AzureAD PowerShell module
+    # Install-Module AzureAD
+    $TenantID="[YOUR AZURE ACTIVE DIRECTORY TENANT ID]"
+    $GraphAppId = "00000003-0000-0000-c000-000000000000"
+    $DisplayNameOfMSI="[PLAYBOOK IDENTITY NAME]"
+    $PermissionName = "ThreatIndicators.ReadWrite.OwnedBy"
+    Connect-AzureAD -TenantId $TenantID
+    $MSI = (Get-AzureADServicePrincipal -Filter "displayName eq '$DisplayNameOfMSI'")
+    Start-Sleep -Seconds 10
+    $GraphServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphAppId'"
+    $AppRole = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
+    New-AzureAdServiceAppRoleAssignment -ObjectId $MSI.ObjectId -PrincipalId $MSI.ObjectId -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole.Id
+
+2. Grant Admin Consent for MicrosoftGraphSecurityConnector application
+2.1 Navigate to 'https://login.microsoftonline.com/[YOUR AZURE ACTIVE DIRECTORY TENANT ID]/adminconsent?client_id=c4829704-0edc-4c3d-a347-7c4a67586f3c'
+2.2 Accept the requested permissions
+
 
 ## Initial Setup
 
