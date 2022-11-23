@@ -25,7 +25,7 @@ resource "google_pubsub_topic" "sentinel-topic" {
 
 resource "google_pubsub_subscription" "sentinel-subscription" {
   project = data.google_project.project.project_id
-  name  = "sentinel-subscription"
+  name  = "sentinel-subscription-auditlogs"
   topic = var.topic-name
   depends_on = [google_pubsub_topic.sentinel-topic]
 }
