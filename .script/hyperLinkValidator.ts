@@ -22,15 +22,19 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
       //check if the link is valid
       const isValid = await isValidLink(link);
       if (!isValid) {
-        logger.logError(`Invalid link: ${link}`);
+        //logger.logError(`Invalid link: ${link}`);
         //throw new Error();
         invalidLinks.push(link)
       }
     }
 
-    console.log(`Total Invalid Links ${invalidLinks.length}`)
+    console.log(`Total Invalid Links: ${invalidLinks.length}`)
     if (invalidLinks.length > 0) {
-      logger.logError(`List of Invalid link: ${invalidLinks}`);
+      console.log(`Below are the invalid links:`)
+      invalidLinks.forEach(l => {
+        logger.logError(`\n ${l}`);
+      });
+      
       throw new Error();
     }
   }
@@ -39,7 +43,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
   async function isValidLink(link: string): Promise<boolean> {
     try {
       //import XMLHttpRequest from "xmlhttprequest"
-      console.log("link to valid is ", link)
+      //console.log("link to valid is ", link)
       const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
