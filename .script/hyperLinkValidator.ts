@@ -11,8 +11,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
   const content = fs.readFileSync(filePath, "utf8");
   console.log(content)
   //get http or https links from the content
-  const links = content.match(/https?:\/\/[^\s]+/g);
-  //const links = content.match("(http|ftp|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])");
+  //const links = content.match(/https?:\/\/[^\s]+/g);
+  const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])/);
   if (links) {
     for (var link of links) {
       console.log("hello world")
