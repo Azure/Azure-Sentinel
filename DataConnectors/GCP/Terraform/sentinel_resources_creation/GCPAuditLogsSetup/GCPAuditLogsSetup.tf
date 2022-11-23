@@ -46,6 +46,10 @@ resource "google_project_iam_binding" "log-writer" {
   ]
 }
 
+output "An_output_message"{
+  value = "Please copy the following values to Sentinel"
+}
+
 output "GCP_project_id" {
   value       = data.google_project.project.project_id
 }

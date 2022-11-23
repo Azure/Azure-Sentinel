@@ -1,3 +1,5 @@
+Import-Module powershell-yaml
+
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
 $mainTemplateArtifact = [PSCustomObject]@{
@@ -151,7 +153,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.json"
     $metadataPath = "$PSScriptRoot/../../../Solutions/$($contentToImport.Name)/$($contentToImport.Metadata)"
 
-    $workbookMetadataPath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/"
+    $workbookMetadataPath = "$PSScriptRoot/../../../"
     # Base JSON Objects
     $baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
     $baseCreateUiDefinition = Get-Content -Raw $baseCreateUiDefinitionPath | Out-String | ConvertFrom-Json
@@ -161,13 +163,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
     $customConnectorsList = @{};
     $metadataAuthor = $contentToImport.Author.Split(" - ");
     $solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
-                $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
-                if($null -ne $metadataAuthor[1])
-                {
-                    $baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
-                    $baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
-                }
+    $baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $solutionId
+    $baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
+    if($null -ne $metadataAuthor[1])
+    {
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "email" -NotePropertyValue $($metadataAuthor[1])
+        $baseMainTemplate.variables | Add-Member -NotePropertyName "_email" -NotePropertyValue "[variables('email')]"
+    }
 
     foreach ($objectProperties in $contentToImport.PsObject.Properties) {
         # Access the value of the property
@@ -334,8 +336,13 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $workbookDependencies = [PSCustomObject]@{
                                     operator = "AND";
-                                    criteria = $WorkbookDependencyCriteria;
                                 };
+
+                                if($WorkbookDependencyCriteria.Count -gt 0)
+                                {
+                                    $workbookDependencies | Add-Member -NotePropertyName "criteria" -NotePropertyValue $WorkbookDependencyCriteria                 
+                                }
+
                                 $newWorkbook.metadata | Add-Member -MemberType NoteProperty -Name "description" -Value "$($dependencies.description)"
                             }
                             catch {
@@ -403,6 +410,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     };
                                     author    = $authorDetails;
                                     support   = $baseMetadata.support;
+                                    dependencies = $workbookDependencies;
                                 }
                             }
 
@@ -1914,7 +1922,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
                             function Remove-EmptyArrays($Object) {
-                                ($Object.GetEnumerator() | ? {
+                                (@($Object).GetEnumerator() | ? {
                                     if($_.GetType().fullname -eq "System.Collections.Hashtable"){
                                         -not $_.Values
                                     }
