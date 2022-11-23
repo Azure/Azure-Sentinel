@@ -10,7 +10,6 @@ export type CheckOptions = {
 
 async function changedFilesValidator(checkOptions: CheckOptions, fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPrefixes?: string[]) {
   const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
-  console.log(`Changed files in changedFilesValidator are ${changedFiles}`)
   if (changedFiles === undefined) {
     return;
   }
@@ -19,7 +18,6 @@ async function changedFilesValidator(checkOptions: CheckOptions, fileKinds: stri
 
   for (const filePath of changedFiles) {
     try {
-      console.log(`File that changed ${filePath}`)
       const validationResultCode = await checkOptions.onCheckFile(filePath);
       if (validationResultCode !== ExitCode.SUCCESS) {
         retCode = ExitCode.ERROR;

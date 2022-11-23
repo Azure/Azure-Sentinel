@@ -9,11 +9,7 @@ export async function GetPRDetails() {
   if (typeof pullRequestDetails == "undefined"){
     console.log("Getting PR details");
     const config = cli.defaultConfig();
-    console.log(`config Details are ${config}`)
     pullRequestDetails = await devOps.createPullRequestProperties(config);
-    console.log(`PR Details are ${pullRequestDetails}`)
-    
-
   }
   return pullRequestDetails;
 }
@@ -25,10 +21,9 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
   }
-
+ 
   let changedFiles = await pr.diff();
-  console.log(`Changed files are : ${changedFiles}`)
-  //console.log(`${changedFiles.length} files changed in current PR`);
+  console.log(`${changedFiles.length} files changed in current PR`);
 
   const filterChangedFiles = changedFiles
     .filter(change => fileKinds.includes(change.kind))
@@ -47,6 +42,6 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
   let fileTypeSuffixesLogValue = typeof fileTypeSuffixes === "undefined" ? null : fileTypeSuffixes.join(",");
   let filePathFolderPreffixesLogValue = typeof filePathFolderPreffixes === "undefined" ? null : filePathFolderPreffixes.join(",");
   console.log(`${filterChangedFiles.length} files changed in current PR after filter. File Type Filter: ${fileTypeSuffixesLogValue}, File path Filter: ${filePathFolderPreffixesLogValue}, File Kind Filter: ${fileKindsLogValue}`);
-  console.log(`Changed files are ${filterChangedFiles}`);
+
   return filterChangedFiles;
 }
