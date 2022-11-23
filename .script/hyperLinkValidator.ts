@@ -9,19 +9,23 @@ import * as logger from "./utils/logger";
 export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
 
   const content = fs.readFileSync(filePath, "utf8");
-  console.log(content)
+
   //get http or https links from the content
   //const links = content.match(/https?:\/\/[^\s]+/g);
   const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])/);
   if (links) {
+    console.log(links)
     var invalidLinks = new Array();
     for (var link of links) {
+      console.log("hello world")
+      console.log(`Before filtering ${link}`);
       link = link.replace(/["']/g, "")
+      console.log(`After filtering ${link}`)
 
       //check if the link is valid
       const isValid = await isValidLink(link);
       if (!isValid) {
-        //logger.logError(`Invalid link: ${link}`);
+        logger.logError(`Invalid link: ${link}`);
         //throw new Error();
         invalidLinks.push(link)
       }
@@ -42,8 +46,10 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
       request.send();
+      console.log(`responseText is ${request.responseText}`)
+      console.log(`responseXML is ${request.responseXML}`)
+      console.log(`statusText is ${request.statusText}`)
       console.log(request.status);
-      console.log(`Request is ${request}`);
       return request.status !== 404;
     } catch (error) {
       console.log('invalid link')
@@ -61,6 +67,7 @@ let filePathFolderPrefixes = ["DataConnectors","Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
+    console.log(`File path is ${filePath}`)
     return ValidateHyperlinks(filePath);
   },
   onExecError: async (e: any, filePath: string) => {
