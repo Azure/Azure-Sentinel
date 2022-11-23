@@ -48,7 +48,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> {
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
       request.send();
-      console.log(request.status);
 
       if (request.status == 404) {
         return false;
