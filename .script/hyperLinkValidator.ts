@@ -63,13 +63,19 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       //import XMLHttpRequest from "xmlhttprequest"
       const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
       const request = new XMLHttpRequest();
-      request.open("GET", link, false);
+      request.open("GET", link, true);
       request.send();
 
       if (request.status == 404 || request.status == 302) {
         return false;
       }
       else {
+        if (request.status == 302)
+        {
+          request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+          var ss = request.getResponseHeader("Location")
+          console.log(`this is 302 response ${ss}`)
+        }
         var responseContent = request.responseText
 
         if (responseContent != null && (responseContent.includes("www.google.com") || responseContent.includes("www.bing.com") || responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
