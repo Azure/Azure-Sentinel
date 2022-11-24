@@ -1660,15 +1660,15 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
                             $huntingQueryDescription = ""
                             if ($yaml.description) {
-                                $huntingQueryDescription = $yaml.description
-                                if($yaml.description.StartsWith("'"))
+                                $huntingQueryDescription = $yaml.description.Trim();
+                                if($huntingQueryDescription.StartsWith("'"))
                                 {
-                                    $huntingQueryDescription = $huntingQueryDescription.substring(1, $yaml.description.length - 2)
+                                    $huntingQueryDescription = $huntingQueryDescription.substring(1, $huntingQueryDescription.length-1)
                                 }
 
-                                if($yaml.description.EndsWith("'"))
+                                if($huntingQueryDescription.EndsWith("'"))
                                 {
-                                    $huntingQueryDescription = $huntingQueryDescription.substring(0, $yaml.description.length - 2)
+                                    $huntingQueryDescription = $huntingQueryDescription.substring(0, $huntingQueryDescription.length-1)
                                 }
 
                                 $descriptionObj = [PSCustomObject]@{
@@ -1797,8 +1797,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             $dependencyDescription = ""
                             if ($yaml.requiredDataConnectors) {
-                                # $dependencyDescription = "It depends on the $($yaml.requiredDataConnectors.connectorId) data connector and $($($yaml.requiredDataConnectors.dataTypes)) data type and $($yaml.requiredDataConnectors.connectorId) parser."
-                                $dependencyDescription = "This hunting query depends on $($yaml.requiredDataConnectors.connectorId) data connector ($($($yaml.requiredDataConnectors.dataTypes)) Parser or Table)"
+                                $dependencyDescription = "It depends on the $($yaml.requiredDataConnectors.connectorId) data connector and $($($yaml.requiredDataConnectors.dataTypes)) data type and $($yaml.requiredDataConnectors.connectorId) parser."
                             }
                             $huntingQueryElement = [PSCustomObject]@{
                                 name     = "huntingquery$huntingQueryCounter";
