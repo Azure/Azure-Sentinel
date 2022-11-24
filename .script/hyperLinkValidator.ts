@@ -74,7 +74,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       else if(request.status == 302)
       {
         var redirectResponse = request.getResponseHeader("Location")
-        return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com")) ? false : true;
+        if (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com"))
+        {
+          logger.logWarning(`Warning: Given link '${link}' seems to be searching in www.Google.com or www.Bing.com and possibly an invalid link.`)
+        }
+        return true;
+        //return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com")) ? false : true;
       } 
       else 
       {
