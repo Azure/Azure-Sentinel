@@ -64,6 +64,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
+      request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       request.send();
       console.log(request.status)
       if (request.status == 404) {
@@ -72,8 +73,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       else {
         if (request.status == 302)
         {
-          console.log("inside of 302")
-          request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+          console.log("inside of 302")          
           var ss = request.getResponseHeader("Location")
           console.log(`this is 302 response ${ss}`)
         }
