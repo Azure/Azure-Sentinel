@@ -65,13 +65,14 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       const request = new XMLHttpRequest();
       request.open("GET", link, true);
       request.send();
-
+      console.log(request.status)
       if (request.status == 404) {
         return false;
       }
       else {
         if (request.status == 302)
         {
+          console.log("inside of 302")
           request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
           var ss = request.getResponseHeader("Location")
           console.log(`this is 302 response ${ss}`)
