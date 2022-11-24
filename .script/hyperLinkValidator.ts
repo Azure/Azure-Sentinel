@@ -66,9 +66,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       request.open("GET", link, false);
       request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       request.send();
-      console.log(request.status)
+
       if (request.status == 404) {
-        console.log("inside of 404 if condition")
         return false;
       }
       else if(request.status == 302)
@@ -86,8 +85,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       else 
       {
         var responseContent = request.responseText
-        console.log("inside of else")
-        console.log(`Response Content2 ${responseContent}`)
         if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
           return false;
         }
