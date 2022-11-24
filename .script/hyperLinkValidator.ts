@@ -68,18 +68,27 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       request.send();
       console.log(request.status)
       if (request.status == 404) {
+        console.log("inside of 404 if condition")
         return false;
       }
-      else {
-        if (request.status == 302)
+      else if(request.status == 302)
+      {
+        var redirectResponse = request.getResponseHeader("Location")
+        console.log("inside of else if of 302 having status code ${request.status}")
+        console.log(`Response Content1 ${responseContent}`)
+        if (redirectResponse.includes("www.google.com") || responseContent.includes("www.bing.com"))
         {
-          console.log("inside of 302")          
-          var ss = request.getResponseHeader("Location")
-          console.log(`this is 302 response ${ss}`)
+          return false;
         }
-        var responseContent = request.responseText
 
-        if (responseContent != null && (responseContent.includes("www.google.com") || responseContent.includes("www.bing.com") || responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
+        return true
+      } 
+      else 
+      {
+        var responseContent = request.responseText
+        console.log("inside of else")
+        console.log(`Response Content2 ${responseContent}`)
+        if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
           return false;
         }
       }
