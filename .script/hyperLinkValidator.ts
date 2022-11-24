@@ -63,7 +63,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       //import XMLHttpRequest from "xmlhttprequest"
       const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
       const request = new XMLHttpRequest();
-      request.open("GET", link, true);
+      request.open("GET", link, false);
       request.send();
       console.log(request.status)
       if (request.status == 404) {
