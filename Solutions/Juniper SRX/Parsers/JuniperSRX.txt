@@ -28,7 +28,7 @@
 //<18-Oct-2022><Sample Log><JuniperSRXStructured_CL.csv> //<TenantId,SourceSystem,TimeGenerated,Computer,EventTime,Facility,HostName,SeverityLevel,SyslogMessage,ProcessID,HostIP,ProcessName,MG,Type,_ResourceId
 //58afdc1d-32c7-497b-926f-94c1d1e9e192,Linux,10/7/2022 18:16,10.151.254.59,10/7/2022 19:27,user,10.151.254.59,info,RT_FLOW_SESSION_CLOSE: session closed TCP //FIN: 10.255.50.101/34494->10.151.254.59/22 junos-ssh 10.255.50.101/34494->10.151.254.59/22 N/A N/A N/A N/A 6 Allow-Intra MGMNT MGMNT 52380767 165(13032) //266(46477) 286 SSH UNKNOWN N/A(N/A) ae1.255 UNKNOWN,,Unknown IP,RT_FLOW,00000000-0000-0000-0000-000000000002,Syslog,>
 //
-let LogHeader = Syslog
+let LogHeader = Syslog 
 | extend Parser = extract_all(@"(\w+)\:?\s([\S\s]+)", dynamic([1,2]),SyslogMessage)
 | mv-expand Parser
 | extend EventTimestamp = EventTime,
@@ -115,16 +115,20 @@ let FlowNotDenyEvents = FlowEvents
 | project-away Parser, Parser2, Substring;
 let IdPEvents = LogHeader
 | where EventType == "RT_IDP"
-| extend IDPParser = extract_all(@"(\w+)\:?\s([\S\s]+)", dynamic([1,2]),SyslogMessage_s)
+| extend IDPParser = extract_all(@"(\w+)\:?\s([\S\s]+)", dynamic([1,2]),SyslogMessage)
 | mv-expand IDPParser
-| extend EventTimestamp = EventTime_s,
-         DvcHostname = HostName_s,
-         EventType = ProcessName_s,
-         ProcessId = ProcessID_s,
+| extend EventTimestamp = EventTime,
+         DvcHostname = HostName,
+         EventType = ProcessName,
+         ProcessId = ProcessID,
          Message = trim("- ",tostring(IDPParser[1]))
-| parse-kv Message as (username: string, action: string, name: string) with (pair_delimiter=',', kv_delimiter='=')
-| parse Message with * ", " EventName " <" *
+| parse-kv Message as (username: string, action: string, name: string, ['threat-severity']: string) with (pair_delimiter=',', kv_delimiter='=')
+| parse Message with EventName ": at" *
 | parse Message with * "intf:" InterfaceName":" *
+| parse Message with * "> for " Protocol " " *
+| parse Message with * "application " Application " " *
+| parse Message with * "rule " Rule " " *
+// | parse Message with * "application " Application " " *
 | parse Message with * "<" SrcDstDetails"> " *
 | parse SrcDstDetails with SrcDetails"->" *
 | parse SrcDstDetails with * "->" DstDetails 
@@ -141,7 +145,8 @@ let IdPEvents = LogHeader
 | parse DstNAT with * ":" DstNatPortNumber:int
 | project-rename UserName = username,
     Action = action,
-    ZoneName = name
+    ZoneName = name,
+    ['Threat Severity'] = ['threat-severity']
 | project-away IDPParser, NAT, SrcNAT, DstNAT, SrcDstDetails, SrcDetails, DstDetails;
 let AllOtherEvents = LogHeader
 | where EventType !in ("sshd","RT_IDS","RT_FLOW","RT_IDP")
