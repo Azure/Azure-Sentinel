@@ -73,7 +73,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       else if(request.status == 302)
       {
         var redirectResponse = request.getResponseHeader("Location")
-        console.log(`Response Content1 ${redirectResponse}`)
         return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com")) ? false : true;
       } 
       else 
