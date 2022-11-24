@@ -65,27 +65,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
       request.send();
-      console.log(request.status)
-      if (request.status == 404) {
+
+      if (request.status == 404 || request.status == 302) {
         return false;
       }
       else {
         var responseContent = request.responseText
-
-        if (link === "https://aka.ms/sentinel-AliCloud-functionapp")
-        {
-          console.log("inside of links")
-          console.log(responseContent)
-        }
-        if (responseContent == null)
-        {
-          console.log("content is null")
-        }
-
-        if (responseContent == "")
-        {
-          console.log("content is empty")
-        }
 
         if (responseContent != null && (responseContent.includes("www.google.com") || responseContent.includes("www.bing.com") || responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
           return false;
