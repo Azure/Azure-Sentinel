@@ -66,21 +66,15 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       request.open("GET", link, false);
       request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       request.send();
-
+      console.log(request.status)
       if (request.status == 404) {
         return false;
       }
       else if(request.status == 302)
       {
         var redirectResponse = request.getResponseHeader("Location")
-        console.log("inside of else if of 302 having status code ${request.status}")
-        console.log(`Response Content1 ${responseContent}`)
-        if (redirectResponse.includes("www.google.com") || responseContent.includes("www.bing.com"))
-        {
-          return false;
-        }
-
-        return true
+        console.log(`Response Content1 ${redirectResponse}`)
+        return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com")) ? false : true;
       } 
       else 
       {
