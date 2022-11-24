@@ -66,7 +66,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       request.open("GET", link, true);
       request.send();
 
-      if (request.status == 404 || request.status == 302) {
+      if (request.status == 404) {
         return false;
       }
       else {
