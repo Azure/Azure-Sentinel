@@ -102,13 +102,22 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "$connections": {
+                            "defaultValue": {},
                             "type": "Object"
                         },
                         "ApiToken": {
                             "type": "SecureString"
                         },
+                        "EndTimeOffsetInMinutes": {
+                            "defaultValue": 5,
+                            "type": "Int"
+                        },
                         "EnvironmentUrl": {
                             "type": "String"
+                        },
+                        "StartTimeOffsetInMinutes": {
+                            "defaultValue": -1,
+                            "type": "Int"
                         }
                     },
                     "triggers": {
@@ -129,7 +138,7 @@
                     },
                     "actions": {
                         "For_Each_Security_Alert": {
-                            "foreach": "@body('Get_Related_Security_Alerts')?['value']",
+                            "foreach": "@body('Get_MSDefender365_Security_Alerts')?['value']",
                             "actions": {
                                 "Append_Payload_Item_to_LogEntries": {
                                     "runAfter": {
@@ -151,6 +160,7 @@
                                         "AlertType": "@{items('For_Each_Security_Alert')?['AlertType']}",
                                         "Description": "@{items('For_Each_Security_Alert')?['Description']}",
                                         "EndTime": "@{items('For_Each_Security_Alert')?['EndTime']}",
+                                        "OriginalSeverity": "@{items('For_Each_Security_Alert')?['AlertSeverity']}",
                                         "ProductName": "@{items('For_Each_Security_Alert')?['ProductName']}",
                                         "ProviderName": "@{items('For_Each_Security_Alert')?['ProviderName']}",
                                         "StartTime": "@{items('For_Each_Security_Alert')?['StartTime']}",
@@ -160,7 +170,7 @@
                                         "dt.entity.process_group_instance": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
                                         "dt.source_entity": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
                                         "log.source": "@{items('For_Each_Security_Alert')?['ProductName']}",
-                                        "severity": "@{items('For_Each_Security_Alert')?['AlertSeverity']}",
+                                        "severity": "warn",
                                         "timestamp": "@{variables('Timestamp')}"
                                     }
                                 },
@@ -171,29 +181,30 @@
                                             "actions": {
                                                 "Append_Entity_Item_to_LogEntries": {
                                                     "runAfter": {
-                                                        "Set_Entity_Timestamp": [
+                                                        "Compose_Entity_Item": [
                                                             "Succeeded"
                                                         ]
                                                     },
                                                     "type": "AppendToArrayVariable",
                                                     "inputs": {
                                                         "name": "logentries",
-                                                        "value": "@outputs('Set_Entity_Timestamp')"
+                                                        "value": "@outputs('Compose_Entity_Item')"
                                                     }
                                                 },
-                                                "Set_Entity_SecurityAlertId": {
+                                                "Compose_Entity_Item": {
                                                     "runAfter": {},
                                                     "type": "Compose",
-                                                    "inputs": "@addProperty(items('For_each_Security_Alert_Entity'),'SystemAlertId',items('For_Each_Security_Alert')['SystemAlertId'])"
-                                                },
-                                                "Set_Entity_Timestamp": {
-                                                    "runAfter": {
-                                                        "Set_Entity_SecurityAlertId": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "Compose",
-                                                    "inputs": "@addProperty(outputs('Set_Entity_SecurityAlertId'),'timestamp',variables('Timestamp'))"
+                                                    "inputs": {
+                                                        "Content": "@{items('For_each_Security_Alert_Entity')}",
+                                                        "EntityType": "@{items('For_each_Security_Alert_Entity')?['Type']}",
+                                                        "SystemAlertId": "@{items('For_Each_Security_Alert')?['SystemAlertId']}",
+                                                        "VendorName": "@{items('For_Each_Security_Alert')?['VendorName']}",
+                                                        "dt.entity.process_group_instance": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                        "dt.source_entity": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                        "log.source": "@{items('For_Each_Security_Alert')?['ProductName']}",
+                                                        "severity": "info",
+                                                        "timestamp": "@{variables('Timestamp')}"
+                                                    }
                                                 }
                                             },
                                             "runAfter": {},
@@ -223,29 +234,29 @@
                                     "actions": {
                                         "Append_Extended_Properties_to_LogEntries": {
                                             "runAfter": {
-                                                "Set_Extended_Properties_Timestamp": [
+                                                "Compose_Extended_Properties_Item": [
                                                     "Succeeded"
                                                 ]
                                             },
                                             "type": "AppendToArrayVariable",
                                             "inputs": {
                                                 "name": "logentries",
-                                                "value": "@outputs('Set_Extended_Properties_Timestamp')"
+                                                "value": "@outputs('Compose_Extended_Properties_Item')"
                                             }
                                         },
-                                        "Set_Extended_Properties_SecurityAlertId": {
+                                        "Compose_Extended_Properties_Item": {
                                             "runAfter": {},
                                             "type": "Compose",
-                                            "inputs": "@addProperty(json(items('For_Each_Security_Alert')?['ExtendedProperties']),'SystemAlertId',items('For_Each_Security_Alert')['SystemAlertId'])"
-                                        },
-                                        "Set_Extended_Properties_Timestamp": {
-                                            "runAfter": {
-                                                "Set_Extended_Properties_SecurityAlertId": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "Compose",
-                                            "inputs": "@addProperty(outputs('Set_Extended_Properties_SecurityAlertId'),'timestamp',variables('Timestamp'))"
+                                            "inputs": {
+                                                "Content": "@{items('For_Each_Security_Alert')?['ExtendedProperties']}",
+                                                "SystemAlertId": "@{items('For_Each_Security_Alert')?['SystemAlertId']}",
+                                                "VendorName": "@{items('For_Each_Security_Alert')?['VendorName']}",
+                                                "dt.entity.process_group_instance": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                "dt.source_entity": "@{body('Parse_Dynatrace_Attack_JSON')?['affectedEntities']?['processGroupInstance']?['id']}",
+                                                "log.source": "@{items('For_Each_Security_Alert')?['ProductName']}",
+                                                "severity": "info",
+                                                "timestamp": "@{variables('Timestamp')}"
+                                            }
                                         }
                                     },
                                     "runAfter": {
@@ -269,7 +280,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Get_Related_Security_Alerts": [
+                                "Get_MSDefender365_Security_Alerts": [
                                     "Succeeded"
                                 ]
                             },
@@ -279,6 +290,25 @@
                                     "repetitions": 1
                                 }
                             }
+                        },
+                        "For_each_payload_item": {
+                            "foreach": "@body('Parse_Dynatrace_Attack_JSON')?['entrypoint']?['payload']?['values']",
+                            "actions": {
+                                "Append_value_to_SearchTerms": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "SearchTerms",
+                                        "value": "@concat('\"', items('For_each_payload_item')?['value'],'\"')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_SearchTerms": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
                         },
                         "Get_Dynatrace_Attack_Details": {
                             "runAfter": {
@@ -298,15 +328,15 @@
                                 "uri": "@{parameters('EnvironmentUrl')}/api/v2/attacks/@{first(body('Parse_Incident_Alert_Custom_Body_JSON')?['AttackIdentifier'])}"
                             }
                         },
-                        "Get_Related_Security_Alerts": {
+                        "Get_MSDefender365_Security_Alerts": {
                             "runAfter": {
-                                "Initialize_Timestamp": [
+                                "If_Remaing_Minutes_In_Time_Window": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "let start_date=datetime_add(\"minute\", -5, todatetime(\"@{variables('Timestamp')}\"));\nlet end_date=datetime_add(\"minute\", 2,  todatetime(\"@{variables('Timestamp')}\"));\n\nSecurityAlert \n| where not(VendorName == \"Dynatrace\")\n| where TimeGenerated between (start_date .. end_date) and \n    ExtendedProperties contains \"@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}\"\n| top 50 by TimeGenerated;",
+                                "body": "let start_date=datetime_add(\"minute\", @{parameters('StartTimeOffsetInMinutes')}, todatetime(\"@{variables('Timestamp')}\"));\nlet end_date=datetime_add(\"minute\", @{parameters('EndTimeOffsetInMinutes')},  todatetime(\"@{variables('Timestamp')}\"));\nSecurityAlert \n| where not(VendorName == \"Dynatrace\")\n| where ExtendedProperties has_any (@{join(variables('SearchTerms'),',')}) or Entities has_any (@{join(variables('SearchTerms'),',')})\n| where TimeGenerated between (start_date .. end_date);",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -367,6 +397,36 @@
                             },
                             "type": "If"
                         },
+                        "If_Remaing_Minutes_In_Time_Window": {
+                            "actions": {
+                                "Delay_if_Time_Window_Not_Met_": {
+                                    "runAfter": {},
+                                    "type": "Wait",
+                                    "inputs": {
+                                        "interval": {
+                                            "count": "@mul(variables('RemainingMinutesInTimeWindow'),-1)",
+                                            "unit": "Minute"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_RemainingMinutesInTimeWindow": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "less": [
+                                            "@variables('RemainingMinutesInTimeWindow')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
                         "Initialize_LogEntries": {
                             "runAfter": {
                                 "Parse_Dynatrace_Attack_JSON": [
@@ -379,6 +439,43 @@
                                     {
                                         "name": "logentries",
                                         "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_RemainingMinutesInTimeWindow": {
+                            "runAfter": {
+                                "For_each_payload_item": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RemainingMinutesInTimeWindow",
+                                        "type": "integer",
+                                        "value": "@div(div(sub(ticks(utcNow()),ticks(variables('Timestamp'))),10000000),60)"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_SearchTerms": {
+                            "runAfter": {
+                                "Initialize_Timestamp": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SearchTerms",
+                                        "type": "array",
+                                        "value": [
+                                            "\"@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}\"",
+                                            "\"@{body('Parse_Dynatrace_Attack_JSON')?['request']?['url']}\""
+                                        ]
                                     }
                                 ]
                             }
@@ -446,6 +543,9 @@
                                         },
                                         "attacker": {
                                             "properties": {
+                                                "location": {
+                                                    "type": "object"
+                                                },
                                                 "sourceIp": {
                                                     "type": "string"
                                                 }
@@ -547,6 +647,80 @@
                                                 "type": "object"
                                             },
                                             "type": "array"
+                                        },
+                                        "request": {
+                                            "properties": {
+                                                "host": {
+                                                    "type": "string"
+                                                },
+                                                "path": {
+                                                    "type": "string"
+                                                },
+                                                "protocolDetails": {
+                                                    "properties": {
+                                                        "http": {
+                                                            "properties": {
+                                                                "headers": {
+                                                                    "properties": {
+                                                                        "truncationInfo": {
+                                                                            "properties": {
+                                                                                "truncated": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "values": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "name": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "value": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "name",
+                                                                                    "value"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "parameters": {
+                                                                    "properties": {
+                                                                        "truncationInfo": {
+                                                                            "properties": {
+                                                                                "truncated": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "values": {
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "requestMethod": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
                                         },
                                         "state": {
                                             "type": "string"
