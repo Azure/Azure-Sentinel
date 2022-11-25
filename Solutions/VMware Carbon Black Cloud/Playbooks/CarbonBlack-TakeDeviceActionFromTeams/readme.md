@@ -44,8 +44,8 @@ Once deployment is complete, you will need to authorize each connection.
 
 ## Playbook steps explained
 
-### When Azure Sentinel incident creation rule is triggered
-Azure Sentinel incident is created. The playbook receives the incident as the input.
+### When Microsoft Sentinel incident creation rule is triggered
+Microsoft Sentinel incident is created. The playbook receives the incident as the input.
 
 ### Entities - Get Hosts
 Get the list of risky devices as entities from the Incident
