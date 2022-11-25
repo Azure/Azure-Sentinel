@@ -148,7 +148,7 @@ class Sentinel:
             logging.info("Chunk was processed({} events)".format(chunk_count))
             self.success_processed = self.success_processed + chunk_count
         else:
-            logging.error("Error during sending events to Azure Sentinel. Response code:{}".format(response.status_code))
+            logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
             self.fail_processed = self.fail_processed + chunk_count
 
 def results_array_join(result_element,api_req_id,api_req_name):
