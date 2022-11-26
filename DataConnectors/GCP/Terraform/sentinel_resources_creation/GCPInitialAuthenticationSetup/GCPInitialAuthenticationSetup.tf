@@ -81,6 +81,10 @@ resource "google_service_account_iam_binding" "bind-workloadIdentityUser-role-to
   ]
 }
 
+output "An_output_message"{
+  value = "Please copy the following values to Sentinel"
+}
+
 output "GCP_project_id" {
   value       = data.google_project.project.project_id
 }
@@ -93,10 +97,10 @@ output "Identity_federation_pool_name" {
   value       = google_iam_workload_identity_pool.sentinel-workload-identity-pool.display_name
 }
 
-output "Service_account_name" {
+output "Service_account_email" {
   value       = "${google_service_account.sentinel-service-account.account_id}@${data.google_project.project.project_id}.iam.gserviceaccount.com"
 }
 
-output "Identity_provider_id" {
+output "Identity_federation_provider_id" {
   value       = google_iam_workload_identity_pool_provider.sentinel-workload-identity-pool-provider.workload_identity_pool_provider_id
 }

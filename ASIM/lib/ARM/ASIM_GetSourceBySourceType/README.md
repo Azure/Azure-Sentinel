@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function to get the the list of sources for an ASIM source type.
+# Log Analytics KQL function An ASIM function to get the the list of sources for an ASIM source type.
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function to get the the list of sources for an ASIM source type.
+ARM template for deploying the Log Analytics KQL function An ASIM function to get the the list of sources for an ASIM source type.
 
 This ASIM function reads the ASimSourceType watchlist. It is more performant than using the general _GetWatchlist function.
 
