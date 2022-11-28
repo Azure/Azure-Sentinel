@@ -24,7 +24,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     if (links) 
     {
       //console.log(`List of all Links in given File ${filePath} are:`)
-      console.log(links)
+      //console.log(links)
       var invalidLinks = new Array();
       for (var link of links) 
       {
@@ -67,13 +67,13 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       request.send();
 
-      console.log(link)
-      console.log(request.status)
+      //console.log(link)
+      //console.log(request.status)
       if (request.status == 404)
       {
         return false;
       }
-      else if(request.status == 302)
+      else if(request.status == 302 || request.status == 301)
       {
         var redirectResponse = request.getResponseHeader("Location")
         // if (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com"))
@@ -81,20 +81,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         //   logger.logWarning(`Warning: Given link '${link}' seems to be searching in www.Google.com or www.Bing.com and possibly an invalid link.`)
         // }
         // return true;
-        if (link == "https://learn.microsoft.com/en-us/azure/azure-monitor1/platform/agent-windows#obtain-workspace-id-and-key")
-        {
-          console.log(`Status ${request.status} and its content is ${responseContent}`)
-        
-        }
-        return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com")) ? false : true;
+        return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com") || redirectResponse.includes("404 - Page not found")) ? false : true;
       }
       else 
       {
         var responseContent = request.responseText
-        if (link == "https://learn.microsoft.com/en-us/azure/azure-monitor1/platform/agent-windows#obtain-workspace-id-and-key")
-        {
-          console.log(responseContent)
-        }
+
         if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error") || responseContent.includes("404 - Page not found"))) {
           return false;
         }
