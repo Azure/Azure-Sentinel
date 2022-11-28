@@ -67,8 +67,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       request.send();
 
-      //console.log(link)
-      //console.log(request.status)
+      console.log(link)
+      console.log(request.status)
       if (request.status == 404)
       {
         return false;
@@ -81,6 +81,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         //   logger.logWarning(`Warning: Given link '${link}' seems to be searching in www.Google.com or www.Bing.com and possibly an invalid link.`)
         // }
         // return true;
+        console.log(link)
+        console.log(redirectResponse)
         return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com") || redirectResponse.includes("404 - Page not found")) ? false : true;
       }
       else 
