@@ -69,13 +69,11 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       request.ontimeout = function () { return false; }
       request.send();
 
-      console.log(link)
-      console.log(request.status)
       if (request.status == 404)
       {
         return false;
       }
-      else if(request.status == 302 || request.status == 301)
+      else if(request.status == 302)
       {
         var redirectResponse = request.getResponseHeader("Location")
         // if (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com"))
@@ -83,8 +81,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         //   logger.logWarning(`Warning: Given link '${link}' seems to be searching in www.Google.com or www.Bing.com and possibly an invalid link.`)
         // }
         // return true;
-        console.log(`response is ${redirectResponse}`)
         return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com") || redirectResponse.includes("404 - Page not found")) ? false : true;
+      }
+      else if (request.status == 0)
+      {
+        // TIMEOUT STATUS IS 0
+        return false;
       }
       else 
       {
