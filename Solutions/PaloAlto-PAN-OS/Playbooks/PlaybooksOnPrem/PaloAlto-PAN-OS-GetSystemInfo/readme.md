@@ -30,8 +30,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 
 
 2. Fill in the required parameters:
-    * Playbook Name: The playbook name here (e.g. PaloAlto-PAN-OS-GetThreatPCAP)
-    * :  The blob storage account where the threat PCAP will be stored
+    * Playbook Name: The playbook name here (e.g. PaloAlto-PAN-OS-GetSystemInfo)
     * LogAnalyticsResourceGroup: The Log Analytics resource group for logging for the Playbook.
     * LogAnalyticsResourceName: The Log Analytics resource for logging for the Playbook.
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
