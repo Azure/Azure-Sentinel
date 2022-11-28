@@ -65,6 +65,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
       request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+      request.timeout = 5000;
+      request.ontimeout = function () { return false; }
       request.send();
 
       if (request.status == 404)
