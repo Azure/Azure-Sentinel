@@ -26,7 +26,7 @@ namespace AlertHttpTrigger
 
         public static long GetPreviousUnixTime()
         {
-            DateTime previousDateTime = DateTime.Now.AddDays(-30);
+            DateTime previousDateTime = DateTime.Now.AddDays(long.Parse(Environment.GetEnvironmentVariable("startDaysAgo")));
             return ((DateTimeOffset)previousDateTime).ToUnixTimeMilliseconds() * 1000;
         }
 
@@ -47,11 +47,11 @@ namespace AlertHttpTrigger
         {
             return new Lazy<ConnectionMultiplexer>(() =>
             {
-                return ConnectionMultiplexer.Connect($"cohesity.redis.cache.windows.net:6380,password=cUdpmdeSMkF7NSFnnfPdloHQius2y52ivAzCaAe9akI=,ssl=True,abortConnect=False");
+                return ConnectionMultiplexer.Connect(Environment.GetEnvironmentVariable("connectStr"));
             });
         }
 
-        [FunctionName("func-cohesity_duplicate_alerts_filter-prod-002")]
+        [FunctionName("func-cohesity-duplicate-alerts-filter-prod-003")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
             ILogger log)
@@ -62,16 +62,23 @@ namespace AlertHttpTrigger
             try
             {
                 var db = Connection.GetDatabase();
-                var key = "cUdpmdeSMkF7NSFnnfPdloHQius2y52ivAzCaAe9akI=";
+                string apiKey = req.Query["apiKey"].ToString() != String.Empty
+                                ? req.Query["apiKey"]
+                                : Environment.GetEnvironmentVariable("apiKey");
+
+                if (req.Query["resetRedis"] == "1")
+                {
+                    db.StringSet(apiKey, 0);
+                }
 
                 try
                 {
-                    startDateUsecs = long.Parse(db.StringGet(key));
+                    startDateUsecs = long.Parse(db.StringGet(apiKey));
                 }
                 catch  (Exception ex)
                 {
                     startDateUsecs = GetPreviousUnixTime();
-                    log.LogError("Exception: " + ex.Message);
+                    log.LogError("Exception --> 1" + ex.Message);
                 }
 
                 if (startDateUsecs == 0)
@@ -82,9 +89,11 @@ namespace AlertHttpTrigger
                 log.LogInformation ("startDateUsecs --> " + startDateUsecs);
 
                 long endDateUsecs = GetCurrentUnixTime();
-                db.StringSet(key, endDateUsecs.ToString());
+                log.LogInformation ("endDateUsecs --> " + endDateUsecs.ToString());
+                db.StringSet(apiKey, endDateUsecs.ToString());
 
                 string requestUriString = $"https://helios.cohesity.com/mcm/alerts?alertCategoryList=kSecurity&alertStateList=kOpen&startDateUsecs={startDateUsecs}&endDateUsecs={endDateUsecs}";
+                log.LogInformation("requestUriString --> " + requestUriString);
                 using HttpClient client = new ();
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Add("apiKey", System.Environment.GetEnvironmentVariable("apiKey"));
@@ -92,18 +101,12 @@ namespace AlertHttpTrigger
 
                 StreamReader reader = new StreamReader(stream);
                 string text = reader.ReadToEnd();
-
-                if (!string.IsNullOrEmpty(text) && !string.IsNullOrWhiteSpace(text) && !text.Trim().Equals("[]"))
-                {
-                    log.LogInformation("requestUriString --> " + requestUriString);
-                }
-
                 return new OkObjectResult(text);
 
             }
             catch  (Exception ex)
             {
-                log.LogError("Exception: " + ex.Message);
+                log.LogError("Exception --> 2" + ex.Message);
             }
 
             return new OkObjectResult("[]");
