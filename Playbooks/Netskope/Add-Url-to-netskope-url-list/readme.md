@@ -51,7 +51,7 @@ Before you can use this playbook and the logic app's managed system identity for
 Note; On these resources, you'll add the necessary role for the logic app's managed system identity to access these resources on your logic app's or connection's behalf. To add a role to a managed identity, you need Azure AD administrator permissions that can assign roles to identities in the corresponding Azure AD tenant.
 
 ### Configurations in Microsoft Sentinel
-For Azure Sentinel some additional configuration is needed:
+For Microsoft Sentinel some additional configuration is needed:
 
 - Enable Microsoft Sentinel Analytics rules that create alerts and incidents which includes the relevant entity i.e. URL.
 - Configure automation rule(s) to trigger the playbooks.
