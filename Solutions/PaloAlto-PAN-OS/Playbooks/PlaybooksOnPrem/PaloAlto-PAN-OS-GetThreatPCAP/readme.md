@@ -39,6 +39,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
     * LogAnalyticsResourceName: The Log Analytics resource for logging for the Playbook.
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
     * secretValue: value of X-PAN-KEY
+    * OnPremiseGatewayName: On-premises data gateway that will be used with PaloAlto connector.
 
     
 

@@ -42,6 +42,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
     * Predefined address group name: Enter the predefined address group name here to Block IP / Unblock IP
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
     * secretValue: value of X-PAN-KEY
+    * OnPremiseGatewayName: On-premises data gateway that will be used with PaloAlto connector.
 
 ### Post-Deployment instructions 
 #### a. Authorize connections

@@ -16,6 +16,7 @@
     * Playbook Name: Enter the playbook name here (e.g. PAN-OS Playbook)
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
     * secretValue: value of X-PAN-KEY
+    * OnPremiseGatewayName: On-premises data gateway that will be used with PaloAlto connector.
     
 ### Post-Deployment instructions 
 #### a. Authorize connections
