@@ -23,8 +23,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
     if (links) 
     {
-      console.log(`List of all Links in given File ${filePath} are:`)
-      console.log(links)
       var invalidLinks = new Array();
       for (var link of links) 
       {
@@ -37,14 +35,14 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         }
       }
 
-      console.log(`Total Invalid Links: ${invalidLinks.length}`)
-      if (invalidLinks.length > 0) 
+      if (invalidLinks.length > 0)
       {
+        console.log(`File: '${filePath}' has Total Invalid Links: ${invalidLinks.length}`)
         console.log(`Below are the invalid links:`)
         invalidLinks.forEach(l => {
           logger.logError(`\n ${l}`);
         });
-        
+
         throw new Error(`Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
       }
     }
@@ -65,6 +63,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       const request = new XMLHttpRequest();
       request.open("GET", link, false);
       request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+      request.timeout = 5000;
+      request.ontimeout = function () { return false; }
       request.send();
 
       if (request.status == 404)
@@ -79,12 +79,18 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         //   logger.logWarning(`Warning: Given link '${link}' seems to be searching in www.Google.com or www.Bing.com and possibly an invalid link.`)
         // }
         // return true;
-        return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com")) ? false : true;
+        return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com") || redirectResponse.includes("404 - Page not found")) ? false : true;
+      }
+      else if (request.status == 0)
+      {
+        // TIMEOUT STATUS IS 0
+        return false;
       }
       else 
       {
         var responseContent = request.responseText
-        if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
+
+        if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error") || responseContent.includes("404 - Page not found"))) {
           return false;
         }
       }
@@ -102,10 +108,10 @@ let filePathFolderPrefixes = ["DataConnectors", "Data Connectors", "Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
-    return ValidateHyperlinks(filePath);
+    return ValidateHyperlinks(filePath)
   },
-  onExecError: async (e: any, filePath: string) => {
-    console.log(`HyperLink Validation Failed. File path: '${filePath}'. Error message: ${e.message}`);
+  onExecError: async () => {
+    logger.logError(`HyperLink Validation Failed.`);
   },
   onFinalFailed: async () => {
     logger.logError("An error occurred, please open an issue");
