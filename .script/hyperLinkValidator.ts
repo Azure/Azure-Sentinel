@@ -44,7 +44,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         invalidLinks.forEach(l => {
           logger.logError(`\n ${l}`);
         });
-        
+
         throw new Error(`Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
       }
     }
@@ -79,11 +79,20 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         //   logger.logWarning(`Warning: Given link '${link}' seems to be searching in www.Google.com or www.Bing.com and possibly an invalid link.`)
         // }
         // return true;
+        if (link == "https://learn.microsoft.com/en-us/azure/azure-monitor1/platform/agent-windows#obtain-workspace-id-and-key")
+        {
+          console.log(`Status ${request.status} and its content is ${responseContent}`)
+        
+        }
         return (redirectResponse.includes("www.google.com") || redirectResponse.includes("www.bing.com")) ? false : true;
       }
       else 
       {
         var responseContent = request.responseText
+        if (link == "https://learn.microsoft.com/en-us/azure/azure-monitor1/platform/agent-windows#obtain-workspace-id-and-key")
+        {
+          console.log(responseContent)
+        }
         if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error") || responseContent.includes("404 - Page not found"))) {
           return false;
         }
@@ -102,7 +111,7 @@ let filePathFolderPrefixes = ["DataConnectors", "Data Connectors", "Solutions"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
   onCheckFile: (filePath: string) => {
-    return ValidateHyperlinks(filePath);
+    return ValidateHyperlinks(filePath)
   },
   onExecError: async () => {
     logger.logError(`HyperLink Validation Failed.`);
