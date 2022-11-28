@@ -24,7 +24,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     if (links) 
     {
       //console.log(`List of all Links in given File ${filePath} are:`)
-      //console.log(links)
+      console.log(links)
       var invalidLinks = new Array();
       for (var link of links) 
       {
