@@ -23,8 +23,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
     if (links) 
     {
-      console.log(`List of all Links in given File ${filePath} are:`)
-      console.log(links)
+      //console.log(`List of all Links in given File ${filePath} are:`)
+      //console.log(links)
       var invalidLinks = new Array();
       for (var link of links) 
       {
@@ -104,8 +104,8 @@ let CheckOptions = {
   onCheckFile: (filePath: string) => {
     return ValidateHyperlinks(filePath);
   },
-  onExecError: async (e: any, filePath: string) => {
-    console.log(`HyperLink Validation Failed. File path: '${filePath}'. Error message: ${e.message}`);
+  onExecError: async () => {
+    logger.logError(`HyperLink Validation Failed.`);
   },
   onFinalFailed: async () => {
     logger.logError("An error occurred, please open an issue");
