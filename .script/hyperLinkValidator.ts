@@ -84,7 +84,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
       else 
       {
         var responseContent = request.responseText
-        if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error"))) {
+        if (responseContent != null && (responseContent.includes("404! Not Found!") || responseContent.includes("404 Not Found") || responseContent.includes("404 error") || responseContent.includes("404 - Page not found"))) {
           return false;
         }
       }
