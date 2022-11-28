@@ -37,9 +37,9 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         }
       }
 
-      console.log(`Total Invalid Links: ${invalidLinks.length}`)
-      if (invalidLinks.length > 0) 
+      if (invalidLinks.length > 0)
       {
+        console.log(`Total Invalid Links: ${invalidLinks.length}`)
         console.log(`Below are the invalid links:`)
         invalidLinks.forEach(l => {
           logger.logError(`\n ${l}`);
