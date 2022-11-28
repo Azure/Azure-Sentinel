@@ -295,5 +295,20 @@ let ProofpointPOD_message_view = view () {
                 DstUserUpn,
                 SrcUserUpn,
                 EventType
+	| join kind=inner  (
+		ProofpointPOD_message_CL
+		| extend Guid = column_ifexists('guid_s', ''),
+		    MsgParts=column_ifexists('msgParts_s', '')
+		| extend d = parse_json(MsgParts)
+		| mv-apply d on (where isnotempty(d.urls)
+		    | extend URL_LIST = tostring(d.urls))
+		| extend e = parse_json(URL_LIST)
+		| mv-apply e on (where isnotempty(e.url)
+		    | extend URLLIST = tostring(e.url))
+		| summarize make_set(URLLIST) by Guid
+        )
+        on Guid
+    | project-away Guid1
+    | project-rename Urls = set_URLLIST
 };
 union isfuzzy=true ProofpointPOD_message_view, ProofpointPOD_maillog_view
