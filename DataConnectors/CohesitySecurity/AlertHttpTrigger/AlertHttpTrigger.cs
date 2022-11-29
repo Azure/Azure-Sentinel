@@ -24,9 +24,18 @@ namespace AlertHttpTrigger
     {
         private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
 
-        public static long GetPreviousUnixTime()
+        public static long GetPreviousUnixTime(ILogger log)
         {
-            DateTime previousDateTime = DateTime.Now.AddDays(long.Parse(Environment.GetEnvironmentVariable("startDaysAgo")));
+            DateTime previousDateTime = DateTime.Now;
+            try
+            {
+                previousDateTime = previousDateTime.AddDays(long.Parse(Environment.GetEnvironmentVariable("startDaysAgo")));
+            }
+            catch  (Exception ex)
+            {
+                previousDateTime = previousDateTime.AddDays(-30);
+                log.LogError("Exception --> 1 " + ex.Message);
+            }
             return ((DateTimeOffset)previousDateTime).ToUnixTimeMilliseconds() * 1000;
         }
 
@@ -77,13 +86,13 @@ namespace AlertHttpTrigger
                 }
                 catch  (Exception ex)
                 {
-                    startDateUsecs = GetPreviousUnixTime();
-                    log.LogError("Exception --> 1" + ex.Message);
+                    startDateUsecs = GetPreviousUnixTime(log);
+                    log.LogError("Exception --> 2 " + ex.Message);
                 }
 
                 if (startDateUsecs == 0)
                 {
-                    startDateUsecs = GetPreviousUnixTime();
+                    startDateUsecs = GetPreviousUnixTime(log);
                 }
 
                 log.LogInformation ("startDateUsecs --> " + startDateUsecs);
@@ -106,7 +115,7 @@ namespace AlertHttpTrigger
             }
             catch  (Exception ex)
             {
-                log.LogError("Exception --> 2" + ex.Message);
+                log.LogError("Exception --> 3 " + ex.Message);
             }
 
             return new OkObjectResult("[]");
