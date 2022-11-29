@@ -1,7 +1,8 @@
 id: bafc1446-1cc4-4f6d-ad76-1250b8c3b60c
-name: Unusual volume of external file sharing with external user.
+name: Unusual volume of file deletion by user.
 description: |
-  This query looks for users sharing access to files with external users.
+  This query looks for users performing file deletion activities. Spikes in file deletion observed from risky sign-in sessions are flagged here.
+  This applies to SharePoint and OneDrive users.
 requiredDataConnectors:
 - connectorId: MicrosoftThreatProtection
   dataTypes:
@@ -21,10 +22,10 @@ query: |
   let riskyUsers=
     AADSignInEventsBeta    
     | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
-    | where isnotempty(AccountObjectId)
+    | where isnotempty(AccountObjectId) and isnotempty(RequestId) // In AADSignInEventsBeta, the SessionId column has inaccurate data and instead the RequestId has the actual Session identifier
     | where ErrorCode == 0
     | where RiskLevelDuringSignIn >=80
-    | project RiskLevelDuringSignIn, AccountObjectId, Timestamp
+    | project RiskLevelDuringSignIn, AccountObjectId, Timestamp, SessionId=RequestId
     ;
   let hasUsers = isnotempty(toscalar(riskyUsers));
   //
@@ -46,11 +47,11 @@ entityMappings:
     fieldMappings:
       - identifier: AadUserId
         columnName: AccountObjectId
-- entityType: Account
+  - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountDisplayName
-- entityType: CloudApplication
+  - entityType: CloudApplication
     fieldMappings:
       - identifier: AppId
         columnName: ApplicationId
