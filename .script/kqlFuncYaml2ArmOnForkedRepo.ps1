@@ -42,6 +42,12 @@ function run([string] $fork, [string] $branch, [string] $repoBaseFolder) {
     Write-Host "Run kqlFuncYaml2Arm"
     & "$($repoBaseFolder)/.script/kqlFuncYaml2Arm.ps1"
 
+	$filesThatWereChanged=$(echo $(git diff --name-only))
+	if ($filesThatWereChanged) {
+		Write-Information "Updating ARM templates"
+        break
+	}
+
 	Write-Host "git add ."
 	git add .
 	Write-Host "git commit"
