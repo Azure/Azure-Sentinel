@@ -48,9 +48,9 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
             return parsersYamlFiles.Select(fileName =>
             {
                 var schema = fileName.Split(Path.DirectorySeparatorChar)[^3];
-                var resultColumns = schemaToResultColumnsMapping[schema];
-                return GetParserFunctionSchema(fileName, resultColumns);
-            });
+                var resultColumns = schemaToResultColumnsMapping.GetValueOrDefault(schema);
+                return resultColumns is null ? null : GetParserFunctionSchema(fileName, resultColumns);
+            }).Where(function => function != null);
         }
 
         /// <summary>

@@ -34,6 +34,21 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
                     Schema= "ASimProcessEvent",
                     SampleFunctionName= "_Im_ProcessEvent",
                 },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimFileEvent",
+                    SampleFunctionName= "_Im_FileEvent",
+                },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimAuthentication",
+                    SampleFunctionName= "_Im_Authentication",
+                },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimRegistryEvent",
+                    SampleFunctionName= "_Im_RegistryEvent",
+                },
             };
     }
 
