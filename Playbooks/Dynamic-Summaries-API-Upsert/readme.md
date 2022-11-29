@@ -16,6 +16,5 @@ Before deploying the playbook you will need
 [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FDynamic-Summaries-API-Upsert%2Fazuredeploy.json)
 
 ## Post-Deployment
-After deployment, the playbook will run automatically, it may fail due to permission issues.  You need to perform 2 actions:
-- 1. You need to grant this Logic App access to the destination subscription as a contributor, by going to Identity on the left menu, then adding role assignment to the subscription;
-- 2. You need to auithorize the API Connections, going to API connections, selecting the API connection, selecting Edit API connection. then clicking Authorize button at the bottom.
+After deployment, the playbook will run automatically, it may fail due to permission issues.  You need to perform one action:
+- You need to auithorize the API Connections, going to API connections, selecting the API connection, selecting Edit API connection. then clicking Authorize button at the bottom.
