@@ -2,13 +2,17 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Cybersixgill-Alert-Status-Update", 
+        "title": "Cybersixgill-Alert-Status-Update",
         "description": "This playbook will update status of Cybersixgill Alerts when respective incident status is updated in Microsoft Sentinel",
-        "lastUpdateTime": "2022-11-08T18:18:05Z",
-        "entities": [], 
-        "tags": ["Incident", "Sync"], 
+        "prerequisites": "",
+        "postDeployment": [],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2022-11-29T18:18:05Z",
+        "entities": [],
+        "tags": ["Incident", "Sync"],
         "support": {
-            "tier": "developer"
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
         },
         "author": {
             "name": "Loginsoft"
@@ -18,22 +22,11 @@
         "PlaybookName": {
             "defaultValue": "CybersixgillAlertStatusUpdate",
             "type": "string"
-        },
-        "client_id": {
-            "type": "string",
-            "metadata": {
-                "description": "Enter value for client_id"
-            }
-        },
-        "client_secret": {
-            "type": "securestring",
-            "metadata": {
-                "description": "Enter value for client_secret"
-            }
         }
     },
     "variables": {
-        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -47,14 +40,6 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
-                        },
-                        "client_id": {
-                            "type": "string",
-                            "defaultValue": "[parameters('client_id')]"
-                        },
-                        "client_secret": {
-                            "type": "securestring",
-                            "defaultValue": "[parameters('client_secret')]"
                         }
                     },
                     "triggers": {
@@ -75,10 +60,14 @@
                     },
                     "actions": {
                         "Authenticate_Cybersixgill_API": {
-                            "runAfter": {},
+                            "runAfter": {
+                                "Get_Cybersixgill_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "Http",
                             "inputs": {
-                                "body": "client_id=@{parameters('client_id')}&client_secret=@{parameters('client_secret')}&grant_type=client_credentials",
+                                "body": "client_id=@{body('Get_Cybersixgill_Client_ID')?['value']}&client_secret=@{body('Get_Cybersixgill_Client_Secret')?['value']}&grant_type=client_credentials",
                                 "headers": {
                                     "Cache-Control": "no-cache",
                                     "Content-Type": "application/x-www-form-urlencoded"
@@ -151,6 +140,36 @@
                                         "value": "@{triggerBody()?['object']?['properties']?['Bookmarks']?[0]?['properties']?['queryResult']}"
                                     }
                                 ]
+                            }
+                        },
+                        "Get_Cybersixgill_Client_ID": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('clientid')}/value"
+                            }
+                        },
+                        "Get_Cybersixgill_Client_Secret": {
+                            "runAfter": {
+                                "Get_Cybersixgill_Client_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('clientsecret')}/value"
                             }
                         },
                         "Initialize_status": {
@@ -393,6 +412,16 @@
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
                     }
@@ -404,9 +433,14 @@
             "identity": {
                 "type": "SystemAssigned"
             },
+            "tags": {
+                "hidden-SentinelTemplateName": "CybersixgillAlertStatusUpdate",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "apiVersion": "2017-07-01",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
             ]
         },
         {
@@ -421,6 +455,21 @@
                 "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
                 }
             }
         }
