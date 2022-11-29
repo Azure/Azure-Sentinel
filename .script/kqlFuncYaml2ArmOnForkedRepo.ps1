@@ -44,17 +44,19 @@ function run([string] $fork, [string] $branch, [string] $repoBaseFolder) {
 
 	$filesThatWereChanged=$(echo $(git diff --name-only))
 	if ($filesThatWereChanged) {
-		Write-Information "Updating ARM templates"
-        break
+		Write-Host "Updating ARM templates"
+		Write-Host "git add ."
+		git add .
+		Write-Host "git commit"
+		git commit -m '[ASIM Parsers] Generate deployable ARM templates from KQL function YAML files.'
+	
+		Write-Host "git push"
+		git push
+	} else {
+		Write-Host "Your ARM templates are already updated"
 	}
 
-	Write-Host "git add ."
-	git add .
-	Write-Host "git commit"
-	git commit -m '[ASIM Parsers] Generate deployable ARM templates from KQL function YAML files.'
 
-	Write-Host "git push"
-	git push
 
 	if (![string]::IsNullOrEmpty($fork)) {
 		Write-Host "git fetch origin"
