@@ -25,7 +25,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
     * Output Location (e.g. s3://test-bucket/)
     * Query String (e.g. select * from testtable)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Faws-athena%2FSolutions%2FAWSAthena%2FPlaybooks%2FAWSAthenaPlaybooks%2FAWSAthena-GetQueryResults%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Forigin%2Fusers%2Frahul%2Faws-athena%2FSolutions%2FAWSAthena%2FPlaybooks%2FAWSAthenaPlaybooks%2FAWSAthena-GetQueryResults%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWSAthena%2FPlaybooks%2FAWSAthenaPlaybooks%2FAWSAthena-GetQueryResults%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWSAthena%2FPlaybooks%2FAWSAthenaPlaybooks%2FAWSAthena-GetQueryResults%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
