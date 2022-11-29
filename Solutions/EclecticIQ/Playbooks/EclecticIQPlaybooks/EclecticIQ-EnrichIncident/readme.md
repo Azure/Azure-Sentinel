@@ -3,11 +3,11 @@
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
  1. For each Entity (Accounts, Host, IP Address, FileHash, URL) available in Sentinel incident, it performs lookup for a match in EclecticIQ
  2. If it finds the match, this playbook adds a rich comment to the incident with all the collected information
-    ![Comment example](./images/CommentElasticSearch_EnrichIncident.png)
+    ![Comment example](./images/EclecticIQ_EI_IncidentComment_DarkTheme.png)
 
 
 
-![Playbook Designer view](./images/EnrichIndicentElasticSearchWorkflow.png)<br>
+![Playbook Designer view](./images/EclecticIQ_EI_Workflow_DarkTheme.png)<br>
 
 ### Prerequisites 
 1. EclecticIQ Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
@@ -30,7 +30,7 @@ Once deployment is complete, you will need to authorize each connection.
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for EclecticIQ Api  Connection (For authorizing the EclecticIQ API connection, API Key needs to be provided)
+6.	Repeat steps for EclecticIQ API  Connection (For authorizing the EclecticIQ API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
 1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account or host or URL or FileHash or IP Address. 
 2. Configure the automation rules to trigger this playbook
