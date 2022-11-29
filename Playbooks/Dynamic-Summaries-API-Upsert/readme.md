@@ -5,7 +5,7 @@ This playbook shows how to query Log Analytics data and upload the query result 
 
 ## Prerequisites
 
-Before deploying the the playbook you will need 
+Before deploying the playbook you will need 
 - [Create Azure Integration account through Azure portal](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/logic-apps/logic-apps-enterprise-integration-create-integration-account.md#tab/azure-portal).  Integration account should be in the same region as Logic App.
 - Have a KQL that renders data for Dynamic Summaries object model  
 
