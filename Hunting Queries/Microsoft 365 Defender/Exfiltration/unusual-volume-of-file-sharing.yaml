@@ -1,0 +1,62 @@
+id: bafc1446-1cc4-4f6d-ad76-1250b8c3b60c
+name: Unusual volume of external file sharing with external user.
+description: |
+  This query looks for users sharing access to files with external users.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - AADSignInEventsBeta
+tactics:
+- Exfiltration
+query: |
+  let usefulExtn= pack_array('csv', 'doc', 'docm', 'docx', 'dot', 'dotx', 'eml', 'pdf', 'pot', 'potm', 'potx', 'ppam', 'pps', 'ppsm', 'ppsx', 'ppt', 'pptm', 'pptx',
+    'psd', 'pst', 'pub', 'ppk', 'rar', 'rtf', 'txt', 'vsd', 'vsdm', 'vsdx', 'vss', 'vssm', 'vst', 'vstm', 'vstx', 'xla', 'xlam', 'xll', 'xlm', 'xls', 'xlsm', 'xlsx', 'xlt',
+    'xltm', 'xltx', 'xps', 'zip', 'xsl');
+  let sharingPerms= pack_array("AnonymousLinkCreated", "SharingInvitationCreated", "SharingSet");
+  let relevantAppIds = pack_array(int(20892), int(15600)); // App Ids for SharePoint and OneDrive
+  let timeWindow = 24h;
+  let timeNow = now();
+  //
+  let riskyUsers=
+    AADSignInEventsBeta    
+    | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
+    | where isnotempty(AccountObjectId)
+    | where ErrorCode == 0
+    | where RiskLevelDuringSignIn >=80
+    | project RiskLevelDuringSignIn, AccountObjectId, Timestamp
+    ;
+  let hasUsers = isnotempty(toscalar(riskyUsers));
+  //
+  CloudAppEvents
+    | where hasUsers
+    | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
+    | where ApplicationId in (relevantAppIds)
+    | where AccountObjectId in (toscalar(riskyUsers))
+    | where ActionType in (sharingPerms)
+    | extend SourceFileExtension = tostring(RawEventData.SourceFileExtension), SourceFileName=tostring(RawEventData.SourceFileName), TargetGroup=tostring(RawEventData.TargetUserOrGroupType)
+    | where SourceFileExtension has_any (usefulExtn)
+    | where TargetGroup == "Guest"
+    //
+    | summarize Count = countif(isnotempty( SourceFileName)), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) ,FileNames = make_set(SourceFileName) ,FileExt = make_set(SourceFileExtension) by AccountObjectId, AccountDisplayName, ApplicationId, ActionType, Time = bin(Timestamp, 10m)
+    | summarize TotalCount = countif(Count > 10) , (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId
+    | where TotalCount > 1
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountObjectId
+- entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountDisplayName
+- entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+customDetails:
+  Count: TotalCount
