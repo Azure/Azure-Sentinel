@@ -15,8 +15,8 @@ from sixgill.sixgill_actionable_alert_client import SixgillActionableAlertClient
 customer_id = environ['WorkspaceID'] 
 shared_key = environ['WorkspaceKey']
 connection_string = environ['AzureWebJobsStorage']
-client_id = environ['CLIENT_ID']
-client_secret = environ['CLIENT_SECRET']
+client_id = environ['ClientID']
+client_secret = environ['ClientSecret']
 logAnalyticsUri = environ.get('logAnalyticsUri')
 CHANNEL_ID = "cea9a52effad4bc5e905a5a653f5cf9b"
 LAST_X_DAYS = 90
