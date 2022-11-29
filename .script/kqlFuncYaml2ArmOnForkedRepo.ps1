@@ -50,11 +50,15 @@ function run([string] $fork, [string] $branch, [string] $repoBaseFolder) {
 	Write-Host "git push"
 	git push
 
-    Write-Host "git fetch origin"
-    git fetch origin
+	if (![string]::IsNullOrEmpty($fork)) {
+		Write-Host "git fetch origin"
+		git fetch origin
+	}
 
-    Write-Host "git checkout master"
-    git checkout master
+	if ([string]::IsNullOrEmpty($branch)) {
+		Write-Host "git checkout master"
+		git checkout master
+    } 
 }
 
 run $fork $branch $repoBaseFolder
