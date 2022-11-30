@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function sets DvcHostname, DvcDomain, DvcDomainType and DvcFQDN based for an FQDN or hostname provided as a parameter
+# Log Analytics KQL function An ASIM function sets DvcHostname, DvcDomain, DvcDomainType and DvcFQDN based for an FQDN or hostname provided as a parameter
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function sets DvcHostname, DvcDomain, DvcDomainType and DvcFQDN based for an FQDN or hostname provided as a parameter
+ARM template for deploying the Log Analytics KQL function An ASIM function sets DvcHostname, DvcDomain, DvcDomainType and DvcFQDN based for an FQDN or hostname provided as a parameter
 
 This ASIM tabular function is intended for use in ASIM parsers and sets the DvcHostname entity fields based on an FQDN or hostname provided as a parameter. The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.
 
