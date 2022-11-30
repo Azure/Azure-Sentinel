@@ -30,6 +30,7 @@ query: |
     let monitoredColumn = 'AffectedRows';           // The name of the column for volumetric anomalies.
     let processedData = materialize (
         AzureDiagnostics
+        | where TimeGenerated >= ago(detectionWindow)
         | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
         | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
                   ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
@@ -42,9 +43,7 @@ query: |
                         , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+), Level ([0-9.]+)", 2, additional_information_s))
                         , 0)
         | extend QuantityColumn = column_ifexists(monitoredColumn, 0)
-        | sort by TimeGenerated desc
-        | extend RowNumber = row_number(),
-                             WindowType = case( TimeGenerated >= ago(detectionWindow), 'detection',
+        | extend WindowType = case( TimeGenerated >= ago(detectionWindow), 'detection',
                                                (ago(trainingWindow) <= TimeGenerated and TimeGenerated < ago(detectionWindow)), 'training', 'other')
         | where WindowType in ('detection', 'training'));
     let trainingSet =
