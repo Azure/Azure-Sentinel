@@ -1,8 +1,6 @@
 Param([string]$fork, [string]$branch, [string]$repoBaseFolder)
 
 function run([string] $fork, [string] $branch, [string] $repoBaseFolder) {
-	
-
 	if ([string]::IsNullOrEmpty($repoBaseFolder)) {
 		$repoBaseFolder = "$($PSScriptRoot)/.." 
     } 
@@ -32,7 +30,7 @@ function run([string] $fork, [string] $branch, [string] $repoBaseFolder) {
 	$conflicts= $(echo $(git ls-files -u))
 	if ($conflicts)  {
 		git merge --abort
-		Write-Error "There is a merge conflict. Aborting"
+		Write-Error "There is a merge conflict. Please fix it and run the test again. Aborting"
 		break
 	}
 
