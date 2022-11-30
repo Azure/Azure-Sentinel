@@ -27,6 +27,7 @@ query: |
     let monitoredErrors = pack_array(102, 105);     // List of sql error codes relevant for this detection.
     let processedData = materialize (
         AzureDiagnostics
+        | where TimeGenerated >= ago(detectionWindow)
         | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
         | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
                   ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
@@ -42,9 +43,7 @@ query: |
         | summarize countEvents = count(), countStatements = dcount(Statement), countStatementsWithError = dcountif(Statement, Error in (monitoredErrors))
             , anyMonitoredStatement = anyif(Statement, Error in (monitoredErrors)), anyInfo = anyif(AdditionalInfo, Error in (monitoredErrors))
             by Database, ClientIp, ApplicationName, PrincipalName, timeSlice
-        | sort by timeSlice desc
-        | extend RowNumber = row_number(),
-                             WindowType = case( timeSlice >= ago(detectionWindow), 'detection',
+        | extend WindowType = case( timeSlice >= ago(detectionWindow), 'detection',
                                                (ago(trainingWindow) <= timeSlice and timeSlice < ago(detectionWindow)), 'training', 'other')
         | where WindowType in ('detection', 'training'));
     let trainingSet =
