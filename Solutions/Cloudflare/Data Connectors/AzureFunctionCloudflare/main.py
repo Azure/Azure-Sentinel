@@ -56,7 +56,11 @@ async def main(mytimer: func.TimerRequest):
                 cor = conn.process_blob(blob, container_client, session)
                 cors.append(cor)
                 if len(cors) >= MAX_PAGE_SIZE:
-                    await asyncio.gather(*cors)
+                    try :
+                        await asyncio.gather(*cors)
+                    except ValueError as e:
+                        logging.error('Error while reading blob name: {}. Error: {}'.format(blob['name'],str(e)))
+                        raise e                    
                     cors = []
                 if conn.check_if_script_runs_too_long():
                     logging.info('Script is running too long. Stop processing new blobs.')
