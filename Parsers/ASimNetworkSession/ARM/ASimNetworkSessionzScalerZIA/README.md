@@ -1,6 +1,6 @@
-# Zscaler ZIA Firewall ASIM NetworkSession Normalization Parser
+# Zscaler ZIA Firewall rrr ASIM NetworkSession Normalization Parser
 
-ARM template for ASIM NetworkSession schema parser for Zscaler ZIA Firewall.
+ARM template for ASIM NetworkSession schema parser for Zscaler ZIA Firewall rrr.
 
 This ASIM parser supports normalizing Zscaler ZIA proxy logs produced by the Microsoft Sentinel Zscaler connector to the ASIM Network Session normalized schema.
 
