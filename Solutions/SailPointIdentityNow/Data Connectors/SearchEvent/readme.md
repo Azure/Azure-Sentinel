@@ -14,4 +14,4 @@ Using IdentityNow's AuditEvents API, we can solve a number of problems. Some exa
 
 --> Surface and gain insights into the brute force password attempts IdentityNow has blocked --> Correlate IdentityNow user activity with other system events to identify coordinated attacks --> Evaluate the timing of login attempts from different geographies to identify problems
 
-NOTE: This function app is intended to make it even easier to bring IdentityNow user activity and governance events into Azure Sentinel to improve insights from your security incident and event monitoring solution.
+NOTE: This function app is intended to make it even easier to bring IdentityNow user activity and governance events into Microsoft Sentinel to improve insights from your security incident and event monitoring solution.

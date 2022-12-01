@@ -1,0 +1,461 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Add IP Entity To Network Security Group", 
+        "description": "This playbook will execute using an incident based trigger and add the IP entities to a Network Security Group",
+        "prerequisites": ["After playbook is deployed, grant the Logic App Managed Identity access to the Network Security Group by using an RBAC role such as Network Contributor. Additionally, add the Managed identity to the Microsoftr Sentinel Responder role on the Resource Group where Microsoft Sentinel is installed."],
+        "lastUpdateTime": "2022-09-30T10:00:00.000Z", 
+        "entities": ["Ip"], 
+        "tags": ["Remediation"],
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Brian Delaney"
+        },
+        "postDeployment":["- After playbook is deployed, grant the Logic App Managed Identity access to the Network Security Group by using an RBAC role such as Network Contributor and add the Managed identity to the Microsoftr Sentinel Responder role on the Resource Group where Microsoft Sentinel is installed. \n\n - Attach this playbook to an **automation rule** so it runs when specified incidents are created. \n\n [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)"],
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Add IP Entity To Network Security Group",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Add-IP-Entity-To-NSG",
+            "type": "String"
+        },
+        "Network Security Group ResourceId": {
+            "defaultValue": "/subscriptions/<subscriptionId>/resourceGroups/<resourceGroupName>/providers/Microsoft.Network/networkSecurityGroups/<nsgName>",
+            "type": "String"
+        },
+        "NSG Rule Priority": {
+            "defaultValue": 150,
+            "minValue": 100,
+            "maxValue": 4096,
+            "type": "int"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "NSGResourceId": {
+                            "defaultValue": "[parameters('Network Security Group ResourceId')]",
+                            "type": "String"
+                        },
+                        "RulePriority": {
+                            "defaultValue": "[parameters('NSG Rule Priority')]",
+                            "type": "Int"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_-_Failed": {
+                            "runAfter": {
+                                "HTTP_-_Set_NSG": [
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>Failed to add IP Addresses @{outputs('Compose_IP_List')} to the Network Security Group.<br>\nWorkflow name: @{workflow()['name']}<br>\nWorkflow run id: @{workflow()['run']['name']}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Add_comment_to_incident_-_Success": {
+                            "runAfter": {
+                                "HTTP_-_Set_NSG": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>IP Addresses&nbsp;@{outputs('Compose_IP_List')} were added to the Network Security Group @{parameters('NSGResourceId')} into the rule at priority @{parameters('RulePriority')}.</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "All_Rules_-_Union": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ],
+                                "Filter_array_-_Other_Rules": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@union(variables('updatedRule'),body('Filter_array_-_Other_Rules'))"
+                        },
+                        "Check_for_Empty_Array": {
+                            "actions": {
+                                "Add_comment_to_incident_-_No_IP_Entity": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>No IP entities were present in the incident. &nbsp;The Network Security Group was not updated.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Terminate": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_-_No_IP_Entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_IP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(variables('ipArray'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Compose_IP_List": {
+                            "runAfter": {
+                                "All_Rules_-_Union": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@variables('ipArray')"
+                        },
+                        "Condition": {
+                            "actions": {
+                                "Existing_Source_Addresses": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": "@body('Filter_array_-_Rule_to_append')[0]['properties']['sourceAddressPrefixes']"
+                                },
+                                "Set_variable_-_updatedRule": {
+                                    "runAfter": {
+                                        "Existing_Source_Addresses": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "updatedRule",
+                                        "value": [
+                                            "@setProperty(body('Filter_array_-_Rule_to_append')[0], 'properties', setProperty(body('Filter_array_-_Rule_to_append')[0]['properties'], 'sourceAddressPrefixes', union(variables('ipArray'),outputs('Existing_Source_Addresses'))))"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_array_-_Rule_to_append": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_-_New_Rule": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "updatedRule",
+                                            "value": [
+                                                {
+                                                    "name": "logic-app-created-rule",
+                                                    "properties": {
+                                                        "access": "Deny",
+                                                        "destinationAddressPrefix": "*",
+                                                        "destinationPortRange": "*",
+                                                        "direction": "Inbound",
+                                                        "priority": "@parameters('RulePriority')",
+                                                        "protocol": "*",
+                                                        "sourceAddressPrefix": "",
+                                                        "sourceAddressPrefixes": "@variables('ipArray')",
+                                                        "sourcePortRange": "*"
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Filter_array_-_Rule_to_append'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Filter_array_-_Other_Rules": {
+                            "runAfter": {
+                                "Initialize_object_updatedRule": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@variables('existingRules')",
+                                "where": "@not(equals(item()['properties']['priority'], parameters('RulePriority')))"
+                            }
+                        },
+                        "Filter_array_-_Rule_to_append": {
+                            "runAfter": {
+                                "Initialize_object_updatedRule": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@variables('existingRules')",
+                                "where": "@equals(item()['properties']['priority'], parameters('RulePriority'))"
+                            }
+                        },
+                        "For_each_IP": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "ipArray",
+                                        "value": "@items('For_each_IP')?['Address']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_ipArray": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP_-_Get_NSG": {
+                            "runAfter": {
+                                "Check_for_Empty_Array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://management.azure.com",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2022-01-01"
+                                },
+                                "uri": "https://management.azure.com@{parameters('NSGResourceId')}"
+                            }
+                        },
+                        "HTTP_-_Set_NSG": {
+                            "runAfter": {
+                                "Compose_IP_List": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://management.azure.com",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "body": {
+                                    "location": "@{body('HTTP_-_Get_NSG')['location']}",
+                                    "properties": {
+                                        "securityRules": "@outputs('All_Rules_-_Union')"
+                                    }
+                                },
+                                "method": "PUT",
+                                "queries": {
+                                    "api-version": "2022-01-01"
+                                },
+                                "uri": "https://management.azure.com@{parameters('NSGResourceId')}"
+                            }
+                        },
+                        "Initialize_array_existingRules": {
+                            "runAfter": {
+                                "HTTP_-_Get_NSG": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "existingRules",
+                                        "type": "array",
+                                        "value": "@body('HTTP_-_Get_NSG')['properties']['securityRules']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_ipArray": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ipArray",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_object_updatedRule": {
+                            "runAfter": {
+                                "Initialize_array_existingRules": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "updatedRule",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

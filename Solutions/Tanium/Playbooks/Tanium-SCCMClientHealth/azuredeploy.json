@@ -1,0 +1,892 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Tanium-SCCMClientHealth",
+        "description": "This playbook starts with a Microsoft Sentinel incident, gets the hosts associated with that incident, queries the Tanium API Gateway for the SCCM Client Health for those hosts, and then adds a comment to the incident with that information.",
+        "prerequisites": [
+            "1. Microsoft Sentinel incidents with associated hosts.",
+            "2. A [Tanium API Token](https://docs.tanium.com/platform_user/platform_user/console_api_tokens.html) granting access to your Tanium environment: the query will be made with the user priviledges of that token.",
+            "3. A hostname for your Tanium environment reachable from Logic Apps."
+        ],
+        "postDeploymentSteps": [
+            "1. Ensure the Logic App API connection to Microsoft Sentinel is authenticated."
+        ],
+        "entities": [ "host" ],
+        "tags": ["Enrichment"],
+        "lastUpdateTime": "2022-09-15T00:00:00.000Z",
+        "support": {
+            "tier": "developer",
+            "link": "https://www.tanium.com"
+        },
+        "author": {
+            "name": "Tanium"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Tanium-SCCMClientHealth",
+            "type": "string"
+        },
+        "IntegrationAccountName": {
+            "defaultValue": "Tanium-SCCMClientHealth-Integration",
+            "type": "string",
+            "metadata": {
+                "description": "An Integration Account is required to run inline JavaScript actions"
+            }
+        },
+        "IntegrationAccountPricingTier": {
+            "type": "string",
+            "defaultValue": "Free",
+            "allowedValues": [
+                "Free",
+                "Basic",
+                "Standard"
+            ],
+            "metadata": {
+                "description": "Specify the Pricing Tier of the Integration Account."
+            }
+        },
+        "TaniumApiToken": {
+            "defaultValue": "",
+            "type": "securestring",
+            "metadata": {
+                "description": "The Tanium API Token used for this logic app. The logic app will be restricted to the level of access available to the user who generated the token."
+            }
+        },
+        "TaniumServerHostname": {
+            "defaultValue": "hostname",
+            "type": "String",
+            "metadata": {
+                "description": "The hostname for your Tanium server e.g. tanium.example.com"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TaniumApiGatewayApi": "[uri(concat('https://',parameters('TaniumServerHostname')),'/plugin/products/gateway/graphql')]"
+    },
+    "resources": [
+        {
+          "type": "Microsoft.Web/connections",
+          "apiVersion": "2018-07-01-preview",
+          "name": "[variables('AzureSentinelConnectionName')]",
+          "location": "[resourceGroup().location]",
+          "properties": {
+              "displayName": "[variables('AzureSentinelConnectionName')]",
+              "customParameterValues": {},
+              "api": {
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+          }
+        },
+        {
+            "type": "Microsoft.Logic/integrationAccounts",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('IntegrationAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "[parameters('IntegrationAccountPricingTier')]"
+            },
+            "properties": {
+                "state": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+              "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+              "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "integrationAccount": {
+                    "id": "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+                },
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "TaniumApiToken": {
+                            "type": "securestring",
+                            "metadata": {
+                                "description": "The Tanium API Token provides access to the Tanium Server. Access is restricted to the level of access available to the user who generated the token."
+                            }
+                        },
+                        "TaniumApiGatewayApi": {
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)_2": {
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Create_HTML_table": {
+                            "runAfter": {
+                                "Flatten_API_Gateway_endpoints": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@body('Flatten_API_Gateway_endpoints')"
+                            }
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Exit_early_if_no_hosts_are_found": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>No hosts found for this incident.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Terminate": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "less": [
+                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            1
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Flatten_API_Gateway_endpoints": {
+                            "runAfter": {
+                                "Parse_endpoints_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "JavaScriptCode",
+                            "inputs": {
+                                "code": "var e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nfunction sensorReadings(r) {\r\n\treturn r.columns.map(c => {\r\n\t\tif (c.sensor && c.sensor.name) {\r\n\t\t\treturn { name: [c.sensor.name, c.name].join(' - '), value: c.values.join(' ') };\r\n\t\t} else {\r\n\t\t\treturn { name: c.name, value: c.values.join(' ') };\r\n\t\t}\r\n\t});\r\n}\r\n\r\nfunction flatten(obj, pk = '') {\r\n\tif (pk !== '') pk += ' ';\r\n\tlet flat = {};\r\n\tObject.keys(obj).forEach((key) => {\r\n\t\tif (key === 'sensorReadings') {\r\n\t\t\tsensorReadings(obj[key]).forEach((r) => {\r\n\t\t\t\tflat[r.name] = r.value;\r\n\t\t\t});\r\n\t\t} else {\r\n\t\t\tif (typeof obj[key] === 'object' && obj[key] !== null) {\r\n\t\t\t\tObject.assign(flat, flatten(obj[key], pk + key));\r\n\t\t\t} else {\r\n\t\t\t\tflat[pk + key] = obj[key];\r\n\t\t\t}\r\n\t\t}\r\n\t});\r\n\treturn flat;\r\n}\r\n\r\nreturn e.map(function(e) { return flatten(e.node); });"
+                            }
+                        },
+                        "For_each_incident_host": {
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "If_ip_address": {
+                                    "actions": {
+                                        "Append_to_endpoint_filters": {
+                                            "runAfter": {
+                                                "Compose_endpoint_filter_for_host_and_ip_address": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "endpoint filters",
+                                                "value": "@outputs('Compose_endpoint_filter_for_host_and_ip_address')"
+                                            }
+                                        },
+                                        "Compose_endpoint_filter_for_host_and_ip_address": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "filters": [
+                                                    {
+                                                        "op": "CONTAINS",
+                                                        "path": "ipAddress",
+                                                        "value": "@{body('Parse_host_json')?['additionalData']?['LastIpAddress']}"
+                                                    },
+                                                    {
+                                                        "path": "name",
+                                                        "value": "@{body('Parse_host_json')?['hostName']}"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_host_json": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_host_only_to_endpoint_filters": {
+                                                "runAfter": {
+                                                    "Compose_endpoint_filter_for_host_only": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "endpoint filters",
+                                                    "value": "@outputs('Compose_endpoint_filter_for_host_only')"
+                                                }
+                                            },
+                                            "Compose_endpoint_filter_for_host_only": {
+                                                "runAfter": {},
+                                                "type": "Compose",
+                                                "inputs": {
+                                                    "filters": [
+                                                        {
+                                                            "path": "name",
+                                                            "value": "@{body('Parse_host_json')?['hostName']}"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_host_json')?['additionalData']?['LastIpAddress']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_host_json": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_incident_host')",
+                                        "schema": {
+                                            "properties": {
+                                                "Type": {
+                                                    "type": "string"
+                                                },
+                                                "additionalData": {
+                                                    "properties": {
+                                                        "AvStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "FQDN": {
+                                                            "type": "string"
+                                                        },
+                                                        "HealthStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "LastExternalIpAddress": {
+                                                            "type": "string"
+                                                        },
+                                                        "LastIpAddress": {
+                                                            "type": "string"
+                                                        },
+                                                        "LastSeen": {
+                                                            "type": "string"
+                                                        },
+                                                        "LoggedOnUsers": {
+                                                            "type": "string"
+                                                        },
+                                                        "MdatpDeviceId": {
+                                                            "type": "string"
+                                                        },
+                                                        "OnboardingStatus": {
+                                                            "type": "string"
+                                                        },
+                                                        "RiskScore": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                },
+                                                "hostName": {
+                                                    "type": "string"
+                                                },
+                                                "osFamily": {
+                                                    "type": "string"
+                                                },
+                                                "osVersion": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Endpoint_Filters_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_API_Gateway_Query": {
+                            "runAfter": {
+                                "Exit_early_if_no_hosts_are_found": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "api gateway query",
+                                        "type": "string",
+                                        "value": "query ($incidentHosts: EndpointFieldFilter, $endCursor: Cursor, $source: EndpointSource) {\n  endpoints(source: $source, first: 10, after: $endCursor, filter: $incidentHosts) {\n    edges {\n      node {\n        name\n        ipAddress\n        sensorReadings(sensors: [{name: \"SCCM Client Health\"}]) {\n          columns {\n            sensor {\n              name\n            }\n            name\n            values\n          }\n        }\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n  }\n}\n"
+                                    }
+                                ]
+                            },
+                            "description": "To check this query against a Tanium Server question use this in the query variables: {\"source\":{\"ts\":{\"stableWaitTime\":10}}}"
+                        },
+                        "Initialize_API_Gateway_Query_Variables": {
+                            "runAfter": {
+                                "Initialize_Tanium_Endpoint_Source_to_TDS": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "api gateway query variables",
+                                        "type": "string",
+                                        "value": "{\n  \"source\": @{variables('Tanium Endpoint Source')},\n  \"incidentHosts\": {\n    \"any\": true,\n    \"filters\": @{variables('endpoint filters')}\n  }\n}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_API_Gateway_Response": {
+                            "runAfter": {
+                                "Query_API_Gateway": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "API Gateway Response",
+                                        "type": "object",
+                                        "value": "@body('Query_API_Gateway')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_API_Gateway_query_cursor": {
+                            "runAfter": {
+                                "Parse_API_Gateway_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "cursor",
+                                        "type": "string",
+                                        "value": "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Endpoint_Filters_array": {
+                            "runAfter": {
+                                "Initialize_API_Gateway_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "endpoint filters",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Tanium_Endpoint_Source_to_TDS": {
+                            "runAfter": {
+                                "For_each_incident_host": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tanium endpoint source",
+                                        "type": "object",
+                                        "value": {
+                                            "tds": {
+                                                "allNamespaces": false
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_endpoints_array": {
+                            "runAfter": {
+                                "Initialize_API_Gateway_query_cursor": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "endpoints",
+                                        "type": "array",
+                                        "value": "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['edges']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Paginate_API_Gateway_query_if_needed": {
+                            "actions": {
+                                "Until": {
+                                    "actions": {
+                                        "For_each_endpoint_in_paginated_API_Gateway_response": {
+                                            "foreach": "@body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['edges']",
+                                            "actions": {
+                                                "Append_endpoint_to_endpoints": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "endpoints",
+                                                        "value": "@items('For_each_endpoint_in_paginated_API_Gateway_response')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Update_API_Gateway_query_cursor": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            }
+                                        },
+                                        "Paginate_API_Gateway": {
+                                            "runAfter": {
+                                                "Update_API_Gateway_query_variables": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "body": {
+                                                    "query": "@variables('api gateway query')",
+                                                    "variables": "@variables('api gateway query variables')"
+                                                },
+                                                "headers": {
+                                                    "Content-Type": "application/json",
+                                                    "session": "@parameters('TaniumApiToken')"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@parameters('TaniumApiGatewayApi')"
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "Parse_paginated_API_Gateway_response": {
+                                            "runAfter": {
+                                                "Paginate_API_Gateway": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Paginate_API_Gateway')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "data": {
+                                                            "properties": {
+                                                                "endpoints": {
+                                                                    "properties": {
+                                                                        "edges": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "node": {
+                                                                                        "type": "object"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "node"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "pageInfo": {
+                                                                            "properties": {
+                                                                                "endCursor": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "hasNextPage": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Update_API_Gateway_query_cursor": {
+                                            "runAfter": {
+                                                "Parse_paginated_API_Gateway_response": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "cursor",
+                                                "value": "@body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']"
+                                            }
+                                        },
+                                        "Update_API_Gateway_query_variables": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "api gateway query variables",
+                                                "value": "{\n  \"source\": @{variables('tanium endpoint source')},\n  \"endCursor\": \"@{variables('cursor')}\"\n}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": "@equals(body('Parse_paginated_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage'], false)",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_endpoints_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Parse_API_Gateway_response": {
+                            "runAfter": {
+                                "Switch_to_TS_from_TDS_if_needed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@variables('API Gateway Response')",
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "endpoints": {
+                                                    "properties": {
+                                                        "edges": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "node": {
+                                                                        "properties": {},
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "node"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "pageInfo": {
+                                                            "properties": {
+                                                                "endCursor": {
+                                                                    "type": "string"
+                                                                },
+                                                                "hasNextPage": {
+                                                                    "type": "boolean"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "items": {
+                                                "properties": {
+                                                    "message": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "message"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_endpoints_array": {
+                            "runAfter": {
+                                "Paginate_API_Gateway_query_if_needed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@variables('endpoints')",
+                                "schema": {
+                                    "type": "array"
+                                }
+                            },
+                            "description": "We need an action's output to use in the JavaScript code since it can't read from a variable"
+                        },
+                        "Query_API_Gateway": {
+                            "runAfter": {
+                                "Initialize_API_Gateway_Query_Variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "query": "@variables('api gateway query')",
+                                    "variables": "@variables('api gateway query variables')"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "session": "@parameters('TaniumApiToken')"
+                                },
+                                "method": "POST",
+                                "uri": "@parameters('TaniumApiGatewayApi')"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Switch_to_TS_from_TDS_if_needed": {
+                            "actions": {
+                                "Requery_the_API_Gateway": {
+                                    "runAfter": {
+                                        "Update_API_Query_variables_to_get_new_source": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": {
+                                            "query": "@variables('api gateway query')",
+                                            "variables": "@variables('api gateway query variables')"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json",
+                                            "session": "@parameters('TaniumApiToken')"
+                                        },
+                                        "method": "POST",
+                                        "uri": "@parameters('TaniumApiGatewayApi')"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Set_Tanium_Endpoint_Source_to_TS": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "tanium endpoint source",
+                                        "value": {
+                                            "ts": {
+                                                "stableWaitTime": 30
+                                            }
+                                        }
+                                    }
+                                },
+                                "Update_API_Gateway_Response": {
+                                    "runAfter": {
+                                        "Requery_the_API_Gateway": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "API Gateway Response",
+                                        "value": "@body('Requery_the_API_Gateway')"
+                                    }
+                                },
+                                "Update_API_Query_variables_to_get_new_source": {
+                                    "runAfter": {
+                                        "Set_Tanium_Endpoint_Source_to_TS": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "api gateway query variables",
+                                        "value": "{\n  \"source\": @{variables('Tanium Endpoint Source')},\n  \"incidentHosts\": {\n    \"any\": true,\n    \"filters\": @{variables('endpoint filters')}\n  }\n}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_API_Gateway_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@string(body('Query_API_Gateway'))",
+                                            "must refer to an existing sensor"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            }
+                        }
+                    },
+                    "TaniumApiToken": {
+                        "value": "[parameters('TaniumApiToken')]"
+                    },
+                    "TaniumApiGatewayApi": {
+                        "value": "[variables('TaniumApiGatewayApi')]"
+                    }
+                }
+            }
+        }
+    ]
+}

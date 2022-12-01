@@ -1,0 +1,404 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Digital Shadows Playbook to Update Incident Status",
+        "description":  "This playbook will update the status of Microsoft Sentinel incidents to match the status of the alerts imported from Digital Shadows SearchLight",
+        "mainSteps": [
+            "1. This playbook triggers when a Microsoft Sentinel Alert is created by the Digital Shadows Data Connector",
+            "2. The status of the inbound Digital Shadows alert is inspected and the Microsoft Sentinel Incident status is updated to match"
+        ],
+        "prerequisites":  [
+            "The Digital Shadows Data Connector is deployed on your environment"
+        ],
+        "lastUpdateTime":  "2022-04-06T00:00:00.000Z",
+        "entities":  [],
+        "tags":  [
+            "Sync"
+        ],
+        "support":  {
+            "tier":  "community"
+        },
+        "author":  {
+            "name":  "Digital Shadows"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "DigitalShadowsPlaybook-UpdateIncidentStatus",
+            "type":  "string"
+        }
+    },
+    "variables":  {
+        "azuresentinelConnectionName":  "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/subscribe"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Alert_-_Get_incident":  {
+                            "runAfter":  {
+                                "Delay":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Condition_4":  {
+                            "actions":  {
+                                "Update_incident":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "body":  {
+                                            "classification":  {
+                                                "ClassificationAndReason":  "Undetermined",
+                                                "ClassificationReasonText":  "Sync in Sentinel-DS playbook"
+                                            },
+                                            "incidentArmId":  "@body('Alert_-_Get_incident')?['id']",
+                                            "status":  "Closed"
+                                        },
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "put",
+                                        "path":  "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "For_each_4":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                    "Condition_5":  {
+                                        "actions":  {
+                                            "Update_incident_2":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "ApiConnection",
+                                                "inputs":  {
+                                                    "body":  {
+                                                        "incidentArmId":  "@body('Alert_-_Get_incident')?['id']",
+                                                        "status":  "Active"
+                                                    },
+                                                    "host":  {
+                                                        "connection":  {
+                                                            "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method":  "put",
+                                                    "path":  "/Incidents"
+                                                }
+                                            }
+                                        },
+                                        "runAfter":  {
+                                        },
+                                        "else":  {
+                                            "actions":  {
+                                                "Update_incident_3":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "ApiConnection",
+                                                    "inputs":  {
+                                                        "body":  {
+                                                            "incidentArmId":  "@body('Alert_-_Get_incident')?['id']",
+                                                            "status":  "New"
+                                                        },
+                                                        "host":  {
+                                                            "connection":  {
+                                                                "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method":  "put",
+                                                        "path":  "/Incidents"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "expression":  {
+                                            "and":  [
+                                                {
+                                                    "contains":  [
+                                                        "@variables('status')",
+                                                        "open"
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "type":  "If"
+                                    }
+                                }
+                            },
+                            "expression":  {
+                                "or":  [
+                                    {
+                                        "contains":  [
+                                            "@variables('status')",
+                                            "closed"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@variables('status')",
+                                            "resolved"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@variables('status')",
+                                            "rejected"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Delay":  {
+                            "runAfter":  {
+                            },
+                            "type":  "Wait",
+                            "inputs":  {
+                                "interval":  {
+                                    "count":  5,
+                                    "unit":  "Second"
+                                }
+                            }
+                        },
+                        "For_each_4":  {
+                            "foreach":  "@variables('state')",
+                            "actions":  {
+                                "Set_variable_4":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "status",
+                                        "value":  "@string(item())"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_5":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_variable_3":  {
+                            "runAfter":  {
+                                "Parse_JSON_2":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "state",
+                                        "type":  "array",
+                                        "value":  "@body('Parse_JSON_2')?['status']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_5":  {
+                            "runAfter":  {
+                                "Initialize_variable_3":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "status",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON":  {
+                            "runAfter":  {
+                                "Alert_-_Get_incident":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@triggerBody()?['ExtendedProperties']",
+                                "schema":  {
+                                    "properties":  {
+                                        "Custom Details":  {
+                                            "type":  "string"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_2":  {
+                            "runAfter":  {
+                                "Parse_JSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@body('Parse_JSON')?['Custom Details']",
+                                "schema":  {
+                                    "properties":  {
+                                        "alert_id":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "description":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "impact_description":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "incident_id":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "mitigation":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "risk_alert":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "risk_incident":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "status":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        },
+                                        "triage_id":  {
+                                            "items":  {
+                                                "type":  "string"
+                                            },
+                                            "type":  "array"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                                "connectionName":  "[variables('azuresentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "DigitalShadowsPlaybook-UpdateIncidentStatus",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('azuresentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('azuresentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

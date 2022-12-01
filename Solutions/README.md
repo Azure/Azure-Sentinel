@@ -57,7 +57,7 @@ For more information, see the [solution template documentation](https://docs.mic
 
 After creating both the `mainTemplate.json` and the `createUIDefinition.json` files, validate them, and package them into a .zip file that you can upload as part of the publishing process (Step 3).
 
-Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution#azure-sentinel-solutions-packaging-tool-guidance) to use the tool and package your content.
+Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V2) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V2/README.md) to use the tool and package your content.
 
 ### Updating your solution
 
@@ -69,9 +69,9 @@ When updating your package, make sure to raise the version value, regardless of 
 
 For example, if your original package version is `1.0.1`, you might update your versions as follows:
 
-* **Major updates** might have a new version of 2.0.0
-* **Minor updates**, like changes in a few pieces of content in the package, might have a new version of `1.1.0`
-* **Very minor revisions**, such as those scoped to a single piece of content, might have a new version of `1.0.2`
+* **Major updates** have a new version of 2.0.0 - this is usually reserved for major tooling or package level changes
+* **Minor updates**, for changes in content of the package, might have a new version of `1.1.0`
+* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `1.0.2`
 
 Since solutions use ARM templates, you can customize the solution text as well as tabs as needed to cater to specific scenarios.
 
@@ -93,7 +93,7 @@ The following steps reference the Partner Center's more detailed documentation.
 
 3.	Configure the [Offer listing details](https://docs.microsoft.com/azure/marketplace/azure-app-offer-listing), including the title, description, pictures, videos, support information, and so on. 
     * As one of your search keywords, add `f1de974b-f438-4719-b423-8bf704ba2aef` to have your solution appear in the Microsoft Sentinel content hub.
-    * Ensure to provide CSP (Cloud Solution Provider) Program contact and relevant CSP information as requested. This will enable you to offer the solution to CSP subscriptions and increased visibility and adoption of your solution.
+    * Ensure to provide CSP (Cloud Solution Provider) Program contact and relevant CSP information as requested. This will enable you to offer the solution to CSP subscriptions and increased visibility and adoption of your solution. Refer to the [CSP FAQs](#csp-cloud-solution-provider) for further details on why this is recommended for Microsoft Sentinel solutions. 
     * If you want to start your solution in Preview (Public Preview), you can do so by appending "(Preview)" in the solution / offer title. This will ensure your offer  gets tagged with Preview tag in Microsoft Sentinel Content hub. 
 
 4.	[Create a plan](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-plans) and select **Solution Template** as the plan type. 
@@ -101,7 +101,7 @@ The following steps reference the Partner Center's more detailed documentation.
 
 5.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-solution) the **Solutions template** plan. This is where you’ll upload the zip file that you'd created in step two and set a version for your package. Make sure to follow the versioning guidance described in step 2, above.	
 
-6. [Enable CSP for your offer](https://docs.microsoft.com/azure/marketplace/azure-app-marketing) by going to the *Resell through CSPs* tab in Partner Center and selecting *Any partner in the CSP program*. This will enable you to offer the solution to CSP subscriptions and increased visibility and adoption of your solution.
+6. [Enable CSP for your offer](https://docs.microsoft.com/azure/marketplace/azure-app-marketing) by going to the *Resell through CSPs* tab in Partner Center and selecting *Any partner in the CSP program*. This will enable you to offer the solution to CSP subscriptions and increased visibility and adoption of your solution. Refer to the [CSP FAQs](#csp-cloud-solution-provider) for further details on why this is recommended for Microsoft Sentinel solutions. 
 
 7.	[Validate and test](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish) your solution offer.  
 
@@ -114,5 +114,27 @@ The following steps reference the Partner Center's more detailed documentation.
 ## Feedback
 
 [Email Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with any feedback on this process, for new scenarios not covered in this guide, or with any constraints you may encounter. 
+
+## FAQs
+
+### CSP (Cloud Solution Provider)
+
+#### What is CSP?
+Microsoft Azure Customers may purchase their Azure Subscriptions either directly from Microsoft, or via an Azure Reseller who is part of the Microsoft Cloud Solution Provider (CSP) program.  Microsoft Sentinel Solutions are valid for both subscription purchase paths.   
+
+#### Why is there a “CSP Opt-in” option on Microsoft Sentinel solution offers?
+“CSP Opt-in” is a general feature of the Azure Marketplace and applies to multiple offer types, including the Azure App offer type used by Microsoft Sentinel solutions.  For some publishers, there is occasionally a desire to restrict individual offers to only be deployable in subscriptions that were purchased directly through Microsoft.   This is controllable via the “CSP opt-in” flag for each individual offer.  
+
+#### Is Microsoft Sentinel available to customers who purchased their Azure subscription from a CSP Reseller partner?
+Yes.  There are many customers purchasing directly from Microsoft, via a CSP Reseller and even some who purchase Azure via both programs.
+
+#### What happens when you enable “CSP opt-in” for your Microsoft Sentinel Solution offer?
+Quite simply, it permits your Microsoft Sentinel solution to be deployed into Microsoft Sentinel Workspaces regardless of how the customer acquired it. It is more of a pro-active stance to eliminate an message for your customers who are trying to deploy your Microsoft Sentinel Solution into a CSP purchase subscription.
+
+#### What does **not** happen when you enable “CSP opt-in” for your Microsoft Sentinel solution offer?
+You are **not** joining the CSP program.  Each offer is individually enabled or disabled for deployability in CSP sourced subscriptions, and setting this flag for your Microsoft Sentinel solution does not affect any other offer in your Marketplace publishing account.
+
+#### What will happen if you do not enable “CSP opt-in” for your Microsoft Sentinel solution offer?
+If the customer, who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
 
 

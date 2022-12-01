@@ -1,0 +1,50 @@
+id: adc32a33-1cd6-46f5-8801-e3ed8337885f
+name: External Upstream Source Added to Azure DevOps Feed
+description: |
+  'The detection looks for new external sources added to an Azure DevOps feed. An allow list can be customized to explicitly allow known good sources. 
+  An attacker could look to add a malicious feed in order to inject malicious packages into a build pipeline.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1199
+query: |
+  // Add any known allowed sources and source locations to the filter below (the NuGet Gallery has been added here as an example).
+  let allowed_sources = dynamic(["NuGet Gallery"]);
+  let allowed_locations = dynamic(["https://api.nuget.org/v3/index.json"]);
+  AzureDevOpsAuditing
+  // Look for feeds created or modified at either the organization or project level
+  | where OperationName matches regex "Artifacts.Feed.(Org|Project).Modify"
+  | where Details has "UpstreamSources, added"
+  | extend FeedName = tostring(Data.FeedName)
+  | extend FeedId = tostring(Data.FeedId)
+  | extend UpstreamsAdded = Data.UpstreamsAdded
+  // As multiple feeds may be added expand these out
+  | mv-expand UpstreamsAdded
+  // Only focus on external feeds
+  | where UpstreamsAdded.UpstreamSourceType !~ "internal"
+  | extend SourceLocation = tostring(UpstreamsAdded.Location)
+  | extend SourceName = tostring(UpstreamsAdded.Name)
+  // Exclude sources and locations in the allow list
+  | where SourceLocation !in (allowed_locations) and SourceName !in (allowed_sources)
+  | extend SourceProtocol = tostring(UpstreamsAdded.Protocol)
+  | extend SourceStatus = tostring(UpstreamsAdded.Status)
+  | project-reorder TimeGenerated, OperationName, ScopeDisplayName, ProjectName, FeedName, SourceName, SourceLocation, SourceProtocol, ActorUPN, UserAgent, IpAddress
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity =  IpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled
