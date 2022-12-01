@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function to return the IP network protocol name
+# Log Analytics KQL function An ASIM function to return the IP network protocol name
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function to return the IP network protocol name
+ARM template for deploying the Log Analytics KQL function An ASIM function to return the IP network protocol name
 
 This ASIM function returns IP network protocol name associated with the numerical value provided as a parameter. For example, for 6, the function returns "TCP".  
 
