@@ -24,6 +24,7 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
  
   let changedFiles = await pr.diff();
   console.log(`${changedFiles.length} files changed in current PR`);
+  console.log(`changed files are ${changedFiles}`)
 
   const filterChangedFiles = changedFiles
     .filter(change => fileKinds.includes(change.kind))
@@ -42,6 +43,6 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
   let fileTypeSuffixesLogValue = typeof fileTypeSuffixes === "undefined" ? null : fileTypeSuffixes.join(",");
   let filePathFolderPreffixesLogValue = typeof filePathFolderPreffixes === "undefined" ? null : filePathFolderPreffixes.join(",");
   console.log(`${filterChangedFiles.length} files changed in current PR after filter. File Type Filter: ${fileTypeSuffixesLogValue}, File path Filter: ${filePathFolderPreffixesLogValue}, File Kind Filter: ${fileKindsLogValue}`);
-
+  console.log(`filtered files are ${filterChangedFiles}`)
   return filterChangedFiles;
 }
