@@ -11,10 +11,23 @@
 2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
 
 ### Deployment instructions 
+Before playbook deployment you need to have configured KeyVault and store key as a secret in Key vault.
+####Steps to configure Key vault:
+#### a. KeyVault creation
+1. In Azure Sentinel navigate to Key vaults.
+2. Create new Key Vault and remember Key vault name.
+
+#### b. Secret creation
+1. Navigate to your created key vault
+2. Go to secrets and click generate/import
+3. Configure secret with X-PAN-KEY and remember its name
+
+
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (e.g. PAN-OS Playbook)
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
+    * secretName: Name of the secret that will be stored in Key vault
     * secretValue: value of X-PAN-KEY
     * OnPremiseGatewayName: On-premises data gateway that will be used with PaloAlto connector.
     
@@ -34,7 +47,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 
 #### c. Configuration of Azure Key Vault
-1. Navigate to new automatically created Azure Key Vault. Name of Key Vault is defined in playbook parameters.
+1. Navigate to  created Azure Key Vault.
    ![Key Vault configuration](./images/KeyVault.png)
 2. Create new Access Police with secret Get permission
    ![Secret permission creation](./images/CreatePolice.png)
