@@ -6,9 +6,9 @@ namespace Kqlvalidations.Tests
 { 
     public class JsonFilesTestData : TheoryData<string, string>
     {
-        public JsonFilesTestData(JsonFilesLoader yamlFilesLoader, List<string> fileNamesToIgnore = null)
+        public JsonFilesTestData(JsonFilesLoader jsonFilesLoader, List<string> fileNamesToIgnore = null)
         {
-            var files = yamlFilesLoader.GetFilesNames();
+            var files = jsonFilesLoader.GetFilesNames();
             files.ForEach(filePath =>
             {
                 if (!fileNamesToIgnore?.Any(fileNameToIgnore => filePath.EndsWith(fileNameToIgnore)) ?? true)

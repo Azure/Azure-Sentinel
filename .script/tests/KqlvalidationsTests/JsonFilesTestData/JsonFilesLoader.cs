@@ -10,7 +10,7 @@ namespace Kqlvalidations.Tests
 
         protected abstract List<string> GetDirectoryPaths();
 
-        public List<string> GetFilesNames()
+        public virtual List<string> GetFilesNames()
         {
             var directoryPaths = GetDirectoryPaths();
             return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
