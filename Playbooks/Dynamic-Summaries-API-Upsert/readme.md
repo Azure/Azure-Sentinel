@@ -6,8 +6,10 @@ This playbook shows how to query Log Analytics data and upload the query result 
 ## Prerequisites
 
 Before deploying the playbook you will need 
-- [Create Azure Integration account through Azure portal](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/logic-apps/logic-apps-enterprise-integration-create-integration-account.md#tab/azure-portal).  Integration account should be in the same region as Logic App.
-- Have a KQL that renders data for Dynamic Summaries object model  
+- [Create Azure Integration account through Azure portal](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/logic-apps/logic-apps-enterprise-integration-create-integration-account.md#tab/azure-portal).  Integration account should be in the same region as Logic App. And integration acctount must be in either Basic or Standard pricing tier.
+- Have a KQL that renders data for Dynamic Summaries object model.
+- Logic App and Log Analytics Workspace for Dynamic Summaries should be in the same Azure resource group.
+- Finally user must be a subscription owner to deploy the playbook template.
 
 ## Quick Deployment
 [Learn more about playbook deployment](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/ReadMe.md)
