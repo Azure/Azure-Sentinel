@@ -20,10 +20,11 @@ triggerThreshold: 0
 tactics:
   - Impact
 query: |
-
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
-  ThreatIntelligenceIndicator
+  let IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True));
+  let IP_Indicators = (union isfuzzy=true
+  (ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
@@ -34,6 +35,19 @@ query: |
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  //Exclude local addresses, using the ipv4_is_private operator
+  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+  ),
+  (IoCList
+  | where IoC_Type =~ 'IP'
+  | where ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
+  | where Active =~ 'True'
+  | extend TI_ipEntity = IoC
+  | project-away  IoC_Type
+  )
+  );
+  IP_Indicators
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
       AzureDiagnostics
@@ -49,9 +63,9 @@ query: |
   )
   on $left.TI_ipEntity == $right.RemoteIP
   | where AzureFirewall_TimeGenerated < ExpirationDateTime
-  | summarize AzureFirewall_TimeGenerated = arg_max(AzureFirewall_TimeGenerated, *) by IndicatorId, RemoteIP
+  | summarize AzureFirewall_TimeGenerated = arg_max(AzureFirewall_TimeGenerated, *) by IndicatorId, RemoteIP, IoC
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore, AzureFirewall_TimeGenerated,
-  TI_ipEntity, Resource, Category, msg_s, SourceAddress, DestinationAddress, Firewall_Action, Protocol, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+  TI_ipEntity, Resource, Category, msg_s, SourceAddress, DestinationAddress, Firewall_Action, Protocol, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
   | extend timestamp = AzureFirewall_TimeGenerated, IPCustomEntity = TI_ipEntity, URLCustomEntity = Url
 entityMappings:
   - entityType: IP
@@ -62,5 +76,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.1.2
+version: 1.2.2
 kind: Scheduled
