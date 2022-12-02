@@ -7,6 +7,8 @@ Many of these detections are already covered under Defender for Endpoint, and it
    ![Sentinel](./Media/Sentinel-Hunting.png)
    ![MDE](./Media/MDE-alert.png)
 
+You can see a sample of a generated JSON ARM Hunting Template for Sentinel here - [MDE Alert JSON ARM Hunting Template](https://raw.githubusercontent.com/SCStelz/Azure-Sentinel/master/Playbooks/Put-MDEAlert-Hunting-GitHub/Media/MDE_A_process_was_injected_with_potentially_malicious_code_T1055_T1055_001_T1055_002_T1055_003_T1055_004_T1055_012_T1059_001.json)
+
 ## Prerequisites
 
 You will need an existing Microsoft Sentinel workspace, connected to a GitHub repository for [Deploying Custom Content from your repository](https://learn.microsoft.com/en-us/azure/sentinel/ci-cd?tabs=github).
