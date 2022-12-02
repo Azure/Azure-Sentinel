@@ -7,7 +7,7 @@ Many of these detections are already covered under Defender for Endpoint, and it
    ![Sentinel](./Media/Sentinel-Hunting.png)
    ![MDE](./Media/MDE-alert.png)
 
-You can see a sample of a generated JSON ARM Hunting Template for Sentinel here - [MDE Alert JSON ARM Hunting Template](https://raw.githubusercontent.com/SCStelz/Azure-Sentinel/master/Playbooks/Put-MDEAlert-Hunting-GitHub/Media/MDE_A_process_was_injected_with_potentially_malicious_code_T1055_T1055_001_T1055_002_T1055_003_T1055_004_T1055_012_T1059_001.json)
+You can see a sample of a generated JSON ARM Hunting Template for Sentinel here - [MDE Alert JSON ARM Hunting Template](https://raw.githubusercontent.com/Azure-Sentinel/master/Playbooks/Put-MDEAlert-Hunting-GitHub/Media/MDE_A_process_was_injected_with_potentially_malicious_code_T1055_T1055_001_T1055_002_T1055_003_T1055_004_T1055_012_T1059_001.json)
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ If your Azure environment meets the prerequisites, and you're familiar with usin
 
 Select the following image to sign in with your Azure account and open the logic app in the Azure portal:
 
-   [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)         [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.svg)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)
+   [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)         [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.svg)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)
    
 
 
