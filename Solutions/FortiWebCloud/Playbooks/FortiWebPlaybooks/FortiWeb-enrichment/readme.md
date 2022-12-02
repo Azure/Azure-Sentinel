@@ -1,6 +1,6 @@
 # FortiWeb-enrichment Info Playbook
  ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs below actions
+ When a new Microosft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the list of Ip's from incident entites .
  2. Make the APi call to get the latest threat information/details from cloud console and update the same incidents comments with result.
  ![image](https://user-images.githubusercontent.com/97503740/184323073-d3d7e6eb-f40e-42e1-8d2b-ef7f9550e646.png)
@@ -22,12 +22,12 @@
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microosft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for Fortiweb Api  Connection (For authorizing the Fortiweb API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address. 
+1. In Microosft Sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address. 
 2. Configure the automation rules to trigger this playbook , mapping of IP and URL entities is necessary
