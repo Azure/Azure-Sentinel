@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Incident-Response-Approval-Email%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Incident-Response-Approval-Email%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Response-Approval-Email%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Response-Approval-Email%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel incident. It will facilitate incident response by sending an approval email to the manager(s) of the user(s) associated with the Microsoft Sentinel incident.
 
@@ -17,8 +17,8 @@ This playbook is intended to be run from a Microsoft Sentinel incident. It will 
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* An [App Registration](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#create-an-app-registration) for using the Microsoft Graph API
-* An [Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret) containing your App Registration Secret 
+* An [App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#create-an-app-registration) for using the Microsoft Graph API
+* An [Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret) containing your App Registration Secret 
 
 
 # 
@@ -57,7 +57,7 @@ Click "**New client secret"**". After adding a description and selecting an expi
 
 ![ApprovalEmail_Create_App_Registration_7](Images/ApprovalEmail_Create_App_Registration_7.png)
 
-Copy the generated "**Value**" and save it for the next step, [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret).
+Copy the generated "**Value**" and save it for the next step, [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret).
 
 ![ApprovalEmail_Create_App_Registration_8](Images/ApprovalEmail_Create_App_Registration_8.png)
 
@@ -74,7 +74,7 @@ Choose a name for the secret, such as "**AS-Incident-Response-Approval-Email-App
 
 ![ApprovalEmail_Key_Vault_2](Images/ApprovalEmail_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#granting-access-to-azure-key-vault).
 
 ![ApprovalEmail_Key_Vault_3](Images/ApprovalEmail_Key_Vault_3.png)
 
@@ -88,8 +88,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Incident-Response-Approval-Email%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Incident-Response-Approval-Email%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Response-Approval-Email%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Incident-Response-Approval-Email%2Fazuredeploy.json)                                             
 
 Click the "**Deploy to Azure**" button at the bottom and it will bring you to the custom deployment template.
 
@@ -101,13 +101,13 @@ In the **Instance Details** section:
 
 * **Playbook Name**: This can be left as "**AS-Incident-Response-Approval-Email**" or you may change it.  
 
-* **App Registration ID**: Enter the value of the Application (client) ID referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#create-an-app-registration).
+* **App Registration ID**: Enter the value of the Application (client) ID referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#create-an-app-registration).
 
-* **App Registration Tenant**: Enter the value of the Directory (tenant) ID referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#create-an-app-registration).
+* **App Registration Tenant**: Enter the value of the Directory (tenant) ID referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#create-an-app-registration).
 
-* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret).
 
-* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret).
+* **Secret Name**: Enter the name of the Key Vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Incident-Response-Approval-Email#create-an-azure-key-vault-secret).
 
 Towards the bottom, click on "**Review + create**". 
 
