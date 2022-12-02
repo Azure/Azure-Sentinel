@@ -32,29 +32,30 @@ ParserQuery: |
         };
         let ASIM_ParseWindowsEvents = (WindowsEvent:(EventData:dynamic)) {
             WindowsEvent
-            | extend ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName)
+            | extend ActorUsername = iif(isnotempty(EventData.SubjectDomainName), strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), EventData.SubjectUserName)
                 , ActorDomainName = tostring(EventData.SubjectDomainName)
                 , ActorUserId = tostring(EventData.SubjectUserSid)
                 , ActorSessionId = tostring(EventData.SubjectLogonId)
                 , ActingProcessName = tostring(EventData.ProcessName)
                 , ActingProcessId = tostring(toint(tolong(EventData.ProcessId)))
                 , RegistryKey = iif(EventData.ObjectName startswith @"\REGISTRY\MACHINE", replace_string(tostring(EventData.ObjectName), @"\REGISTRY\MACHINE","HKEY_LOCAL_MACHINE")
-                , replace_string(tostring(EventData.ObjectName), @"\REGISTRY\USER","HKEY_USERS"))
-                , Type = "WindowsEvent"
+                    , replace_string(tostring(EventData.ObjectName), @"\REGISTRY\USER","HKEY_USERS")
+                )
         };
         let ASIM_ParseSecurityEvents = (SecurityEvent:(SubjectDomainName:string,SubjectUserName:string,ProcessId:string,ObjectName:string,SubjectUserSid:string,SubjectLogonId:string,ProcessName:string)) {
             SecurityEvent
-            | extend ActorUsername = strcat(SubjectDomainName, @'\', SubjectUserName)
-                , ActorDomainName = SubjectDomainName
-                , ActingProcessId = tostring(toint(tolong(ProcessId)))
-                , RegistryKey = iif(ObjectName startswith @"\REGISTRY\MACHINE", replace_string(ObjectName, @"\REGISTRY\MACHINE","HKEY_LOCAL_MACHINE")
-                , replace_string(ObjectName, @"\REGISTRY\USER","HKEY_USERS"))
-                , Type = "SecurityEvent"
-            | project-rename ActorUserId = SubjectUserSid
+            | project-rename ActorUsername = SubjectUserName
+                , ActorUserId = SubjectUserSid
                 , ActorSessionId = SubjectLogonId
                 , ActingProcessName = ProcessName
+                , ActorDomainName = SubjectDomainName
+            | extend ActorUsername = iif(isnotempty(ActorDomainName), strcat(ActorDomainName, @'\', ActorUsername), ActorUsername)
+                , ActingProcessId = tostring(toint(tolong(ProcessId)))
+                , RegistryKey = iif(ObjectName startswith @"\REGISTRY\MACHINE", replace_string(ObjectName, @"\REGISTRY\MACHINE","HKEY_LOCAL_MACHINE")
+                    , replace_string(ObjectName, @"\REGISTRY\USER","HKEY_USERS")
+                )
         };
-        let EventTypeLookup = datatable (AccessMask:string,EventType:string)
+        let Event4663TypeLookup = datatable (AccessMask:string,EventType:string)
         [
             "0x1", "RegistryValueRead"
             , "0x10", "MetadataModified"
@@ -66,7 +67,7 @@ ParserQuery: |
             , "0x8", "RegistrySubkeyEnumerated"
             , "0x80000", "MetadataModified"
         ];
-        let RegistryAction = datatable (EventOriginalSubType:string,EventType:string)
+        let Event4567TypeLookup = datatable (EventOriginalSubType:string,EventType:string)
         [
             "%%1904", "RegistryValueSet"
             , "%%1905", "RegistryValueSet"
@@ -88,56 +89,59 @@ ParserQuery: |
                 and EventData.ObjectType == "Key"
             | extend AccessMask = tostring(EventData.AccessMask)
                 , Type = "WindowsEvent"
-            | lookup EventTypeLookup on AccessMask
+            | lookup Event4663TypeLookup on AccessMask
             | invoke ASIM_ParseWindowsEvents()
             | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorDomainName, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, Type
-        ), (
-            WindowsEvent
-            | where EventID == 4657
-            | invoke ASIM_ParseWindowsEvents()
-            | extend EventOriginalSubType = tostring(EventData.OperationType)
-                , OldValue = tostring(EventData.OldValue)
-                , NewValue = tostring(EventData.NewValue)
-                , RegistryValue = tostring(EventData.ObjectValueName)
-                , NewValueType = tostring(EventData.NewValueType)
-                , OldValueType = tostring(EventData.OldValueType)
-            | lookup RegistryAction on EventOriginalSubType
-            | extend RegistryValueData = iff (EventOriginalSubType == "%%1906", OldValue, NewValue)
-                , RegistryPreviousKey = iff (EventOriginalSubType == "%%1905", RegistryKey, "")
-                , RegistryPreviousValue = iff (EventOriginalSubType == "%%1905", RegistryValue, "")
-                , RegistryPreviousValueData = iff (EventOriginalSubType == "%%1905", OldValue, "")
-            | lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName
-            | lookup RegistryType on $left.OldValueType == $right.TypeCode | project-rename RegistryPreviousValueType = TypeName
-            | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorDomainName, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, RegistryValueData, RegistryPreviousKey, RegistryPreviousValue,RegistryPreviousValueData, RegistryValue, RegistryValueType, RegistryPreviousValueType, Type
         ), (
             SecurityEvent
             | where EventID == 4663
                 and ObjectType == "Key"
-            | lookup EventTypeLookup on AccessMask
+            | lookup Event4663TypeLookup on AccessMask
             | invoke ASIM_ParseSecurityEvents()
             | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorDomainName, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, Type
         ), (
-            SecurityEvent
-            | where EventID == 4657
-            | invoke ASIM_ParseSecurityEvents()
-            | extend EventOriginalSubType = OperationType
-                , RegistryValue = ObjectValueName
-            | lookup RegistryAction on EventOriginalSubType
+            union isfuzzy=false (
+                WindowsEvent
+                | where EventID == 4657
+                | invoke ASIM_ParseWindowsEvents()
+                | extend EventOriginalSubType = tostring(EventData.OperationType)
+                    , OldValue = tostring(EventData.OldValue)
+                    , NewValue = tostring(EventData.NewValue)
+                    , RegistryValue = tostring(EventData.ObjectValueName)
+                    , NewValueType = tostring(EventData.NewValueType)
+                    , OldValueType = tostring(EventData.OldValueType)
+                | lookup Event4567TypeLookup on EventOriginalSubType
+                | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorDomainName, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, RegistryValue, Type, NewValueType, OldValueType, EventOriginalSubType, OldValue, NewValue
+            ), (
+                SecurityEvent
+                | where EventID == 4657
+                | invoke ASIM_ParseSecurityEvents()
+                | extend EventOriginalSubType = OperationType
+                    , RegistryValue = ObjectValueName
+                | lookup Event4567TypeLookup on EventOriginalSubType
+                | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorDomainName, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, Type, NewValueType, OldValueType, EventOriginalSubType, OldValue, NewValue, RegistryValue
+            )
+            | lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName
+            | lookup RegistryType on $left.OldValueType == $right.TypeCode | project-rename RegistryPreviousValueType = TypeName
             | extend RegistryValueData = iff (EventOriginalSubType == "%%1906", OldValue, NewValue)
                 , RegistryPreviousKey = iff (EventOriginalSubType == "%%1905", RegistryKey, "")
                 , RegistryPreviousValue = iff (EventOriginalSubType == "%%1905", RegistryValue, "")
                 , RegistryPreviousValueData = iff (EventOriginalSubType == "%%1905", OldValue, "")
-            | lookup RegistryType on $left.NewValueType == $right.TypeCode | project-rename RegistryValueType = TypeName
-            | lookup RegistryType on $left.OldValueType == $right.TypeCode | project-rename RegistryPreviousValueType = TypeName
-            | project TimeGenerated, Computer, EventID, EventType, ActorUsername, ActorDomainName, ActorUserId, ActorSessionId, ActingProcessName, ActingProcessId, RegistryKey, _ResourceId, RegistryValueData, RegistryPreviousKey, RegistryPreviousValue,RegistryPreviousValueData, RegistryValueType, RegistryPreviousValueType, Type
+            | project-away NewValueType, OldValueType, EventOriginalSubType, OldValue, NewValue, RegistryValue
         )
+        | invoke _ASIM_ResolveFQDN ("Computer")
+        | project-rename DvcDomainType = DomainType
+            , DvcHostname = ExtractedHostname
+        | extend DvcFQDN = iif(DvcDomainType == "FQDN", FQDN, "")
+            , DvcDomain = iif(isnotempty(Domain), Domain, "")
+            , Dvc = iif(DvcDomainType == "FQDN", FQDN, "DvcHostname")
         | extend ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
             , ActorUsernameType = ASIM_GetAccountType(ActorUserId)
-        | project-rename DvcFQDN = Computer
         | extend User = ActorUsername
             , UserId = ActorUserId
+            , ActorUserSid = ActorUserId
             , Process = ActingProcessName
-            , Dvc = DvcFQDN
+            , Dvc = iif(DvcDomainType == "FQDN", Computer, "")
             , EventStartTime = TimeGenerated
             , EventEndTime = TimeGenerated
             , EventOriginalType = tostring(EventID)
@@ -149,5 +153,4 @@ ParserQuery: |
             , EventProduct = "Security Events" 
             , DvcOs = "Windows"
             , ActorUserIdType = "SID"
-            , DvcDomainType = "FQDN"
     }; RegistryEvents
