@@ -74,9 +74,12 @@ if ($filterParameters){
 		}
 	}
 }
+
 foreach($i in $param.Keys){
 	$allParameters += "${i}=$($param.Item($i))&"
 }
+
+Write-Host("All parameters are : $allParameters")
 # create a request URI
 $all_params = $allParameters+"vm_processed_after="+$vm_processed_after+"&vm_processed_before="+$vm_processed_before
 $request = ($uri + $api + $all_params)
