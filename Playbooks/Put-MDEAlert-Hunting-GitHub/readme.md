@@ -26,7 +26,7 @@ If your Azure environment meets the prerequisites, and you're familiar with usin
 
 Select the following image to sign in with your Azure account and open the logic app in the Azure portal:
 
-   [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel-DRAFT%2Fmain%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json%3Ftoken%3DGHSAT0AAAAAAB35YMHWXKDMEEFM3HNL2GVSY4KOVZA)         [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.svg)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel-DRAFT%2Fmain%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json%3Ftoken%3DGHSAT0AAAAAAB35YMHWXKDMEEFM3HNL2GVSY4KOVZA)
+   [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)         [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.svg)](https%3A%2F%2Fraw.githubusercontent.com%2FSCStelz%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)
    
 
 
