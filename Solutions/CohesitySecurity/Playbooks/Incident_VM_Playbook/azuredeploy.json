@@ -1,0 +1,185 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Restore from Last Snapshot",
+        "description": "This playbook allows you to restore your data from a clean snapshot",
+        "prerequisites": "",
+        "postDeployment": [],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Cohesty"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Incident_VM_Playbook",
+            "type": "string"
+        },
+        "jobId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for jobId"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [{
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "jobId": {
+                            "defaultValue": "[parameters('jobId')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "HTTP": {
+                                    "runAfter": {
+                                        "Set_jobId": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": {
+                                            "name": "Sentinel_triggered_restore_task_@{json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['object'][0]}",
+                                            "objects": [{
+                                                "jobId": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobId'][0])",
+                                                "jobRunId": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobInstanceId'][0])",
+                                                "protectionSourceId": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['entityId'][0])",
+                                                "sourceName": "@json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['object'][0]",
+                                                "startedTimeUsecs": "@int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobStartTimeUsecs'][0])"
+                                            }],
+                                            "type": "kRecoverVMs",
+                                            "vmwareParameters": {
+                                                "powerOffAndRenameExistingVm": true,
+                                                "poweredOn": true,
+                                                "prefix": "Recover-",
+                                                "recoveryProcessType": "kCopyRecovery",
+                                                "suffix": "-VM-@{utcNow()}"
+                                            }
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json",
+                                            "apiKey": "apiKey_string",
+                                            "clusterid": "@{json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['cid'][0]}"
+                                        },
+                                        "method": "Post",
+                                        "uri": "https://helios-test2.cohesitycloud.co/irisservices/api/v1/public/restore/recover"
+                                    }
+                                },
+                                "Set_jobId": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "jobId",
+                                        "value": "@{int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobId'][0])}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "jobId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "jobId": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [{
+                                    "name": "jobId",
+                                    "type": "string"
+                                }]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "Incident_VM_Playbook",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2019-05-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

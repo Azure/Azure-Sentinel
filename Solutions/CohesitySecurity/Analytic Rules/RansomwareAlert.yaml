@@ -1,0 +1,76 @@
+id: 52a51512-5c38-4e0e-a741-aa2afe6c8d34
+name: Ransomware Alert
+description: Take custom fields in alert
+severity: High
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: []
+query: |
+  let outliers =
+      SecurityAlert
+      | where TimeGenerated > now() - 14d
+      | summarize by AlertName;
+  HeliosAuditNativePoller_CL
+  | where id_s !in (outliers)
+  | extend d=parse_json(propertyList_s)
+  | extend entityId=d[0].value
+  | extend object=d[1].value
+  | extend source=d[3].value
+  | extend cid=d[4].value
+  | extend cluster=d[6].value
+  | extend jobId=d[7].value
+  | extend jobName=d[8].value
+  | extend jobInstanceId=d[10].value
+  | extend jobStartTimeUsecs=d[11].value
+  | extend anomalyStrength=d[12].value
+  | extend severity = case(anomalyStrength >= 70, "High",
+                          anomalyStrength < 30, "Low",
+                          "Medium"
+                          )
+  | summarize arg_max(TimeGenerated, *) by id_s
+  | project
+      TimeGenerated,
+      alertDocument_alertDescription_s,
+      alertDocument_alertHelpText_s,
+      alertDocument_alertName_s,
+      anomalyStrength,
+      cid,
+      cluster,
+      entityId,
+      id_s,
+      jobId,
+      jobInstanceId,
+      jobName,
+      jobStartTimeUsecs,
+      object,
+      severity,
+      source;
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: object
+- entityType: CloudApplication
+  fieldMappings:
+  - identifier: Name
+    columnName: cluster
+- entityType: FileHash
+  fieldMappings:
+  - identifier: Algorithm
+    columnName: MD5
+  - identifier: Value
+    columnName: entityId
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: source
+- entityType: Malware
+  fieldMappings:
+  - identifier: Name
+    columnName: anomalyStrength
+version: 1.0.0
+kind: Scheduled
