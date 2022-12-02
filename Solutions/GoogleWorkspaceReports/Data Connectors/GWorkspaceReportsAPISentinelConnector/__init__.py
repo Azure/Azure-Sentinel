@@ -98,12 +98,14 @@ def get_result(activity,start_time, end_time):
         return result_activities
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
-    x_headers = 'x-ms-date:' + date
-    string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
+    x_headers = f"x-ms-date:{date}"
+    string_to_hash = "\n".join([method, str(content_length), content_type, x_headers, resource])
     bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
     decoded_key = base64.b64decode(shared_key)
-    encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
-    authorization = "SharedKey {}:{}".format(customer_id,encoded_hash)
+    encoded_hash = base64.b64encode(
+        hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
+    ).decode()
+    authorization = f"SharedKey {customer_id}:{encoded_hash}"
     return authorization
 
 def post_data(customer_id, shared_key, body, log_type):
