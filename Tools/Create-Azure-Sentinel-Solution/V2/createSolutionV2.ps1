@@ -1797,7 +1797,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             }
                             $dependencyDescription = ""
                             if ($yaml.requiredDataConnectors) {
-                                $dependencyDescription = "It depends on the $($yaml.requiredDataConnectors.connectorId) data connector and $($($yaml.requiredDataConnectors.dataTypes)) data type and $($yaml.requiredDataConnectors.connectorId) parser."
+                                # $dependencyDescription = "It depends on the $($yaml.requiredDataConnectors.connectorId) data connector and $($($yaml.requiredDataConnectors.dataTypes)) data type and $($yaml.requiredDataConnectors.connectorId) parser."
+                                $dependencyDescription = "This hunting query depends on $($yaml.requiredDataConnectors.connectorId) data connector ($($($yaml.requiredDataConnectors.dataTypes)) Parser or Table)"
                             }
                             $huntingQueryElement = [PSCustomObject]@{
                                 name     = "huntingquery$huntingQueryCounter";
