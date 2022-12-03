@@ -8,7 +8,7 @@ This code integrates Cohesity Helios Cloud solution with MS Sentinel
 * your_email_for_playbook@your_domain.com
 * your_support_email@your_domain.com
 * 11111111-2222-3333-4444-555555555555
-3. Run build.sh from anywhere
+3. Run build.ps1 from anywhere
 4. Follow Tools/Create-Azure-Sentinel-Solution/V2/README.md:273 to do post-build manually validation
 
 ## Prerequisites for deploying Custom Connector
