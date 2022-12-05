@@ -19,4 +19,4 @@ class StateManager:
         try:
             return self.file_cli.download_file().readall().decode()
         except ResourceNotFoundError:
-            return None 
+            return None

@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import base64
 
- 
+
 class AzureSentinelConnector:
     def __init__(self, log_analytics_uri, workspace_id, shared_key, log_type, queue_size=200, queue_size_bytes=25 * (2**20)):
         self.log_analytics_uri = log_analytics_uri

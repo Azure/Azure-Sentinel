@@ -6,11 +6,11 @@ import json
 from typing import Tuple, List, Union
 from datetime import datetime as dt
 from datetime import timedelta
- 
+
 import azure.functions as func
 from Auth0Connector.sentinel_connector import AzureSentinelConnector
 from Auth0Connector.state_manager import StateManager
- 
+
 
 WORKSPACE_ID = os.environ['WorkspaceID']
 SHARED_KEY = os.environ['WorkspaceKey']
