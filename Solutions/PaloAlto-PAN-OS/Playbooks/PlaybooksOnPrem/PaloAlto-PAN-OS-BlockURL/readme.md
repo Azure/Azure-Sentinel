@@ -54,7 +54,6 @@ Before playbook deployment you need to have configured KeyVault and store key as
     * Predefined address group name: Enter the predefined address group name here to Block URL /Unblock URL
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
     * secretName: Name of the secret that will be stored in Key vault
-    * secretValue: value of X-PAN-KEY
     * OnPremiseGatewayName: On-premises data gateway that will be used with PaloAlto connector.
 
 ### Post-Deployment instructions 

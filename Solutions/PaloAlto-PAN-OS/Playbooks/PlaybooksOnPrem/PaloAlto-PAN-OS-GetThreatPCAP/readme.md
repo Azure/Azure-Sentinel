@@ -45,13 +45,10 @@ Before playbook deployment you need to have configured KeyVault and store key as
 
 2. Fill in the required parameters:
     * Playbook Name: The playbook name here (e.g. PaloAlto-PAN-OS-GetThreatPCAP)
-    * StorageAccountName:  The blob storage account where the threat PCAP will be stored
-    * StorageAccountFolderPath: The folder in the blob storage account where the threat PCAP will be stored
     * LogAnalyticsResourceGroup: The Log Analytics resource group for logging for the Playbook.
     * LogAnalyticsResourceName: The Log Analytics resource for logging for the Playbook.
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
     * secretName: Name of the secret that will be stored in Key vault
-    * secretValue: value of X-PAN-KEY
     * OnPremiseGatewayName: On-premises data gateway that will be used with PaloAlto connector.
 
     
