@@ -475,9 +475,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
 
                         $IsLogicAppsCustomConnector = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/customApis".ToLower())}) ? $true : $false;
-                        $IsFunctionAppResource = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/sites".ToLower())}) ? $true : $false;
-                        # $functionappfiledata = Get-Content "C:\GitHub\Azure-Sentinel\Solutions\Fortinet-FortiGate\Playbooks\FunctionApp\azuredeploy.json" | ConvertFrom-Json
-                        # $functionAppsPlaybookId = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/sites".ToLower())}) ? $functionappfiledata.parameters.FunctionAppName.defaultValue:''
+                        $IsFunctionAppResource = ($playbookData.resources | Where-Object {($_.type.ToLower() -eq "Microsoft.Web/sites".ToLower())}) ? $true : $false;                        
                         $DependencyCriteria += [PSCustomObject]@{
                             kind      = $IsLogicAppsCustomConnector ? "LogicAppsCustomConnector" : $IsFunctionAppResource ? "AzureFunction" : "Playbook";;
                             contentId = "[variables('_$fileName')]";
@@ -864,7 +862,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $logicAppsPlaybookId = '';
                         $customConnectorContentId = '';
                         $FunctionResource = @();
-                        # $functionAppsPlaybookId= '';
                         foreach ($playbookResource in $playbookData.resources) {
                             if ($playbookResource.type -eq "Microsoft.Web/connections") {
                                 if ($playbookResource.properties -and $playbookResource.properties.api -and $playbookResource.properties.api.id) {
@@ -938,12 +935,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         }
                         if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
                             {
-                            # if($null -ne $playbookData.parameters.FunctionAppName ){}
                             if ($null -ne $playbookData -and $null -ne $playbookData.parameters){
-                                # if ($playbookResource.properties -and $playbookResource.properties.api -and $playbookResource.properties.api.id) {
-                                #     if ($playbookResource.properties.api.id.Contains("/providers/Microsoft.Web/customApis/")) {
-                                #         $splits = $playbookResource.properties.api.id.Split(',');
-                                #         $connectionKey = $splits[-1].Trim().Replace("parameters('","").Replace("'","").Replace(")","").Replace("]","");
                                         foreach($param in $playbookData.parameters.PsObject.Properties)
                                         {
                                             if($functionAppList.ContainsKey($param.Value.defaultValue))
@@ -954,14 +946,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                                         version = $functionAppList[$param.Value.defaultValue].version;
                                                 }
                                             }
-                                        }
-                                                
-                                            
-                                    # $playbookDependencies += [PSCustomObject] @{
-                                    #                     kind = "AzureFunction";
-                                    #                     contentId = $functionAppList[$templateVar.Value.defaultValue].id;
-                                    #                     version = $functionAppList[$templateVar.Value.defaultValue].version;
-                                
+                                        }                                                                            
                         
                         }
                         }
