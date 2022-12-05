@@ -10,9 +10,16 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     {
         let dataFolderName = splitPath[2] === "Data" || splitPath[2] === "data" ? splitPath[2] : null
         let dataConnectorFolderName = splitPath[2] === "DataConnectors" || splitPath[2] === "Data Connectors" ? splitPath[2] : null
-        if ((dataFolderName == null && dataConnectorFolderName == null) || (filePath.includes("azuredeploy") || filePath.includes("host.json") || filePath.includes("proxies.json") || filePath.includes("function.json") || filePath.includes("requirements.txt") || filePath.includes(".py") || filePath.includes(".ps1"))) 
+        if (dataFolderName == null && dataConnectorFolderName == null) 
         {
             console.log(`Skipping Hyperlink validation for file path : '${filePath}' as change is not in 'Data' and/or 'Data Connectors' folder`)
+            return ExitCode.SUCCESS;
+        }
+
+        //IGNORE BELOW FILES
+        if (filePath.includes("azuredeploy") || filePath.includes("host.json") || filePath.includes("proxies.json") || filePath.includes("function.json") || filePath.includes("requirements.txt") || filePath.includes(".py") || filePath.includes(".ps1"))
+        {
+            console.log(`Skipping Hyperlink validation for file path : '${filePath}'`)
             return ExitCode.SUCCESS;
         }
 
