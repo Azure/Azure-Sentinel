@@ -247,6 +247,10 @@ while [[ $# -gt 0 ]]; do
 		PREVIEW=1
 		shift 1
 		;;
+	--multi-clients)
+		MULTICLIENTS=1
+		shift 1
+		;;
 	--script-debug)
 		set -x
 		shift 1
@@ -285,6 +289,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--http-proxy <proxy url>"
 		echo "--confirm-all-prompts"
 		echo "--preview"
+		echo "--multi-clients"
 		exit 1
 		;;
 	*)
@@ -625,7 +630,12 @@ else
 	echo 'SAP system is reachable'
 fi
 
-intprefix="$SID-$CLIENTNUMBER"
+if [ $MULTICLIENTS ]; then
+	intprefix="$SID-$CLIENTNUMBER"
+else
+	intprefix="$SID"
+fi
+
 sysfileloc=$CONFIGPATH/$containername/$intprefix/
 sudo mkdir -p "$sysfileloc"
 sudo chown "$USER" "$sysfileloc"
