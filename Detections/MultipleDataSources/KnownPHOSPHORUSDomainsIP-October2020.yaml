@@ -29,6 +29,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes:
       - AzureDiagnostics (Azure Firewall)
+      - AZFWApplicationRule
+      - AZFWDnsQuery
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -40,7 +42,6 @@ relevantTechniques:
   - T1071
   - T1566
 query: |
-
   let DomainNames = dynamic(["de-ma.online", "g20saudi.000webhostapp.com", "ksat20.000webhostapp.com"]);
   let EmailAddresses = dynamic(["munichconference1962@gmail.com","munichconference@outlook.de", "munichconference@outlook.com", "t20saudiarabia@gmail.com", "t20saudiarabia@hotmail.com", "t20saudiarabia@outlook.sa"]);
   let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
@@ -80,8 +81,20 @@ query: |
   (AzureDiagnostics
   | where ResourceType =~ "AZUREFIREWALLS"
   | where msg_s has_any (DomainNames)
+  | extend timestamp = TimeGenerated),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | where msg_s has_any (DomainNames)
+  | extend timestamp = TimeGenerated),
+  (AZFWApplicationRule
+  | where isnotempty(Fqdn)
+  | where Fqdn has_any (DomainNames)  
+  | extend timestamp = TimeGenerated),
+  (AZFWDnsQuery
+  | where isnotempty(QueryName)
+  | where QueryName has_any (DomainNames)
   | extend timestamp = TimeGenerated))
-
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -95,5 +108,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
