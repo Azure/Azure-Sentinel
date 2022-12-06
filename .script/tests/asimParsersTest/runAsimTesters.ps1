@@ -3,6 +3,8 @@ $global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
 $global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
 $global:schemas = ("DNS", "WebSession", "NetworkSession", "ProcessEvent")
 
+Param([string]$subscriptionId, [string]$workspaceId)
+
 Class Parser {
     [string] $Name;
     [string] $OriginalQuery;
@@ -16,13 +18,29 @@ Class Parser {
     }
 }
 
-function run {
-    $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
+function run ([string]$subscriptionId = $global:subscriptionId, [string]$workspaceId = $global:workspaceId) {
+    $subscription = Select-AzSubscription -SubscriptionId $subscriptionId
     $modifiedSchemas = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
-    $modifiedSchemas | ForEach-Object { testSchema($_) }
+    $schemaTesterAsletStatements = getSchemaTesterAsletStatement
+    $dataTesterAsletStatements = getDataTesterAsletStatement
+    $modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
 }
 
-function testSchema([string] $schema) {
+function getSchemaTesterAsletStatement {
+    $aSimSchemaTester =  Get-Content "$($PSScriptRoot)/../../../ASIM/dev/ASimTester/ASimSchemaTester.json" | ConvertFrom-Json
+    $schemaQuery = $aSimSchemaTester.resources.resources.properties.query
+    $schemaParameters = $aSimSchemaTester.resources.resources.properties.functionParameters
+    return "let generatedASimSchemaTester= ($($schemaParameters)) { $($schemaQuery) };"
+}
+
+function getDataTesterAsletStatement {
+    $aSimDataTester =  Get-Content "$($PSScriptRoot)/../../../ASIM/dev/ASimTester/ASimDataTester.json" | ConvertFrom-Json
+    $dataQuery = $aSimDataTester.resources.resources.properties.query
+    $dataParameters = $aSimDataTester.resources.resources.properties.functionParameters
+    return "let generatedASimDataTester= ($($dataParameters)) { $($dataQuery) };"
+}
+
+function testSchema([string] $workspaceId, [string] $schema, [string] $schemaTesterAsletStatements, [string] $dataTesterAsletStatements) {
     $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/$($schema)/Parsers"
     Write-Host "Testing $($schema) schema, $($parsersAsObjects.count) parsers were found"
     $parsersAsObjects | ForEach-Object {
@@ -31,32 +49,32 @@ function testSchema([string] $schema) {
             Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
         }
         else {
-            testParser([Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams))
+            testParser($workspaceId, [Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams), $schemaTesterAsletStatements, $dataTesterAsletStatements)
         }
     }
 }
 
-function testParser([Parser] $parser) {
+function testParser([string] $workspaceId, [Parser] $parser, [string] $schemaTesterAsletStatements, [string] $dataTesterAsletStatements) {
     Write-Host "Testing parser- '$($parser.Name)'"
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $($letStatementName)= ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
 
     Write-Host "-- Running schema test for '$($parser.Name)'"
-    $schemaTest = "$($parserAsletStatement)`r`n$($letStatementName) | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
-    invokeAsimTester $schemaTest $parser.Name "schema"
+    $schemaTest = "$($schemaTesterAsletStatements)`r`n$($parserAsletStatement)`r`n$($letStatementName) | getschema | invoke generatedASimSchemaTester('$($parser.Schema)')"
+    invokeAsimTester $workspaceId, $schemaTest $parser.Name "schema"
     Write-Host ""
 
     Write-Host "-- Running data test for '$($parser.Name)'"
-    $dataTest = "$($parserAsletStatement)`r`n$($letStatementName) | invoke ASimDataTester('$($parser.Schema)')"
-    invokeAsimTester $dataTest  $parser.Name "data"
+    $dataTest = "$($dataTesterAsletStatements)`r`n$($parserAsletStatement)`r`n$($letStatementName) | invoke generatedASimDataTester('$($parser.Schema)')"
+    invokeAsimTester $workspaceId, $dataTest  $parser.Name "data"
     Write-Host ""
     Write-Host ""
 }
 
-function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
+function invokeAsimTester([string] $workspaceId, [string] $test, [string] $name, [string] $kind) {
         $query = $test + " | where Result startswith '(0) Error:'"
         try {
-            $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
+            $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $workspaceId -Query $query -ErrorAction Stop
             if ($rawResults.Results) {
                 $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
                 if ($resultsArray.count) {  
@@ -92,5 +110,5 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
     return $paramsString
 }
 
-run
+run $subscriptionId $workspaceId
 exit $global:failed
