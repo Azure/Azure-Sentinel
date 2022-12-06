@@ -33,10 +33,26 @@ namespace Kqlvalidations.Tests
 
         // We pass File name to test because in the result file we want to show an informative name for the test
         [Theory]
+        [ClassData(typeof(WorkbookFilesTestData))]
+        public void Validate_Workbooks_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            var workbookQueries = GetQueriesFromWorkbook(encodedFilePath);
+
+            //loop through workbookQueries and using ValidateKqlForWorkbooks method
+            foreach (var query in workbookQueries)
+            {
+                ValidateKqlForWorkbooks(fileName, query);
+            }
+
+
+        }
+
+        // We pass File name to test because in the result file we want to show an informative name for the test
+        [Theory]
         [ClassData(typeof(DataConnectorFilesTestData))]
         public void Validate_DataConnectors_HaveValidKql(string fileName, string encodedFilePath)
         {
-            var dataConnector = ReadAndDeserializeJson(encodedFilePath);
+            var dataConnector = ReadAndDeserializeDataConnectorJson(encodedFilePath);
             var id = (string)dataConnector.Id;
             //we ignore known issues
             if (ShouldSkipTemplateValidation(id))
@@ -213,6 +229,30 @@ namespace Kqlvalidations.Tests
                     Errors: {validationResult.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
         }
 
+        private void ValidateKqlForWorkbooks(string filename,string queryStr)
+        {
+            var validationResult = _queryValidator.ValidateSyntax(queryStr);
+            var firstErrorLocation = (Line: 0, Col: 0);
+            if (!validationResult.IsValid)
+            {
+                firstErrorLocation = GetLocationInQuery(queryStr, validationResult.Diagnostics.First(d => d.Severity == "Error").Start);
+            }
+
+            var listOfDiagnostics = validationResult.Diagnostics;
+
+            bool isQueryValid = !(from p in listOfDiagnostics
+                                  where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                                  select p).Any();
+
+
+            Assert.True(
+                isQueryValid,
+                isQueryValid
+                    ? string.Empty
+                    : @$"File: {filename} is not valid in Line: {firstErrorLocation.Line} col: {firstErrorLocation.Col}
+                    Errors: {validationResult.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+        }
+
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
         {
 
@@ -221,11 +261,40 @@ namespace Kqlvalidations.Tests
             return deserializer.Deserialize<dynamic>(yaml);
         }
 
-        private DataConnectorSchema ReadAndDeserializeJson(string encodedFilePath)
+        private DataConnectorSchema ReadAndDeserializeDataConnectorJson(string encodedFilePath)
         {
             var jsonString = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
             DataConnectorSchema dataConnectorObject = JsonConvert.DeserializeObject<DataConnectorSchema>(jsonString);
             return dataConnectorObject;
+        }
+
+
+        private List<string> GetQueriesFromWorkbook(string encodedFilePath)
+        {
+            var jsonString = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
+            List<string> queries = new List<string>();
+            var data = JsonConvert.DeserializeObject<dynamic>(jsonString);
+            if (data.items!=null)
+            {
+                GetQueriesFromItems(queries, data.items);
+            }
+            return queries;
+        }
+
+        private void GetQueriesFromItems(List<string> queries, dynamic items)
+        {
+            foreach (var item in items)
+            {
+                var content = item.content;
+                var json = JsonConvert.SerializeObject(content);
+                Content contentObject = JsonConvert.DeserializeObject<Content>(json);
+                if (!string.IsNullOrEmpty(contentObject.Query))
+                    queries.Add(contentObject.Query);
+                if (contentObject.items!=null && contentObject.items.Count>0)
+                {
+                    GetQueriesFromItems(queries, contentObject.items);
+                }
+            }
         }
 
         private bool ShouldSkipTemplateValidation(string templateId)
