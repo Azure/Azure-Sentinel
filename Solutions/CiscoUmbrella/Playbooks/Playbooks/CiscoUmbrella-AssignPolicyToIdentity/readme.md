@@ -29,7 +29,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in
@@ -38,5 +38,5 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident. An incident should have the *originId* custom entity. OriginId is an Umbrella-wide unique identifier for this traffic source (origin). It can be obtained from the corresponding field in Cisco Umbrella logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the *originId* custom entity. OriginId is an Umbrella-wide unique identifier for this traffic source (origin). It can be obtained from the corresponding field in Cisco Umbrella logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
 2. Configure the automation rules to trigger the playbook.
