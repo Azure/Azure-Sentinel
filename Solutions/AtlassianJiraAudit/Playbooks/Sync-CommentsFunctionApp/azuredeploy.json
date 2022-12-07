@@ -2,15 +2,15 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "siteName": {
+        "FunctionAppName": {
             "defaultValue": "jira-sync",
             "type": "string"
         }
     },
     "variables": {
-        "hostingPlanName": "[concat(parameters('siteName'),'hostingPlan')]",
+        "hostingPlanName": "[concat(parameters('FunctionAppName'),'hostingPlan')]",
         "storageName":"[concat('deploy', uniqueString(resourceGroup().id))]",
-        "packageURL":"https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Sync-IncidentsWithJIRA/Sync-Comments/tc-function-cc-sync.zip?raw=true"
+        "packageURL":"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Sync-CommentsFunctionApp/tc-function-cc-sync.zip?raw=true"
     },
     "resources": [
         {
@@ -18,8 +18,9 @@
             "type": "Microsoft.Storage/storageAccounts",
             "name": "[variables('storageName')]",
             "location": "[resourceGroup().location]",
-            "properties": {
-                "accountType": "Standard_LRS"
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
             }
         },
         {
@@ -41,7 +42,7 @@
         },
         {
             "apiVersion": "2015-08-01",
-            "name": "[parameters('siteName')]",
+            "name": "[parameters('FunctionAppName')]",
             "type": "Microsoft.Web/sites",
             "location": "[resourceGroup().location]",
             "kind": "functionapp",
@@ -55,11 +56,11 @@
                         "appSettings": [
                             {
                                 "name": "AzureWebJobsDashboard",
-                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2021-09-01').key1)]"
+                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2022-05-01').keys[0].value)]"
                             },
                             {
                                 "name": "AzureWebJobsStorage",
-                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2021-09-01').key1)]"
+                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2022-05-01').keys[0].value)]"
                             },
                             {
                                 "name": "FUNCTIONS_EXTENSION_VERSION",
@@ -67,7 +68,7 @@
                             },
                             {
                                 "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2021-09-01').key1)]"
+                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2022-05-01').keys[0].value)]"
                             },
                             {
                                 "name": "WEBSITE_NODE_DEFAULT_VERSION",
@@ -75,7 +76,7 @@
                             },
                             {
                                 "name": "WEBSITE_CONTENTSHARE",
-                                "value": "[toLower(parameters('siteName'))]"
+                                "value": "[toLower(parameters('FunctionAppName'))]"
                             }
                         ]
                     }
@@ -87,7 +88,7 @@
                     "location": "[resourceGroup().location]",
                     "apiVersion": "2015-08-01",
                     "dependsOn": [
-                        "[concat('Microsoft.Web/sites/', parameters('siteName'))]"
+                        "[concat('Microsoft.Web/sites/', parameters('FunctionAppName'))]"
                     ],
                     "properties": {
                     "packageUri": "[variables('packageURL')]"
