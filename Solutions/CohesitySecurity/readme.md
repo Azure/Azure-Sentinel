@@ -8,13 +8,13 @@ This is a Cohesity authored integration for use with Sentinel, Microsoft’s clo
 
 ### Package Building and Validation Instructions
 __Disclaimer:__ You can skip these steps and use one of the pre-built packages from [this directory](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Package). These steps are required _only_ if you'd like to rebuild everything yourself.
-1. Follow this [readme.md](https%3A%2F%2Fgithub.com%2Fcohesity%2FAzure-Sentinel%2Ftree%2FCohesitySecurity.internal%2FSolutions%23readme) for setup build prerequisites
+1. Follow this [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions#readme.md) for setup build prerequisites
 2. Edit [cohesity.config](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/cohesity.config) to replace these values with your owm
 * your_email_for_playbook@your_domain.com
 * your_support_email@your_domain.com
 * 11111111-2222-3333-4444-555555555555
 3. Run [build.ps1](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/build.ps1) to build the package
-4. Follow [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions#readme) for post-build manual validation
+4. Follow [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions#readme.md) for post-build manual validation
 
 ### Deployment
 The package consists of the following Azure functions
