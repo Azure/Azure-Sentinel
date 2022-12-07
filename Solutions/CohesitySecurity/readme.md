@@ -14,7 +14,7 @@ __Disclaimer:__ You can skip these steps and use one of the pre-built packages f
 * your_support_email@your_domain.com
 * 11111111-2222-3333-4444-555555555555
 3. Run [build.ps1](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/build.ps1) to build the package
-4. Follow [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/README.md) for post-build manual validation
+4. Follow [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/README.md:273) for post-build manual validation
 
 ### Deployment
 The package consists of the following Azure functions
