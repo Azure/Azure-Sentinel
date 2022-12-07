@@ -1,4 +1,4 @@
-# Cohesity Send Incident Email
+# Send Incident Email
 ## Summary
 This playbook sends an email to the recipient with the details related to the incidents.
 
@@ -12,8 +12,8 @@ This playbook sends an email to the recipient with the details related to the in
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fcohesity%2FAzure-Sentinel%2Ftree%2Fmaster%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FIncident_Email_Playbook%2Fazuredeploy.json)
 
 2. Fill in the required parameters:
-* Playbook Name: Enter the playbook name here
-* Email address: The distribution list for incident notifications
+* __Playbook Name__: Enter the playbook name here
+* __Email address__: The distribution list for incident notifications
 
 ## Post-Deployment instructions
 None
