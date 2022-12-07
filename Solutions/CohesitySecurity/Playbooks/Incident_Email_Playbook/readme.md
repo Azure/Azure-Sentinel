@@ -8,12 +8,11 @@ This playbook sends an email to the recipient with the details related to the in
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fcohesity%2FAzure-Sentinel%2Ftree%2Fmaster%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FIncident_Email_Playbook%2Fazuredeploy.json)
 
 2. Fill in the required parameters:
-* __Playbook Name__: Enter the playbook name here
-* __Email address__: The distribution list for incident notifications
+* __Playbook Name__: Playbook display name.
+* __Email address__: Distribution list (email) for incident notifications
 
 ## Post-Deployment instructions
 None
