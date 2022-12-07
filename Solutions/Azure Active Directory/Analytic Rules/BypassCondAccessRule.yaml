@@ -37,21 +37,22 @@ query: |
   let aadFunc = (tableName:string){
   table(tableName)
   | where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ "failure"
+  | extend CAP = parse_json(ConditionalAccessPolicies)
+  | mv-apply CAP on (
+    project ConditionalAccessPoliciesName = CAP.displayName, result = CAP.result
+    | where result =~ "failure"
+  )
   | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)
   | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
   | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion) 
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-  | extend ConditionalAccessPolicies = todynamic(ConditionalAccessPolicies)
-  | extend ConditionalAccessPol0Name = tostring(ConditionalAccessPolicies[0].displayName)
-  | extend ConditionalAccessPol1Name = tostring(ConditionalAccessPolicies[1].displayName)
-  | extend ConditionalAccessPol2Name = tostring(ConditionalAccessPolicies[2].displayName)
   | extend Status = strcat(StatusCode, ": ", ResultDescription) 
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId) 
-  by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name, Type
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName)
+  by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type
   | where IPAddressCount > threshold and StatusDetails !has "MFA successfully completed"
   | mvexpand IPAddresses, Status, StatusDetails, CorrelationIds
   | extend Status = strcat(Status, " ", StatusDetails)
-  | summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds) 
+  | summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName)
   by StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name, IPAddressCount, Type
   | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)
   };
@@ -67,5 +68,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
