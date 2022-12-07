@@ -7,7 +7,7 @@ This is a Cohesity authored integration for use with Sentinel, Microsoft’s clo
 * Closed loop integration closes out the alert in Helios via included Playbook
 
 ### Package Building and Validation Instructions
-__Disclaimer:__ You can skip these steps and use one of the pre-built packages from [this directory](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CiscoUmbrella/Package). These steps are required _only_ if you'd like to revuild everything yourself.
+__Disclaimer:__ You can skip these steps and use one of the pre-built packages from [this directory](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Package). These steps are required _only_ if you'd like to revuild everything yourself.
 1. Follow this [readme.md]("https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions#readme") for setup build prerequisites
 2. Edit [cohesity.config](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/cohesity.config) to replace these values with your owm
 * your_email_for_playbook@your_domain.com
