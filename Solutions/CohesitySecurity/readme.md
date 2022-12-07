@@ -20,8 +20,8 @@ __Disclaimer:__ You can skip these steps and use one of the pre-built packages f
 The package consists of the following Azure functions
 * _IncidentProducer_ to retrieve Helios alerts via a special REST API (deployment steps) - TBD
 * _IncidentConsumer_ to create incidents in MS Sentnel (deployment steps) - TBD
-It also has a few playbooks for automation.
+<br>It also has a few playbooks for automation.
 * *Close_Helios_Incident* to resolve alerts on Cohesity Helios (deployment steps - TBD).
-* *Send_Incident_Email* to send an email to the recipient with the details related to the incidents ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Incident_Email_Playbook#readme)).
-* *CreateOrUpdate_ServiceNow_Incident* to creates and updates the incident in the ServiceNow platform ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/SNOW-CreateAndUpdateIncident#readme)). 
-* *Restore_From_Last_Snapshot* ([deployment steps] (https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Incident_VM_Playbook#readme))
+* *Send_Incident_Email* to send an email to the recipient with the incident details ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Incident_Email_Playbook#readme.md)).
+* *CreateOrUpdate_ServiceNow_Incident* to create and update the incident in the ServiceNow platform ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/SNOW-CreateAndUpdateIncident#readme.md)). 
+* *Restore_From_Last_Snapshot* to restore data from the latest clean snapshot in Helios ([deployment steps] (https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Incident_VM_Playbook#readme.md))
