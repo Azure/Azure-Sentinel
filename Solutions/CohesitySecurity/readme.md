@@ -9,7 +9,7 @@ This is a Cohesity authored integration for use with Sentinel, Microsoft’s clo
 ### Package Building and Validation Instructions
 __Disclaimer:__ You can skip these steps and use one of the pre-built packages from [this directory](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Package). These steps are required _only_ if you'd like to rebuild the package yourself.
 1. Follow this [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/README.md) for setup build prerequisites
-2. Edit [cohesity.config](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/cohesity.config) to replace these values with your owm
+2. Edit [cohesity.config](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/cohesity.config) to replace these values with your own
 * your_email_for_playbook@your_domain.com
 * your_support_email@your_domain.com
 * 11111111-2222-3333-4444-555555555555
@@ -19,7 +19,7 @@ __Disclaimer:__ You can skip these steps and use one of the pre-built packages f
 ### Deployment
 The package consists of the following Azure functions
 * _IncidentProducer_ to retrieve Helios alerts via a special REST API (deployment steps - TBD)
-* _IncidentConsumer_ to create incidents in MS Sentnel (deployment steps - TBD)
+* _IncidentConsumer_ to create incidents in MS Sentinel (deployment steps - TBD)
 
 It also has a few playbooks for automation.
 * *Close_Helios_Incident* to resolve alerts on Cohesity Helios (deployment steps - TBD).
