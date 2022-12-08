@@ -9,7 +9,7 @@ This function retrieves ransomware alerts from Cohesity DataHawk and lands them 
 * Select _Add API Key_. The API Key Details is displayed.
 * Enter a name for the API key.
 * Select _Save_. The API Key Token is displayed.
-* Pu this key to [IncidentProducer/local.settings.json](https://raw.githubusercontent.com/cohesity/Azure-Sentinel/CohesitySecurity.internal/DataConnectors/CohesitySecurity/Helios2Sentinel/IncidentProducer/local.settings.json)
+* Put this key to [IncidentProducer/local.settings.json](https://raw.githubusercontent.com/cohesity/Azure-Sentinel/CohesitySecurity.internal/DataConnectors/CohesitySecurity/Helios2Sentinel/IncidentProducer/local.settings.json)
 `"Values": {
   ...
     "apiKey": "33e44eac-ce99-46df-7f4e-9ac39446a66f",
