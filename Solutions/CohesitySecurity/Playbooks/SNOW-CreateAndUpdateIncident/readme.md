@@ -1,21 +1,18 @@
-# Create Incident in Service Now Playbook
+# Cohesity Create or Update ServiceNow Incident 
 ## Summary
-This playbook creates a ticket in ServiceNow
+This playbook creates a ticket in ServiceNow.
 
 ## Prerequisites
-1. Cohesty SIEM/SOAR integration needs to be deployed prior to the deployment of this playbook under the same subscription.
-2. Have a valid account for ServiceNow
+1. Create an account for [ServiceNow](https://signon.service-now.com/x_snc_sso_auth.do).
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template)
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fcohesity%2FAzure-Sentinel%2Fblob%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FSNOW-CreateAndUpdateIncident%2Fazuredeploy.json)
 2. Fill in the required parameters:
-* Playbook Name: Enter the playbook name here
-* ServiceNow URL: Enter the HTTP-address of your ServiceNow instance
-* ServiceNow Login: Enter your ServiceNow login
-* ServiceNow Password: Enter your ServiceNow password
+* __Playbook Name:__ Enter the playbook name here.
+* __ServiceNow URL:__ Enter the HTTP-address of your ServiceNow instance.
+* __ServiceNow Login:__ Enter your ServiceNow login.
+* __ServiceNow Password:__ Enter your ServiceNow password.
 
 ## Post-Deployment instructions
 * None
