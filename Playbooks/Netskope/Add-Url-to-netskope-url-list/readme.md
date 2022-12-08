@@ -28,6 +28,8 @@ To deploy this template in Azure:
 *Fig 2. Netskope API Token*
 
 - Deploy a playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard inside Azure Portal.
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FNetskope%2FAdd-Url-to-netskope-url-list%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FNetskope%2FAdd-Url-to-netskope-url-list%2Fazuredeploy.json)
 - Provide values to the template parameters.
 
 |   Parameter                  |          Description                             |
