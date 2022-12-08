@@ -1,22 +1,22 @@
 # Cohesity Restore From Last Snapshot Playbook
 ## Summary
-This playbook restores the latest good Helios snapshot. It’s recommended for Backup Admins _only_ after they make sure that the existing data are compromised and rollback to the previous snapshot, even at the expense of data loss, is _really required_.
+This playbook restores the latest good Helios snapshot. It’s recommended for running by Backup Admins _only_ after they make sure that the existing data is compromised and rollback to the previous snapshot, even at the expense of data loss, is _really required_.
 
 ## Prerequisites
 1. Create Helios API Key:
 * Go to the Cohesity Helios [login](https://helios.cohesity.com/#/login) page.
 * Enter your credentials and select _Log In_. The _Summary_ page is displayed.
 * Navigate to _Settings > Access Management_. The _Users_ tab is displayed.
-* Select Add API Key. The _API Key Details_ is displayed.
+* Select _Add API Key_. The API Key Details is displayed.
 * Enter a name for the API key.
-* Select Save.
+* Select _Save_.
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FIncident_VM_Playbook%2Fazuredeploy.json)
 2. Fill in the required parameters:
 * __Playbook Name:__ Enter the playbook name here.
-* __Helios API Key:__ Enter the API key.
+* __Job Id:__ Enter any random number.
 
 ## Post-Deployment instructions
 1. Update API Key in the playbook
