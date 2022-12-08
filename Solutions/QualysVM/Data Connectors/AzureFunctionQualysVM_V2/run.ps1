@@ -178,6 +178,8 @@ Function Parse-and-Send($qualysResponse){
         Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "LastVMAuthScannedDateTime" -Value $_.LAST_VM_AUTH_SCANNED_DATE
 		Write-Output "Adding data for Host id = $($_.ID)"
 
+		Write-Host "Number of Detections under Host ID $($_.ID) is $($_.DETECTION_LIST.length))"
+
 		foreach($detection in $_.DETECTION_LIST.DETECTION){
 			$detectionObject = $hostObject.PsObject.Copy()
 			Add-Member -InputObject $detectionObject -MemberType NoteProperty -Name "QID" -Value $detection.QID
@@ -278,14 +280,17 @@ Function Parse-and-Send($qualysResponse){
 Do {
 	try {
 		Write-Host "Making Request: $request"
+		Write-Host "Starting request to pull data from API : $($(Get-Date).ToUniversalTime())"
 		$response = Invoke-RestMethod -Headers $hdrs -Uri $request -WebSession $LogonSession
-
+		Write-Host "API response recieved at : $($(Get-Date).ToUniversalTime())"
+		
 		if ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null) {
 			Write-Output "No new results found for this interval. Exiting..."
 			$keep_running = $false
 		} else {
 			$request = ""
 			# provide the response for parsing to Parse-and-Send Function
+			Write-Host "Number of Hosts returned is $($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST.Length))"
 			Parse-and-Send $response
 			$request = $response.selectnodes("//WARNING").URL."#cdata-section"
 			if($request){
