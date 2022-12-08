@@ -27,6 +27,7 @@ query: |
     let hotwords = pack_array('xp_cmdshell', 'ps.exe', 'powershell', 'cmd.exe', 'msiexec', '<script>'); // List of monitored hot words.
     let processedData = materialize (
         AzureDiagnostics
+        | where TimeGenerated >= ago(detectionWindow)
         | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
         | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
                   ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
@@ -49,9 +50,7 @@ query: |
             , anyInfo = anyif(AdditionalInfo, hasHotword == 1)
             , hotWord = anyif(extract(strcat_array(hotwords, '|'), 0, tolower(Statement)), hasHotword == 1)
             by Database, ClientIp, ApplicationName, PrincipalName, timeSlice   
-        | sort by timeSlice desc
-        | extend RowNumber = row_number(),
-                             WindowType = case( timeSlice >= ago(detectionWindow), 'detection',
+        | extend WindowType = case( timeSlice >= ago(detectionWindow), 'detection',
                                                (ago(trainingWindow) <= timeSlice and timeSlice < ago(detectionWindow)), 'training', 'other')
         | where WindowType in ('detection', 'training'));
     let trainingSet =
@@ -87,5 +86,5 @@ entityMappings:
     fieldMappings:
       - identifier: ResourceId
         columnName: ResourceId
-version: 1.0.0
+version: 1.1.0
 kind: Scheduled
