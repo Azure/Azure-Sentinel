@@ -13,8 +13,10 @@ from pytz import timezone
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 from .state_manager_async import StateManagerAsync
 
+
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
 logging.getLogger('charset_normalizer').setLevel(logging.ERROR)
+
 
 INSIGHTVM_APIKEY = os.environ['InsightVMAPIKey']
 INSIGHTVM_REGION = os.environ['InsightVMCloudRegion']
@@ -28,8 +30,8 @@ LOG_TYPE_VULNS = 'NexposeInsightVMCloud_vulnerabilities'
 VULNERS_API_REQUEST_CHUNK_SIZE = 50
 ASSETS_API_REQUSET_CHUNK_SIZE = 500
 
-LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
+LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
 if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
     LOG_ANALYTICS_URI = 'https://' + WORKSPACE_ID + '.ods.opinsights.azure.com'
@@ -142,8 +144,7 @@ class InsightVMAPI:
         res = await self._make_get_vulners_request(vulner_ids=vulner_ids)
         return res['data']
 
-    async def _make_get_vulners_request(self, cursor: Optional[str] = None,
-                                        vulner_ids: Optional[List[str]] = None) -> dict:
+    async def _make_get_vulners_request(self, cursor: Optional[str] = None, vulner_ids: Optional[List[str]] = None) -> dict:
         method = 'POST'
         endpoint = '/v4/integration/vulnerabilities'
         params = {
@@ -158,8 +159,7 @@ class InsightVMAPI:
         res = res if res else {}
         return res
 
-    async def _make_api_request(self, method: str, endpoint: str, params: Optional[dict] = None,
-                                payload: Optional[dict] = None) -> Optional[dict]:
+    async def _make_api_request(self, method: str, endpoint: str, params: Optional[dict] = None, payload: Optional[dict] = None) -> Optional[dict]:
         url = f'{self.base_url}{endpoint}'
         headers = {
             'Accept': "application/json",
@@ -175,28 +175,22 @@ class InsightVMAPI:
                 return res
             except Exception as err:
                 if try_number < 3:
-                    logging.warning(
-                        'Error during making request to InsightVM API. Try number: {}. Trying one more time. {}'.format(
-                            try_number, err))
+                    logging.warning('Error during making request to InsightVM API. Try number: {}. Trying one more time. {}'.format(try_number, err))
                     await asyncio.sleep(try_number)
                     try_number += 1
                 else:
                     logging.error(str(err))
                     raise err
 
-    async def _make_http_request(self, method: str, url: str, params: Optional[dict], headers: Optional[dict],
-                                 body: Optional[str]) -> Optional[dict]:
+    async def _make_http_request(self, method: str, url: str, params: Optional[dict], headers: Optional[dict], body: Optional[str]) -> Optional[dict]:
         async with self.session.request(method=method, url=url, headers=headers, params=params, data=body) as response:
             response_body = await response.text()
             if not response.ok:
-                raise Exception(
-                    "Error during making request to InsightVM API. Response code: {}. Response body: {}".format(
-                        response.status, response_body))
+                raise Exception("Error during making request to InsightVM API. Response code: {}. Response body: {}".format(response.status, response_body))
             return json.loads(response_body)
 
 
-async def process_assets(assets: list, api: InsightVMAPI, sentinel: AzureSentinelConnectorAsync,
-                         state_manager=StateManagerAsync) -> Optional[datetime.datetime]:
+async def process_assets(assets: list, api: InsightVMAPI, sentinel: AzureSentinelConnectorAsync, state_manager=StateManagerAsync) -> Optional[datetime.datetime]:
     await asyncio.gather(
         send_assets_to_sentinel(assets=assets, sentinel=sentinel),
         process_vulners_in_assets(assets=assets, api=api, sentinel=sentinel)
@@ -207,8 +201,7 @@ async def process_assets(assets: list, api: InsightVMAPI, sentinel: AzureSentine
 async def process_vulners_in_assets(assets: list, api: InsightVMAPI, sentinel: AzureSentinelConnectorAsync) -> None:
     vulner_ids = get_vuner_ids_from_assets(assets)
     vulner_ids = [x for x in vulner_ids if x not in api.processed_vulner_ids]
-    logging.info(
-        f'Found {len(vulner_ids)} new unique vulnerabilities from assets. Start obtaining vulnerabilities from API.')
+    logging.info(f'Found {len(vulner_ids)} new unique vulnerabilities from assets. Start obtaining vulnerabilities from API.')
     vulners = await get_vulners_by_vulner_ids(vulner_ids=vulner_ids, api=api)
     logging.info(f'{len(vulners)} vulnerabilities obtained.')
     await send_vulners_to_sentinel(vulners=vulners, sentinel=sentinel)

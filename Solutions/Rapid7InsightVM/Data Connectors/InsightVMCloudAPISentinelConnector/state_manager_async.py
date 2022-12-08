@@ -15,8 +15,7 @@ class StateManagerAsync:
         self._last_date: Optional[datetime.datetime] = None
 
     def _get_file_cli(self):
-        return ShareFileClient.from_connection_string(conn_str=self.connection_string, share_name=self.share_name,
-                                                      file_path=self.file_path)
+        return ShareFileClient.from_connection_string(conn_str=self.connection_string, share_name=self.share_name, file_path=self.file_path)
 
     def _get_share_cli(self):
         return ShareClient.from_connection_string(conn_str=self.connection_string, share_name=self.share_name)
