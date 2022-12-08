@@ -15,7 +15,8 @@ class StateManagerAsync:
         self._last_date: Optional[datetime.datetime] = None
 
     def _get_file_cli(self):
-        return ShareFileClient.from_connection_string(conn_str=self.connection_string, share_name=self.share_name, file_path=self.file_path)
+        return ShareFileClient.from_connection_string(conn_str=self.connection_string, share_name=self.share_name,
+                                                      file_path=self.file_path)
 
     def _get_share_cli(self):
         return ShareClient.from_connection_string(conn_str=self.connection_string, share_name=self.share_name)
@@ -44,12 +45,16 @@ class StateManagerAsync:
             except ResourceNotFoundError:
                 return None
 
-    async def get_last_date_from_storage(self) -> Optional[datetime.datetime]:
+    async def get_last_date_from_storage(self, current_time, shift_start_time, end_time) -> Optional[datetime.datetime]:
         s = await self.get()
         try:
             date = parse_date(s)
+            if date < current_time - datetime.timedelta(days=7):
+                logging.info(f'The last saved time was long ago, trying to get events for the last week.')
+                date = current_time - datetime.timedelta(days=7)
         except Exception:
-            date = None
+            date = end_time - datetime.timedelta(minutes=int(shift_start_time))
+            logging.info(f'There is no last time point, trying to get events for recent time.')
         return date
 
     def remember_last_date(self, date: Optional[datetime.datetime]) -> None:
@@ -61,4 +66,4 @@ class StateManagerAsync:
         if isinstance(self._last_date, datetime.datetime):
             date_str = self._last_date.isoformat()
             await self.post(date_str)
-            logging.info(f'Saved last scan date - {date_str}')
+            logging.info(f'Saved end_time - {date_str}')
