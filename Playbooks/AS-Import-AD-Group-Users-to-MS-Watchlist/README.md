@@ -1,4 +1,4 @@
-# AS-Import-AD-Group-Users-to-MS-Watchlist
+# AS-Import-Azure-AD-Group-Users-to-MS-Watchlist
 
 Author: Accelerynt
 
