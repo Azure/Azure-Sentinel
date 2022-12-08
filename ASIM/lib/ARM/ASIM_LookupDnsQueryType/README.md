@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function to returns the DNS query type name (resource record type) based on a numerical query type
+# Log Analytics KQL function An ASIM function to returns the DNS query type name (resource record type) based on a numerical query type
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function to returns the DNS query type name (resource record type) based on a numerical query type
+ARM template for deploying the Log Analytics KQL function An ASIM function to returns the DNS query type name (resource record type) based on a numerical query type
 
 This ASIM function returns the DNS query type name (also called the resource record, or RR) associated with the RR numerical value provided as a parameter. For example, for the RR code 16, the function returns TXT.  
 
