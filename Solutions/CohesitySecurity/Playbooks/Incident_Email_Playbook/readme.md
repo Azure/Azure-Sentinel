@@ -14,11 +14,11 @@ This playbook sends an email to the recipient with the incident details..
 
 ## Post-Deployment instructions
 To update the email address in the playbook:
-* In your Microsoft Sentinel Instance, go to the Automation under the Configuration pane.
-* Under Active Playbooks, select the playbook and click on Edit.
-* On the Logic App Designer page, select Initialize variable 2.
+* In your Microsoft Sentinel workspace, go to the _Automation_ under the _Configuration_ pane.
+* Under _Active Playbooks_, select the playbook and click on _Edit_.
+* On the _Logic App Designer_ page, select _Initialize variable 2_.
 * Under the value section, enter the email address for the incident notifications.
-* Select Save.
+* Click _Save_.
 
 #  References
  - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm)
