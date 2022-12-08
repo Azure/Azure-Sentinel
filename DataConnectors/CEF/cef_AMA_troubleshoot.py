@@ -10,7 +10,7 @@ COLLECT_OUTPUT_FILE = "/tmp/cef_troubleshooter_collection_output.log"
 PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Support/HelpAndSupportBlade/overview"
 FAILED_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
-SCRIPT_VERSION = 1.0
+SCRIPT_VERSION = 1.1
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
                       "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
