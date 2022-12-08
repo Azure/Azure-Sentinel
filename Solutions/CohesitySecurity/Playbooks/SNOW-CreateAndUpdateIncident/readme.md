@@ -21,7 +21,7 @@ This playbook creates a ticket in ServiceNow.
 2. For the playbook to run, there is a need to assign the Microsoft Sentinel Responder role to the playbook's managed identity.
 * Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
 * Choose the _Access Control (IAM)_ option from the left pane.
-* Click on _Add > Add Role Assignment_ and add Microsoft Sentinel Responder managed identity role to the playbook. 
+* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Responder_ managed identity role to the playbook. 
 
 #  References
  - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm)
