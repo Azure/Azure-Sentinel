@@ -25,7 +25,7 @@ This playbook restores the latest good Helios snapshot. It’s recommended for r
 * Select the _HTTP connector_.
 * Under the _Headers_ section, enter the API key generated on Helios platform.
 * Select _Save_.
-2. (Recommendation) Limit access rights to this playbook to only Backup Admins because this playbook rolls back customer data that can result in a loss of important data if used without a good reason.
+2. (_Recommendation_) Limit access rights to this playbook to only Backup Admins because this playbook rolls back customer data that can result in a loss of important data if used without a good reason.
 * From the Microsoft Sentinel navigation menu, select _Settings_.
 * In the _Settings_ blade, select the _Settings_ tab and expand _Playbook Permissions_.
 * Select _Configure Permissions_ to open the _Manage Permissions_ panel.
