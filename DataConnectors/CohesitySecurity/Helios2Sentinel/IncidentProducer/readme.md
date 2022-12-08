@@ -33,10 +33,10 @@ followed by
 * _startDaysAgo_: If it's the first run, how many days of historical events would you like to get? By default, it's set to _-30_ meaning that you'll get all alerts that happened between 30 days ago and now. If you set it to 0, then you'll get only new alerts.
 * _connectStr_: The Redis cache connection string.
 * _workspace_: Your workspace name.
-4. Restart the Azure Function
-* Go to the Overview blade of the IncidentProducer function
-* Press Restart
-* Confirm the restart
+4. Restart the Azure Function.
+* Go to the Overview blade of the IncidentProducer function.
+* Press _Restart_.
+* Confirm the restart.
 
 ## Testing
 Check that the function successfully runs at  _IncidentProducer | Functions | Monitor_.
