@@ -50,9 +50,9 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                     logger.logWarning(`\n ${l}`);
                 });
 
-                
+                console.log("##vso[task.complete result=SucceededWithIssues;]")
                 //console.log(`Warning: Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`)
-                throw new Error(`Warning: Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
+                //throw new Error(`Warning: Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
             }
         }
 
@@ -118,10 +118,10 @@ let CheckOptions = {
         return ValidateHyperlinks(filePath)
     },
     onExecError: async () => {
-        logger.logWarning(`Warning: HyperLink Validation Failed.`);
+        logger.logError(`HyperLink Validation Failed.`);
     },
     onFinalFailed: async () => {
-        logger.logWarning("Warning: An error occurred, please open an issue");
+        logger.logError("An error occurred, please open an issue");
     },
 };
 
