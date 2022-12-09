@@ -121,7 +121,7 @@ query:  |
   (CommonSecurityLog
   | where FileHash in (sha256Hashes)
   | project TimeGenerated, Message, SourceUserID, FileHash, Type
-  | extend timestamp = TimeGenerated, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = FileHash, AccountCustomEntity = SourceUserID
+  | extend timestamp = TimeGenerated, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(FileHash), AccountCustomEntity = SourceUserID
   ),
   (imFileEvent
   | where TargetFileSHA256 has_any (sha256Hashes)
@@ -132,12 +132,12 @@ query:  |
   (DeviceFileEvents
   | where SHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = InitiatingProcessSHA256,  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
   ),
   (DeviceImageLoadEvents
   | where SHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = InitiatingProcessSHA256,  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
   ),
   (Event
   | where Source =~ "Microsoft-Windows-Sysmon"
@@ -146,11 +146,12 @@ query:  |
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"], Hashes = tostring(EventDetail.[17].["#text"])
   | extend Hashes = extract_all(@"(?P<key>\w+)=(?P<value>[a-zA-Z0-9]+)", dynamic(["key","value"]), Hashes)
-  | extend Hashes = column_ifexists("Hashes", ""), CommandLine = column_ifexists("CommandLine", "")
-  | where (Hashes has_any (sha256Hashes) )  
+  | extend Hashes = column_ifexists("Hashes", dynamic(["", ""])), CommandLine = column_ifexists("CommandLine", "")
+  | mv-expand Hashes
+  | where Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes) 
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, FileHashCustomEntity = Hashes
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, FileHashCustomEntity = tostring(Hashes[1])
   )
   )
 entityMappings:
@@ -172,7 +173,7 @@ entityMappings:
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 metadata:
     source:
