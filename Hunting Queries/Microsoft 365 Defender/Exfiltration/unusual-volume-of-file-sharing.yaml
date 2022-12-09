@@ -1,9 +1,9 @@
-id: 611ebbc2-c789-42ad-93e3-6dc02bfa5e3d
+id: bafc1446-1cc4-4f6d-ad76-1250b8c3b60c
 name: Unusual volume of external file sharing with external user.
 description: |
   This query looks for users sharing access to files with external users. 
   This applies to SharePoint and OneDrive users.
-  Audit event and Cloud application identifier references.
+  Audit event and Cloud application identifier references.  
   Reference - https://learn.microsoft.com/en-us/microsoft-365/compliance/audit-log-sharing?view=o365-worldwide
   Reference - https://learn.microsoft.com/en-us/azure/sentinel/entities-reference#cloud-application-identifiers
 requiredDataConnectors:
@@ -14,7 +14,10 @@ requiredDataConnectors:
 tactics:
 - Exfiltration
 query: |
-  let relevantOperations = pack_array("FileDeleted", "FileRecycled", "FileDeletedFirstStageRecycleBin", "FileDeletedSecondStageRecycleBin", "FileVersionsAllMinorsRecycled", "FileVersionRecycled", "FileVersionsAllRecycled");
+  let usefulExtn= pack_array('csv', 'doc', 'docm', 'docx', 'dot', 'dotx', 'eml', 'pdf', 'pot', 'potm', 'potx', 'ppam', 'pps', 'ppsm', 'ppsx', 'ppt', 'pptm', 'pptx',
+    'psd', 'pst', 'pub', 'ppk', 'rar', 'rtf', 'txt', 'vsd', 'vsdm', 'vsdx', 'vss', 'vssm', 'vst', 'vstm', 'vstx', 'xla', 'xlam', 'xll', 'xlm', 'xls', 'xlsm', 'xlsx', 'xlt',
+    'xltm', 'xltx', 'xps', 'zip', 'xsl');
+  let sharingPerms= pack_array("AnonymousLinkCreated", "SharingInvitationCreated", "SharingSet");
   let relevantAppIds = pack_array(int(20892), int(15600)); // App Ids for SharePoint and OneDrive
   let timeWindow = 24h;
   let timeNow = now();
@@ -28,26 +31,20 @@ query: |
     | project RiskLevelDuringSignIn, AccountObjectId, Timestamp, SessionId=RequestId
     ;
   let hasUsers = isnotempty(toscalar(riskyUsers));
-  let deleteEvents = // look for file deletion activity and scope it to alerted users
-    CloudAppEvents
+  //
+  CloudAppEvents
     | where hasUsers
     | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
     | where ApplicationId in (relevantAppIds)
-    | where isnotempty(AccountObjectId)
-    | where AccountObjectId in (toscalar(impactedAccounts))
-    | where ActionType in (relevantOperations)
-    | extend SessionId= tostring(RawEventData.AppAccessContext.AADSessionId)
-    | where isnotempty(SessionId)
-    | project AccountObjectId, AccountDisplayName, ApplicationId, SessionId, ActionType, Timestamp, ReportId
-    ;   
-   //
-  deleteEvents  
-  | join kind=leftsemi suspUsers on AccountObjectId, SessionId
-  | summarize Count=count() , (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId, ActionType, Time=bin(Timestamp, 5m)
-  // look for only those scoped users who have generated an increase in file deletion activity.
-  | summarize TotalCount= countif(Count > 50), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId 
-  | where TotalCount >= 3
-  | project AccountObjectId, AccountDisplayName, ApplicationId, TotalCount, ReportId, Timestamp
+    | where AccountObjectId in (riskyUsers)
+    | where ActionType in (sharingPerms)
+    | extend SourceFileExtension = tostring(RawEventData.SourceFileExtension), SourceFileName=tostring(RawEventData.SourceFileName), TargetGroup=tostring(RawEventData.TargetUserOrGroupType)
+    | where SourceFileExtension has_any (usefulExtn)
+    | where TargetGroup == "Guest"
+    //
+    | summarize Count = countif(isnotempty( SourceFileName)), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) ,FileNames = make_set(SourceFileName, 10) ,FileExt = make_set(SourceFileExtension, 10) by AccountObjectId, AccountDisplayName, ApplicationId, ActionType, Time = bin(Timestamp, 10m)
+    | summarize TotalCount = countif(Count > 10) , (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId
+    | where TotalCount > 1
 entityMappings:
   - entityType: Account
     fieldMappings:
