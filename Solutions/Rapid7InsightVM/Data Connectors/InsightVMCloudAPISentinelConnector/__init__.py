@@ -8,7 +8,6 @@ import datetime
 import azure.functions as func
 import aiohttp
 from dateutil.parser import parse as parse_date
-from pytz import timezone
 
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 from .state_manager_async import StateManagerAsync
@@ -48,7 +47,7 @@ async def main(mytimer: func.TimerRequest):
         async with aiohttp.ClientSession() as session_sentinel:
             delay = os.environ.get('Delay', "60")
             shift_start_time = os.environ.get('ShiftStartTime', "60")
-            current_time = timezone('UTC').localize(datetime.datetime.utcnow().replace(microsecond=0, second=0))
+            current_time = datetime.datetime.now(tz=datetime.timezone.utc).replace(microsecond=0, second=0)
             end_time = current_time - datetime.timedelta(minutes=int(delay))
             api = InsightVMAPI(session_api, INSIGHTVM_REGION, INSIGHTVM_APIKEY)
             sentinel = AzureSentinelConnectorAsync(session=session_sentinel, log_analytics_uri=LOG_ANALYTICS_URI,
