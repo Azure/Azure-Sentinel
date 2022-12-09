@@ -23,7 +23,7 @@ followed by
 ## Post Publishing Steps
 1. In the [Function App](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp) window choose IncidentConsumer.
 2. Click on _Configuration_ to see the _IncidentConsumer | Configuration_ window.
-3. Set the following parameters in the _Application Settings_ tab to the corresponding values you created in the __Publishing Prerequisites__ above. If you don't see one of these settings, then press the _+New Application Setting_ button and create it ([details](https://learn.microsoft.com/en-us/azure/app-service/configure-common?tabs=portal)). 
+3. Set the following parameters in the _Application Settings_ tab to the corresponding values you created in the __Publishing Prerequisites__ above. If you don't see all or one of these settings, then press the _+New Application Setting_ button and create them ([details](https://learn.microsoft.com/en-us/azure/app-service/configure-common?tabs=portal)). 
 * _AzureWebJobsStorage_: The queue connection string.
 * _workspace_: Your workspace name.
 * _ClientId_: Your client id from your registered app.
@@ -37,4 +37,4 @@ followed by
 * Confirm the restart.
 
 ## Testing
-Check that the function successfully runs at  _IncidentConsumer | Functions | Monitor_.
+Check that the function successfully runs at  _IncidentConsumer | Functions | Monitor_. If not, please check that you created all environment variables correctly by comparing their names with the ones in [local.settings.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/DataConnectors/CohesitySecurity/Helios2Sentinel/IncidentConsumer/local.settings.json).
