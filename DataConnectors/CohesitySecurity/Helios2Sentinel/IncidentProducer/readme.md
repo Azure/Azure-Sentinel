@@ -36,6 +36,7 @@ followed by
 * _startDaysAgo_: If it's the first run, how many days of historical events would you like to get? By default, we recommend to set it to _-30_ meaning that you'll get all alerts that happened between 30 days ago and now. If you set it to 0, then you'll get only new alerts.
 * _connectStr_: The Redis cache connection string.
 * _workspace_: Your workspace name.
+* CohesityQueueName:  Your queue name.
 4. Restart the Azure Function.
 * Go to the _Overview_ blade of the IncidentProducer function.
 * Press _Restart_.

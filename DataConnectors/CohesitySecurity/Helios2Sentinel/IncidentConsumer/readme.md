@@ -29,7 +29,8 @@ followed by
 * _ClientId_: Your client id from your registered app.
 * _ClientKey_:  Your client key (secret) from your registered app.
 * _TenantId_:  Your tenant id (secret) from your registered app.
-* _resourceGroup_: Your [resource group](https://portal.azure.com/#view/HubsExtension/BrowseResourceGroups). 
+* CohesityQueueName:  Your queue name.
+* _resourceGroup_: Your [resource group](https://portal.azure.com/#view/HubsExtension/BrowseResourceGroups).
 * _subscription_: Your [subscription](https://portal.azure.com/#view/Microsoft_Azure_Billing/SubscriptionsBlade).
 4. Restart the Azure Function.
 * Go to the _Overview_ blade of the _IncidentConsumer_ function.
