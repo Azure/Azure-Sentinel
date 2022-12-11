@@ -25,6 +25,7 @@ namespace Helios2Sentinel
 {
     public class IncidentProducer
     {
+        private static readonly object queueLock = new object();
         private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
         public static long GetPreviousUnixTime(ILogger log)
         {
@@ -97,7 +98,11 @@ namespace Helios2Sentinel
                 i++;
                 if (i == 13) break;
             }
-            outputQueueItem.Add(JsonConvert.SerializeObject(output));
+
+            lock (queueLock)
+            {
+                outputQueueItem.Add(JsonConvert.SerializeObject(output));
+            }
         }
 
         [FunctionName("IncidentProducer")]
@@ -165,8 +170,8 @@ namespace Helios2Sentinel
 
                 if (t.Status == TaskStatus.RanToCompletion)
                 {
-                db.StringSet(redisKey, endDateUsecs.ToString());
-            }
+                    db.StringSet(redisKey, endDateUsecs.ToString());
+                }
             }
             catch (Exception ex)
             {
