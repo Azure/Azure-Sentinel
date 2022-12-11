@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM filtering parser for Zscaler ZIA
-  Version: '0.2'
-  LastUpdated: Jan 17 2022
+  Version: '0.3'
+  LastUpdated: Dec 11, 2022
 Product:
   Name: Zscaler ZIA DNS
 Normalization:
@@ -85,7 +85,8 @@ ParserQuery: |
         resaction = DeviceCustomString3, 
         DvcUsername = SourceUserID,
         DvcZone = SourceUserPrivileges,
-        SrcHostname = DeviceName
+        SrcHostname = DeviceName,
+        NetworkProtocol = Protocol
     | extend
         EventCount=int(1), 
         EventStartTime=TimeGenerated, 
@@ -95,11 +96,10 @@ ParserQuery: |
         EventSchemaVersion="0.1.3", 
         EventEndTime=TimeGenerated, 
         SrcUsernameType = "Upn",
-        SrcHostnameType = "Simple",
         EventSubType = iff(resaction == 'None', 'request', 'response'), 
         DvcAction = iff(resaction == 'None', reqaction, resaction), 
         EventType = 'Query', 
-        DnsRuleName = strcat (FlexString1, " / ", FlexString2),
+        RuleName = strcat (FlexString1, " / ", FlexString2),
         // -- Adjustment to support both old and new CSL fields.
         UrlCategory = coalesce(column_ifexists("DeviceEventCategory", ""), extract("cat=(.*)", 1, AdditionalExtensions), ""),  
         DnsNetworkDuration = coalesce(
@@ -123,11 +123,6 @@ ParserQuery: |
         DvcHostname = Dvc,
         Duration = DnsNetworkDuration,
         User = SrcUsername
-    // -- Backward Compatibility
-    | extend
-        Query=DnsQuery, 
-        QueryTypeName=DnsQueryTypeName, 
-        ResponseName=DnsResponseName, 
-        ResponseCodeName=DnsResponseCodeName
+    | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, EventOutcome, FieldDevice*, LogSeverity, Message, ExtID, Reason, ApplicationProtocol, ReportReferenceLink, Activity, resaction, reqaction
     };
   ZscalerDNSevents (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)
