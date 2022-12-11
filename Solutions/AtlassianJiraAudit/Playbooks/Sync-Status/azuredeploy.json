@@ -2,36 +2,45 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Sync Jira to Sentinel - public comments",
-        "description": "This Playbook will sync the public comments from JIRA to Azure Sentinel.",
-        "prerequisites": ["1. Configure JIRA with for custom fields and automation rule. [Learn more](https://github.com/ThijsLecomte/Azure-Sentinel/tree/master/Playbooks/Sync-IncidentsWithJIRA#2-jira-configuration)",
-            "2. After playbook is deployed, grant the playbook permissions on the Key Vault (Secret - Get) and on Azure Sentinel workspace (Azure Sentinel responder)",
-            "Optional: deploy Azure Function to sync comments from Jira to Azure Sentinel."],
-    "prerequisitesDeployTemplateFile": "../../Sync-Comments/azuredeploy.json",
-    "lastUpdateTime": "2021-07-20T00:00:00.000Z",
-        "entities": [],
+        "title": "Sync Jira to Sentinel - Status",
+        "description": "This Playbook will sync the status from JIRA to Microsoft Sentinel.",
+        "prerequisites": [
+            "1. Configure JIRA with for custom fields and automation rule. [Learn more](https://github.com/ThijsLecomte/Azure-Sentinel/tree/master/Playbooks/Sync-IncidentsWithJIRA#2-jira-configuration)",
+            "2. After playbook is deployed, grant the playbook permissions on the Key Vault (Secret - Get) and on Microsoft Sentinel workspace (Microsoft Sentinel responder)",
+            "Optional: deploy Azure Function to sync comments from Jira to Microsoft Sentinel."
+        ],
+        "prerequisitesDeployTemplateFile": "../Sync-CommentsFunctionApp/azuredeploy.json",
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "entities": [ "Account" ],
         "tags": [ "Sync" ],
         "support": {
             "tier": "community"
         },
         "author": {
             "name": "Thijs Lecomte"
-        }
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Sync Jira to Sentinel - Status",
+                "notes": [ "Initial version" ]
+            }
+        ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Add-JIRALinkComment",
+            "defaultValue": "Sync-Status",
             "type": "string"
         }
     },
     "variables": {
-        "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+        "AzureSentinelConnectionName" : "[concat('azuresentinel-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('SentinelConnectionName')]",
+            "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
                 "displayName": "[parameters('PlaybookName')]",
@@ -51,11 +60,11 @@
                 "type": "SystemAssigned"
             },
             "tags": {
-                "hidden-SentinelTemplateName": "SyncComments",
+                "hidden-SentinelTemplateName": "SyncJIRAStatus",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -1221,31 +1230,85 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V3)": {
-                            "runAfter": {
-                                "Create_HTML_Comment": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": {
-                                    "incidentArmId": "@triggerBody()?['fields']?['customfield_10175']",
-                                    "message": "<p>@{outputs('Create_HTML_Comment')}</p>"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        "Switch": {
+                            "runAfter": {},
+                            "cases": {
+                                "Case": {
+                                    "case": "NEW",
+                                    "actions": {
+                                        "Update_incident_2": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['fields']?['customfield_10175']",
+                                                    "status": "New"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
+                                            }
+                                        }
                                     }
                                 },
-                                "method": "post",
-                                "path": "/Incidents/Comment"
-                            }
-                        },
-                        "Create_HTML_Comment": {
-                            "runAfter": {},
-                            "type": "Compose",
-                            "inputs": "[[[JIRA ID: @{triggerBody()?['key']}](@{triggerBody()?['fields']?['customfield_10010']?['_links']?['web']})"
+                                "Case_2": {
+                                    "case": "INDETERMINATE",
+                                    "actions": {
+                                        "Update_incident_3": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['fields']?['customfield_10175']",
+                                                    "status": "Active"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_3": {
+                                    "case": "DONE",
+                                    "actions": {
+                                        "Update_incident": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "classification": {
+                                                        "ClassificationAndReason": "@{triggerBody()?['fields']?['customfield_10147']?['value']}",
+                                                        "ClassificationReasonText": "@triggerBody()?['fields']?['customfield_10146']"
+                                                    },
+                                                    "incidentArmId": "@triggerBody()?['fields']?['customfield_10175']",
+                                                    "status": "Closed"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {}
+                            },
+                            "expression": "@triggerBody()?['fields']?['customfield_10010']?['currentStatus']?['statusCategory']",
+                            "type": "Switch"
                         }
                     },
                     "outputs": {}
@@ -1253,10 +1316,10 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                             "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
-                                "connectionName": "[variables('SentinelConnectionName')]",
-                                "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
                                 "connectionProperties": {
                                     "authentication": {
                                         "type": "ManagedServiceIdentity"
