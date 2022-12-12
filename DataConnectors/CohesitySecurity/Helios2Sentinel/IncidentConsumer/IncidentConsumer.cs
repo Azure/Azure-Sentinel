@@ -66,12 +66,12 @@ namespace IncidentConsumer
                 log.LogError("URI --> " + URI);
                 log.LogError("body --> " + body);
                 log.LogError("ex --> " + ex.Message);
-                throw new Exception();
             }
+            throw new Exception();
+            return null;
         }
 
         [FunctionName("IncidentConsumer")]
-        [FixedDelayRetry(5, "00:05:00")]
         public void Run([QueueTrigger("%CohesityQueueName%", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
         {
             log.LogInformation("queueItem --> " + queueItem);
