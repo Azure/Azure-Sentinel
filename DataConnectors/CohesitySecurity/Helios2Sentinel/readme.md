@@ -9,5 +9,5 @@ Before deployment, please make sure that all prerequisites and pre-deployment st
 * Install [azure-functions-core-tools](https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local).
 
 ## Deployment
-* Deploy [IncidentProducer](TBD) function.
-* Deploy [IncidentConsumer](TBD) function.
+* Deploy [IncidentProducer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/DataConnectors/CohesitySecurity/Helios2Sentinel/IncidentProducer#readme) function.
+* Deploy [IncidentConsumer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/DataConnectors/CohesitySecurity/Helios2Sentinel/IncidentConsumer#readme) function.
