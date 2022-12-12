@@ -24,7 +24,7 @@ namespace Kqlvalidations.Tests
         public override List<string> GetFilesNames()
         {
             
-            Console.WriteLine("PR number printed "+Environment.GetEnvironmentVariable("PRNumberNew"));
+            Console.WriteLine("PR number printed "+Environment.GetEnvironmentVariable("PrNumberNew"));
             var directoryPaths = GetDirectoryPaths();
             return directoryPaths.Aggregate(new List<string>(), (accumulator, directoryPath) =>
             {
