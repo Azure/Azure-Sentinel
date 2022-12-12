@@ -11,7 +11,7 @@ terraform {
 
 locals{
   sentinel_app_id = "2041288c-b303-4ca0-9076-9612db3beeb2" // Do not change it. It's our Azure Active Directory app id that will be used for authentication with your project.
-  sentinel_tenant_id = "33e01921-4d64-4f8c-a055-5bdaffd5e33d" // Do not change it. It's our tenant id that will be used for authentication with your project.
+  sentinel_auth_id = "33e01921-4d64-4f8c-a055-5bdaffd5e33d" // Do not change it. It's our tenant id that will be used for authentication with your project.
 }
 
 data "google_project" "project" {}
@@ -45,7 +45,7 @@ resource "google_iam_workload_identity_pool_provider" "sentinel-workload-identit
 
   oidc {
     allowed_audiences = ["api://${local.sentinel_app_id}"]
-    issuer_uri        = "https://sts.windows.net/${local.sentinel_tenant_id}"
+    issuer_uri        = "https://sts.windows.net/${local.sentinel_auth_id}"
   }
 }
 
@@ -81,6 +81,10 @@ resource "google_service_account_iam_binding" "bind-workloadIdentityUser-role-to
   ]
 }
 
+output "An_output_message"{
+  value = "Please copy the following values to Sentinel"
+}
+
 output "GCP_project_id" {
   value       = data.google_project.project.project_id
 }
@@ -93,10 +97,10 @@ output "Identity_federation_pool_name" {
   value       = google_iam_workload_identity_pool.sentinel-workload-identity-pool.display_name
 }
 
-output "Service_account_name" {
+output "Service_account_email" {
   value       = "${google_service_account.sentinel-service-account.account_id}@${data.google_project.project.project_id}.iam.gserviceaccount.com"
 }
 
-output "Identity_provider_id" {
+output "Identity_federation_provider_id" {
   value       = google_iam_workload_identity_pool_provider.sentinel-workload-identity-pool-provider.workload_identity_pool_provider_id
 }
