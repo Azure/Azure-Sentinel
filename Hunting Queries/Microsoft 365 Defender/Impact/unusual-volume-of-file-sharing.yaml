@@ -1,0 +1,64 @@
+id: 611ebbc2-c789-42ad-93e3-6dc02bfa5e3d
+name: Unusual volume of external file sharing with external user.
+description: |
+  This query looks for users sharing access to files with external users. 
+  This applies to SharePoint and OneDrive users.
+  Audit event and Cloud application identifier references.
+  Reference - https://learn.microsoft.com/en-us/microsoft-365/compliance/audit-log-sharing?view=o365-worldwide
+  Reference - https://learn.microsoft.com/en-us/azure/sentinel/entities-reference#cloud-application-identifiers
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - AADSignInEventsBeta
+tactics:
+- Exfiltration
+query: |
+  let relevantOperations = pack_array("FileDeleted", "FileRecycled", "FileDeletedFirstStageRecycleBin", "FileDeletedSecondStageRecycleBin", "FileVersionsAllMinorsRecycled", "FileVersionRecycled", "FileVersionsAllRecycled");
+  let relevantAppIds = pack_array(int(20892), int(15600)); // App Ids for SharePoint and OneDrive
+  let timeWindow = 24h;
+  let timeNow = now();
+  //
+  let riskyUsers=
+    AADSignInEventsBeta    
+    | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
+    | where isnotempty(AccountObjectId) and isnotempty(RequestId) // In AADSignInEventsBeta, the SessionId column has inaccurate data and instead the RequestId has the actual Session identifier
+    | where ErrorCode == 0
+    | where RiskLevelDuringSignIn >=80
+    | project RiskLevelDuringSignIn, AccountObjectId, Timestamp, SessionId=RequestId
+    ;
+   let deleteEvents = // look for file deletion activity and scope it to alerted users
+    CloudAppEvents
+    | where hasUsers
+    | where Timestamp between ((alertTime - timeWindow) .. (alertTime + timeWindow))
+    | where ApplicationId in (relevantAppIds)
+    | where isnotempty(AccountObjectId)
+    | where AccountObjectId in (toscalar(impactedAccounts))
+    | where ActionType in (relevantOperations)
+    | extend SessionId= tostring(RawEventData.AppAccessContext.AADSessionId)
+    | where isnotempty(SessionId)
+    | project AccountObjectId, AccountDisplayName, ApplicationId, SessionId, ActionType, Timestamp, ReportId
+    ;   
+   //
+  deleteEvents  
+  | join kind=leftsemi suspUsers on AccountObjectId, SessionId
+  | summarize Count=count() , (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId, ActionType, Time=bin(Timestamp, 5m)
+  // look for only those scoped users who have generated an increase in file deletion activity.
+  | summarize TotalCount= countif(Count > 50), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId 
+  | where TotalCount >= 3
+  | project AccountObjectId, AccountDisplayName, ApplicationId, TotalCount, ReportId, Timestamp
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountObjectId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountDisplayName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+customDetails:
+  Count: TotalCount
