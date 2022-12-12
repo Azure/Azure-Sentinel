@@ -46,6 +46,7 @@ namespace Kqlvalidations.Tests
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
+        //hi
         [Theory]
         [ClassData(typeof(DetectionsYamlFilesTestData))]
         public void Validate_DetectionQueries_SkippedTemplatesDoNotHaveValidKql(string fileName, string encodedFilePath)
