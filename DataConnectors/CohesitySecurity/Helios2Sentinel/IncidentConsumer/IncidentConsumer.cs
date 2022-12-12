@@ -33,57 +33,46 @@ namespace IncidentConsumer
 
         private string doPUT(string URI, string body, String token, ILogger log)
         {
-            Uri uri = new Uri(String.Format(URI));
-
-            // Create the request
-            var httpWebRequest = (HttpWebRequest) WebRequest.Create(uri);
-            httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
-            httpWebRequest.ContentType = "application/json";
-            httpWebRequest.Method = "PUT";
-
             try
             {
+                Uri uri = new Uri(String.Format(URI));
+
+                // Create the request
+                var httpWebRequest = (HttpWebRequest) WebRequest.Create(uri);
+                httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
+                httpWebRequest.ContentType = "application/json";
+                httpWebRequest.Method = "PUT";
+
                 using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
                 {
                     streamWriter.Write(body);
                     streamWriter.Flush();
                     streamWriter.Close();
                 }
-            }
-            catch (Exception ex)
-            {
-                log.LogError("ex --> 1 " + ex.Message);
-            }
 
-            // Get the response
-            HttpWebResponse httpResponse = null;
-            string result = null;
-            try
-            {
+                // Get the response
+                HttpWebResponse httpResponse = null;
+                string result = null;
                 httpResponse = (HttpWebResponse) httpWebRequest.GetResponse();
-            }
-            catch (Exception ex)
-            {
-                log.LogError("URI --> 2 " + URI);
-                log.LogError("body --> 2 " + body);
-                log.LogError("ex --> 2 " + ex.Message);
+
                 using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
                 {
                     result = streamReader.ReadToEnd();
-                    log.LogError("result --> 1 " + result);
                 }
                 return result;
             }
-
-            using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+            catch (Exception ex)
             {
-                result = streamReader.ReadToEnd();
+                log.LogError("URI --> " + URI);
+                log.LogError("body --> " + body);
+                log.LogError("ex --> " + ex.Message);
             }
-            return result;
+            throw new Exception();
+            return null;
         }
 
         [FunctionName("IncidentConsumer")]
-        public void Run([QueueTrigger("cohesity-incidents", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
+        public void Run([QueueTrigger("%CohesityQueueName%", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
         {
             log.LogInformation("queueItem --> " + queueItem);
             string token = GetAccessTokenAsync(ARM_ENDPOINT).Result;

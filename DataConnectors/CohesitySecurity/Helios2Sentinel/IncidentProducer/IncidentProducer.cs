@@ -25,6 +25,7 @@ namespace Helios2Sentinel
 {
     public class IncidentProducer
     {
+        private static readonly object queueLock = new object();
         private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
         public static long GetPreviousUnixTime(ILogger log)
         {
@@ -62,8 +63,8 @@ namespace Helios2Sentinel
             });
         }
 
-        public static async Task ParseAlertToQueueAsync(
-            [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
+        public static void ParseAlertToQueue(
+            [Queue("%CohesityQueueName%"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             dynamic alert)
         {
             dynamic output = new ExpandoObject();
@@ -97,7 +98,11 @@ namespace Helios2Sentinel
                 i++;
                 if (i == 13) break;
             }
-            outputQueueItem.Add(JsonConvert.SerializeObject(output));
+
+            lock (queueLock)
+            {
+                outputQueueItem.Add(JsonConvert.SerializeObject(output));
+            }
         }
 
         [FunctionName("IncidentProducer")]
@@ -107,7 +112,7 @@ namespace Helios2Sentinel
 #else
             [TimerTrigger("* */5 * * * *")]TimerInfo myTimer,
 #endif
-            [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
+            [Queue("%CohesityQueueName%"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
@@ -147,15 +152,26 @@ namespace Helios2Sentinel
                 StreamReader reader = new StreamReader(stream);
                 dynamic alerts = JsonConvert.DeserializeObject(reader.ReadToEnd());
 
-                /*
-                 * We could parse and add alerts to the queue in parallel as long as we protect the queue with a semaphore
-                 * and wait for all tasks to finish.
-                 */
+                var tasks = new List<Task>();
+
                 foreach (var alert in alerts)
                 {
-                    await ParseAlertToQueueAsync(outputQueueItem, alert);
+                    tasks.Add(Task.Run( () =>
+                    {
+                        ParseAlertToQueue(outputQueueItem, alert);
+                    }));
                 }
-                db.StringSet(redisKey, endDateUsecs.ToString());
+                Task t = Task.WhenAll(tasks);
+                try
+                {
+                    t.Wait();
+                }
+                catch {}
+
+                if (t.Status == TaskStatus.RanToCompletion)
+                {
+                    db.StringSet(redisKey, endDateUsecs.ToString());
+                }
             }
             catch (Exception ex)
             {
