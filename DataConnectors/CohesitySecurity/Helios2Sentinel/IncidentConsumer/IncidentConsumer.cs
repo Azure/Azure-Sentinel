@@ -34,14 +34,14 @@ namespace IncidentConsumer
         private string doPUT(string URI, string body, String token, ILogger log)
         {
             try
-        {
-            Uri uri = new Uri(String.Format(URI));
+            {
+                Uri uri = new Uri(String.Format(URI));
 
-            // Create the request
-            var httpWebRequest = (HttpWebRequest) WebRequest.Create(uri);
-            httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
-            httpWebRequest.ContentType = "application/json";
-            httpWebRequest.Method = "PUT";
+                // Create the request
+                var httpWebRequest = (HttpWebRequest) WebRequest.Create(uri);
+                httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
+                httpWebRequest.ContentType = "application/json";
+                httpWebRequest.Method = "PUT";
 
                 using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
                 {
@@ -50,9 +50,9 @@ namespace IncidentConsumer
                     streamWriter.Close();
                 }
 
-            // Get the response
-            HttpWebResponse httpResponse = null;
-            string result = null;
+                // Get the response
+                HttpWebResponse httpResponse = null;
+                string result = null;
                 httpResponse = (HttpWebResponse) httpWebRequest.GetResponse();
 
                 using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
@@ -67,7 +67,7 @@ namespace IncidentConsumer
                 log.LogError("body --> " + body);
                 log.LogError("ex --> " + ex.Message);
                 throw new Exception();
-                }
+            }
         }
 
         [FunctionName("IncidentConsumer")]
