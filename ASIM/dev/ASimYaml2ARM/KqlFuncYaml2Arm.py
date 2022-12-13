@@ -207,8 +207,8 @@ for f in files:
             Parameters = ""
             for param in params:
                 logging.debug("Param: " + str(param))
-                if param['Type'] == 'table':
-                    ParamString = param["Name"]
+                if param['Type'].startswith('table:'):
+                    ParamString = f'{param["Name"]}:{param["Type"].split(":",1)[1]}'
                 else:
                     try:
                         Default = param["Default"] 
