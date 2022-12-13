@@ -5,8 +5,8 @@ Before deployment, please make sure that all prerequisites and pre-deployment st
 ## Prerequisites
 * _(Recommendation)_ Get access to [Visual Studio](https://visualstudio.microsoft.com/vs/community/) or [Visual Studio Code](https://code.visualstudio.com/).
 * Install [dotnet core](https://dotnet.microsoft.com/download/dotnet-core).
-* Install [azure-cli](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest).
-* Install [azure-functions-core-tools](https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local).
+* Install [azure-cli](https://docs.microsoft.com/cli/azure/install-azure-cli?view=azure-cli-latest).
+* Install [azure-functions-core-tools](https://docs.microsoft.com/azure/azure-functions/functions-run-local).
 
 ## Deployment
 * Deploy [IncidentProducer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/DataConnectors/CohesitySecurity/Helios2Sentinel/IncidentProducer#readme) function.
