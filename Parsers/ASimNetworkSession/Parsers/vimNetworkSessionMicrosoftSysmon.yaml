@@ -48,93 +48,70 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
-    
-let Sysmon3_NetworkEvent =    
+  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+  let Sysmon3_NetworkEvent =    
     Event
-        | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
-        | where not(disabled)
-        | where Source == "Microsoft-Windows-Sysmon" and EventID==3
-        // ***************  Prefilterring *****************************************************************
-        | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
-            and (array_length(ip_any)==0 
-                  or has_any_ipv4_prefix(EventData,ip_any)
-                ) 
-           and (array_length(hostname_has_any)==0 
-                  or EventData has_any(hostname_has_any))  // can we not just check on "Computer" in this case? I took this from the Linux Sysmon example
-            and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
-        // ***************  Prefilterring *****************************************************************   
-        | parse-kv EventData as 
-          (
+    | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
+    | where not(disabled)
+    | where Source == "Microsoft-Windows-Sysmon" and EventID==3
+    // ***************  Prefilterring *****************************************************************
+    | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+      and (array_length(ip_any)==0 
+           or has_any_ipv4_prefix(EventData,ip_any)
+          ) 
+      and (array_length(hostname_has_any)==0 
+           or EventData has_any(hostname_has_any))  // can we not just check on "Computer" in this case? I took this from the Linux Sysmon example
+      and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
+    // ***************  Prefilterring *****************************************************************   
+    | parse-kv EventData as 
+      (
           SourceIp:string,
           DestinationIp:string,
           SourceHostname:string,
-          DestinationHostname:string
-          ) 
+          DestinationHostname:string,
+          Initiated:bool  // Initiated indicates the process initiated a connection (meaning outbound)
+      ) 
           with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')    
-        | where (array_length(srcipaddr_has_any_prefix)==0 
+    | where 
+      (array_length(srcipaddr_has_any_prefix)==0 
                   or has_any_ipv4_prefix(SourceIp,srcipaddr_has_any_prefix)
-                )
-                | project-rename SrcHostname = SourceHostname
-        | project-rename  DstHostname = DestinationHostname
-              | extend SourceIsInternal = iff (
-          ipv4_is_private(SourceIp) , "true", "false")
-          | extend DestinationIsInternal = iff (
-          ipv4_is_private(DestinationIp) , "true", "false")  // this works only on ipv4 and on RFC standard internal Ips
-                    | extend NetworkDirection = case(
-                                    ((SourceIsInternal == "true") and (DestinationIsInternal == "false")) , "Outbound",
-                                    ((SourceIsInternal == "false") and (DestinationIsInternal == "true")), "Inbound", 
-                                                                                // Check which address is private. If only one address is private, it is the local machine, and the user and process fields should assume its role.
-                                    (DstHostname == "-") , "Outbound",
-                                    (SrcHostname == "-") , "Inbound",
-                                                                                 //If either the source or destination hostname are empty ("-"), the other one is the local machine.
-                                    "Outbound") 
-                                                                                // this cannot be proven, we take this as a fallback
-        | project-away  SourceIsInternal, DestinationIsInternal
-        ;
-        
+      )
+    | project-rename 
+                SrcHostname = SourceHostname,
+                DstHostname = DestinationHostname
+    ;    
   let Sysmon3_NetworkWindowsEvent =    
-    WindowsEvent
-        | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
-        | where not(disabled)
-          | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3
-        // ***************  Prefilterring *****************************************************************
-        | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+  WindowsEvent
+    | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
+    | where not(disabled)
+    | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3
+    // ***************  Prefilterring *****************************************************************
+    | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
             and (array_length(ip_any)==0 
                   or has_any_ipv4_prefix(EventData,ip_any)
                 ) 
            and (array_length(hostname_has_any)==0 
                   or EventData has_any(hostname_has_any))  // can we not just check on "Computer" in this case? I took this from the Linux Sysmon example
             and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
-        // ***************  Prefilterring *****************************************************************   
-      | extend
+    // ***************  Prefilterring *****************************************************************   
+    | extend
             SourceIp = tostring(EventData.SourceIp),
             DestinationIp = tostring(EventData.DestinationIp),
             DstHostname = tostring(EventData.DestinationHostname),
-            SrcHostname = tostring(EventData.SrcHostname)
-                  | extend SourceIsInternal = iff (
+            SrcHostname = tostring(EventData.SrcHostname),
+            Initiated = tobool(EventData.Initiated)
+    | extend 
+    SourceIsInternal = iff (
           ipv4_is_private(SourceIp) , "true", "false")
-          | extend DestinationIsInternal = iff (
+    | extend 
+    DestinationIsInternal = iff (
           ipv4_is_private(DestinationIp) , "true", "false")  // this works only on ipv4 and on RFC standard internal Ips
-                    | extend NetworkDirection = case(
-                                    ((SourceIsInternal == "true") and (DestinationIsInternal == "false")) , "Outbound",
-                                    ((SourceIsInternal == "false") and (DestinationIsInternal == "true")), "Inbound", 
-                                                                                // Check which address is private. If only one address is private, it is the local machine, and the user and process fields should assume its role.
-                                    (DstHostname == "-") , "Outbound",
-                                    (SrcHostname == "-") , "Inbound",
-                                                                                 //If either the source or destination hostname are empty ("-"), the other one is the local machine.
-                                    "Outbound") 
-                                                                                // this cannot be proven, we take this as a fallback
-        | project-away  SourceIsInternal, DestinationIsInternal
-
-          ;
-  
-
+    ;
     let EventParser = (T: (Event: string)) {
-      T 
-      | parse-kv EventData as 
+    T 
+    | parse-kv EventData as 
           (
           RuleName:string,
           UtcTime:datetime,
@@ -156,24 +133,24 @@ let Sysmon3_NetworkEvent =
           DestinationHostname:string
           ) 
           with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')
-         | project-away EventData, ParameterXml, RenderedDescription
-         | project-rename
+    | project-away EventData, ParameterXml, RenderedDescription
+    | project-rename
          SrcIpAddr = SourceIp,
          DstIpAddr = DestinationIp,
          SrcHostname = SourceHostname,
          DstHostname = DestinationHostname
-         | extend
+    | extend
          ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]), " ")
     };
-
     let OutboundNetworkEvents = 
     Sysmon3_NetworkEvent
-    | where NetworkDirection == "Outbound"
+    | where Initiated
     | invoke EventParser ()
     | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any) 
            , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
-    | extend ASimMatchingIpAddr = case(
+    | extend 
+    ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
             , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
             , temp_isSrcMatch, "SrcIpAddr"
@@ -181,7 +158,8 @@ let Sysmon3_NetworkEvent =
             , "No match"
     )
     | where ASimMatchingIpAddr != "No match"
-    | extend temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
+    | extend 
+    temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
             , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
     | extend ASimMatchingHostname = case(
             array_length(hostname_has_any) == 0, "-" // match not requested: probably most common case
@@ -190,9 +168,9 @@ let Sysmon3_NetworkEvent =
             , temp_isDstHostMatch, "DstHostname"
             , "No match"
     )
-     | where ASimMatchingHostname != "No match"
-     | project-away temp_*
-     | extend
+    | where ASimMatchingHostname != "No match"
+    | project-away temp_*
+    | extend 
         SrcUsernameType = 'Simple',
         SrcUsername = User,
         SrcProcessId = ProcessId, 
@@ -201,11 +179,9 @@ let Sysmon3_NetworkEvent =
         SrcAppName = Image,
         SrcAppType = 'Process'
     ;
-
-
     let InboundNetworkEvents = 
     Sysmon3_NetworkEvent
-    | where NetworkDirection == "Inbound"
+    | where not(Initiated)
     | invoke EventParser ()
     | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any) 
@@ -227,9 +203,9 @@ let Sysmon3_NetworkEvent =
             , temp_isDstHostMatch, "DstHostname"
             , "No match"
     )
-     | where ASimMatchingHostname != "No match"
-     | project-away temp_*
-     | extend
+    | where ASimMatchingHostname != "No match"
+    | project-away temp_*
+    | extend 
         SrcUsernameType = 'Simple',
         SrcUsername = User,
         SrcProcessId = ProcessId, 
@@ -238,10 +214,9 @@ let Sysmon3_NetworkEvent =
         SrcAppName = Image,
         SrcAppType = 'Process'
     ;
-
     let WindowsEventParser = (T: (Event: string)) {
       T       
-      | extend
+    | extend 
             RuleName = tostring(EventData.RuleName),
             UtcTime = todatetime(EventData.UtcTime),
             ProcessGuid = tostring(EventData.ProcessGuid),
@@ -261,14 +236,12 @@ let Sysmon3_NetworkEvent =
             DstHostname = tostring(EventData.DestinationHostname),
             SrcHostname = tostring(EventData.SrcHostname)
     | project-away EventData
-    | extend
+    | extend 
          ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]), " ")
          }
-
-
     let OutboundNetworkWindowsEvents = 
     Sysmon3_NetworkWindowsEvent
-    | where NetworkDirection == "Outbound"
+    | where Initiated
     | invoke WindowsEventParser ()
           | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
@@ -283,16 +256,16 @@ let Sysmon3_NetworkEvent =
      | where ASimMatchingIpAddr != "No match"
      | extend temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
             , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
-      | extend ASimMatchingHostname = case(
+     | extend ASimMatchingHostname = case(
             array_length(hostname_has_any) == 0, "-" // match not requested: probably most common case
             , (temp_isSrcHostMatch and temp_isDstHostMatch), "Both" // has to be checked before the individual 
             , temp_isSrcHostMatch, "SrcHostname"
             , temp_isDstHostMatch, "DstHostname"
             , "No match"
     )
-| where ASimMatchingHostname != "No match"
-| project-away temp_* 
-| extend
+    | where ASimMatchingHostname != "No match"
+    | project-away temp_* 
+    | extend 
         SrcUsernameType = 'Simple',
         SrcUsername = User,
         SrcProcessId = ProcessId, 
@@ -300,11 +273,10 @@ let Sysmon3_NetworkEvent =
         SrcProcessName = Image,
         SrcAppName = Image,
         SrcAppType = 'Process'
-;
-
-    let inboundNetworkWindowsEvents = 
-    Sysmon3_NetworkWindowsEvent
-    | where NetworkDirection == "Inbound"
+      ;
+  let  inboundNetworkWindowsEvents = 
+  Sysmon3_NetworkWindowsEvent
+    | where not(Initiated)
     | invoke WindowsEventParser ()
           | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
@@ -316,19 +288,19 @@ let Sysmon3_NetworkEvent =
             , temp_isDstMatch, "DstIpAddr"
             , "No match"
     )       
-     | where ASimMatchingIpAddr != "No match"
-     | extend temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
+    | where ASimMatchingIpAddr != "No match"
+    | extend  temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
             , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
-      | extend ASimMatchingHostname = case(
+    | extend  ASimMatchingHostname = case(
             array_length(hostname_has_any) == 0, "-" // match not requested: probably most common case
             , (temp_isSrcHostMatch and temp_isDstHostMatch), "Both" // has to be checked before the individual 
             , temp_isSrcHostMatch, "SrcHostname"
             , temp_isDstHostMatch, "DstHostname"
             , "No match"
     )
-| where ASimMatchingHostname != "No match"
-| project-away temp_* 
-| extend
+    | where ASimMatchingHostname != "No match"
+    | project-away temp_* 
+    | extend 
         SrcUsernameType = 'Simple',
         SrcUsername = User,
         SrcProcessId = ProcessId, 
@@ -336,32 +308,29 @@ let Sysmon3_NetworkEvent =
         SrcProcessName = Image,
         SrcAppName = Image,
         SrcAppType = 'Process'
-;
-
-    let SysmonForWindowsNetworks =
-        union OutboundNetworkEvents, InboundNetworkEvents, OutboundNetworkWindowsEvents, inboundNetworkWindowsEvents
-        | extend 
-            EventType = 'NetworkSession',
-            EventStartTime = EventEndTime,
-            EventCount = int(1),
-            EventVendor = 'Microsoft',
-            EventSchemaVersion = '0.2.4',
-            EventSchema = 'NetworkSession', 
-            EventProduct = 'Sysmon for Windows',
-            EventType = 'EndpointNetworkSession',
-            EventResult = 'Success',
-            EventSeverity = 'Informational',
-            DvcOs = 'Windows',
-            Protocol = toupper(Protocol),
-            EventOriginalType = '3' // Set with a constant value to avoid parsing
-            | project-rename 
-            DvcHostname = Computer
-            | extend // aliases
-            Dvc = DvcHostname,
-            Hostname = DstHostname,
-            IpAddr = SrcIpAddr,
-            Src = SrcIpAddr,
-            Dst = DstIpAddr
-    ;
-
-    SysmonForWindowsNetworks
+      ;
+  let SysmonForWindowsNetworks =
+  union OutboundNetworkEvents, InboundNetworkEvents, OutboundNetworkWindowsEvents, inboundNetworkWindowsEvents
+    | extend 
+                EventType = 'NetworkSession',
+                EventStartTime = EventEndTime,
+                EventCount = int(1),
+                EventVendor = 'Microsoft',
+                EventSchemaVersion = '0.2.4',
+                EventSchema = 'NetworkSession', 
+                EventProduct = 'Sysmon for Windows',
+                EventType = 'EndpointNetworkSession',
+                EventResult = 'Success',
+                EventSeverity = 'Informational',
+                DvcOs = 'Windows',
+                Protocol = toupper(Protocol),
+                 EventOriginalType = '3', // Set with a constant value to avoid parsing
+                Dvc = DvcHostname,
+                Hostname = DstHostname,
+                IpAddr = SrcIpAddr,
+                Src = SrcIpAddr,
+                Dst = DstIpAddr
+    | project-rename 
+                DvcHostname = Computer
+      ;
+      SysmonForWindowsNetworks
