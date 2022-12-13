@@ -1,7 +1,7 @@
 Parser:
   Title:  Network Session ASIM parser for Sysmon for Linux
   Version: '0.3'
-  LastUpdated: Jun 16, 2022
+  LastUpdated: Dec 13, 2022
 Product:
   Name: Sysmon for Linux
 Normalization:
@@ -25,40 +25,51 @@ ParserQuery: |
     Syslog | where not(disabled)
     | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>3</EventID>')
     | project-away ProcessName, ProcessID
-    | parse SyslogMessage with * '<Data Name="SourceIp">' SrcIpAddr:string '</Data>' *
-    | extend outbound = (SrcIpAddr == HostIP or SrcIpAddr in ('127.0.0.1', '0.0.0.0'))
+    | parse-kv SyslogMessage as (
+                     Initiated:bool
+                                 ) with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')
     ;
     let parser = (T: (SyslogMessage: string)) {
       T 
-      | parse SyslogMessage with 
-          *
-          '<EventRecordID>' EventOriginalUid:string '</EventRecordID>'
-          *
-          '<Computer>' SysmonComputer:string '</Computer>'
-          *
-          '<Data Name="RuleName">' RuleName:string '</Data>'
-          '<Data Name="UtcTime">' EventEndTime:datetime '</Data>'
-          '<Data Name="ProcessGuid">{' ProcessGuid:string '}</Data>'
-          '<Data Name="ProcessId">' ProcessId:string '</Data>'
-          '<Data Name="Image">' Process:string '</Data>'
-          '<Data Name="User">' User:string '</Data>'
-          '<Data Name="Protocol">' Protocol:string '</Data>' // -- source is lowercase
-          '<Data Name="Initiated">' Initiated:bool '</Data>' 
-          '<Data Name="SourceIsIpv6">' SourceIsIpv6:bool '</Data>'		
-          '<Data Name="SourceIp">' * '</Data>'
-          '<Data Name="SourceHostname">' SrcHostname:string '</Data>'
-          '<Data Name="SourcePort">' SrcPortNumber:int '</Data>'
-          '<Data Name="SourcePortName">' SrcPortName:string '</Data>'
-          '<Data Name="DestinationIsIpv6">' DestinationIsIpv6:bool '</Data>'
-          '<Data Name="DestinationIp">' DstIpAddr:string '</Data>'
-          '<Data Name="DestinationHostname">' DstHostname:string '</Data>'
-          '<Data Name="DestinationPort">' DstPortNumber:int '</Data>'
-          '<Data Name="DestinationPortName">' DstPortName:string '</Data>'
-          *
+      | parse-kv SyslogMessage as (
+                 EventOriginalUid:string,
+                 SysmonComputer:string,
+                 RuleName:string,
+                 EventEndTime:datetime,
+                 ProcessGuid:string,
+                 ProcessId:string,
+                 Process:string,
+                 User:string,
+                 Protocol:string,
+                 Initiated:bool,
+                 SourceIsIpv6:bool,
+                 SourceIp:string,
+                 SrcHostname:string,
+                 SrcPortNumber:int,
+                 SrcPortName:string,
+                 DestinationIsIpv6:bool,
+                 DstIpAddr:string,
+                 DstHostname:string ,
+                 DstPortNumber:int,
+                 DstPortName:string
+                ) with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')
+      | project-away EventData
+      | project-rename 
+                EventRecordID = EventOriginalUid,
+                Computer = SysmonComputer,
+                UtcTime = EventEndTime,
+                Image = Process,
+                SourceHostname  = SrcHostname,
+                SourcePort = SrcPortNumber,
+                SourcePortName = SrcPortName,
+                DestinationIp = DstIpAddr,
+                DestinationHostname = DstHostname,
+                DestinationPort = DstPortNumber,
+                DestinationPortName = DstPortName
     };
     let OutboundNetworkEvents = 
       DirectionNetworkEvents
-      | where outbound
+      | where Initiated
       | invoke parser ()
       | extend
         SrcUsernameType = 'Simple',
@@ -72,7 +83,7 @@ ParserQuery: |
     ;
     let InboundNetworkEvents = 
         DirectionNetworkEvents
-        | where not(outbound)
+        | where not(Initiated)
         | invoke parser ()
         | extend
         DstUsernameType = 'Simple',
@@ -98,7 +109,7 @@ ParserQuery: |
             EventSeverity = 'Informational',
             DvcOs = 'Linux',
             Protocol = toupper(Protocol),
-            NetworkDirection = iff(outbound, "Outbound", "Inbound"),
+            NetworkDirection = iff(Initiated, "Outbound", "Inbound"),
             EventOriginalType = '3' // Set with a constant value to avoid parsing
         | project-away
             outbound
