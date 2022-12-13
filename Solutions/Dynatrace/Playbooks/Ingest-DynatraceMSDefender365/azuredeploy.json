@@ -39,15 +39,17 @@
                 "description": "Dynatrace tenant (ex. xyz.dynatrace.com)"
             }
         },
-        "DynatraceApiToken": {
-            "type": "securestring",
+        "KeyvaultName": {
+            "defaultValue": "",
+            "type": "String",
             "metadata": {
-                "description": "Dynatrace Api Token"
+                "description": "Enter the key vault name where Dynatrace Access Token is stored"
             }
         }
     },
     "variables": {
-        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]"
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('akv-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -65,6 +67,28 @@
             }
         },
         {
+            "type": "Microsoft.Web/Connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'keyvault')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                },
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "nonSecretParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                }
+
+            }
+        },
+        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
@@ -77,7 +101,8 @@
                 "type": "SystemAssigned"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -89,8 +114,8 @@
                             "defaultValue": {},
                             "type": "Object"
                         },
-                        "ApiToken": {
-                            "type": "SecureString"
+                        "KeyvaultName": {
+                            "type": "String"
                         },
                         "Tenant": {
                             "type": "String"
@@ -151,6 +176,19 @@
                                 "log.source": "@{triggerBody()?['ProductName']}",
                                 "severity": "warn",
                                 "timestamp": "@{triggerBody()?['TimeGenerated']}"
+                            }
+                        },
+                        "Get_Dynatrace_Access_Token": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('DynatraceAccessToken')}/value"
                             }
                         },
                         "If_Entities_Exist": {
@@ -311,7 +349,7 @@
                                     "inputs": {
                                         "body": "@variables('logentries')",
                                         "headers": {
-                                            "Authorization": "Api-Token @{parameters('ApiToken')}",
+                                            "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}",
                                             "Content-Type": "application/json; charset=utf-8"
                                         },
                                         "method": "POST",
@@ -348,7 +386,11 @@
                             "type": "If"
                         },
                         "Initialize_LogEntries": {
-                            "runAfter": {},
+                            "runAfter": {
+                                "Get_Dynatrace_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -373,11 +415,21 @@
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location,'keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
                     },
-                    "ApiToken": {
-                        "value": "[parameters('DynatraceApiToken')]"
+                    "KeyvaultName": {
+                        "value": "[parameters('KeyvaultName')]"
                     },
                     "Tenant": {
                         "value": "[parameters('DynatraceTenant')]"

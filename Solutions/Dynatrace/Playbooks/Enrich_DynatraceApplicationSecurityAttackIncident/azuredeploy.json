@@ -39,17 +39,19 @@
                 "description": "Dynatrace tenant (ex. xyz.dynatrace.com)"
             }
         },
-        "DynatraceApiToken": {
-            "type": "securestring",
+        "KeyvaultName": {
+            "defaultValue": "",
+            "type": "String",
             "metadata": {
-                "description": "Dynatrace Api Token"
+                "description": "Enter the key vault name where Dynatrace Access Token is stored"
             }
         }
     },
     "variables": {
         "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
         "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
-        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('akv-', parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -94,6 +96,28 @@
             }
         },
         {
+            "type": "Microsoft.Web/Connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'keyvault')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                },
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "nonSecretParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                }
+
+            }
+        },
+        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
@@ -108,7 +132,8 @@
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -119,8 +144,8 @@
                         "$connections": {
                             "type": "Object"
                         },
-                        "ApiToken": {
-                            "type": "SecureString"
+                        "KeyvaultName": {
+                            "type": "String"
                         },
                         "Tenant": {
                             "type": "String"
@@ -178,16 +203,33 @@
                                 }
                             }
                         },
-                        "Get_Dynatrace_Attack_Details": {
+                        "Get_Dynatrace_Access_Token": {
                             "runAfter": {
                                 "Parse_Incident_Alert_Custom_Body_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('DynatraceAccessToken')}/value"
+                            }
+                        },
+                        "Get_Dynatrace_Attack_Details": {
+                            "runAfter": {
+                                "Get_Dynatrace_Access_Token": [
                                     "Succeeded"
                                 ]
                             },
                             "type": "Http",
                             "inputs": {
                                 "headers": {
-                                    "Authorization": "Api-Token @{parameters('ApiToken')}"
+                                    "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}"
                                 },
                                 "method": "GET",
                                 "queries": {
@@ -207,8 +249,7 @@
                                 "variables": [
                                     {
                                         "name": "tags",
-                                        "type": "array",
-                                        "value": []
+                                        "type": "array"
                                     }
                                 ]
                             }
@@ -574,11 +615,21 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
                                 "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
                                 "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location,'azureloganalyticsdatacollector')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location,'keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             }
                         }
                     },
-                    "ApiToken": {
-                        "value": "[parameters('DynatraceApiToken')]"
+                    "KeyvaultName": {
+                        "value": "[parameters('KeyvaultName')]"
                     },
                     "Tenant": {
                         "value": "[parameters('DynatraceTenant')]"
