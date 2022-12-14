@@ -2,7 +2,7 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "author": "Microsoft - support@microsoft.com",
+        "author": "Cohesity - support@cohesity.com",
         "comments": "Solution template for CohesitySecurity"
     },
     "parameters": {
@@ -29,12 +29,17 @@
             }
         },
         "playbook1-PlaybookName": {
-            "defaultValue": "Incident_Email_Playbook",
+            "defaultValue": "My_Cohesity_Send_Incident_Email",
             "type": "string",
             "minLength": 1,
             "metadata": {
                 "description": "Resource name for the logic app playbook.  No spaces are allowed"
             }
+        },
+        "playbook1-EmailID": {
+            "defaultValue": "",
+            "type": "string",
+            "minLength": 1
         },
         "playbook2-PlaybookName": {
             "defaultValue": "Incident_VM_Playbook",
@@ -59,8 +64,8 @@
         }
     },
     "variables": {
-        "playbook1-Incident_Email_Playbook": "playbook1-Incident_Email_Playbook",
-        "_playbook1-Incident_Email_Playbook": "[variables('playbook1-Incident_Email_Playbook')]",
+        "playbook1-Cohesity_Send_Incident_Email": "playbook1-Cohesity_Send_Incident_Email",
+        "_playbook1-Cohesity_Send_Incident_Email": "[variables('playbook1-Cohesity_Send_Incident_Email')]",
         "playbook1-MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('playbook1-PlaybookName'))]",
         "playbook1-OutlookConnectionName": "[concat('Outlook-', parameters('playbook1-PlaybookName'))]",
         "playbook-1-connection-2": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/Azuresentinel')]",
@@ -89,6 +94,10 @@
                     "parameters": {
                         "$connections": {
                             "type": "Object"
+                        },
+                        "EmailID": {
+                            "defaultValue": "[parameters('playbook1-EmailID')]",
+                            "type": "string"
                         }
                     },
                     "triggers": {
@@ -108,47 +117,6 @@
                         }
                     },
                     "actions": {
-                        "For_each": {
-                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
-                            "actions": {
-                                "Send_an_email_(V2)_2": {
-                                    "runAfter": {
-                                        "Set_variable": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "Body": "<p>@{variables('EmailBody')}</p>",
-                                            "Importance": "Normal",
-                                            "Subject": "Cohesity Alert",
-                                            "To": "@variables('EmailId')"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['outlook_1']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/v2/Mail"
-                                    }
-                                },
-                                "Set_variable": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "EmailBody",
-                                        "value": "<p>Hello SecurityTeam,</p> <p>You have a Cohesity incident from Azure Sentinel. Below is information:</p>  <ul> <li><strong>Alert Name:&nbsp;</strong>@{items('For_each')?['properties']?['alertDisplayName']}</li> <li><strong>Description</strong>: @{triggerBody()?['object']?['properties']?['description']}</li> <li><strong>Severity</strong>: @{triggerBody()?['object']?['properties']?['severity']}</li> <li><strong>Incident ID</strong>: @{triggerBody()?['object']?['properties']?['incidentNumber']}</li> <li><strong>Start Time</strong>: @{items('For_each')?['properties']?['startTimeUtc']}</li> <li><strong>Incident URL</strong>: @{triggerBody()?['object']?['properties']?['incidentUrl']}</li> <li><strong> Anamoly Strength </strong>: @{last(triggerBody()?['object']?['properties']?['relatedEntities'])?['properties']?['malwareName']}</li> </ul>  <p>Please review and update incident accordingly.</p> <p>Cohesity Team</p>"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Initialize_variable_2": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
                         "Initialize_variable": {
                             "type": "InitializeVariable",
                             "inputs": {
@@ -158,19 +126,39 @@
                                 }]
                             }
                         },
-                        "Initialize_variable_2": {
+                        "Send_an_email_(V2)": {
+                            "runAfter": {
+                                "Set_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>@{variables('EmailBody')}</p>",
+                                    "Importance": "Normal",
+                                    "Subject": "Cohesity Alert",
+                                    "To": "@parameters('playbook1-EmailID')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['outlook']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        },
+                        "Set_variable": {
                             "runAfter": {
                                 "Initialize_variable": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
+                            "type": "SetVariable",
                             "inputs": {
-                                "variables": [{
-                                    "name": "EmailId",
-                                    "type": "string",
-                                    "value": "your_email_for_playbook@your_domain.com"
-                                }]
+                                "name": "EmailBody",
+                                "value": "<p>Hello SecurityTeam,</p> <p>You have a Cohesity incident from Azure Sentinel. Below is information:</p>  <ul> <li><strong>Incident ARM Name:&nbsp;</strong>@{triggerBody()?['object']?['name']}</li> <li><strong>Description</strong>: @{triggerBody()?['object']?['properties']?['description']}</li> <li><strong>Severity</strong>: @{triggerBody()?['object']?['properties']?['severity']}</li> <li><strong>Incident ID</strong>: @{triggerBody()?['object']?['properties']?['incidentNumber']}</li> <li><strong>Incident Create Time Utc</strong>: @{triggerBody()?['object']?['properties']?['createdTimeUtc']}</li> <li><strong>Incident URL</strong>: @{triggerBody()?['object']?['properties']?['incidentUrl']}</li> </ul>  <p>Please review and update incident accordingly.</p> <p>Cohesity Team</p>"
                             }
                         }
                     }
@@ -188,7 +176,7 @@
                                     }
                                 }
                             },
-                            "outlook_1": {
+                            "outlook": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('playbook1-OutlookConnectionName'))]",
                                 "connectionName": "[variables('playbook1-OutlookConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/Outlook')]"
@@ -200,12 +188,12 @@
             "name": "[parameters('playbook1-PlaybookName')]",
             "type": "Microsoft.Logic/workflows",
             "location": "[parameters('workspace-location')]",
+            "tags": {
+                "hidden-SentinelTemplateName": "My_Cohesity_Send_Incident_Email",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
             "identity": {
                 "type": "SystemAssigned"
-            },
-            "tags": {
-                "hidden-SentinelTemplateName": "Incident_Email_Playbook",
-                "hidden-SentinelTemplateVersion": "1.0"
             },
             "apiVersion": "2019-05-01",
             "dependsOn": [
@@ -1030,7 +1018,7 @@
             "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
             "apiVersion": "2021-03-01-preview",
             "properties": {
-                "version": "2.0.1",
+                "version": "2.0.0",
                 "kind": "Solution",
                 "contentId": "[variables('_sourceId')]",
                 "parentId": "[variables('_sourceId')]",
@@ -1040,31 +1028,31 @@
                     "sourceId": "[variables('_sourceId')]"
                 },
                 "author": {
-                    "name": "Microsoft",
-                    "email": "support@microsoft.com"
+                    "name": "Cohesity",
+                    "email": "support@cohesity.com"
                 },
                 "support": {
-                    "name": "Cohesity Corporation",
-                    "email": "your_support_email@your_domain.com",
-                    "tier": "Microsoft",
+                    "name": "Microsoft Corporation",
+                    "email": "support@microsoft.com",
+                    "tier": "Partner",
                     "link": "https://support.cohesity.com"
                 },
                 "dependencies": {
                     "operator": "AND",
                     "criteria": [{
                             "kind": "Playbook",
-                            "contentId": "[variables('_playbook1-Incident_Email_Playbook')]",
-                            "version": "2.0.1"
+                            "contentId": "[variables('_playbook1-Cohesity_Send_Incident_Email')]",
+                            "version": "2.0.0"
                         },
                         {
                             "kind": "Playbook",
                             "contentId": "[variables('_playbook2-Incident_VM_Playbook')]",
-                            "version": "2.0.1"
+                            "version": "2.0.0"
                         },
                         {
                             "kind": "Playbook",
                             "contentId": "[variables('_playbook3-SNOW-CreateAndUpdateIncident')]",
-                            "version": "2.0.1"
+                            "version": "2.0.0"
                         }
                     ]
                 },
@@ -1074,7 +1062,8 @@
                 ],
                 "categories": {
                     "domains": [
-                        "DevOps"
+                        "Security - Cloud Security",
+                        "Security - Automation (SOAR)"
                     ]
                 }
             },

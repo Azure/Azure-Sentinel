@@ -19,8 +19,8 @@ The package consists of the following Azure functions ([install pre-requisites](
 * _IncidentConsumer_ to create incidents in MS Sentinel ([deployment steps](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/DataConnectors/CohesitySecurity/Helios2Sentinel/IncidentConsumer/readme.md))
 
 It also has a few playbooks for automation.
-* *Cohesity_Send_Incident_Email* to send an email to the recipient with the incident details ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Incident_Email_Playbook#readme.md)).
-* *Cohesity_CreateOrUpdate_ServiceNow_Incident* to create and update the incident in the ServiceNow platform ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/SNOW-CreateAndUpdateIncident#readme.md)). 
+* *Cohesity_Send_Incident_Email* to send an email to the recipient with the incident details ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Cohesity_Send_Incident_Email#readme.md)).
+* *Cohesity_CreateOrUpdate_ServiceNow_Incident* to create and update the incident in the ServiceNow platform ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/SNOW-CreateAndUpdateIncident#readme.md)).
 * *Cohesity_Restore_From_Last_Snapshot* to restore data from the latest clean snapshot in Helios ([deployment steps](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Incident_VM_Playbook#readme.md))
 
 ## Misc
