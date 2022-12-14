@@ -1,0 +1,80 @@
+// Title:           Infoblox consolidated parser for Fortigate Fortiweb WAF
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    14/12/2022
+// Comment:         
+//
+// DESCRIPTION:
+// This parser is based on Attack log type of Fortiweb appliance for more details refe - //https://help.fortinet.com/fweb/560/Content/FortiWeb/fortiweb-admin/logging.htm#:~:text=The%20FortiWeb%20appliance%20will%20store,Critical%2C%20Alert%2C%20and%20Emergency.
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+// 
+// Jul 14 13:11:42 syslog.fortiweb-cloud.com syslogng[9] CEF:0||||N/A|IP Protection: IP in black list was blocked|Critical|cat=attack rt=2022-07-14T08:11:19-05:00 cs1=My App 1 cs1Label=appName //src=167.220.238.23 spt=52169 dpt=443 cs2=India cs2Label=srcCountry app=https/tls1.3 act=Monitor cs3=IP Protection cs3Label=mainType cs4=Black IP List cs4Label=subType cs5=Critical cs5Label=threatLevel cn1=200 //cn1Label=threatWeight dhost=soartesting.net request=/ requestMethod=GET requestClientApplication=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36 //cn2=1535 cn2Label=length cn3=N/A cn3Label=signatureID cs6=N/A cs6Label=owaspTop10 msg=IP Protection: IP in black list was blocked
+CommonSecurityLog
+| where DeviceVendor =~ 'Fortinet'
+| extend EventVendor = 'Fortinet'
+| extend EventProduct = 'Fortiweb'
+| extend EventSchemaVersion = 0.2
+| extend EventCount = 1
+| extend DeviceCustomNumber1 = coalesce(column_ifexists("FieldDeviceCustomNumber1", long(null)),DeviceCustomNumber1),
+         DeviceCustomNumber2 = coalesce(column_ifexists("FieldDeviceCustomNumber2", long(null)),DeviceCustomNumber2),
+         DeviceCustomNumber3 = coalesce(column_ifexists("FieldDeviceCustomNumber3", long(null)),DeviceCustomNumber3),
+         ExternalID = coalesce(column_ifexists("ExtID", ""),tostring(ExternalID))
+| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1
+                     , DeviceCustomNumber2Label, DeviceCustomNumber2
+                     , DeviceCustomNumber3Label, DeviceCustomNumber3
+                     , DeviceCustomString1Label, DeviceCustomString1
+                     , DeviceCustomString2Label, DeviceCustomString2
+                     , DeviceCustomString3Label, DeviceCustomString3
+                     , DeviceCustomString4Label, DeviceCustomString4
+                     , DeviceCustomString5Label, DeviceCustomString5
+                     , DeviceCustomString6Label, DeviceCustomString6
+                     , DeviceCustomDate1Label, DeviceCustomDate1
+                     , DeviceCustomDate2Label, DeviceCustomDate2)
+| evaluate bag_unpack(packed)
+| parse-kv AdditionalExtensions as (cat:string) with (pair_delimiter=';', kv_delimiter='=')
+| extend EventEndTime = todatetime(ReceiptTime),
+         cat = coalesce(column_ifexists("DeviceEventCategory", ""),cat)
+| project-rename EventProductVersion=DeviceVersion
+                , EventSubType=cat
+                , EventOriginalType=DeviceEventClassID
+                , EventSeverity=LogSeverity
+                , EventMessage=Message
+                , DstPortNumber=DestinationPort
+                , DstIpAddr=DestinationIP
+                , DstDvcHostname=DestinationHostName
+                , DstUserName=DestinationUserName
+                , DvcIpAddr=DeviceAddress
+                , DvcHostname=DeviceName
+                , DstMacAddr=DestinationMACAddress
+                , NetworkApplicationProtocol=Protocol
+                , SrcPortNumber=SourcePort
+                , SrcIpAddr=SourceIP
+                , SrcMacAddr=SourceMACAddress
+                , EventId=ExternalID
+                , SrcDvcHostname=SourceHostName
+| extend ThreatType=Activity
+| project-away AdditionalExtensions
+            , Activity
+            , ReceiptTime
+            , DeviceVendor
+            , DeviceProduct
+            , DeviceCustomNumber1
+            , DeviceCustomNumber1Label
+            , DeviceCustomNumber2
+            , DeviceCustomNumber2Label
+            , DeviceCustomNumber3
+            , DeviceCustomNumber3Label
+            , DeviceCustomString1
+            , DeviceCustomString1Label
+            , DeviceCustomString2
+            , DeviceCustomString2Label
+            , DeviceCustomString3
+            , DeviceCustomString3Label
+            , DeviceCustomString4
+            , DeviceCustomString4Label
+            , DeviceCustomString5
+            , DeviceCustomString5Label
+            , DeviceCustomString6
+            , DeviceCustomString6Label
+            , EventType
