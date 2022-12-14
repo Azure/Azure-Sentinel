@@ -5,7 +5,7 @@ This playbook will ingest Microsoft Defender 365 insights to Dynatrace. You need
 
 ** Prerequisites ** 
 - Follow [these instructions](https://www.dynatrace.com/support/help/get-started/access-tokens#create-api-token) to generate a Dynatrace access token.
-- [Important step]Store the Dynatrace Access Token as a secret in Azure Key vault and provide the key vault name during deployment.
+- [Important step]Store the Dynatrace Access Token as a secret in Azure Key vault and provide the key vault name during deployment, by convention the secret name should be 'DynatraceAccessToken'.
 
 ** Post Install Notes:**
 
