@@ -1,0 +1,217 @@
+name: Arm-ttk Validations
+
+on: [pull_request]
+
+jobs:
+  run-arm-ttk:
+    runs-on: ubuntu-latest
+    outputs:
+      solutionName: ${{ steps.step1.outputs.solutionName }}
+      mainTemplateOrCreateUiDefinitionTemplateChanged: ${{ steps.step1.outputs.mainTemplateOrCreateUiDefinitionTemplateChanged }}
+      hasPlaybooksChanged: ${{ steps.step1.outputs.hasPlaybooksChanged }}
+      playbookFilesList: ${{ steps.step1.outputs.playbookFilesList}}
+      dataConnectorFileName: ${{ steps.step1.outputs.dataConnectorFileName }}
+      isDataConnectorFolderNameWithSpace: ${{ steps.step1.outputs.isDataConnectorFolderNameWithSpace}}
+      hasDataConnectorFileChanged: ${{ steps.step1.outputs.hasDataConnectorFileChanged}}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - shell: pwsh
+        id: step1
+        name: Identify Changes in PR
+        run: |
+          $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+          Write-Host "List of files in PR: $diff"
+          $hasmainTemplateOrCreateUiDefinitionTemplateChanged = $false
+          $hasPlaybooksChanged = $false
+          $hasDataConnectorFileChanged = $false
+          $isDataConnectorFolderNameWithSpace = $false
+          $playbookFilesList = @()
+          $dataConnectorFileNames = @()
+
+          $SourceDiff = $diff | ForEach-Object {
+            $currentFile = Get-ChildItem -Path $_ -File
+            Write-Host "Current File is '$currentFile'"
+            $currentFileStr = $currentFile.ToString()
+            $mainTemplateOrCreateUiDefinitionTemplateChanged = $currentFileStr.ToLower().Contains("maintemplate.json") -or $currentFileStr.ToLower().Contains("createUiDefinition.json")
+            Write-Host "MainTemplate or CreateUiDefiniton TemplateExist is $mainTemplateOrCreateUiDefinitionTemplateChanged"
+
+            if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
+            {
+              $hasmainTemplateOrCreateUiDefinitionTemplateChanged = $true
+            }
+            $fileValue = (($currentFile.DirectoryName).Split("\")[-1])
+            Write-Host "File Value $fileValue"
+            $playbooksFolderIndex = $fileValue.IndexOf("Playbooks/")
+            $playbooksWithSingleFileFolderIndex = $fileValue.IndexOf("Playbooks")
+            if ($playbooksFolderIndex -gt 0 -or $playbooksWithSingleFileFolderIndex -gt 0)
+            {
+              $hasPlaybooksChanged = $true
+              $playbookFilesList += $currentFileStr
+            }
+
+            $dataConnectorFolderWithSpaceIndex = $fileValue.IndexOf("Data Connectors")
+            $dataConnectorFolderWithoutSpaceIndex = $fileValue.IndexOf("DataConnectors")
+            Write-Host "Data Connector Folder with space $dataConnectorFolderWithSpaceIndex , Withoutspace $dataConnectorFolderWithoutSpaceIndex"
+            if ($dataConnectorFolderWithSpaceIndex -gt 0 -or $dataConnectorFolderWithoutSpaceIndex -gt 0)
+            {
+              # CHANGES ARE MADE IN DATA CONNECTOR FILE
+              if ($currentFileStr.Contains("azuredeploy"))
+              {
+                $dataConnectorFileNames += $currentFileStr
+                if ($dataConnectorFolderWithSpaceIndex -gt 0)
+                {
+                  $isDataConnectorFolderNameWithSpace = $true
+                }
+                $hasDataConnectorFileChanged = $true
+                Write-Host "Data Connector File Name is $currentFileStr"
+              }
+            }
+            
+            $solutionIndex = $fileValue.IndexOf("Solutions/")
+            Write-Host "Solution Index is $solutionIndex"
+            if ($solutionIndex -gt -1 -and $null -ne $solutionIndex  -and $solutionName -ne '')
+            {
+              $solutionNameWithOtherPath = $fileValue.SubString($solutionIndex + 10)
+              if ($solutionNameWithOtherPath -ne '' -and $solutionNameWithOtherPath -ne $null)
+              {
+                $headers = $solutionNameWithOtherPath -split '/', 3
+                if ($null -ne $headers[0])
+                {
+                  $sName = $headers[0]
+                }
+              }
+            }
+          }
+
+          if ($hasPlaybooksChanged -eq $true)
+          {
+            $playbooksBasePath = "/home/runner/work/packagingrepo/packagingrepo/Solutions/$sName/Playbooks/"
+            $filteredPlaybookFiles = $playbookFilesList.Split(" ")
+            Write-Host "Filtered Playbook Files are $filteredPlaybookFiles"
+            $finalizedPlaybookFiles = @()
+            foreach($playbookFile in $filteredPlaybookFiles)
+            {
+              if ($playbookFile.Contains(".json"))
+              {
+                $finalizedPlaybookFiles += $playbookFile.Replace($playbooksBasePath, '')
+              }
+            }
+          }
+
+          if ($hasDataConnectorFileChanged -eq $true)
+          {
+            if ($isDataConnectorFolderNameWithSpace -eq $true)
+            {
+              $dataConnectorBasePath = "/home/runner/work/packagingrepo/packagingrepo/Solutions/$sName/Data Connectors/"
+            }
+            else
+            {
+              $dataConnectorBasePath = "/home/runner/work/packagingrepo/packagingrepo/Solutions/$sName/DataConnectors/"
+            }
+            
+            Write-Host "DC Path $dataConnectorBasePath"
+            $finalizedDataConnectorFilesList = @()
+            foreach($dataConnectorFileItem in $dataConnectorFileNames)
+            {
+              Write-Host "Inside of DC foreach loop $dataConnectorFileItem"
+              if ($dataConnectorFileItem.Contains(".json"))
+              {
+                Write-Host "Inside of if condition of json"
+                $finalizedDataConnectorFilesList += $dataConnectorFileItem.Replace($dataConnectorBasePath, '')
+              }
+            }
+
+            Write-Host "Data connector finalized file name is $finalizedDataConnectorFilesList"
+          }
+
+          Write-Host "playbookFilesList are $finalizedPlaybookFiles"
+          Write-Host "Hellow"
+          Write-Host "Solution Name is $sName"
+          Write-Host "mainTemplateOrCreateUiDefinitionTemplateChanged is $mainTemplateOrCreateUiDefinitionTemplateChanged"
+          Write-Host "hasPlaybooksChanged is $hasPlaybooksChanged"
+
+          Write-Output "::set-output name=solutionName::$sName"
+          Write-Output "::set-output name=mainTemplateOrCreateUiDefinitionTemplateChanged::$hasmainTemplateOrCreateUiDefinitionTemplateChanged"
+          Write-Output "::set-output name=hasPlaybooksChanged::$hasPlaybooksChanged"
+          Write-Output "::set-output name=playbookFilesList::$finalizedPlaybookFiles"
+          Write-Output "::set-output name=hasDataConnectorFileChanged::$hasDataConnectorFileChanged"
+          Write-Output "::set-output name=dataConnectorFileNames::$finalizedDataConnectorFilesList"
+          Write-Output "::set-output name=isDataConnectorFolderNameWithSpace::$isDataConnectorFolderNameWithSpace"
+
+      - uses: actions/download-artifact@v2
+        id: downloadArtifactsInDocker
+        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.hasPlaybooksChanged == 'true' || steps.step1.outputs.mainTemplateOrCreateUiDefinitionTemplateChanged == 'true' || steps.step1.outputs.hasDataConnectorFileChanged == 'true' ) }}
+        with:
+          path: dist
+      - run: docker images
+      - run : cp /home/runner/work/packagingrepo/packagingrepo/.github/actions/entrypoint1.ps1 ./dist
+
+      - uses: docker/login-action@v1
+        id: dockerRegistry
+        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.hasPlaybooksChanged == 'true' || steps.step1.outputs.mainTemplateOrCreateUiDefinitionTemplateChanged == 'true' || steps.step1.outputs.hasDataConnectorFileChanged == 'true') }}
+        with:
+          username: vamolpatil
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - uses: docker/build-push-action@v2
+        id: publishGithubPackage
+        name: Run ARM-TTK
+        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.hasPlaybooksChanged == 'true' || steps.step1.outputs.mainTemplateOrCreateUiDefinitionTemplateChanged == 'true' || steps.step1.outputs.hasDataConnectorFileChanged == 'true') }}
+        env: 
+          SolutionName: ${{ steps.step1.outputs.solutionName }}
+          mainTemplateOrCreateUiDefinitionTemplateChanged: ${{ steps.step1.outputs.mainTemplateOrCreateUiDefinitionTemplateChanged }}
+          hasPlaybooksChanged: ${{ steps.step1.outputs.hasPlaybooksChanged }}
+          playbookFilesList: ${{ steps.step1.outputs.playbookFilesList }}
+          dataConnectorFileNames: ${{ steps.step1.outputs.dataConnectorFileNames }}
+          isDataConnectorFolderNameWithSpace: ${{ steps.step1.outputs.isDataConnectorFolderNameWithSpace }}
+          hasDataConnectorFileChanged: ${{ steps.step1.outputs.hasDataConnectorFileChanged }}
+        with:
+          context: .
+          file: ./.github/actions/Dockerfile1
+          push: true
+          build-args: |
+            SolutionName
+            mainTemplateOrCreateUiDefinitionTemplateChanged
+            hasPlaybooksChanged
+            playbookFilesList
+            dataConnectorFileNames
+            isDataConnectorFolderNameWithSpace
+            hasDataConnectorFileChanged
+          tags: vamolpatil/amoldockerrepo 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      # - uses: actions/checkout@v3
+      # - name: Script
+      #   shell: pwsh
+      #   run: |
+      #     echo "Hello I am here"
+      #     ./.script/build.ps1
+      #   continue-on-error: true
+      #   env:
+      #     MyVariable: "Hello, Amol"
+
+      # - name: Set outputs
+      #   id: vars
+      #   shell: pwsh
+      #   run: |
+      #     ./.script/testpowershell.ps1
+      # - name: Check outputs
+      #   shell: pwsh
+      #   run: |
+      #     echo ${{ steps.vars.outputs.production }}
+      #     echo ${{ steps.vars.outputs.packageName }}
