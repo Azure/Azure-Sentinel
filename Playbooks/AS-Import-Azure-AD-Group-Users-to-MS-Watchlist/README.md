@@ -152,6 +152,19 @@ Returning to the "**Overview**" page of the logic app, it can now be run success
 
 
 # 
+### Add Microsoft Sentinel Contributor Role
+
+To run successfully, this playbook requires Microsoft Sentinel Contributor role on the Log Analytics workspace.
+
+Navigate to the Log Analytics Workspaces page and select the same workspace the watchlist is located in:
+
+https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.OperationalInsights%2Fworkspaces
+
+Select the "**Access control (IAM)**" option from the menu blade, then click "**Add role assignment**".
+![AS_Group_Watchlist_Add_Role_1](Images/AS_Group_Watchlist_Add_Role_1.png)
+
+
+# 
 ### Editing the Microsoft Sentinel Watchlist
 
 A watchlist needs initial data in order to be created. Because of this, the watchlist will have a row with the values "**initial data**". Once the logic app has run successfully and other entries have been added, you can remove this row.
