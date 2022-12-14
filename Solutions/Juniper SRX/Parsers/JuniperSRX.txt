@@ -1,7 +1,7 @@
 // Title:           Juniper SRX Parser
 // Author:          Microsoft
 // Version:         1.1
-// Last Updated:    10/18/2022
+// Last Updated:    12/14/2022
 // Comment:         Optimized 
 //  
 // DESCRIPTION:
@@ -111,24 +111,16 @@ let FlowNotDenyEvents = FlowEvents
          PolicyName = tostring(Parser2[6]),
          SrcNatRuleName = tostring(Parser2[7]),
          DstNatRuleName = tostring(Parser2[8]),
-         SessionId = toint(Parser2[9])
+         SessionId = tolong(Parser2[9])
 | project-away Parser, Parser2, Substring;
 let IdPEvents = LogHeader
 | where EventType == "RT_IDP"
-| extend IDPParser = extract_all(@"(\w+)\:?\s([\S\s]+)", dynamic([1,2]),SyslogMessage)
-| mv-expand IDPParser
-| extend EventTimestamp = EventTime,
-         DvcHostname = HostName,
-         EventType = ProcessName,
-         ProcessId = ProcessID,
-         Message = trim("- ",tostring(IDPParser[1]))
 | parse-kv Message as (username: string, action: string, name: string, ['threat-severity']: string) with (pair_delimiter=',', kv_delimiter='=')
 | parse Message with EventName ": at" *
 | parse Message with * "intf:" InterfaceName":" *
 | parse Message with * "> for " Protocol " " *
 | parse Message with * "application " Application " " *
 | parse Message with * "rule " Rule " " *
-// | parse Message with * "application " Application " " *
 | parse Message with * "<" SrcDstDetails"> " *
 | parse SrcDstDetails with SrcDetails"->" *
 | parse SrcDstDetails with * "->" DstDetails 
@@ -147,9 +139,34 @@ let IdPEvents = LogHeader
     Action = action,
     ZoneName = name,
     ['Threat Severity'] = ['threat-severity']
-| project-away IDPParser, NAT, SrcNAT, DstNAT, SrcDstDetails, SrcDetails, DstDetails;
+| project-away NAT, SrcNAT, DstNAT, SrcDstDetails, SrcDetails, DstDetails;
+let UTMEvents = LogHeader
+| where EventType == "RT_UTM"
+| parse-kv Message as (['source-zone']: string, ['destination-zone']: string, ['NESTED-APPLICATION']: string, CATEGORY: string, REASON: string, PROFILE: string) with (pair_delimiter='" ', kv_delimiter='="')
+| parse Message with EventName ":" *
+| parse Message with * 'ACTION="' Action '" ' *
+| parse Message with * 'APPLICATION="' Application '"' *
+| parse Message with * "SESSION_ID=" SessionId:long " APPLICATION=" *
+| parse Message with * "destination-zone=" SrcDstDetails"->" *
+| parse SrcDstDetails with * " " SrcIpAddr"(" *
+| parse SrcDstDetails with * "(" SrcPortNumber:int ")" *
+| parse Message with * "->" DstAddr")" *
+| parse DstAddr with DstIpAddr"(" *
+| parse DstAddr with * "(" DstPortNumber:int 
+| parse Message with * "URL=" URL " " *
+| parse Message with * "username " UserName " " *
+| parse Message with * "roles " Roles " " *
+| parse Message with * "application-sub-category " ApplicationSubCategory " " *
+| parse Message with * "urlcategory-risk " URLRisk " " *
+| project-rename ZoneName = ['source-zone'],
+    DestinationZone = ['destination-zone'],
+    NestedApplication = ['NESTED-APPLICATION'],
+    Category = CATEGORY,
+    Reason = REASON,
+    Profile = PROFILE
+| project-away SrcDstDetails, DstAddr;
 let AllOtherEvents = LogHeader
-| where EventType !in ("sshd","RT_IDS","RT_FLOW","RT_IDP")
+| where EventType !in ("sshd","RT_IDS","RT_FLOW","RT_IDP","RT_UTM")
 | extend EventName = extract(@"^([\w\s]+)\s(0)",1, Message);
-union SshEvents, IdsEvents, AllOtherEvents, FlowNotDenyEvents, FlowDenyEvents, IdPEvents
+union SshEvents, IdsEvents, AllOtherEvents, FlowNotDenyEvents, FlowDenyEvents, IdPEvents, UTMEvents
 | extend EventName = iif(isempty(EventName), extract(@"^([\w\s]+)\s(\d.*)",1, Message), EventName)
