@@ -73,7 +73,6 @@ ParserQuery: |
         | where (array_length(srcipaddr_has_any_prefix)==0 
                   or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_prefix)
                 ) 
-        | extend outbound = (SrcIpAddr == HostIP or SrcIpAddr in ('127.0.0.1', '0.0.0.0'))
     ;
     let parser = (T: (SyslogMessage: string)) {
       T 
@@ -105,7 +104,7 @@ ParserQuery: |
     };
     let OutboundNetworkEvents = 
       DirectionNetworkEvents
-      | where outbound
+      | where Initiated
       | invoke parser ()
       | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
@@ -141,7 +140,7 @@ ParserQuery: |
     ;
     let InboundNetworkEvents = 
         DirectionNetworkEvents
-        | where not(outbound)
+        | where not(Initiated)
         | invoke parser ()
         // *************** Postfilterring ***************************************************************
         | where (array_length(hostname_has_any)==0 or DstHostname has_any (hostname_has_any)or SrcHostname has_any (hostname_has_any) )
@@ -183,7 +182,7 @@ ParserQuery: |
             EventSeverity = 'Informational',
             DvcOs = 'Linux',
             Protocol = toupper(Protocol),
-            NetworkDirection = iff(outbound, "Outbound", "Inbound"),
+            NetworkDirection = iff(Initiated, "Outbound", "Inbound"),
             EventOriginalType = '3' // Set with a constant value to avoid parsing
         | project-away outbound
         | project-rename 
