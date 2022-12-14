@@ -75,9 +75,12 @@ ParserQuery: |
           Initiated:bool  // Initiated indicates the process initiated a connection (meaning outbound)
       ) 
           with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')    
+    | project-rename
+      SrcIpAddr = SourceIp,
+      DstIpAddr = DestinationIp
     | where 
       (array_length(srcipaddr_has_any_prefix)==0 
-                  or has_any_ipv4_prefix(SourceIp,srcipaddr_has_any_prefix)
+                  or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_prefix)
       )
     | project-rename 
                 SrcHostname = SourceHostname,
@@ -98,24 +101,22 @@ ParserQuery: |
             and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
     // ***************  Prefilterring *****************************************************************   
     | extend
-            SourceIp = tostring(EventData.SourceIp),
-            DestinationIp = tostring(EventData.DestinationIp),
+            SrcIpAddr = tostring(EventData.SourceIp),
+            DstIpAddr = tostring(EventData.DestinationIp),
             DstHostname = tostring(EventData.DestinationHostname),
             SrcHostname = tostring(EventData.SrcHostname),
             Initiated = tobool(EventData.Initiated)
     | extend 
     SourceIsInternal = iff (
-          ipv4_is_private(SourceIp) , "true", "false")
+          ipv4_is_private(SrcIpAddr) , "true", "false")
     | extend 
     DestinationIsInternal = iff (
-          ipv4_is_private(DestinationIp) , "true", "false")  // this works only on ipv4 and on RFC standard internal Ips
+          ipv4_is_private(DstIpAddr) , "true", "false")  // this works only on ipv4 and on RFC standard internal Ips
     ;
     let EventParser = (T: (EventData: string)) {
     T 
     | parse-kv EventData as 
           (
-          RuleName:string,
-          UtcTime:datetime,
           ProcessGuid:string,
           ProcessId:string,
           Image:string,
@@ -125,13 +126,12 @@ ParserQuery: |
           SourceIsIpv6:bool,
           SourceIp:string,
           SourcePort:int,
-          SourcePortName:string,
           DestinationIsIpv6:bool,
           DestinationIp:string,
           DestinationPort:int,
-          DestinationPortName:string,
           SourceHostname:string,
-          DestinationHostname:string
+          DestinationHostname:string,
+          UtcTime:datetime
           ) 
           with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')
     | project-away EventData
@@ -139,16 +139,23 @@ ParserQuery: |
          SrcIpAddr = SourceIp,
          DstIpAddr = DestinationIp,
          SrcHostname = SourceHostname,
-         DstHostname = DestinationHostname
+         DstHostname = DestinationHostname,
+         SrcPortNumber = SourcePort,
+         DstPortNumber = DestinationPort,
+         EventStartTime = UtcTime
     | extend
-         ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0])
+         ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]),
+         NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6), "IPv6", "IPv4")
+    | project-away
+        SourceIsIpv6, DestiantionIsIpv6, DestinationPort
     };
     let OutboundNetworkEvents = 
     Sysmon3_NetworkEvent
     | where Initiated
+    | extend NetworkDirection = "Outbound"
     | invoke EventParser ()
     | extend 
-             temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any) 
+             temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
            , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
     | extend 
     ASimMatchingIpAddr = case(
@@ -179,13 +186,16 @@ ParserQuery: |
         SrcProcessName = Image,
         SrcAppName = Image,
         SrcAppType = 'Process'
+    | project-away
+     ProcessGuid, ProcessId, Image, User, Initiated
     ;
     let InboundNetworkEvents = 
     Sysmon3_NetworkEvent
     | where not(Initiated)
+    | extend NetworkDirection = "Inbound"
     | invoke EventParser ()
     | extend 
-             temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any) 
+             temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
            , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
     | extend ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
@@ -214,12 +224,12 @@ ParserQuery: |
         SrcProcessName = Image,
         SrcAppName = Image,
         SrcAppType = 'Process'
+    | project-away
+     ProcessGuid, ProcessId, Image, User, Initiated
     ;
     let WindowsEventParser = (T: (EventData: string)) {
       T       
     | extend 
-            RuleName = tostring(EventData.RuleName),
-            UtcTime = todatetime(EventData.UtcTime),
             ProcessGuid = tostring(EventData.ProcessGuid),
             ProcessId = tostring(EventData.ProcessId),
             Image = tostring(EventData.Image),
@@ -229,20 +239,25 @@ ParserQuery: |
             SourceIsIpv6 = tobool(EventData.SourceIsIpv6),
             SrcIpAddr = tostring(EventData.SourceIp),
             SourcePort = toint(EventData.SourcePort),
-            SourcePortName = tostring(EventData.SourcePortName),
             DestinationIsIpv6 = tobool(EventData.DestinationIsIpv6),
             DstIpAddr = tostring(EventData.DestinationIp),
-            DestinationPort = toint(EventData.DestinationPort),
-            DestinationPortName = tostring(EventData.DestinationPortName),
+            DstPortNumber = toint(EventData.DestinationPort),
             DstHostname = tostring(EventData.DestinationHostname),
-            SrcHostname = tostring(EventData.SrcHostname)
+            SrcHostname = tostring(EventData.SrcHostname),
+            EventStartTime = todate(EventData.UtcTime),
     | project-away EventData
     | extend 
-         ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0])
+         ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]),
+         NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6),, "IPv6", "IPv4")
+    | project-rename
+    SrcPortNumber = SourcePort
+    | project-away
+            SourceIsIpv6, DestinationIsIpv6
          }
     let OutboundNetworkWindowsEvents = 
     Sysmon3_NetworkWindowsEvent
     | where Initiated
+    | extend NetworkDirection = "Outbound"
     | invoke WindowsEventParser ()
           | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
@@ -274,10 +289,13 @@ ParserQuery: |
         SrcProcessName = Image,
         SrcAppName = Image,
         SrcAppType = 'Process'
+     | project-away
+     ProcessGuid, ProcessId, Image, User, Initiated
       ;
   let  inboundNetworkWindowsEvents = 
   Sysmon3_NetworkWindowsEvent
     | where not(Initiated)
+    | extend NetworkDirection = "Inbound"
     | invoke WindowsEventParser ()
           | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
@@ -309,12 +327,14 @@ ParserQuery: |
         SrcProcessName = Image,
         SrcAppName = Image,
         SrcAppType = 'Process'
+     | project-away
+     ProcessGuid, ProcessId, Image, User, Initiated
       ;
   let SysmonForWindowsNetworks =
   union OutboundNetworkEvents, InboundNetworkEvents, OutboundNetworkWindowsEvents, inboundNetworkWindowsEvents
+      | project-rename 
+                DvcHostname = Computer
     | extend 
-                EventType = 'NetworkSession',
-                EventStartTime = EventEndTime,
                 EventCount = int(1),
                 EventVendor = 'Microsoft',
                 EventSchemaVersion = '0.2.4',
@@ -325,13 +345,13 @@ ParserQuery: |
                 EventSeverity = 'Informational',
                 DvcOs = 'Windows',
                 Protocol = toupper(Protocol),
-                 EventOriginalType = '3', // Set with a constant value to avoid parsing
+                EventOriginalType = '3', // Set with a constant value to avoid parsing
                 Dvc = DvcHostname,
                 Hostname = DstHostname,
                 IpAddr = SrcIpAddr,
                 Src = SrcIpAddr,
                 Dst = DstIpAddr
-    | project-rename 
-                DvcHostname = Computer
+      | project-rename 
+                NetworkProtocol = Protocol
       ;
       SysmonForWindowsNetworks
