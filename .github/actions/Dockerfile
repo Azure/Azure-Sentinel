@@ -2,9 +2,6 @@
 FROM mcr.microsoft.com/powershell:latest
 
 ARG SolutionName
-# ARG SolutionName1
-# ENV snamea ${SolutionName1}
-
 ARG mainTemplateOrCreateUiDefinitionTemplateChanged
 ENV mainTemplateOrCreateUiDefinitionTemplateChanged ${mainTemplateOrCreateUiDefinitionTemplateChanged}
 
@@ -23,18 +20,9 @@ ENV dataConnectorFileNames ${dataConnectorFileNames}
 ARG hasDataConnectorFileChanged
 ENV hasDataConnectorFileChanged ${hasDataConnectorFileChanged}
 
-#RUN echo "new $snamea"
-
 ENV sname ${SolutionName}
-ENV sname1 $SolutionName
-RUN echo "a2 $sname1"
-RUN echo "a $SolutionName"
-RUN echo "b $sname"
-RUN echo "c ${SolutionName}"
-RUN echo "d ${sname}"
 RUN echo "playbooksChanged ${playbooksChanged}"
 RUN echo "mainCreateUIExist ${mainTemplateOrCreateUiDefinitionTemplateChanged}"
-
 RUN echo "isDataConnectorFolderNameWithSpace ${isDataConnectorFolderNameWithSpace}"
 RUN echo "dataConnectorFileNames ${dataConnectorFileNames}"
 RUN echo "hasDataConnectorFileChanged ${hasDataConnectorFileChanged}"

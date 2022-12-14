@@ -28,7 +28,6 @@ if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
     } 
     else {
         Write-Host "All tests passed for the given files of CreateUiDefinition.json and/or MainTemplate.json!"
-        #exit 0
     }
 }
 
@@ -59,7 +58,6 @@ if ($hasDataConnectorFileChanged -eq $true)
         } 
         else {
             Write-Host "All files passed for Data Connectors Folder!"
-            #exit 0
         }
     }
 }
