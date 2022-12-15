@@ -38,7 +38,7 @@ RUN ls ./
 WORKDIR ./Solutions/$SolutionName
 
 COPY ./Solutions/$SolutionName dist
-COPY ./.github/actions/entrypoint1.ps1 dist
+COPY ./.github/actions/entrypoint.ps1 dist
 RUN ls dist/*
 
 LABEL "com.github.actions.name"="ARM TTK"
