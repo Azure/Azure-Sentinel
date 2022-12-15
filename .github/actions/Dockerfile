@@ -59,5 +59,5 @@ RUN ls /dist
 
 
 SHELL ["pwsh"]
-RUN .\dist\entrypoint1.ps1
+RUN .\dist\entrypoint.ps1
 
