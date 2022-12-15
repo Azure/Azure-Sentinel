@@ -6,7 +6,7 @@ import * as logger from "./utils/logger";
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
     // CHECK IF FILE CONTAINS "Azure Sentinel". IF YES THEN ERROR ELSE SUCCESS. THIS IS BECAUSE WE NOW WORK ON
-    if (filePath != ".azure-pipelines/contentValidations.yaml")
+    if (!filePath.includes("azure-pipelines"))
     {
         console.log(`Current File ${filePath}`)
         const fileContent = fs.readFileSync(filePath, "utf8");
