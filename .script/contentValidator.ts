@@ -9,11 +9,11 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     const fileContent = fs.readFileSync(filePath, "utf8");
     const searchText = "Azure Sentinel"
     const replaceWithText = "Microsoft Sentinel"
-    const result = fileContent.toLowerCase().includes(searchText.toLowerCase());
+    const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
     console.log("result ${result}")
-    if (result.length > 0)
+    if (hasAzureSentinelText)
     {
-        logger.logError(`Replace '${result}' with '${replaceWithText}' in file '${filePath}'`)
+        logger.logError(`'${searchText}' text is not allowed. Please replace '${searchText}' text with '${replaceWithText}' in file '${filePath}'`)
         return ExitCode.ERROR;
     }
 
