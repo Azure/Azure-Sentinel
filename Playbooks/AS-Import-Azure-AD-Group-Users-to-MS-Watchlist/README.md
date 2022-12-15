@@ -69,7 +69,6 @@ This will run a Kusto query for your watchlist and you should be able to see the
 
 ![AS_Group_Watchlist_Create_Watchlist_7](Images/AS_Group_Watchlist_Create_Watchlist_7.png)
 
-
 #### Microsoft Sentinel Workspace Id:
 
 Navigate to the Microsoft Sentinel page and select the same workspace as before:
@@ -83,7 +82,6 @@ Under the "**Configuration**" section of the menu, click "**Settings**", then cl
 Copy the value of the "**Workspace ID**" field and save it for deployment.
 
 ![AS_Group_Watchlist_Workspace_Id_2](Images/AS_Group_Watchlist_Workspace_Id_2.png)
-
 
 #
 ### Deployment                                                                                                         
@@ -150,7 +148,6 @@ Returning to the "**Overview**" page of the logic app, it can now be run success
 
 ![AS_Group_Watchlist_Deploy_9](Images/AS_Group_Watchlist_Deploy_9.png)
 
-
 # 
 ### Add Microsoft Sentinel Contributor Role
 
@@ -161,8 +158,20 @@ Navigate to the Log Analytics Workspaces page and select the same workspace the 
 https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.OperationalInsights%2Fworkspaces
 
 Select the "**Access control (IAM)**" option from the menu blade, then click "**Add role assignment**".
+
 ![AS_Group_Watchlist_Add_Role_1](Images/AS_Group_Watchlist_Add_Role_1.png)
 
+Select the "**Microsoft Sentinel Contributor**" role, then click "**Next**".
+
+![AS_Group_Watchlist_Add_Role_2](Images/AS_Group_Watchlist_Add_Role_2.png)
+
+Select the "**Managed identity**" option, then under the subscription the logic app is located, set the value of "**Managed identity**" to "**Logic app**". Next, enter "**AS-Import-Azure-AD-Group-Users-to-MS-Watchlist**", or the alternative playbook name used during deployment, in the field labeled "**Select**". Select the playbook, then click "**Select**".
+
+![AS_Group_Watchlist_Add_Role_3](Images/AS_Group_Watchlist_Add_Role_3.png)
+
+Continue on to the "**Review + assign**" tab and click "**Review + assign**".
+
+![AS_Group_Watchlist_Add_Role_4](Images/AS_Group_Watchlist_Add_Role_4.png)
 
 # 
 ### Editing the Microsoft Sentinel Watchlist
