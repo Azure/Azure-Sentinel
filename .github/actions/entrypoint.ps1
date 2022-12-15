@@ -3,8 +3,6 @@ $playbooksChanged = (Get-Item env:playbooksChanged).value
 $playbookFilesList = (Get-Item env:playbookFilesList).value
 $mainTemplateOrCreateUiDefinitionTemplateChanged = (Get-Item env:mainTemplateOrCreateUiDefinitionTemplateChanged).value
 
-Write-Host "List all playbook files $playbookFilesList"
-
 $isDataConnectorFolderNameWithSpace = (Get-Item env:isDataConnectorFolderNameWithSpace).value
 $dataConnectorFileNames = (Get-Item env:dataConnectorFileNames).value
 $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
@@ -12,10 +10,17 @@ $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
 $MainTemplatePath = './dist/Package'
 
+ls ./
+Write-Host "AA"
+ls ./dist/
+Write-Host "BB"
+ls ./dist/Playbooks
+Write-Host "CC"
+
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 {
-    Write-Host "Running ARM-TTK on MainTemplate.json and/or CreateUiDefinition.json file as change is identified those files."
+    Write-Host "Running ARM-TTK on MainTemplate.json and/or CreateUiDefinition.json file, as change is identified those files."
     $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
     $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
     Write-Output $MainTemplateTestPassed
@@ -34,7 +39,7 @@ if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 # Data Connector file change
 if ($hasDataConnectorFileChanged -eq $true)
 {
-    Write-Host "Running ARM-TTK on Data Connectors Folder, '$dataConnectorFileNames' files as change is identified those file"
+    Write-Host "Running ARM-TTK on Data Connectors Folder, '$dataConnectorFileNames' files, as change is identified those file"
     $dataConnectorFolderName = "Data Connectors"
     if($isDataConnectorFolderNameWithSpace -ne $true)
     {
