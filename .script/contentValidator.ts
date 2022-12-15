@@ -6,17 +6,19 @@ import * as logger from "./utils/logger";
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
     // CHECK IF FILE CONTAINS "Azure Sentinel". IF YES THEN ERROR ELSE SUCCESS. THIS IS BECAUSE WE NOW WORK ON
-    console.log(`Current File ${filePath}`)
-    const fileContent = fs.readFileSync(filePath, "utf8");
-    const searchText = "Azure Sentinel"
-    const replaceWithText = "Microsoft Sentinel"
-    const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
-    
-    if (hasAzureSentinelText)
+    if (filePath != ".azure-pipelines/contentValidations.yaml")
     {
-        throw new Error(`'${searchText}' text is not allowed. Please replace '${searchText}' text with '${replaceWithText}' in file '${filePath}'`);
+        console.log(`Current File ${filePath}`)
+        const fileContent = fs.readFileSync(filePath, "utf8");
+        const searchText = "Azure Sentinel"
+        const replaceWithText = "Microsoft Sentinel"
+        const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
+        
+        if (hasAzureSentinelText)
+        {
+            throw new Error(`'${searchText}' text is not allowed. Please replace '${searchText}' text with '${replaceWithText}' in file '${filePath}'`);
+        }
     }
-
     return ExitCode.SUCCESS;
 }
 
@@ -27,7 +29,7 @@ let CheckOptions = {
         return ValidateFileContent(filePath)
     },
     onExecError: async (e: any) => {
-        console.log(`Content Validation check Failed: ${e.message}`);
+        logger.logError(`Content Validation check Failed: ${e.message}`);
     },
     onFinalFailed: async () => {
         logger.logError("An error occurred, please open an issue");
