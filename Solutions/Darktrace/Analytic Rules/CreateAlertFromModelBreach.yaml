@@ -7,10 +7,6 @@ requiredDataConnectors:
   - connectorId: DarktraceRESTConnector
     dataTypes:
       - darktrace_model_alerts_CL
-queryFrequency: 5m
-queryPeriod: 5m # this might need review
-triggerOperator: gt
-triggerThreshold: 0
 tactics: # tactics pulled dynamically
 relevantTechniques:
 query: |
@@ -22,31 +18,45 @@ query: |
   | extend EventSchemaVersion = "0.2.2"
   | extend EventResult = "Success"
   | extend DvcAction = "Allow"
-  | project-rename EventSeverity=score_d
+  | project-rename EventSeverity=score_d //model breach score 
   | extend EventVendor = "Darktrace"
-  | extend EventProduct = "Enterprise Immune System"
+  | extend EventProduct = "Darktrace DETECT"
   | project-rename  EventStartTime = breachTime_s
   | extend EventEndTime = EventStartTime
   | project-rename NetworkRuleName=modelName_s
-  | project-rename NetworkRuleNumber=pid_d
+  | project-rename NetworkRuleNumber=pid_d //model ID 
   | extend Rule = "NetworkRuleNumber"
-  | project-rename ThreatId=threatID_d
+  | project-rename ThreatId=threatID_d //model breach ID 
   | extend ThreatName = NetworkRuleName
   | project-rename ThreatCategory=dtProduct_s
   | extend ThreatRiskLevel=EventSeverity
-  | extend ThreatCategory=Category
-  | extend ThreatCategory=replace_regex(ThreatCategory, @'Informational', @'Low')
-  | extend ThreatCategory=replace_regex(ThreatCategory, @'Compliance', @'Informational')
-  | extend ThreatCategory=replace_regex(ThreatCategory, @'Suspicious', @'Medium')
-  | extend ThreatCategory=replace_regex(ThreatCategory, @'Critical', @'High')
-  | project-rename SrcIpAddr=SourceIP
-  | project-rename SrcHostname=sourceHost_s
+  | extend SentinelCategory=Category //Darktrace Informational types map to Sentinel Informational types
+  | extend SentinelCategory=replace_regex(SentinelCategory, @'Suspicious', @'Medium') //Suspicous -> Med
+  | extend SentinelCategory=replace_regex(SentinelCategory, @'Critical', @'High') //Critical -> High
+  | project-rename SrcIpAddr=SourceIP| project-rename SrcHostname=hostname_s
   | project-rename SrcMacAddr=sourceMac_s
   | project-rename SrcPortNumber=sourcePort_s
   | project-rename DstIpAddr=destIP_s
   | project-rename DstPortNumber=destPort_s
   | project-rename DstHostname=destHost_s
   | project-rename DstMacAddr=destMac_s
+  | project-rename DtCompliance=compliance_b
+  | project-rename DtClientSensor=cSensor_b
+  | project-rename DtDescription=description_s
+  | project-rename DtAntigena=antigena_b
+  | project-rename DtDeviceID=deviceId_d
+  | project-rename DtSubnetID=sid_d
+  | project-rename DtTags=tags_s
+  | project-rename DtMitreTechniques=mitreTechniques_s
+  | project-rename DtMessage=Message
+  | project-rename DtUUID=uuid_g
+  | project-rename DtBreachURL=breachUrl_s
+  | project-rename DtSrcTypeLabel=typeLabel_s
+  | project-rename DtTriggeredComponents=triggeredComponents_s
+  | project-rename DtDetails=details_s
+  | project-rename DtLongitude=longitude_d
+  | project-rename DtLatitude=latitude_d
+  | project-rename DtCategory=Category
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 entityMappings:
@@ -54,27 +64,46 @@ entityMappings:
     fieldMappings:
       - identifier: HostName
         columnName: SrcHostname
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DstHostname
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: SrcIPAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIPAddr
 customDetails:
   DstHostname: DstHostname
   DstIpAddr: DstIpAddr
   SrcMacAddr: SrcMacAddr
   EventSeverity: EventSeverity
   EventStartTime: EventStartTime
-  EventTitle: NetworkRuleName
-  EventID: ThreatId
-  EventMessage: Message
+  NetworkRuleName: NetworkRuleName
+  NetworkRuleNumber: NetworkRuleNumber
+  ThreatId: ThreatId
+  ThreatCategory: ThreatCategory
+  SentinelCategory: SentinelCategory
+  SrcIpAddr: SrcIpAddr
+  SrcHostname: SrcHostname
+  SrcPortNumber: SrcPortNumber
+  DstPortNumber: DstPortNumber
+  DstMacAddr: DstMacAddr
+  DtCompliance: DtCompliance
+  DtBreachURL: DtBreachURL
+  DtDescription: DtDescription
+  DtCategory: DtCategory
+  DtDeviceID: DtDeviceID
 # These are described here - this is why we're leaving tactics and techniques above empty
 alertDetailsOverride:
   # model breach name here
   alertDisplayNameFormat: 'Darktrace: {{ThreatRiskLevel}} - {{NetworkRuleName}}' # Up to 256 chars and 3 placeholders
-  # model description here - TODO, not sure whether we've still got that field
-  alertDescriptionFormat: '{{description_s}}' # Up to 5000 chars and 3 placeholders
+  alertDescriptionFormat: '{{DtMessage}}' # Up to 5000 chars and 3 placeholders
   # MITRE tactic
   alertTacticsColumnName: #we need to figure out whether this expect a numerical ID or word description of mitre technique
-  alertSeverityColumnName: ThreatCategory
-version: 1.0.0
+  alertSeverityColumnName: SentinelCategory
+version: 1.1.0
 kind: NRT
