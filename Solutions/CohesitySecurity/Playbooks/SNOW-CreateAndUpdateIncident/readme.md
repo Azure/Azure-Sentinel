@@ -1,6 +1,6 @@
 # Cohesity Create or Update ServiceNow Incident 
 ## Summary
-This playbook creates a ticket in ServiceNow.
+This playbook creates a ticket in ServiceNow. It can be also used for updating ticket information or closing it. For example, an automation rule can be created to close the ServiceNow ticket by running this playbook when the corresponding Sentinel ticket is closed ([details](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/Servicenow/Playbooks/SNOW-CreateAndUpdateIncident/readme.md)).
 
 ## Prerequisites
 1. Create an account for [ServiceNow](https://signon.service-now.com/x_snc_sso_auth.do).
