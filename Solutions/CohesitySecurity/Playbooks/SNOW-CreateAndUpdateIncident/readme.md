@@ -13,11 +13,25 @@ This playbook creates a ticket in ServiceNow.
 
 ## Post-Deployment instructions
 1. Update ServiceNow credentials in the playbook
-* In your Microsoft Sentinel Instance, go to the _Automation_ under the _Configuration_ pane.
-* Under _Active Playbooks_, select the playbook and click on _Edit_.
-* Select the ServiceNow connector on the _Logic App Designer_ page.
-* Enter your ServiceNow instance credentials - URL, login and password.
-* Select _Save_.
+* Go to _Logic Apps_.
+* Choose your app (playbook).
+* Select _Development Tools\API Connections_.
+* Select a connection you'd like to authorize.
+* Click on General\Edit API Connection.
+* Enter path to your instance, e.g. https://dev12345.service-now.com.
+* Enter username.
+* Enter password.
+* Click Save.
+
+Alternatively, you can follow these steps to achieve the same goal. This would be especially useful if the previous steps didn’t work for you.
+* Go to _Logic Apps_.
+* Click on the playbook and press _Edit_.
+* Choose _ServiceNow_ block.
+* Click on _Change Connection_.
+* Click on the "!" icon to enter ServiceNow credentials or choose a different, previously authorized, connection with the correct credentials.
+* Press _Save_ button to save changes in your playbook. 
+* If it doesn't work, repeat the steps but either choose a different connection or fix possible authorization errors, e.g. wrong user/password or incorrect path to the instance, for the chosen one.
+
 2. For the playbook to run, there is a need to assign the Microsoft Sentinel Responder role to the playbook's managed identity.
 * Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
 * Choose the _Access Control (IAM)_ option from the left pane.
