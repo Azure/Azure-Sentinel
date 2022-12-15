@@ -13,15 +13,31 @@ This playbook sends an email to the recipient with the incident details..
 * __Email ID__: Email (preferably a distribution list) for sending out incident notifications
 
 ## Post-Deployment instructions
-To update the email address in the playbook:
+To enable this playbook, you need authorize Outlook connection ([details](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/understanding-api-connections-for-your-microsoft-sentinel/ba-p/2593973))
+* Go to _Logic Apps_.
+* Choose your app.
+* Choose _Development Tools\API Connections_.
+* Select a connection you'd like to authorize.
+* Click on _General\Edit API Connection_.
+* Press the _Authorize_ button.
+
+Alternatively, you can follow these steps to achieve the same goal. This would be especially useful if the previous steps didn’t work for you.
+* Go to _Logic Apps_.
+* Click on the playbook and press _Edit_.
+* Choose _Send an email (V2)_ block.
+* Click on _Change Connection_.
+* Click on the "!" icon to authorize the connection or choose a different, previously authorized, connection.
+* Press _Save_ button to save changes in your playbook. 
+* If it doesn't work, repeat the steps but either choose a different connection or fix possible authorization errors for the chosen one.
+
+## Troubleshooting
+To change the email address in the playbook:
 * In your Microsoft Sentinel workspace, go to the _Automation_ under the _Configuration_ pane.
 * Under _Active Playbooks_, select the playbook and click on _Edit_.
 * On the _Logic App Designer_ page, select _Initialize variable 2_.
 * Under the value section, enter the email address for the incident notifications.
 * Click _Save_.
-
-## Troubleshooting
-* If your playbook fails to send emails, go to _Logic Apps_, click on the playbook and press _Edit_. After that choose _Send an email (V2)_ block, click on _Change Connection_, select a different connection and press _Save_ button to save changes in your playbook. Then try again. If it doesn't work, then try another connection. Also, your playbook _Overview_ pane has status of all runs. By looking at the details, you can get more ideas on what could go wrong. 
+If the playbook fails to execute, go to your playbook _Overview_ pane that has status of all runs. By looking at the details, you can get more ideas on what went wrong. 
 
 #  References
  - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm)
