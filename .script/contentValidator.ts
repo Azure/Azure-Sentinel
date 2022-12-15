@@ -6,15 +6,15 @@ import * as logger from "./utils/logger";
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
     // CHECK IF FILE CONTAINS "Azure Sentinel". IF YES THEN ERROR ELSE SUCCESS. THIS IS BECAUSE WE NOW WORK ON
+    console.log(`Current File ${filePath}`)
     const fileContent = fs.readFileSync(filePath, "utf8");
     const searchText = "Azure Sentinel"
     const replaceWithText = "Microsoft Sentinel"
     const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
-    console.log("result ${result}")
+    
     if (hasAzureSentinelText)
     {
-        logger.logError(`'${searchText}' text is not allowed. Please replace '${searchText}' text with '${replaceWithText}' in file '${filePath}'`)
-        return ExitCode.ERROR;
+        throw new Error(`'${searchText}' text is not allowed. Please replace '${searchText}' text with '${replaceWithText}' in file '${filePath}'`);
     }
 
     return ExitCode.SUCCESS;
@@ -26,8 +26,8 @@ let CheckOptions = {
     onCheckFile: (filePath: string) => {
         return ValidateFileContent(filePath)
     },
-    onExecError: async () => {
-        logger.logError(`Content Validation Failed.`);
+    onExecError: async (e: any) => {
+        console.log(`Content Validation check Failed: ${e.message}`);
     },
     onFinalFailed: async () => {
         logger.logError("An error occurred, please open an issue");
