@@ -7,12 +7,13 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-1. [Deploy Custom Connector + Function App + 3 Playbook templates](#deployall)
-1. [Authentication](#authentication)
-1. [Prerequisites](#prerequisites)
-1. [Deployment](#deployment)
-1. [Post Deployment Steps](#postdeployment)
-1. [Limitations](#limitations)
+2. [Deploy Custom Connector + Function App + 3 Playbook templates](#deployall)
+3. [Custom Connector and playbooks OnPrem versions](#onprem)
+4. [Authentication](#authentication)
+5. [Prerequisites](#prerequisites)
+6. [Deployment](#deployment)
+7. [Post Deployment Steps](#postdeployment)
+8. [Limitations](#limitations)
 
 
 <a name="overview">
@@ -26,7 +27,7 @@ FortiGate, a next-generation firewall from IT Cyber Security leaders Fortinet, p
 ## Deploy Custom Connector+ Function App + 3 Playbook templates
 This package includes:
 * [Custom connector](./CustomConnector) 
-* [Function App]((./FunctionApp)) 
+* [Function App]((../FunctionApp)) 
 * Three playbook templates leverage fortinet custom connector and Function App:
   * [Block IP](./Playbooks/FortinetFortiGate-ResponseOnIP)
   * [Block URL](./Playbooks/FortinetFortiGate-ResponseOnURL)
@@ -38,6 +39,25 @@ This package includes:
 You can choose to deploy the whole package: connector + Function App + all three playbook templates, or each one seperately from it's specific folder.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json)
+
+## Deploy Custom Connector + 2 Playbook templates
+<a name="onprem">
+
+This package includes:
+* [Custom connector](./CustomConnectorOnPrem)
+* [Function App](../FunctionApp)
+* Three playbook templates leverage fortinet custom connector and Function App:
+  * [Block IP](./Playbooks/PlaybooksOnPrem/Fortinet_ResponseOnIP)
+  * [Block URL](./Playbooks/PlaybooksOnPrem/Fortinet_ResponseOnURL)
+
+
+*The Azure Function handles the Get calls on FortiOS API in the playbook templates. These calls are not part of the custom connector due to platform limitations.*
+
+You can choose to deploy the whole package: connector + Function App + all three playbook templates, or each one seperately from it's specific folder.
+
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json)
+
 
 # Fortinet connector documentation 
 
