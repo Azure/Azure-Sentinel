@@ -18,32 +18,29 @@ Client ID and Client Secret can be obtained from [Cybersixgill Developer Portal]
 * Once done click on Create the app.
 * Copy Client ID and Client Secret.
 
-### Setup
+# Deployment instructions
+1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-
-#### Create an Azure Key Vault Secret:
-
-Navigate to the Azure Key Vaults page: https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults
-
-Navigate to an existing Key Vault or create a new one. From the Key Vault overview page, click the "**Secrets**" menu option, found under the "**Settings**" section. Click "**Generate/Import**".
-
-![CybersixgillAlertStatusUpdate_Key_Vault_1](./images/CybersixgillAlertStatusUpdate_Key_Vault_1.png)
-
-Choose a name for the secret "**clientid**", and enter the Cybersixgill Client ID copied previously in the "**Value**" field. All other settings can be left as is. Click "**Create**".
-Repeat same step and create a secret for "**clientsecret**"
-
-![CybersixgillAlertStatusUpdate_Key_Vault_2](./images/CybersixgillAlertStatusUpdate_Key_Vault_2.png)
-
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option, also found under the "**Settings**" section on the Key Vault page menu. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Okta-NetworkZoneUpdate#granting-access-to-azure-key-vault).
-
-![CybersixgillAlertStatusUpdate_Key_Vault_3](./images/CybersixgillAlertStatusUpdate_Key_Vault_3.png)
-
-# Quick Deployment
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https%3A%2F%2Fportal.azure.com%2F%23create%2FMicrosoft.Template%2Furi%2Fhttps%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCybersixgill-Actionable-Alerts%2FPlaybooks%2FCybersixgillAlertStatusUpdate%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https%3A%2F%2Fportal.azure.us%2F%23create%2FMicrosoft.Template%2Furi%2Fhttps%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCybersixgill-Actionable-Alerts%2FPlaybooks%2FCybersixgillAlertStatusUpdate%2Fazuredeploy.json)
 
-# Post-deployment
-1. Create new automation rule, ex: CybersixgillStatusUpdateAutomationRule
+2. Fill in the required parameters:
+    * Playbook Name: Enter the playbook name here (Ex: CybersixgillAlertStatusUpdate)
+    * Keyvault name : Enter the key vault name where secret key is stored.
+    * Cybersixgill Client ID : Key name for Cybersixgill Client ID stored api secret.
+    * Cybersixgill Client Secret : Key name for Cybersixgill Client Secret the stored api secret.
+
+### Post-Deployment 
+#### a. Authorize connections (Perform this action if needed)
+Once deployment is complete, you will need to authorize each connection.
+1.	Click the Microsoft Sentinel connection resource
+2.	Click edit API connection
+3.	Click Authorize
+4.	Sign in
+5.	Click Save
+
+#### b. Configurations in Sentinel
+Create new automation rule, ex: CybersixgillStatusUpdateAutomationRule
    * Trigger = When Incident is updated
    * Condition = Status Changed
 
@@ -53,24 +50,23 @@ Once your secret has been added to the vault, navigate to the "**Access policies
 
 ![](./images/AutomationRuleExampleLight.PNG)
 
-
-#
-### Granting Access to Azure Key Vault
-
-Before the Logic App can run successfully, the Key Vault connection created during deployment must be granted access to the Key Vault holding Cybersixgill Client ID and Client Secret.
-
-From the Key Vault "**Access policies**" page, click "**Create**".
-
-![CybersixgillAlertStatusUpdate_Access_1](Images/CybersixgillAlertStatusUpdate_Access_1.png)
-
-Select the "**Get**" checkbox under "**Secret permissions**", then click "**Next**".
-
-![CybersixgillAlertStatusUpdate_Access_2](Images/CybersixgillAlertStatusUpdate_Access_2.png)
-
-Paste "**CybersixgillAlertStatusUpdate**" into the principal search box and click the option that appears. Click "**Next**" towards the bottom of the page.
-
-![CybersixgillAlertStatusUpdate_Access_3](Images/CybersixgillAlertStatusUpdate_Access_3.png)
-
-Navigate to the "**Review + create**" section and click "**Create**".
-
-![CybersixgillAlertStatusUpdate_Access_4](Images/CybersixgillAlertStatusUpdate_Access_4.png)
+#### c. Assign Playbook Microsoft Sentinel Responder Role
+1. Select the Playbook (Logic App) resource
+2. Click on Identity Blade
+3. Choose System assigned tab
+4. Click on Azure role assignments
+5. Click on Add role assignments
+6. Select Scope - Resource group
+7. Select Subscription - where Playbook has been created
+8. Select Resource group - where Playbook has been created
+9. Select Role - Microsoft Sentinel Responder
+10. Click Save (It takes 3-5 minutes to show the added role.)
+#### d. Assign access policy on key vault for Playbook to fetch the secret key
+1. Select the Keyvault resource where you have stored the secret
+2. Click on Access policies Blade
+3. Click on Create
+4. Under Secret permissions column , Select Get , List from "Secret Management Operations"
+5. Click next to go to Principal tab and choose your deployed playbook name
+6. Click Next leave application tab as it is .
+7. Click Review and create
+8. Click Create
