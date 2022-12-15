@@ -52,40 +52,42 @@ ParserQuery: |
   let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
   let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
   let Sysmon3_NetworkEvent =    
-    Event
-    | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
-    | where not(disabled)
-    | where Source == "Microsoft-Windows-Sysmon" and EventID==3
-    | project-away ParameterXml, RenderedDescription
-    // ***************  Prefilterring *****************************************************************
-    | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
-      and (array_length(ip_any)==0 
-           or has_any_ipv4_prefix(EventData,ip_any)
-          ) 
-      and (array_length(hostname_has_any)==0 
-           or EventData has_any(hostname_has_any))  // can we not just check on "Computer" in this case? I took this from the Linux Sysmon example
-      and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
-    // ***************  Prefilterring *****************************************************************   
-    | parse-kv EventData as 
-      (
+      Event
+      | where (isnull(starttime) or TimeGenerated>=starttime)
+        and (isnull(endtime) or TimeGenerated<=endtime) 
+      | where not(disabled)
+      | where Source == "Microsoft-Windows-Sysmon" and EventID==3
+      | project-away ParameterXml, RenderedDescription
+      // ***************  Prefilterring *****************************************************************
+      | where  
+              (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+          and (array_length(ip_any)==0 
+               or has_any_ipv4_prefix(EventData,ip_any)
+               ) 
+          and (array_length(hostname_has_any)==0 
+               or EventData has_any(hostname_has_any))  // can we not just check on "Computer" in this case? I took this from the Linux Sysmon example
+          and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
+      // ***************  Prefilterring *****************************************************************   
+       | parse-kv EventData as 
+        (
           SourceIp:string,
           DestinationIp:string,
           SourceHostname:string,
           DestinationHostname:string,
           Initiated:bool  // Initiated indicates the process initiated a connection (meaning outbound)
-      ) 
+         ) 
           with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')    
-    | project-away EventData
-    | project-rename
-      SrcIpAddr = SourceIp,
-      DstIpAddr = DestinationIp,
-      SrcHostname = SourceHostname,
-      DstHostname = DestinationHostname
-    | where 
-      (array_length(srcipaddr_has_any_prefix)==0 
-                  or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_prefix)
-      )
-    ;    
+      | project-away EventData
+      | project-rename
+        SrcIpAddr = SourceIp,
+        DstIpAddr = DestinationIp,
+        SrcHostname = SourceHostname,
+        DstHostname = DestinationHostname
+      | where 
+        (array_length(srcipaddr_has_any_prefix)==0 
+                      or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_prefix)
+        )
+      ;    
   let Sysmon3_NetworkWindowsEvent =    
   WindowsEvent
     | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
@@ -125,7 +127,6 @@ ParserQuery: |
           Protocol:string,
           Initiated:bool,
           SourceIsIpv6:bool,
-          SourceIp:string,
           SourcePort:int,
           DestinationIsIpv6:bool,
           DestinationIp:string,
@@ -139,10 +140,6 @@ ParserQuery: |
     | project-rename
          SrcUsername = User,
          SrcProcessId = ProcessId,
-         SrcIpAddr = SourceIp,
-         DstIpAddr = DestinationIp,
-         SrcHostname = SourceHostname,
-         DstHostname = DestinationHostname,
          SrcPortNumber = SourcePort,
          DstPortNumber = DestinationPort,
          EventStartTime = UtcTime,
@@ -235,13 +232,9 @@ ParserQuery: |
             Protocol = tostring(EventData.Protocol),
             Initiated = tobool(EventData.Initiated),
             SourceIsIpv6 = tobool(EventData.SourceIsIpv6),
-            SrcIpAddr = tostring(EventData.SourceIp),
             SourcePort = toint(EventData.SourcePort),
             DestinationIsIpv6 = tobool(EventData.DestinationIsIpv6),
-            DstIpAddr = tostring(EventData.DestinationIp),
             DstPortNumber = toint(EventData.DestinationPort),
-            DstHostname = tostring(EventData.DestinationHostname),
-            SrcHostname = tostring(EventData.SrcHostname),
             EventStartTime = todatetime(EventData.UtcTime)
     | project-away EventData
     | extend 
