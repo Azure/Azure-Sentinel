@@ -8,7 +8,6 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     // CHECK IF FILE CONTAINS "Azure Sentinel". IF YES THEN ERROR ELSE SUCCESS. THIS IS BECAUSE WE NOW WORK ON
     if (!filePath.includes("azure-pipelines"))
     {
-        console.log(`Current File ${filePath}`)
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel"
         const replaceWithText = "Microsoft Sentinel"
@@ -22,7 +21,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     return ExitCode.SUCCESS;
 }
 
-let fileTypeSuffixes = ["json", "txt", "md", "yaml", "yml"];
+let fileTypeSuffixes = ["json", "txt", "md", "yaml", "yml", "py"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
     onCheckFile: (filePath: string) => {
