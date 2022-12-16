@@ -29,6 +29,7 @@ namespace Helios2Sentinel
     {
         private static readonly object queueLock = new object();
         private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
+        private static string containerName = Environment.GetEnvironmentVariable("containerName");
         public static long GetPreviousUnixTime(ILogger log)
         {
             DateTime previousDateTime = DateTime.Now;
@@ -36,7 +37,7 @@ namespace Helios2Sentinel
             {
                 previousDateTime = previousDateTime.AddDays(long.Parse(Environment.GetEnvironmentVariable("startDaysAgo")));
             }
-            catch (Exception ex)
+            catch  (Exception ex)
             {
                 previousDateTime = previousDateTime.AddDays(-30);
                 log.LogError("Exception --> 1 " + ex.Message);
@@ -65,7 +66,7 @@ namespace Helios2Sentinel
             });
         }
 
-        public static async Task ParseAlertToQueueAsync(
+        public static async Task ParseAlertToQueue(
             [Queue("%CohesityQueueName%"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             dynamic alert, ILogger log)
         {
@@ -117,11 +118,10 @@ namespace Helios2Sentinel
             }
         }
 
-        private static void WriteData(string storageConnectionString, string containerName, string path, string data)
+        private static void WriteData(string storageConnectionString, string path, string data)
         {
             if (CloudStorageAccount.TryParse(storageConnectionString, out var storageAccount))
             {
-                // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
                 var cloudBlobClient = storageAccount.CreateCloudBlobClient();
                 var container = cloudBlobClient.GetContainerReference(containerName);
                 var blobRef = container.GetBlockBlobReference(path);
@@ -138,11 +138,10 @@ namespace Helios2Sentinel
         {
             try
             {
-                const string container = "extra-parameters";
                 string Blob = incidentID + "\\" + param; // ID unique to the incident
                 var blobStorageConnectionString = Environment.GetEnvironmentVariable("BlobStorageConnectionString");
                 var blobStorageKeys = Environment.GetEnvironmentVariable("BlobStorageAccountKeys");
-                WriteData(blobStorageConnectionString, container, Blob, value);
+                WriteData(blobStorageConnectionString, Blob, value);
             }
             catch (Exception ex)
             {
@@ -173,7 +172,7 @@ namespace Helios2Sentinel
                 {
                     startDateUsecs = long.Parse(db.StringGet(redisKey));
                 }
-                catch (Exception ex)
+                catch  (Exception ex)
                 {
                     startDateUsecs = GetPreviousUnixTime(log);
                     log.LogError("Exception --> 2 " + ex.Message);
@@ -184,10 +183,10 @@ namespace Helios2Sentinel
                     startDateUsecs = GetPreviousUnixTime(log);
                 }
 
-                log.LogInformation("startDateUsecs --> " + startDateUsecs);
+                log.LogInformation ("startDateUsecs --> " + startDateUsecs);
 
                 long endDateUsecs = GetCurrentUnixTime();
-                log.LogInformation("endDateUsecs --> " + endDateUsecs.ToString());
+                log.LogInformation ("endDateUsecs --> " + endDateUsecs.ToString());
 
                 string requestUriString = $"https://helios.cohesity.com/mcm/alerts?alertCategoryList=kSecurity&alertStateList=kOpen&startDateUsecs={startDateUsecs}&endDateUsecs={endDateUsecs}";
                 log.LogInformation("requestUriString --> " + requestUriString);
@@ -198,15 +197,29 @@ namespace Helios2Sentinel
                 StreamReader reader = new StreamReader(stream);
                 dynamic alerts = JsonConvert.DeserializeObject(reader.ReadToEnd());
 
+                var tasks = new List<Task>();
+
                 foreach (var alert in alerts)
                 {
-                    await ParseAlertToQueueAsync(outputQueueItem, alert, log);
+                    tasks.Add(Task.Run( () =>
+                    {
+                        ParseAlertToQueue(outputQueueItem, alert, log);
+                    }));
                 }
+                Task t = Task.WhenAll(tasks);
+                try
+                {
+                    t.Wait();
+                }
+                catch {}
 
-                db.StringSet(redisKey, endDateUsecs.ToString());
+                if (t.Status == TaskStatus.RanToCompletion)
+                {
+                    db.StringSet(redisKey, endDateUsecs.ToString());
+                }
                 log.LogInformation("new startDateUsecs --> " + endDateUsecs.ToString());
             }
-            catch (Exception ex)
+            catch  (Exception ex)
             {
                 log.LogError("Exception --> 3 " + ex.Message);
             }
