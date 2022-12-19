@@ -1,0 +1,63 @@
+id: 641ecd2d-27c9-4f05-8433-8205096b09fc
+name: New Windows Reserved Filenames staged on Office file services
+description: |
+  'Identifies when new Windows Reserved Filenames show up on Office services such as SharePoint and OneDrive in relation to the previous 7 days.
+  List currently includes 'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6',
+  'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9' file extensions.
+  Additionally, identifies when a given user is uploading these files to another users workspace.
+  This may be indication of a staging location for malware or other malicious activity.
+  References: https://docs.microsoft.com/windows/win32/fileio/naming-a-file'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1105
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  // a threshold can be enabled, see commented line below for PrevSeenCount
+  let threshold = 1;
+  // Reserved FileNames/Extension for Windows
+  let Reserved = dynamic(['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']);
+  OfficeActivity | where TimeGenerated between(starttime..endtime)
+  | where isnotempty(SourceFileExtension)
+  | where SourceFileName !~ SourceFileExtension
+  | where SourceFileExtension in~ (Reserved) or SourceFileName in~ (Reserved)
+  | where UserAgent !has "Mac OS"
+  | project TimeGenerated, OfficeId, OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName, SourceFileExtension
+  | join kind= leftanti (
+  OfficeActivity | where TimeGenerated between (ago(lookback)..starttime)
+  | where isnotempty(SourceFileExtension)
+  | where SourceFileName !~ SourceFileExtension
+  | where SourceFileExtension in~ (Reserved) or SourceFileName in~ (Reserved)
+  | where UserAgent !has "Mac OS"
+  | summarize SourceRelativeUrl = make_set(SourceRelativeUrl), UserId = make_set(UserId), SourceFileName = make_set(SourceFileName) , PrevSeenCount = count() by SourceFileExtension
+  // To exclude previous matches when only above a specific count, change threshold above and uncomment the line below
+  //| where PrevSeenCount > threshold
+  | mvexpand SourceRelativeUrl, UserId, SourceFileName
+  | extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId), SourceFileName = tostring(SourceFileName)
+  ) on SourceFileExtension
+  | extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])
+  | extend UserIdUserFolderFormat = tolower(replace('@|\\.', '_',UserId))
+  // identify when UserId is not a match to the specific site url personal folder reference
+  | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true , false )
+  | summarize TimeGenerated = make_list(TimeGenerated), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Operations = make_list(Operation), UserAgents = make_list(UserAgent),
+  OfficeIds = make_list(OfficeId), SourceRelativeUrls = make_list(SourceRelativeUrl), FileNames = make_list(SourceFileName)
+  by OfficeWorkload, RecordType, UserType, UserKey, UserId, ClientIP, Site_Url, SourceFileExtension, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+  // Use mvexpand on any list items and you can expand out the exact time and other metadata about the hit
+  | extend timestamp = StartTime, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.0
