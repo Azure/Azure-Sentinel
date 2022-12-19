@@ -124,6 +124,7 @@ ParserQuery: |
           User:string,
           Protocol:string,
           Initiated:bool,
+          RuleName:string,
           SourceIsIpv6:bool,
           SourcePort:int,
           DestinationIsIpv6:bool,
@@ -320,8 +321,13 @@ ParserQuery: |
   let SysmonForWindowsNetworks =
   union OutboundNetworkEvents, InboundNetworkEvents, OutboundNetworkWindowsEvents, inboundNetworkWindowsEvents
       | project-rename 
-                DvcHostname = Computer
-    | extend 
+                Dvc = Computer,
+                IpAddr = SrcIpAddr,
+                NetworkRuleName = RuleName
+    | extend
+                EventEndTime = EventStartTime,
+                Hostname = iff(SrcHostname == "-", DstHostname, SrcHostname),
+                DvcHostname = Dvc,
                 EventCount = int(1),
                 EventVendor = 'Microsoft',
                 EventSchemaVersion = '0.2.4',
@@ -333,12 +339,36 @@ ParserQuery: |
                 DvcOs = 'Windows',
                 Protocol = toupper(Protocol),
                 EventOriginalType = '3', // Set with a constant value to avoid parsing
-                Dvc = DvcHostname,
-                Hostname = DstHostname,
-                IpAddr = SrcIpAddr,
-                Src = SrcIpAddr,
-                Dst = DstIpAddr
+                SrcIpAddr = IpAddr,
+                Src = IpAddr,
+                DvcIpAddr  = IpAddr,
+                Dst = DstIpAddr,
+                SrcDomain = iff(tostring(split(Dvc, "\\")[0]) == Dvc, Dvc, tostring(split(Dvc, "\\")[0])),
+                DvcDomainType = "Windows",
+                SrcDomainType = "Windows",
+                NetworkProtocol = Protocol
       | project-rename 
                 NetworkProtocol = Protocol
+      | project-away 
+                AzureDeploymentID,
+                Channel,
+                Data,
+                Destination*,
+                MG,
+                ManagementGroupName,
+                Message,
+                UserName,
+                TenantId,
+                Task,
+                Provider,
+                RawEventData,
+                Role,
+                Source*,
+                EventCategory,
+                EventID,
+                EventLevelName,
+                EventLevel,
+                EventLog,
+                EventOriginId
       ;
       SysmonForWindowsNetworks
