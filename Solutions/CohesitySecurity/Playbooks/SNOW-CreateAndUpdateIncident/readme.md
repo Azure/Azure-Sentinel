@@ -16,12 +16,13 @@ This playbook creates a ticket in ServiceNow. It can be also used for updating t
 * Go to _Logic Apps_.
 * Choose your app (playbook).
 * Select _Development Tools\API Connections_.
-* Select a connection you'd like to authorize.
-* Click on General\Edit API Connection.
-* Enter path to your instance, e.g. https://dev12345.service-now.com.
+* Select a connection you'd like to authorize. Usually, such a connection contains your playbook name. For example, if your playbook is called **My-SNOW-CreateAndUpdateIncident**, then the connection _can_ be called _Service-Now-_**My-SNOW-CreateAndUpdateIncident**.
+* Click on _General\Edit API Connection_.
+* Enter path to your instance, e.g. dev12345.
 * Enter username.
 * Enter password.
 * Click Save.
+**Note:** Your ServiceNow credentials can be found in your ServiceNow instance account profile (see _Instance Action\Manage Instance Password_).
 
 Alternatively, you can follow these steps to achieve the same goal. This would be especially useful if the previous steps didn’t work for you.
 * Go to _Logic Apps_.
@@ -35,7 +36,17 @@ Alternatively, you can follow these steps to achieve the same goal. This would b
 2. For the playbook to run, there is a need to assign the Microsoft Sentinel Responder role to the playbook's managed identity.
 * Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
 * Choose the _Access Control (IAM)_ option from the left pane.
-* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Responder_ managed identity role to the playbook. 
+* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Responder_ managed identity role to the playbook.
+
+3. (Recommendation). Create automation rule to close ServiceNow tickets when the corresponding ticket is closed.
+* Choose _Automation_ in the _Configuration_ pane.
+* Select _Create/Automation rule_.
+* In the _Create new automation rule_ window, enter your new rule name, e.g. _Close ServiceNow Ticket_.
+* In the _Trigger_ list, select _When incident is updated_.
+* Add the condition _Tag contains_ **SNOW System ID:**.
+* Add the condition _Status chaged to_ **Close**.
+* In _Actions/Run playbook_ select your playbook.
+* Click _Apply_.
 
 #  References
- - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm)
+ - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm).
