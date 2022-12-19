@@ -18,7 +18,7 @@
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%EclecticIQ%2FPlaybooks%2FEclecticIQPlaybooks%EclecticIQ-EnrichIncident%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FEclecticIQ%2FPlaybooks%2FEclecticIQPlaybooks%EclecticIQ-EnrichIncident%2Fazuredeploy.json)
 
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex: EclecticIQ-EnrichIncident)
     * Custom Connector Name: Enter the EclecticIQ Custom connector name here (Ex: EclecticIQCustomConnector)
     
