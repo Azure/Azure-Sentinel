@@ -1,0 +1,86 @@
+Parser:
+  Title: Audit Event ASIM parser for Microsoft Exchange 365 administrative activity
+  Version: '0.1'
+  LastUpdated: June 28, 2021
+Product:
+  Name: Microsoft SharePoint
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Office 365 Management Activity API schema
+  Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
+Description: |
+  This ASIM parser supports normalizing Microsoft Exchange 365 administrative activity in the OfficeActivity table to the ASIM Audit Event schema.
+ParserName: ASimAuditEventMicrosoftOffice365
+EquivalentBuiltInParser: _ASim_AuditEvent_EventMicrosoftExchangeAdmin365
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let usertypes=datatable (ActorOriginalUserType:string, ActorUserType:string)
+  [
+   // Regular, Regular
+   "Admin", "Admin"
+   , "DcAdmin", "Admin"
+   , "System", "System"
+   , "Application", "Application"
+   , "ServicePrincipal", "Service Principal"
+   , "CustomPolicy", "Other"
+   , "SystemPolicy", "Other"
+   , "Reserved", "Other"
+  ];
+  let parser=(disabled:bool=false){
+    OfficeActivity
+    | where not(disabled)
+    | where RecordType  in ('ExchangeAdmin')
+    | project-away OrganizationId_, RecordType, OfficeWorkload, OfficeTenantId*, UserId_, ResultReasonType, Start_Time, OfficeId, Elevation*, SourceSystem, ClientIP_, AppId, ClientAppId, ExternalAccess
+    | extend 
+        EventType=split (Operation,"-")[0],
+        EventResult = iff(ResultStatus == "True", "Success", "Failure"),
+        NewValue = tostring(Parameters)
+    | extend
+        SplitObject = extract_all(@'^(.*?)[\\/](.*)$', OfficeObjectId)[0]
+    | extend 
+        Object = iff (SplitObject[0] == OrganizationName, SplitObject[1], OfficeObjectId)
+    | extend 
+        SplitIpAddr = extract_all(@'^\[?(.*?)\]?:(\d+)$', ClientIP)[0]
+    | extend 
+        SrcIpAddr = iff (SplitIpAddr[1] == "", ClientIP, SplitIpAddr[0]),
+        SrcPortNumber = iff (SplitIpAddr[1] == "", "", SplitIpAddr[1])
+    | project-rename
+        Value = Parameters,
+        ActorUsername = UserId, 
+        SrcHostname = OriginatingServer 
+    | extend 
+        Src = SrcHostname
+    | project-away ResultStatus, SplitObject, OfficeObjectId, UserKey, SplitIpAddr
+    | project-rename
+        HttpUserAgent = UserAgent, 
+        ActorOriginalUserType = UserType,
+        ActorScopeId = OrganizationId,
+        ActorScope = OrganizationName,
+        EventOriginalUid = SourceRecordId,
+        EventSubType = Operation
+    | lookup usertypes on ActorOriginalUserType
+    | extend
+        EventCount = int(1),
+        EventStartTime = TimeGenerated, 
+        EventEndTime= TimeGenerated,
+        EventProduct = 'Office 365',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'AuditEvent'
+    // Aliases
+    | extend 
+        User=ActorUsername,
+        IpAddr = SrcIpAddr,
+        Value = NewValue,
+        EventOriginalType = EventSubType
+   };
+   parser (disabled=disabled)
