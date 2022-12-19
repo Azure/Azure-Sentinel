@@ -1,0 +1,51 @@
+id: e3d24cfd-b2a1-4ba7-8f80-0360892f9d57
+name: SharePointFileOperation via previously unseen IPs
+description: |
+  'Shows volume of documents uploaded to or downloaded from Sharepoint by IPs with ASNs associated with high user lockout or malicious activity.
+  In stable environments such connections by new IPs may be unauthorized, especially if associated with
+  spikes in volume which could be associated with large-scale document exfiltration.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let BLOCK_THRESHOLD = 1.0;
+  let HighBlockRateASNs =
+  SigninLogs
+  | where TimeGenerated > lookback
+  | where isnotempty(AutonomousSystemNumber)
+  | summarize make_set(IPAddress), TotalIps = dcount(IPAddress), BlockedSignins= countif(ResultType == "50053"), TotalSignins = count() by AutonomousSystemNumber
+  | extend BlockRatio = 1.00 * BlockedSignins/TotalSignins
+  | where BlockRatio >= BLOCK_THRESHOLD
+  | distinct AutonomousSystemNumber
+  ;
+  let ASNIPs=
+  SigninLogs
+  | where TimeGenerated > lookback
+  | where AutonomousSystemNumber in (HighBlockRateASNs)
+  | distinct IPAddress, AutonomousSystemNumber
+  ;
+  OfficeActivity
+  | where TimeGenerated between(starttime .. endtime)
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where ClientIP in (ASNIPs)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities = count() by ClientIP
+  | extend timestamp = StartTime, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.0
