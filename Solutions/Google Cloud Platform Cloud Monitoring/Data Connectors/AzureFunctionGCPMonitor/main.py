@@ -47,6 +47,7 @@ async def main(mytimer: func.TimerRequest):
 
     projects = GCP_PROJECT_ID_LIST.split()
     metrics = METRICS.split()
+    logging.info('Entered Metrics are {}'.format(METRICS))
 
     state_manager = StateManager(os.environ['AzureWebJobsStorage'])
 
@@ -61,6 +62,7 @@ async def main(mytimer: func.TimerRequest):
         client = MetricServiceAsyncClient()
         for project in projects:
             for metric in metrics:
+                logging.info('Current Metric is  {}'.format(metric))
                 cors.append(process_metric(client, project, metric, time_interval, session))
         
         await asyncio.gather(*cors)
