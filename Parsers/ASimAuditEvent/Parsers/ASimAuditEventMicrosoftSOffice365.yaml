@@ -35,52 +35,85 @@ ParserQuery: |
    , "SystemPolicy", "Other"
    , "Reserved", "Other"
   ];
+  let eventtypes=datatable (op:string, EventType:string)
+  [
+   "Remove", "Delete",
+   "New", "Create",
+   "Add", "Create",
+   "Enable", "Enable",
+   "Install", "Install",
+   "Set", "Set",
+   "Disable", "Disable",
+   "disable", "Disable"
+  ];
   let parser=(disabled:bool=false){
     OfficeActivity
     | where not(disabled)
     | where RecordType  in ('ExchangeAdmin')
-    | project-away OrganizationId_, RecordType, OfficeWorkload, OfficeTenantId*, UserId_, ResultReasonType, Start_Time, OfficeId, Elevation*, SourceSystem, ClientIP_, AppId, ClientAppId, ExternalAccess
+    | project Operation, ResultStatus, Parameters, OrganizationName, OrganizationId, OfficeObjectId, ClientIP, UserId, UserKey, UserAgent, UserType, TimeGenerated, OriginatingServer, SourceRecordId, Type, _ResourceId
     | extend 
-        EventType=split (Operation,"-")[0],
-        EventResult = iff(ResultStatus == "True", "Success", "Failure"),
-        NewValue = tostring(Parameters)
+        SplitOp = split (Operation,"-")
+    | extend
+        op=tostring(SplitOp[0])
+    | lookup eventtypes on op
+    | project-away op
+    // --
+    // Calculate Object
     | extend
         SplitObject = extract_all(@'^(.*?)[\\/](.*)$', OfficeObjectId)[0]
     | extend 
-        Object = iff (SplitObject[0] == OrganizationName, SplitObject[1], OfficeObjectId)
+        Object = case (
+            SplitObject[0] == OrganizationName, SplitObject[1], 
+            OfficeObjectId == "", SplitOp[1],
+            OfficeObjectId
+        )
+    | project-away SplitOp, OfficeObjectId
+    // --
+    // Calculate source IP address and port
     | extend 
         SplitIpAddr = extract_all(@'^\[?(.*?)\]?:(\d+)$', ClientIP)[0]
     | extend 
         SrcIpAddr = iff (SplitIpAddr[1] == "", ClientIP, SplitIpAddr[0]),
-        SrcPortNumber = iff (SplitIpAddr[1] == "", "", SplitIpAddr[1])
-    | project-rename
-        Value = Parameters,
-        ActorUsername = UserId, 
-        SrcHostname = OriginatingServer 
+        SrcPortNumber = toint(iff (SplitIpAddr[1] == "", "", SplitIpAddr[1]))
+    | parse UserId with ActorUsername " (" ActingAppName ")"
     | extend 
-        Src = SrcHostname
-    | project-away ResultStatus, SplitObject, OfficeObjectId, UserKey, SplitIpAddr
+        ActorUsernameType = iff (ActorUsername == "", "UPN", "Windows"),
+        ActorUsername = iff (ActorUsername == "", UserId, ActorUsername),
+        ActingAppType = iff (ActingAppName == "", "", "Process")
+    | project-rename
+        SrcDescription = OriginatingServer,
+        NewValue = Parameters 
+    | project-away SplitObject, UserKey, SplitIpAddr, ClientIP, UserId
     | project-rename
         HttpUserAgent = UserAgent, 
         ActorOriginalUserType = UserType,
         ActorScopeId = OrganizationId,
         ActorScope = OrganizationName,
-        EventOriginalUid = SourceRecordId,
-        EventSubType = Operation
+        EventOriginalUid = SourceRecordId
     | lookup usertypes on ActorOriginalUserType
     | extend
         EventCount = int(1),
         EventStartTime = TimeGenerated, 
         EventEndTime= TimeGenerated,
-        EventProduct = 'Office 365',
+        EventProduct = 'Exchange 365',
         EventVendor = 'Microsoft',
         EventSchemaVersion = '0.1.0',
-        EventSchema = 'AuditEvent'
+        EventSchema = 'AuditEvent',
+        TargetAppName = 'Exchange 365',
+        TargetAppType = 'SaaS application',
+        EventResult = iff(ResultStatus == "True", "Success", "Failure")
+    | project-away 
+        ResultStatus
+    | extend
+        EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
     // Aliases
     | extend 
         User=ActorUsername,
         IpAddr = SrcIpAddr,
         Value = NewValue,
-        EventOriginalType = EventSubType
+        Application = TargetAppName,
+        Dst = TargetAppName,
+        Src = coalesce (SrcIpAddr, SrcDescription),
+        Dvc = TargetAppName
    };
    parser (disabled=disabled)

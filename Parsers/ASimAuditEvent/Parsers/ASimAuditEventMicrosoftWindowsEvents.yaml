@@ -23,20 +23,20 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-    let parser = (disabled:bool = false) {
+   let parser = (disabled:bool = false) {
     union 
     (
         union 
         (
             SecurityEvent
             | where not(disabled)
-            | project EventID, EventData, _ResourceId, TimeGenerated, Computer
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
             | where EventID == 1102
         ),
         (
             Event
             | where not(disabled)
-            | project EventID, EventData, _ResourceId, TimeGenerated, Computer
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
             | where EventID == 1102
         )
         | parse-kv EventData as 
@@ -52,7 +52,7 @@ ParserQuery: |
     (
         WindowsEvent 
         | where not(disabled)
-        | project EventID, EventData, _ResourceId, TimeGenerated, Computer
+        | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
         | where EventID == 1102
         | extend
             SubjectUserSid = tostring(EventData.SubjectUserSid),
@@ -65,13 +65,13 @@ ParserQuery: |
         ActorUserId = SubjectUserSid,
         DvcHostname = Computer,
         ActorSessionId = SubjectLogonId,
-        EventOriginalType = EventID,
         DvcId = _ResourceId
     | extend
         EventCount = int(1),
         EventType = "Delete",
         Operation = "Delete Logs",
-        Objects = "Logs",
+        Object = "Logs",
+        EventResult = "Success",
         EventStartTime = TimeGenerated, 
         EventEndTime= TimeGenerated,
         EventProduct = 'Windows',
@@ -81,12 +81,13 @@ ParserQuery: |
         ActorUserIdType = 'SID',
         ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
         ActorUsernameType = iff (SubjectDomainName == "", 'Simple', 'Windows'),
-        DvcIdType = iff (DvcId == "", "", "AzureID")
+        DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
+        EventOriginalType = tostring(EventID)
     // Aliases
     | extend 
         User=ActorUsername,
         ActorUserSid = ActorUserId,
         Dvc = DvcHostname
-    | project-away Subject*
+    | project-away Subject*, EventID
   };
   parser (disabled=disabled)
