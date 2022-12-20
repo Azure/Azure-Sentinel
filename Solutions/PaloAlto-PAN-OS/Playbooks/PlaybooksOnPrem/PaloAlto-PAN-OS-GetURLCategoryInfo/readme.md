@@ -26,6 +26,7 @@ Before playbook deployment you need to have configured KeyVault and store key as
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (e.g. PAN-OS Playbook)
+    * CustomConnectorName: Name of the custom REST API connector which interacts with PAN-OS
     * KeyVaultName: Name of Azure Key Vault that will store X-PAN-KEY
     * secretName: Name of the secret that will be stored in Key vault
     * OnPremiseGatewayName: On-premises data gateway that will be used with PaloAlto connector.

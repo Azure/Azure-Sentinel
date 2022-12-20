@@ -48,6 +48,7 @@ Before playbook deployment you need to have configured KeyVault and store key as
 
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (e.g. PaloAlto-PAN-OS-BlockIP)
+    * CustomConnectorName: Name of the custom REST API connector which interacts with PAN-OS
     * Teams GroupId: Enter the Teams channel id to send the adaptive card
     * Teams ChannelId: Enter the Teams Group id to send the adaptive card
      [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
