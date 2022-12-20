@@ -56,6 +56,7 @@ function getDataTesterAsletStatement {
 }
 
 function testSchema([string] $workspaceId, [string] $schema, [string] $schemaTesterAsletStatements, [string] $dataTesterAsletStatements) {
+    Write-Host "Testing $($workspaceId) workspaceId"
     Write-Host "Testing $($schema) schema"
     $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/$($schema)/Parsers"
     Write-Host "$($parsersAsObjects.count) parsers were found"
