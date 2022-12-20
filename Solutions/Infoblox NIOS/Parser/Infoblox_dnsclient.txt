@@ -16,9 +16,12 @@
 //      07-Apr-2013 20:16:49.083 client 10.120.20.198#57398 UDP: query: a2.foo.com IN A response: NOERROR +AED a2.foo.com. 28800 IN A 1.1.1.2;
 //      30-Apr-2013 13:35:02.187 client 10.120.20.32#42386: query: foo.com IN A + (100.90.80.102)
 //
+// Update 'Sources_by_SourceType' Watchlist by adding names of your Infoblox NIOS servers. This Watchlist would get created as part Infoblox NIOS solution.
+let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
 // Parse Response Logs
 let response =
     Syslog
+    | where Computer in (datasource)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
     | parse SyslogMessage with *
         "client " SrcIpAddr: string
@@ -26,20 +29,21 @@ let response =
         " " NetworkProtocol: string
         ": query: " DnsQuery: string
         " " DnsQueryClassName: string
-        " " DnsQueryTypeName: string
-        " response: " DnsResponseCodeName: string
+        " " DnsQueryType: string
+        " response: " DnsResponseCode: string
         " " DnsFlags: string
     | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
-    | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
+    | extend EventMessage =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
     | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
     | extend EventSubType = "response"
-    | project-away DnsResponseNameIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away DnsResponseNameIndex,SyslogMessage
     ;
 //
 // Parse Request Logs
 //
 let request =
-    Syslog 
+    Syslog
+    | where Computer in (datasource)
     | where ProcessName == "named"
         and SyslogMessage has_all ("client", "query:")
         and SyslogMessage !has "response:"
@@ -51,12 +55,12 @@ let request =
         "#" SrcPortNumber: int *
         "query: " DnsQuery: string
         " " DnsQueryClassName: string
-        " " DnsQueryTypeName: string
+        " " DnsQueryType: string
         " " DnsFlags: string
     | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
     | extend DnsFlags= tostring((split(DnsFlags," "))[0])
-    | extend EventSubType = "request",DnsResponseCodeName = "NA"
-    | project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | extend EventSubType = "request",DnsResponseCode = "NA"
+    | project-away SyslogMessage
     ;
 //
 // Union Request and Response Logs
@@ -67,8 +71,7 @@ let Infoblox_NIOS_ParsedData =
         EventProduct="NIOS",
         EventVendor="Infoblox",
         EventType="Query",
-        EventResult=iff(EventSubType=="request" or DnsResponseCodeName=="NOERROR","Success","Failure"),
-        DvcIpAddr=iff (HostIP == "Unknown IP", "", HostIP)
-    | project-away HostIP
-    ;
+        EventResult=iff(EventSubType=="request" or DnsResponseCode=="NOERROR","Success","Failure"),
+        Log_Type="client",
+        responseTime=EventTime;
 Infoblox_NIOS_ParsedData
