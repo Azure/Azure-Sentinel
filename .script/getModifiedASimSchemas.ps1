@@ -6,6 +6,7 @@ function getModifiedAsimSchemas() {
         if ($filesThatWereChanged) {
             Write-Host Files that were changed under Azure-Sentinel/Parsers/$schema/ARM:
 			Write-Host  - $filesThatWereChanged
+            Write-Host modified schema $schema
             $midifiedSchemas += $schema
         }
         else {

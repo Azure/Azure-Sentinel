@@ -31,6 +31,7 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
     $modifiedSchemas = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
     $schemaTesterAsletStatements = getSchemaTesterAsletStatement
     $dataTesterAsletStatements = getDataTesterAsletStatement
+    Write-Host modifiedSchemas $modifiedSchemas
     $modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
 }
 
@@ -49,8 +50,9 @@ function getDataTesterAsletStatement {
 }
 
 function testSchema([string] $workspaceId, [string] $schema, [string] $schemaTesterAsletStatements, [string] $dataTesterAsletStatements) {
+    Write-Host "Testing $($schema) schema"
     $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/$($schema)/Parsers"
-    Write-Host "Testing $($schema) schema, $($parsersAsObjects.count) parsers were found"
+    Write-Host "$($parsersAsObjects.count) parsers were found"
     $parsersAsObjects | ForEach-Object {
         $functionName = "$($_.EquivalentBuiltInParser)V$($_.Parser.Version.Replace('.',''))"
         if ($_.Parsers) {
