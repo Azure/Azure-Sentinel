@@ -1,0 +1,42 @@
+id: 6fce5baf-bfc2-4c56-a6b7-9c4733fc5a45
+name: External user from a new organisation added to Teams
+description: |
+  'This query identifies external users added to Teams where the user's domain is not one previously seen in Teams data.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  let known_orgs = (
+  OfficeActivity
+  | where TimeGenerated between(ago(lookback)..starttime)
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation =~ "MemberAdded" or Operation =~ "TeamsSessionStarted"
+  // Extract the correct UPN and parse our external organization domain
+  | extend UPN = iif(Operation == "MemberAdded", tostring(Members[0].UPN), UserId)
+  | extend Organization = tostring(split(split(UPN, "_")[1], "#")[0])
+  | where isnotempty(Organization)
+  | summarize by Organization);
+  OfficeActivity
+  | where TimeGenerated between(starttime..endtime)
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation =~ "MemberAdded"
+  | extend UPN = tostring(parse_json(Members)[0].UPN)
+  | extend Organization = tostring(split(split(UPN, "_")[1], "#")[0])
+  | where isnotempty(Organization)
+  | where Organization !in (known_orgs)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UPN
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 2.0.0

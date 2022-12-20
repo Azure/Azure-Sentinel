@@ -47,10 +47,11 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 console.log(`File: '${filePath}' has Total Invalid Links: ${invalidLinks.length}`)
                 console.log(`Below are the invalid links:`)
                 invalidLinks.forEach(l => {
-                logger.logError(`\n ${l}`);
+                    logger.logWarning(`\n ${l}`);
                 });
 
-                throw new Error(`Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
+                // throw new Error(`Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
+                console.log(`Warning: Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`)
             }
         }
 
