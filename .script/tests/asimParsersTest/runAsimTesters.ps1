@@ -1,9 +1,9 @@
+Param([string]$subscriptionId = "", [string]$workspaceId = "")
+
 $global:failed=0
 $global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
 $global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
 $global:schemas = ("DNS", "WebSession", "NetworkSession", "ProcessEvent")
-
-Param([string]$subscriptionId, [string]$workspaceId)
 
 Class Parser {
     [string] $Name;
