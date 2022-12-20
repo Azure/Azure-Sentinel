@@ -19,7 +19,7 @@ Conditions<br>
 # Screenshots
 
 **Playbook** <br>
-![playbook screenshot](./images/PlaybookDark.jpg)<br>
+![playbook screenshot](./images/playbookDark.jpg)<br>
 
 **Microsoft Sentinel Incident Tasks**<br>
 ![SentinelIncident](./images/tasksDark.jpg)
