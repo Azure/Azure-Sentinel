@@ -3,6 +3,7 @@ import requests
 import os
 import re
 import json
+import time
 from typing import Tuple, List, Union
 from datetime import datetime as dt
 from datetime import timedelta
@@ -101,6 +102,8 @@ class Auth0Connector:
             events.extend(resp.json())
             logging.info(f'\t#{page_num} extracted')
             page_num += 1
+            if page_num%9 = 0:
+                time.sleep(1)
         events.sort(key=lambda item: item['date'], reverse=True)
         last_log_id = events[0]['log_id']
         logging.info(f'\t New last log id: {last_log_id}\n at date {events[0]["date"]}. Events extracted.')
