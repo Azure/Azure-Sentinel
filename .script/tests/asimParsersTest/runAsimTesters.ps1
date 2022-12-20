@@ -37,7 +37,7 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
     foreach ($schema in $modifiedSchemas)
     {
         Write-Host "111 schema $($schema)"
-        testSchema $workspaceId, $schema, $schemaTesterAsletStatements, $dataTesterAsletStatements
+        testSchema $workspaceId $schema $schemaTesterAsletStatements $dataTesterAsletStatements
     }
     #$modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
 }
@@ -67,7 +67,7 @@ function testSchema([string] $workspaceId, [string] $schema, [string] $schemaTes
             Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
         }
         else {
-            testParser $workspaceId, [Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams), $schemaTesterAsletStatements, $dataTesterAsletStatements
+            testParser $workspaceId [Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams) $schemaTesterAsletStatements $dataTesterAsletStatements
         }
     }
 }
