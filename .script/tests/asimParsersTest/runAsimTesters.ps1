@@ -32,7 +32,11 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
     $schemaTesterAsletStatements = getSchemaTesterAsletStatement
     $dataTesterAsletStatements = getDataTesterAsletStatement
     Write-Host modifiedSchemas $modifiedSchemas
-    $modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
+    foreach ($schema in $modifiedSchemas)
+    {
+        testSchema($workspaceId, $schema, $schemaTesterAsletStatements, $dataTesterAsletStatements)
+    }
+    #$modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
 }
 
 function getSchemaTesterAsletStatement {
