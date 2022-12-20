@@ -32,6 +32,7 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
     $schemaTesterAsletStatements = getSchemaTesterAsletStatement
     $dataTesterAsletStatements = getDataTesterAsletStatement
     Write-Host modifiedSchemas $modifiedSchemas
+    Write-Host modifiedSchemas type- $modifiedSchemas.GetType()
     foreach ($schema in $modifiedSchemas)
     {
         Write-Host "111 schema $($schema)"
