@@ -3,7 +3,7 @@ Param([string]$fork, [string]$branch, [string]$subscriptionId = "", [string]$wor
 $global:failed=0
 
 function run([string] $fork, [string] $branch, [string]$subscriptionId, [string]$workspaceId) {
-    $repoBaseFolder = "$($PSScriptRoot)/../../../"
+    $repoBaseFolder = "$($PSScriptRoot)/../../.."
 
 	$filesThatWereChanged=$(echo $(git diff --name-only))
 	if($filesThatWereChanged) {
