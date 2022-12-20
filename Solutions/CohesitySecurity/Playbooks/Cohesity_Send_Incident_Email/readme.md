@@ -24,7 +24,7 @@ To enable this playbook, you need authorize Outlook connection ([details](https:
 Alternatively, you can follow these steps to achieve the same goal. This would be especially useful if the previous steps didn’t work for you.
 * Go to _Logic Apps_.
 * Click on the playbook and press _Edit_.
-* Choose _Send an email (V2)_ block.
+* Choose _Send email (V2)_ block.
 * Click on _Change Connection_.
 * Click on the "!" icon to authorize the connection or choose a different, previously authorized, connection.
 * Press _Save_ button to save changes in your playbook. 
