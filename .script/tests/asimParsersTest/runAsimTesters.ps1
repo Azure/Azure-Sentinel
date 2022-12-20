@@ -1,9 +1,8 @@
+Param([string]$subscriptionId, [string]$workspaceId)
 $global:failed=0
 $global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
 $global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
 $global:schemas = ("DNS", "WebSession", "NetworkSession", "ProcessEvent")
-
-Param([string]$subscriptionId, [string]$workspaceId)
 
 Class Parser {
     [string] $Name;
@@ -31,7 +30,7 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
     $modifiedSchemas = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
     $schemaTesterAsletStatements = getSchemaTesterAsletStatement
     $dataTesterAsletStatements = getDataTesterAsletStatement
-    $modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
+    $modifiedSchemas | ForEach-Object { testSchema $workspaceId $_ $schemaTesterAsletStatements $dataTesterAsletStatements }
 }
 
 function getSchemaTesterAsletStatement {
@@ -57,7 +56,7 @@ function testSchema([string] $workspaceId, [string] $schema, [string] $schemaTes
             Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
         }
         else {
-            testParser($workspaceId, [Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams), $schemaTesterAsletStatements, $dataTesterAsletStatements)
+            testParser $workspaceId ([Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams)) $schemaTesterAsletStatements $dataTesterAsletStatements
         }
     }
 }
@@ -69,12 +68,12 @@ function testParser([string] $workspaceId, [Parser] $parser, [string] $schemaTes
 
     Write-Host "-- Running schema test for '$($parser.Name)'"
     $schemaTest = "$($schemaTesterAsletStatements)`r`n$($parserAsletStatement)`r`n$($letStatementName) | getschema | invoke generatedASimSchemaTester('$($parser.Schema)')"
-    invokeAsimTester $workspaceId, $schemaTest $parser.Name "schema"
+    invokeAsimTester $workspaceId $schemaTest $parser.Name "schema"
     Write-Host ""
 
     Write-Host "-- Running data test for '$($parser.Name)'"
     $dataTest = "$($dataTesterAsletStatements)`r`n$($parserAsletStatement)`r`n$($letStatementName) | invoke generatedASimDataTester('$($parser.Schema)')"
-    invokeAsimTester $workspaceId, $dataTest  $parser.Name "data"
+    invokeAsimTester $workspaceId $dataTest  $parser.Name "data"
     Write-Host ""
     Write-Host ""
 }
