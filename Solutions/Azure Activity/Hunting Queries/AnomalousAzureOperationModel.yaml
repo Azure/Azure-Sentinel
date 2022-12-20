@@ -1,0 +1,119 @@
+id: 43cb0347-bdcc-4e83-af5a-cebbd03971d8
+name: Anomalous Azure Operation Hunting Model
+description: |
+  'This query can be used during threat hunts to identify a range of different Azure Operation anomalies.
+  The query is heavily commented inline to explain operation. Anomalies covered are: New Caller, New Caller IP,
+  New Caller IP Range, Anomalous operation based on Jaccard index. By default this query is configured to detect
+  anomalous Run Command operations. The operation and resource type to perform anomaly detection can be configured 
+  at the top of the query along with the detection window parameters'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - LateralMovement
+  - CredentialAccess
+relevantTechniques:
+  - T1570
+  - T1078.004
+query: |
+  // When the detection window will end (3 days prior to now)
+  let startDetectDate = 3d;
+  // When the detection window will start (now)
+  let endDetectDate = 0d;
+  // When to start collecting data for detection
+  let startDate = startDetectDate + 30d;
+  // Operation to monitor, in this case Run Command
+  let monitoredOps = dynamic(['microsoft.compute/virtualmachines/runcommand/action']);
+  // The resource type to monitor, in this case virtual machines
+  let monitoredResource = pack_array('microsoft.compute/virtualmachines');
+  let pair_probabilities_fl = (tbl:(*), A_col:string, B_col:string, scope_col:string)
+  {
+  let T = (tbl | extend _A = column_ifexists(A_col, ''), _B = column_ifexists(B_col, ''), _scope = column_ifexists(scope_col, ''));
+  let countOnScope = T | summarize countAllOnScope = count() by _scope;
+  let probAB = T | summarize countAB = count() by _A, _B, _scope | join kind = leftouter (countOnScope) on _scope | extend P_AB = todouble(countAB)/countAllOnScope;
+  let probA  = probAB | summarize countA = sum(countAB), countAllOnScope = max(countAllOnScope) by _A, _scope | extend P_A = todouble(countA)/countAllOnScope;
+  let probB  = probAB | summarize countB = sum(countAB), countAllOnScope = max(countAllOnScope) by _B, _scope | extend P_B = todouble(countB)/countAllOnScope;
+      probAB
+      | join kind = leftouter (probA) on _A, _scope
+      | join kind = leftouter (probB) on _B, _scope
+      | extend P_AUB = P_A + P_B - P_AB
+             , P_AIB = P_AB/P_B
+             , P_BIA = P_AB/P_A
+      | extend Lift_AB = P_AB/(P_A * P_B)
+             , Jaccard_AB = P_AB/P_AUB
+      | project _A, _B, _scope, floor(P_A, 0.00001), floor(P_B, 0.00001), floor(P_AB, 0.00001), floor(P_AUB, 0.00001), floor(P_AIB, 0.00001)
+      , floor(P_BIA, 0.00001), floor(Lift_AB, 0.00001), floor(Jaccard_AB, 0.00001)
+      | sort by _scope, _A, _B
+  };
+  let eventsTable = materialize (
+  AzureActivity
+  | where TimeGenerated between (ago(startDate) .. ago(endDetectDate))
+  | where isnotempty(CallerIpAddress)
+  | where ActivityStatusValue has_any ('Success', 'Succeeded')
+  | extend ResourceId = iff(isempty(_ResourceId), ResourceId, _ResourceId)
+  | extend splitOp = split(OperationNameValue, '/')
+  | extend splitRes = split(ResourceId, '/')
+  | project TimeGenerated , subscriptionId=SubscriptionId
+              , ResourceProvider
+              , ResourceName = tolower(tostring(splitRes[-1]))
+              , OperationNameValue = tolower(OperationNameValue)
+              , timeSlice = floor(TimeGenerated, 1d)
+              , clientIp = tostring(CallerIpAddress)
+              , Caller
+              , isMonitoredOp = iff(OperationNameValue has_any (monitoredOps), 1, 0)
+              , isMonitoredResource = iff(OperationNameValue has_any (monitoredResource), 1, 0)
+              , CorrelationId
+  | extend clientIpMask = format_ipv4_mask(clientIp, 16)
+  );
+  let modelData =  (
+  eventsTable
+  | where TimeGenerated < ago(startDetectDate) and isnotempty(Caller) and isnotempty(subscriptionId)
+  | summarize countEvents = count(), countMonRes = countif(isMonitoredResource == 1), counMonOp = countif(isMonitoredOp == 1)
+      , firstSeen = min(timeSlice), firstSeenOnMonRes = minif(timeSlice, isMonitoredResource == 1), firstSeenOnMonOp = minif(timeSlice, isMonitoredOp == 1)
+      by subscriptionId, Caller, clientIpMask
+  );
+  let monOpProbs = materialize (
+  eventsTable
+  | where TimeGenerated < ago(startDetectDate) and isnotempty(Caller) and isnotempty(subscriptionId)
+  | invoke pair_probabilities_fl('Caller', 'isMonitoredResource','subscriptionId')
+  | where _B == 1
+  | sort by P_AIB desc
+  | extend rankOnMonRes = row_rank(P_AIB), sumBiggerCondProbs = row_cumsum(P_AIB) - P_AIB
+  | extend avgBiggerCondProbs = floor(iff(rankOnMonRes > 1, sumBiggerCondProbs/(rankOnMonRes-1), max_of(0.0, prev(sumBiggerCondProbs))), 0.00001)
+  | project-away sumBiggerCondProbs
+  );
+  eventsTable
+  | where TimeGenerated between (ago(startDetectDate) .. ago(endDetectDate))
+  | join kind = leftouter (modelData | summarize countEventsPrincOnSub = sum(countEvents), countEventsMonResPrincOnSub = sum(countMonRes),  countEventsMonOpPrincOnSub = sum(counMonOp)
+      , firstSeenPrincOnSubs = min(firstSeen), firstSeenMonResPrincOnSubs = min(firstSeenOnMonRes), firstSeenMonOpPrincOnSubs = min(firstSeenOnMonOp) by subscriptionId, Caller) 
+          on subscriptionId, Caller
+  | join kind = leftouter (modelData | summarize countEventsIpMaskOnSub = sum(countEvents), countEventsMonResIpMaskOnSub = sum(countMonRes),  countEventsMonOpIpMaskOnSub = sum(counMonOp)
+      , firstSeenIpMaskOnSubs = min(firstSeen), firstSeenMonResIpMaskOnSubs = min(firstSeenOnMonRes), firstSeenMonOpIpMaskOnSubs = min(firstSeenOnMonOp) by subscriptionId, clientIpMask) 
+          on subscriptionId, clientIpMask
+  | join kind = leftouter (modelData | summarize countEventsOnSub = sum(countEvents), countEventsMonResOnSub = sum(countMonRes),  countEventsMonOpOnSub = sum(counMonOp)
+      , firstSeenOnSubs = min(firstSeen), firstSeenMonResOnSubs = min(firstSeenOnMonRes), firstSeenMonOpOnSubs = min(firstSeenOnMonOp)
+      , countCallersOnSubs = dcount(Caller), countIpMasksOnSubs = dcount(clientIpMask) by subscriptionId)
+          on subscriptionId        
+  | project-away subscriptionId1, Caller1, subscriptionId2
+  | extend daysOnSubs = datetime_diff('day', timeSlice, firstSeenOnSubs)
+  | extend avgMonOpOnSubs = floor(1.0*countEventsMonOpOnSub/daysOnSubs, 0.01), avgMonResOnSubs = floor(1.0*countEventsMonResOnSub/daysOnSubs, 0.01)
+  | join kind = leftouter(monOpProbs) on $left.subscriptionId == $right._scope, $left.Caller == $right._A
+  | project-away _A, _B, _scope
+  | sort by subscriptionId asc, TimeGenerated asc
+  | extend rnOnSubs = row_number(1, subscriptionId != prev(subscriptionId))
+  | sort by subscriptionId asc, Caller asc, TimeGenerated asc
+  | extend rnOnCallerSubs = row_number(1, (subscriptionId != prev(subscriptionId) and (Caller != prev(Caller))))
+  | extend newCaller = iff(isempty(firstSeenPrincOnSubs), 1, 0)
+      , newCallerOnMonRes = iff(isempty(firstSeenMonResPrincOnSubs), 1, 0)
+      , newIpMask = iff(isempty(firstSeenIpMaskOnSubs), 1, 0)
+      , newIpMaskOnMonRes = iff(isempty(firstSeenMonResIpMaskOnSubs), 1, 0)
+      , newMonOpOnSubs = iff(isempty(firstSeenMonResOnSubs), 1, 0)
+      , anomCallerMonRes = iff(((Jaccard_AB <= 0.1) or (P_AIB <= 0.1)), 1, 0)
+  | project TimeGenerated, subscriptionId,  ResourceProvider, ResourceName, OperationNameValue, Caller, CorrelationId, ClientIP=clientIp, ActiveDaysOnSub=daysOnSubs, avgMonOpOnSubs, newCaller, newCallerOnMonRes, newIpMask, newIpMaskOnMonRes, newMonOpOnSubs, anomCallerMonRes, isMonitoredOp, isMonitoredResource
+  | order by TimeGenerated
+  | where isMonitoredOp == 1
+  // Optional - focus only on monitored operations or monitored resource in detection window
+  | where isMonitoredOp == 1
+  //| where isMonitoredResource == 1
+version: 2.0.0

@@ -11,7 +11,7 @@ PATH_FOR_CSS_TICKET = "https://ms.portal.azure.com/#blade/Microsoft_Azure_Suppor
 FAILED_TESTS_COUNT = 0
 WARNING_TESTS_COUNT = 0
 NOT_RUN_TESTS_COUNT = 0
-SCRIPT_VERSION = 1.0
+SCRIPT_VERSION = 1.1
 SCRIPT_HELP_MESSAGE = "Usage: python cef_AMA_troubleshoot.py [OPTION]\n" \
                       "Runs CEF validation tests on the collector machine and generates a log file here- /tmp/cef_troubleshooter_output_file.log\n\n" \
                       "     collect,        runs the script in collect mode. Useful in case you want to open a ticket. Generates an output file here- /tmp/cef_troubleshooter_collection_output.log\n" \
@@ -250,7 +250,7 @@ class AgentInstallationVerifications:
         Verifying the agent service called mdsd is listening on its default port
         """
         command_name = "verify_ama_agent_service_is_running"
-        command_to_run = "sudo service azuremonitoragent status"
+        command_to_run = "sudo systemctl status azuremonitoragent"
         result_keywords_array = ["azuremonitoragent.service", "Azure", "Monitor", "Agent", "active", "running"]
         command_object = BasicCommand(command_name, command_to_run, result_keywords_array)
         command_object.run_full_test()
@@ -691,7 +691,7 @@ class SystemInfo():
         "agent_log_snip_warn": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.warn"],
         "agent_log_snip_info": ["sudo tail -n 15 /var/opt/microsoft/azuremonitoragent/log/mdsd.info"],
         "is_AMA__running_from_boot": ["sudo systemctl list-unit-files --type=service | grep azuremonitoragent"],
-        "AMA_service_status": ["sudo service azuremonitoragent status"],
+        "AMA_service_status": ["sudo systemctl status azuremonitoragent"],
         "DCR_config_dir": ["sudo ls -la /etc/opt/microsoft/azuremonitoragent/config-cache/configchunks/"],
         "messages_log_snip": ["sudo tail -n 15 /var/log/messages"],
         "syslog_log_snip": ["sudo tail -n 15 /var/log/syslog"],

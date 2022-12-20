@@ -1,0 +1,498 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Add URL - Netskope",
+        "description": "This playbook add URLs in Netskope URL list to be used in policy definitions etc.",
+        "prerequisites": "",
+        "postDeployment": [
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "",
+        "entities": [ "url" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Netskope - Saif Chaudhry"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Netskope-URL-Playbook",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for the playbook."
+            }
+        },
+        "Tenant Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Netskope Tenant Name e.g. if the URL that you use to access your Netskope tenant is https://example.goskope.com then the Tenant Name value will be example"
+            }
+        },
+        "URL List Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Netskope URL List Name."
+            }
+        },
+        "Netskope API Token": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Netskope REST API v2 Token Value."
+            }
+        },
+        "Keyvault Name": {
+            "type": "String",
+            "metadata": {
+                "description": "Globaly unique Name of the Azure Keyvault. Provide a value that's 11 characters or less, a uniqueString function that returns 13 characters is used to append with your provided vault name value to make it unique. The name must begin with a letter, end with a letter or digit, and not contain consecutive hyphens."
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('Sentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]",
+        "keyvaultName": "[toLower(concat( parameters('Keyvault Name'), uniqueString(resourceGroup().id)))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2016-10-01",
+            "name": "[variables('keyvaultName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true,
+                "accessPolicies": [
+                ],
+                "enableRbacAuthorization": true
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('keyvaultName'), '/', 'api-token')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('Netskope API Token')]",
+                "contentType": "string",
+                "attributes": {
+                    "enabled": true
+                }
+            }
+        },
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "tenant-name":  {
+                            "defaultValue":  "[parameters('Tenant Name')]",
+                            "type":  "string"
+                        },
+                        "url-list-name":  {
+                            "defaultValue":  "[parameters('URL List Name')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Add_comment_to_incident_(V3)_3":  {
+                            "runAfter":  {
+                                "Compose_API_Call_Failure_Response":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                    "message":  "\u003cp\u003e\u003cspan style=\"color: rgb(184,49,47)\"\u003eNetskope API Call Failure.\u003cbr\u003e\n\u003c/span\u003e\u003cbr\u003e\n@{outputs('Compose_API_Call_Failure_Response')}\u003c/p\u003e"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/Incidents/Comment"
+                            }
+                        },
+                        "Compose_API_Call_Failure_Response":  {
+                            "runAfter":  {
+                                "GET_URL_Lists":  [
+                                    "TimedOut",
+                                    "Failed",
+                                    "Skipped"
+                                ]
+                            },
+                            "type":  "Compose",
+                            "inputs":  "\u003cimg src=\"https://www.netskope.com/wp-content/uploads/2021/06/Netskope-Primary-Logo-Full-Color-RGB.png\" alt=\"Netskope\"\u003e"
+                        },
+                        "Entities_-_Get_URLs":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/url"
+                            }
+                        },
+                        "For_each":  {
+                            "foreach":  "@body('Parse_Response')",
+                            "actions":  {
+                                "Condition":  {
+                                    "actions":  {
+                                        "For_each_2":  {
+                                            "foreach":  "@body('Entities_-_Get_URLs')?['URLs']",
+                                            "actions":  {
+                                                "Add_comment_to_incident_(V3)":  {
+                                                    "runAfter":  {
+                                                        "Compose":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "ApiConnection",
+                                                    "inputs":  {
+                                                        "body":  {
+                                                            "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                            "message":  "\u003cp\u003eURL @{items('For_each_2')?['Url']} is added to the @{parameters('url-list-name')} URL list.\u003cbr\u003e\n\u003cbr\u003e\n@{outputs('Compose')}\u003cbr\u003e\n\u003c/p\u003e"
+                                                        },
+                                                        "host":  {
+                                                            "connection":  {
+                                                                "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method":  "post",
+                                                        "path":  "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Append_URLs_to_list":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Http",
+                                                    "inputs":  {
+                                                        "body":  {
+                                                            "data":  {
+                                                                "type":  "exact",
+                                                                "urls":  [
+                                                                    "@items('For_each_2')?['Url']"
+                                                                ]
+                                                            },
+                                                            "name":  "@parameters('url-list-name')"
+                                                        },
+                                                        "headers":  {
+                                                            "Content-Type":  "application/json",
+                                                            "Netskope-Api-Token":  "@body('Get_secret')?['value']"
+                                                        },
+                                                        "method":  "PATCH",
+                                                        "uri":  "https://@{parameters('tenant-name')}.goskope.com/api/v2/policy/urllist/@{variables('url_list_id')}/append"
+                                                    }
+                                                },
+                                                "Apply_Pending_Changes":  {
+                                                    "runAfter":  {
+                                                        "Append_URLs_to_list":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "Http",
+                                                    "inputs":  {
+                                                        "headers":  {
+                                                            "Content-Type":  "application/json",
+                                                            "Netskope-Api-Token":  "@body('Get_secret')?['value']"
+                                                        },
+                                                        "method":  "POST",
+                                                        "uri":  "https://@{parameters('tenant-name')}.goskope.com/api/v2/policy/urllist/deploy"
+                                                    }
+                                                },
+                                                "Compose":  {
+                                                    "runAfter":  {
+                                                        "Apply_Pending_Changes":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "Compose",
+                                                    "inputs":  "\u003cimg src=\"https://www.netskope.com/wp-content/uploads/2021/06/Netskope-Primary-Logo-Full-Color-RGB.png\" alt=\"Netskope\"\u003e"
+                                                }
+                                            },
+                                            "runAfter":  {
+                                                "Set_url_list_ID_value":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "Foreach"
+                                        },
+                                        "Set_url_list_ID_value":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "url_list_id",
+                                                "value":  "@items('For_each')['id']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@items('For_each')['name']",
+                                                    "@parameters('url-list-name')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                }
+                            },
+                            "runAfter":  {
+                                "Parse_Response":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "GET_URL_Lists":  {
+                            "runAfter":  {
+                                "Initialize_URL_List_ID":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "headers":  {
+                                    "Content-Type":  "application/json",
+                                    "Netskope-Api-Token":  "@body('Get_secret')?['value']"
+                                },
+                                "method":  "GET",
+                                "uri":  "https://@{parameters('tenant-name')}.goskope.com/api/v2/policy/urllist/"
+                            }
+                        },
+                        "Get_secret":  {
+                            "runAfter":  {
+                                "Entities_-_Get_URLs":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('api-token')}/value"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_URL_List_ID":  {
+                            "runAfter":  {
+                                "Get_secret":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "url_list_id",
+                                        "type":  "integer",
+                                        "value":  0
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Response":  {
+                            "runAfter":  {
+                                "GET_URL_Lists":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@body('GET_URL_Lists')",
+                                "schema":  {
+                                    "items":  {
+                                        "properties":  {
+                                            "data":  {
+                                                "properties":  {
+                                                    "type":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "urls":  {
+                                                        "items":  {
+                                                            "type":  "string"
+                                                        },
+                                                        "type":  "array"
+                                                    }
+                                                },
+                                                "type":  "object"
+                                            },
+                                            "id":  {
+                                                "type":  "integer"
+                                            },
+                                            "modify_by":  {
+                                                "type":  "string"
+                                            },
+                                            "modify_time":  {
+                                                "type":  "string"
+                                            },
+                                            "modify_type":  {
+                                                "type":  "string"
+                                            },
+                                            "name":  {
+                                                "type":  "string"
+                                            },
+                                            "pending":  {
+                                                "type":  "integer"
+                                            }
+                                        },
+                                        "required":  [
+                                            "id",
+                                            "name",
+                                            "data",
+                                            "modify_type",
+                                            "modify_by",
+                                            "modify_time",
+                                            "pending"
+                                        ],
+                                        "type":  "object"
+                                    },
+                                    "type":  "array"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName":  "[variables('KeyvaultConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Netskope-URL-Playbook",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[variables('keyvaultName')]"
+                }
+            }
+        }
+    ]
+}
