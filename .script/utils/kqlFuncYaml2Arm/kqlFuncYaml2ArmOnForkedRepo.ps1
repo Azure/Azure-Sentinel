@@ -1,5 +1,5 @@
 function run() {
-	$repoBaseFolder = "$($PSScriptRoot)/.."
+	$repoBaseFolder = "$($PSScriptRoot)/../../.."
 	Set-Location $repoBaseFolder
 
 	$filesThatWereChanged=$(echo $(git diff --name-only))
@@ -8,7 +8,7 @@ function run() {
         break
 	}
 
-	git pull
+	git fetch
 	git merge origin/master
 	$conflicts= $(echo $(git ls-files -u))
 	if ($conflicts)  {

@@ -1,4 +1,4 @@
-Param([string]$fork, [string]$branch, [string]$subscriptionId, [string]$workspaceId)
+Param([string]$fork, [string]$branch, [string]$subscriptionId = "", [string]$workspaceId = "")
 
 $global:failed=0
 

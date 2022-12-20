@@ -18,7 +18,15 @@ Class Parser {
     }
 }
 
-function run ([string]$subscriptionId = $global:subscriptionId, [string]$workspaceId = $global:workspaceId) {
+function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
+    if ([string]::IsNullOrEmpty($subscriptionId)) {
+        $subscriptionId = $global:subscriptionId
+    }
+
+    if ([string]::IsNullOrEmpty($workspaceId)) {
+        $workspaceId = $global:workspaceId
+    }
+
     $subscription = Select-AzSubscription -SubscriptionId $subscriptionId
     $modifiedSchemas = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
     $schemaTesterAsletStatements = getSchemaTesterAsletStatement

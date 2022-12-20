@@ -114,7 +114,8 @@ for f in folders:
     else:
         logging.warning (f'File or folder "{f}" does not exist.')
 
-files = list(dict.fromkeys(files)).sort()  # -- remove duplicates
+files = list(dict.fromkeys(files))  # -- remove duplicates
+files.sort()
 
 if len(files) == 0:
     raise SystemExit ('No files to prcess.')

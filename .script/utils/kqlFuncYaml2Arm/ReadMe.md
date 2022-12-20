@@ -19,6 +19,6 @@ For pull request from forked branches- the github action have no permissions to 
 ## How to run the script?
 
 1. Checkout the pull request's branch
-1. Make sure that there are no uncommitted changes in your local github environment.
+1. Make sure there are no uncommitted changes in your local github environment.
 3. Open Powershell 7 and go to your github repo base folder.
 4. Run command  `.\.script\utils\kqlFuncYaml2Arm\kqlFuncYaml2ArmOnForkedRepo.ps1`
