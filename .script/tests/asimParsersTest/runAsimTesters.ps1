@@ -23,6 +23,7 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
         $subscriptionId = $global:subscriptionId
     }
 
+    Write-Host workspaceId $workspaceId 
     if ([string]::IsNullOrEmpty($workspaceId)) {
         $workspaceId = $global:workspaceId
     }
