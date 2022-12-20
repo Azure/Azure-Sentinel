@@ -3,11 +3,11 @@ This function picks alerts from the queue and creates the corresponding records 
 
 ## Publishing Prerequisites
 1. Create your Sentinel [workspace](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/microsoft.securityinsightsarg%2Fsentinel).
-* __Attention__: It should be the same workspace as created for [IncidentProducer](https://raw.githubusercontent.com/cohesity/Azure-Sentinel/CohesitySecurity.internal/Solutions/CohesitySecurity/Data Connectors/Helios2Sentinel/IncidentProducer/readme.md).
+* __Attention__: It should be the same workspace as created for [IncidentProducer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentProducer#readme).
 2. [Register](https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/RegisteredApps) a client application in Azure Active Directory with the Contributor privileges ([steps](https://learn.microsoft.com/azure/healthcare-apis/register-application)).
 * Save _Application (client) ID_, _Directory (tenant) ID_ and _Secret Value_.
 3. Create a new queue in [Azure Storage Accounts](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Storage%2FStorageAccounts) ([steps](https://learn.microsoft.com/azure/storage/queues/storage-quickstart-queues-portal)).
-* __Attention__: It should be the same queue as created for [IncidentProducer](https://raw.githubusercontent.com/cohesity/Azure-Sentinel/CohesitySecurity.internal/Solutions/CohesitySecurity/Data Connectors/Helios2Sentinel/IncidentProducer/readme.md).
+* __Attention__: It should be the same queue as created for [IncidentProducer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentProducer#readme).
 * Save the connection string
 4. Choose your [resource group](https://portal.azure.com/#view/HubsExtension/BrowseResourceGroups) that you are going to use for the function app.
 5. Choose your [subscription](https://portal.azure.com/#view/Microsoft_Azure_Billing/SubscriptionsBlade) that you are going to use for the function app.
@@ -38,4 +38,4 @@ followed by
 * Confirm the restart.
 
 ## Testing
-Check that the function successfully runs at  _IncidentConsumer | Functions | Monitor_. If not, please check that you created all environment variables correctly by comparing their names with the ones in [local.settings.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data Connectors/Helios2Sentinel/IncidentConsumer/local.settings.json).
+Check that the function successfully runs at  _IncidentConsumer | Functions | Monitor_. If not, please check that you created all environment variables correctly by comparing their names with the ones in [local.settings.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentConsumer/local.settings.json).
