@@ -26,7 +26,8 @@
     },
     "variables": {
         "AzureblobConnectionName": "[concat('Azureblob-', parameters('PlaybookName'))]",
-        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
     },
     "resources": [{
             "properties": {
@@ -190,9 +191,26 @@
                                 }
                             }
                         },
-                        "HTTP": {
+                        "Get_secret": {
                             "runAfter": {
                                 "Get_object_from_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('ApiKey')}/value"
+                            }
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_secret": [
                                     "Succeeded"
                                 ]
                             },
@@ -218,7 +236,7 @@
                                 },
                                 "headers": {
                                     "Content-Type": "application/json",
-                                    "apiKey": "33e44eac-ce99-46df-7f4e-9ac39446a66e",
+                                    "apiKey": "@body('Get_secret')?['value']",
                                     "clusterid": "@{body('Get_cid_from_blob_content')}"
                                 },
                                 "method": "POST",
@@ -271,6 +289,11 @@
                                         "type": "ManagedServiceIdentity"
                                     }
                                 }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
                             }
                         }
                     }
@@ -289,7 +312,8 @@
             "apiVersion": "2019-05-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
             ]
         },
         {
@@ -318,6 +342,20 @@
                 "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
                 }
             }
         }
