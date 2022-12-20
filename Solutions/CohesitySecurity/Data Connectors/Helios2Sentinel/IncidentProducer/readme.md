@@ -10,11 +10,11 @@ This function retrieves ransomware alerts from Cohesity DataHawk and lands them 
 * Enter a name for the API key.
 * Select _Save_. The API Key Token is displayed.
 2. Create your Sentinel [workspace](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/microsoft.securityinsightsarg%2Fsentinel).
-* __Attention__: It should be the same workspace as created for [IncidentConsumer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data\ Connectors/Helios2Sentinel/IncidentConsumer#readme).
+* __Attention__: It should be the same workspace as created for [IncidentConsumer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data Connectors/Helios2Sentinel/IncidentConsumer#readme).
 3. [Register](https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/RegisteredApps) a client application in Azure Active Directory with the Contributor privileges ([steps](https://learn.microsoft.com/azure/healthcare-apis/register-application)).
 * Save _Application (client) ID_, _Directory (tenant) ID_ and _Secret Value_.
 4. Create a new queue in [Azure Storage Accounts](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Storage%2FStorageAccounts) ([steps](https://learn.microsoft.com/azure/storage/queues/storage-quickstart-queues-portal)).
-* __Attention__: It should be the same workspace as created for [IncidentConsumer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data\ Connectors/Helios2Sentinel/IncidentConsumer#readme).
+* __Attention__: It should be the same workspace as created for [IncidentConsumer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data Connectors/Helios2Sentinel/IncidentConsumer#readme).
 * Save the connection string
 5. Create an instance of [Azure Cache for Redis](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Cache%2FRedis) ([steps](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-configure))
 * Save the connection string
@@ -43,4 +43,4 @@ followed by
 * Confirm the restart.
 
 ## Testing
-Check that the function successfully runs at  _IncidentProducer | Functions | Monitor_. If not, please check that you created all environment variables correctly by comparing their names with the ones in [local.settings.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data\ Connectors/Helios2Sentinel/IncidentProducer/local.settings.json).
+Check that the function successfully runs at  _IncidentProducer | Functions | Monitor_. If not, please check that you created all environment variables correctly by comparing their names with the ones in [local.settings.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data Connectors/Helios2Sentinel/IncidentProducer/local.settings.json).
