@@ -79,12 +79,12 @@ function testParser([string] $workspaceId, [Parser] $parser, [string] $schemaTes
 
     Write-Host "-- Running schema test for '$($parser.Name)'"
     $schemaTest = "$($schemaTesterAsletStatements)`r`n$($parserAsletStatement)`r`n$($letStatementName) | getschema | invoke generatedASimSchemaTester('$($parser.Schema)')"
-    invokeAsimTester $workspaceId, $schemaTest $parser.Name "schema"
+    invokeAsimTester $workspaceId $schemaTest $parser.Name "schema"
     Write-Host ""
 
     Write-Host "-- Running data test for '$($parser.Name)'"
     $dataTest = "$($dataTesterAsletStatements)`r`n$($parserAsletStatement)`r`n$($letStatementName) | invoke generatedASimDataTester('$($parser.Schema)')"
-    invokeAsimTester $workspaceId, $dataTest  $parser.Name "data"
+    invokeAsimTester $workspaceId $dataTest $parser.Name "data"
     Write-Host ""
     Write-Host ""
 }
