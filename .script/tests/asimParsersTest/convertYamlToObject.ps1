@@ -31,6 +31,7 @@ function convertYamlToObject([System.IO.FileInfo] $Path) {
         }
     }
     else {
+        Write-Host $Path
         Write-Error "No YAML templates found"
         break
     }
