@@ -13,6 +13,7 @@ function getModifiedAsimSchemas() {
         }
     }
 
+    Write-Host The modified schemas are- $midifiedSchemas
     return $midifiedSchemas
 }
 
