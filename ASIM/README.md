@@ -16,7 +16,7 @@ To deploy a single schema use the buttons below:
 
 | ASim Schema | Deploy | Deploy to Azure Gov | 
 |-------------|--------| ------------------- | 
-| [AuditEvent](https://aka.ms/ASimAuditEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuditEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuditEventARMgov) |
+| [Audit Event](https://aka.ms/ASimAuditEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuditEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuditEventARMgov) |
 | [Authentication](https://aka.ms/ASimAuthenticationDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuthenticationARMgov) |
 | [Dns](https://aka.ms/ASimDnsDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDnsARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimDnsARMgov) |
 | [File Event](https://aka.ms/ASimFileEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimFileEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimFileEventARMgov) |
