@@ -34,6 +34,7 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
     Write-Host modifiedSchemas $modifiedSchemas
     foreach ($schema in $modifiedSchemas)
     {
+        Write-Host "111 schema $($schema)"
         testSchema($workspaceId, $schema, $schemaTesterAsletStatements, $dataTesterAsletStatements)
     }
     #$modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
