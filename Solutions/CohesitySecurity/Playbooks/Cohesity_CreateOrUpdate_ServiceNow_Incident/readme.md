@@ -1,6 +1,6 @@
 # Cohesity Create or Update ServiceNow Incident
 ## Summary
-This playbook creates a ticket in ServiceNow. It can be also used for updating ticket information or closing it. For example, an automation rule can be created to close the ServiceNow ticket by running this playbook when the corresponding Sentinel ticket is closed ([details](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/Servicenow/Playbooks/Cohesity_CreateOrUpdate_ServiceNow_Incident/readme.md)).
+This playbook creates a ticket in ServiceNow. It can be also used for updating ticket information or closing it. For example, an automation rule can be created to close the ServiceNow ticket by running this playbook when the corresponding Sentinel ticket is closed.
 
 ## Prerequisites
 1. Create an account for [ServiceNow](https://signon.service-now.com/x_snc_sso_auth.do).
@@ -18,10 +18,12 @@ This playbook creates a ticket in ServiceNow. It can be also used for updating t
 * Select _Development Tools\API Connections_.
 * Select a connection you'd like to authorize.
 * Click on General\Edit API Connection.
-* Enter path to your instance, e.g. https://dev12345.service-now.com.
+* Enter path to your instance, e.g. dev12345
 * Enter username.
 * Enter password.
 * Click Save.
+
+**Note:** You can get the credentials at your ServiceNow instance by going to _My account\Instance Action\Manage instance password_.
 
 Alternatively, you can follow these steps to achieve the same goal. This would be especially useful if the previous steps didn’t work for you.
 * Go to _Logic Apps_.
@@ -36,6 +38,16 @@ Alternatively, you can follow these steps to achieve the same goal. This would b
 * Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
 * Choose the _Access Control (IAM)_ option from the left pane.
 * Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Responder_ managed identity role to the playbook.
+
+3. (Recommendation) You can create an automation rule to close the corresponding ServiceNow ticket when the corresponding Sentinel ticket is closed.
+* In _Microsoft Sentinel | Automation_ press _+Create\Automation Rule_.
+* Enter an automation rule name of your choice.
+* Set the following conditions
+  * _Analytic rule name_ contains **All**.
+  * _Tag_ contains **SNOW System ID**.
+  * _Status_ changed to **Closed**.
+* In _Actions_ choose to run this playbook.
+* Click _Apply_.
 
 #  References
  - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm)
