@@ -11,7 +11,7 @@ containment, investigation, remediation and prevention. The step-by-step instruc
 
 # Post-deployment
 1. Assign Microsoft Sentinel Responder role to the managed identity. To do so, choose Identity blade under Settings of the Logic App.
-2. Assign playbook to the automation rule. - https://learn.microsoft.com/en-us/azure/sentinel/tutorial-respond-threats-playbook?tabs=LAC<br>
+2. Assign playbook to the automation rule. - https://learn.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?tabs=LAC<br>
 Conditions<br>
     Incident provider > Equals > Microsoft 365 Defender<br>
     ![SentinelIncident](./images/automationRuleDark.jpg)<br>
