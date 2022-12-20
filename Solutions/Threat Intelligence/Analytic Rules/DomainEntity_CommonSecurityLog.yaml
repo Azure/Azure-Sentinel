@@ -19,6 +19,7 @@ tactics:
 query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
+  let IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv"] with(format="csv", ignoreFirstRecord=True);
   //Create a list of TLDs in our threat feed for later validation of extracted domains
   let list_tlds = ThreatIntelligenceIndicator
   | where TimeGenerated > ago(ioc_lookBack)
@@ -28,12 +29,25 @@ query: |
   | extend tld = parts[(array_length(parts)-1)]
   | summarize count() by tostring(tld)
   | summarize make_list(tld);
-  ThreatIntelligenceIndicator
+  let Domain_Indicators = (union isfuzzy=true
+  (ThreatIntelligenceIndicator
   | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(DomainName)
+  | extend TI_DomainEntity = DomainName
+  ),
+  (IoCList
+    | where IoC_Type =~ 'domainname'
+    | where ExpirationDateTime > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC
+    | where Active =~ 'True'
+    | extend TI_DomainEntity = IoC
+    | project-away  IoC_Type
+  )
+  );
+  Domain_Indicators
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
      CommonSecurityLog
@@ -55,10 +69,10 @@ query: |
      //Validate parsed domain by checking TLD against TLDs from threat feed and drop domains where there is no chance of a match
      | where tld in~ (list_tlds)
      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
-     ) on $left.DomainName==$right.Domain
+     ) on $left.TI_DomainEntity==$right.Domain
   | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
-  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, IoC
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, IoC, TI_DomainEntity
   | extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, URLCustomEntity = PA_Url
 entityMappings:
   - entityType: Host
@@ -73,5 +87,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.2.0
+version: 1.3.0
 kind: Scheduled
