@@ -1,4 +1,4 @@
-Param([string]$subscriptionId = "", [string]$workspaceId = "")
+Param([string]$subscriptionId, [string]$workspaceId)
 
 $global:failed=0
 $global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
