@@ -33,12 +33,7 @@ function run ([string]$subscriptionId = "", [string]$workspaceId = "") {
     $dataTesterAsletStatements = getDataTesterAsletStatement
     Write-Host modifiedSchemas $modifiedSchemas
     Write-Host modifiedSchemas type- $modifiedSchemas.GetType()
-    foreach ($schema in $modifiedSchemas)
-    {
-        Write-Host "111 schema $($schema)"
-        testSchema($workspaceId, $schema, $schemaTesterAsletStatements, $dataTesterAsletStatements)
-    }
-    #$modifiedSchemas | ForEach-Object { testSchema($workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements)}
+    $modifiedSchemas | ForEach-Object { testSchema $workspaceId, $_, $schemaTesterAsletStatements, $dataTesterAsletStatements }
 }
 
 function getSchemaTesterAsletStatement {
@@ -65,7 +60,7 @@ function testSchema([string] $workspaceId, [string] $schema, [string] $schemaTes
             Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
         }
         else {
-            testParser($workspaceId, [Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams), $schemaTesterAsletStatements, $dataTesterAsletStatements)
+            testParser $workspaceId, [Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams), $schemaTesterAsletStatements, $dataTesterAsletStatements
         }
     }
 }
