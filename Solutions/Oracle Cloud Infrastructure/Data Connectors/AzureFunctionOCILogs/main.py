@@ -100,11 +100,13 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
     cursor = initial_cursor
     while True:
         get_response = client.get_messages(stream_id, cursor, limit=1000)
+        logging.info('stream_id {} and cursor {}'.format(stream_id, cursor))
         if not get_response.data:
             return
 
         for message in get_response.data:
             event = b64decode(message.value.encode()).decode()
+            logging.info('event from process_events {}'.format(event))
             event = json.loads(event)
             sentinel.send(event)
 
