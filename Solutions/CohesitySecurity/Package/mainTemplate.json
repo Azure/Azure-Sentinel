@@ -50,20 +50,15 @@
             }
         },
         "playbook3-PlaybookName": {
-            "defaultValue": "Cohesity_Close_Helios_Incident",
+            "defaultValue": "My_Cohesity_Close_Helios_Incident",
             "type": "string",
             "minLength": 1,
             "metadata": {
                 "description": "Resource name for the logic app playbook.  No spaces are allowed"
             }
         },
-        "playbook3-jobId": {
-            "defaultValue": "",
-            "type": "string",
-            "minLength": 1
-        },
         "playbook4-PlaybookName": {
-            "defaultValue": "Cohesity_CreateOrUpdate_ServiceNow_Incident",
+            "defaultValue": "My_Cohesity_CreateOrUpdate_ServiceNow_Incident",
             "type": "string",
             "minLength": 1,
             "metadata": {
@@ -582,10 +577,6 @@
                     "parameters": {
                         "$connections": {
                             "type": "Object"
-                        },
-                        "jobId": {
-                            "type": "string",
-                            "defaultValue": "[parameters('playbook3-jobId')]"
                         }
                     },
                     "triggers": {
@@ -605,46 +596,9 @@
                         }
                     },
                     "actions": {
-                        "For_each": {
-                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
-                            "actions": {
-                                "HTTP": {
-                                    "runAfter": {
-                                        "Set_jobId": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "body": {
-                                            "status": "kSuppressed"
-                                        },
-                                        "headers": {
-                                            "Content-Type": "application/json",
-                                            "apiKey": "@body('Get_secret')?['value']"
-                                        },
-                                        "method": "Patch",
-                                        "uri": "https://helios-test1.cohesitycloud.co/mcm/alerts/@{json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['Alert_ID'][0]}"
-                                    }
-                                },
-                                "Set_jobId": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "jobId",
-                                        "value": "@{int(json(items('For_each')?['properties']?['additionalData']?['Custom Details'])?['jobId'][0])}"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Get_secret": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
                         "Get_secret": {
                             "runAfter": {
-                                "jobId": [
+                                "Initialize_HelioID": [
                                     "Succeeded"
                                 ]
                             },
@@ -659,12 +613,47 @@
                                 "path": "/secrets/@{encodeURIComponent('ApiKey')}/value"
                             }
                         },
-                        "jobId": {
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "status": "kSuppressed"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "apiKey": "@body('Get_secret')?['value']"
+                                },
+                                "method": "Patch",
+                                "uri": "https://helios.cohesity.com/mcm/alerts/@{variables('helioID')}"
+                            }
+                        },
+                        "Initialize_Description": {
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [{
-                                    "name": "jobId",
-                                    "type": "string"
+                                    "name": "description",
+                                    "type": "string",
+                                    "value": "@triggerBody()?['object']?['properties']?['description']"
+                                }]
+                            }
+                        },
+                        "Initialize_HelioID": {
+                            "runAfter": {
+                                "Initialize_Description": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [{
+                                    "name": "helioID",
+                                    "type": "string",
+                                    "value": "@{split(variables('description'), 'Helios ID: ')[1]}"
                                 }]
                             }
                         }
