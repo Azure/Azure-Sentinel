@@ -58,19 +58,19 @@ query: |
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
   | extend ClientIP = "-", AccountName = tolower(UserIdentityUserName), WinSecEventDomain = "-"
   | project-rename EventType = EventName, ServiceOrSystem = EventSource)
-  on AccountName),
+  on AccountName,
   (AccountFormat | join kind=inner
   (SigninLogs
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
   | extend AccountName = tolower(split(UserPrincipalName, "@")[0]), WinSecEventDomain = "-"
   | project-rename EventType = strcat(OperationName, "-", ResultType, "-", ResultDescription), ServiceOrSystem = AppDisplayName, ClientIP = IPAddress)
-  on AccountName),
+  on AccountName,
   (AccountFormat | join kind=inner
   (OfficeActivity
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
   | extend AccountName = tolower(split(UserId, "@")[0]), WinSecEventDomain = "-"
   | project-rename EventType = strcat(Operation, "-", ResultStatus), ServiceOrSystem = OfficeWorkload)
-  on AccountName),
+  on AccountName,
   (AccountFormat | join kind=inner
   (SecurityEvent
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
@@ -78,14 +78,14 @@ query: |
   | extend ClientIP = "-"
   | extend AccountName = tolower(split(Account,"\\")[1]), Domain = tolower(split(Account,"\\")[0])
   | project-rename EventType = Activity, ServiceOrSystem = Computer, WinSecEventDomain = Domain)
-  on AccountName),
+  on AccountName,
   (AccountFormat | join kind=inner
   (W3CIISLog
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
   | where csUserName != "-" and isnotempty(csUserName)
   | extend AccountName = tolower(csUserName), WinSecEventDomain = "-"
   | project-rename EventType = csMethod, ServiceOrSystem = sSiteName, ClientIP = cIP)
-  on AccountName),
+  on AccountName,
   (AccountFormat | join kind=inner
   (W3CIISLog
   | where TimeGenerated >= a_StartTime and TimeGenerated <= a_EndTime
@@ -117,7 +117,7 @@ query: |
   | summarize rel_StartTime = min(TimeGenerated), rel_EndTime = max(TimeGenerated), rel_ServiceOrSystemCount = dcount(OfficeWorkload),
   rel_ServiceOrSystemSet = makeset(OfficeWorkload), rel_ClientIPSet = makeset(ClientIP),
   rel_Count = count() by AccountName = tolower(UserId), rel_EventType = Operation, Type
-  ) on AccountName),
+  ) on AccountName,
   (ra_Today | join kind=inner
   (SecurityEvent | where TimeGenerated > LastDay
   | where EventID in (4624, 4625)
@@ -125,7 +125,7 @@ query: |
   | summarize rel_StartTime = min(TimeGenerated), rel_EndTime = max(TimeGenerated), rel_ServiceOrSystemCount = dcount(Computer),
   rel_ServiceOrSystemSet = makeset(Computer), rel_ClientIPSet = makeset("-"),
   rel_Count = count() by DomainSlashAccount = tolower(Account), rel_EventType = Activity, Type
-  ) on DomainSlashAccount),
+  ) on DomainSlashAccount,
   (ra_Today | join kind=inner
   (Event | where TimeGenerated > LastDay
   // 7045: A service was installed in the system
@@ -133,7 +133,7 @@ query: |
   | summarize rel_StartTime = min(TimeGenerated), rel_EndTime = max(TimeGenerated), rel_ServiceOrSystemCount = dcount(Computer),
   rel_ServiceOrSystemSet = makeset(Computer), rel_ClientIPSet = makeset("-"),
   rel_Count = count() by DomainSlashAccount = tolower(UserName), rel_EventType = strcat(EventID, "-", tostring(split(RenderedDescription,".")[0])), Type
-  ) on DomainSlashAccount),
+  ) on DomainSlashAccount,
   (ra_Today | join kind=inner
   (SecurityEvent | where TimeGenerated > LastDay
   // 4720: Account created, 4726: Account deleted
@@ -141,7 +141,7 @@ query: |
   | summarize rel_StartTime = min(TimeGenerated), rel_EndTime = max(TimeGenerated), rel_ServiceOrSystemCount = dcount(UserPrincipalName),
   rel_ServiceOrSystemSet = makeset(UserPrincipalName), rel_ClientIPSet = makeset("-"),
   rel_Count = count() by DomainSlashAccount = tolower(Account), rel_EventType = Activity, Type
-  ) on DomainSlashAccount),
+  ) on DomainSlashAccount,
   (ra_Today | join kind=inner
   (SigninLogs | where TimeGenerated > LastDay
   | extend RemoteHost = tolower(tostring(parse_json(DeviceDetail.["displayName"])))
@@ -151,13 +151,13 @@ query: |
   rel_ServiceOrSystemSet = makeset(AppDisplayName), rel_ServiceOrSystemCount = dcount(AppDisplayName), rel_ClientIPSet = makeset(IPAddress),
   rel_StateSet = makeset(State),
   rel_Count = count() by AccountAtDomain = tolower(UserPrincipalName), rel_EventType = iff(isnotempty(ResultDescription), ResultDescription, StatusDetails), Type
-  ) on AccountAtDomain),
+  ) on AccountAtDomain,
   (ra_Today | join kind=inner
   (AWSCloudTrail | where TimeGenerated > LastDay
   | summarize rel_StartTime = min(TimeGenerated),rel_EndTime = max(TimeGenerated), rel_ServiceOrSystemSet = makeset(EventSource),
   rel_ServiceOrSystemCount = dcount(EventSource), rel_ClientIPSet = makeset("-"),
   rel_Count= count() by AccountName = tolower(UserIdentityUserName), rel_EventType = EventName, Type
-  ) on AccountName),
+  ) on AccountName,
   (ra_Today | join kind=inner
   (SecurityAlert | where TimeGenerated > LastDay
   | extend ExtProps=parse_json(ExtendedProperties)
@@ -165,7 +165,7 @@ query: |
   | summarize rel_StartTime = min(TimeGenerated), rel_EndTime = max(TimeGenerated), rel_ServiceOrSystemCount = dcount(AlertType),
   rel_ServiceOrSystemSet = makeset(AlertType),
   rel_Count = count() by DomainSlashAccount = tolower(AccountName), rel_EventType = ProductName, Type
-  ) on DomainSlashAccount)
+  ) on DomainSlashAccount
   );
   a_Related
   | project Type, RareActivtyStartTimeUtc = ra_StartTime, RareActivityEndTimeUtc = ra_EndTime, RareActivityCount = ra_Count,
