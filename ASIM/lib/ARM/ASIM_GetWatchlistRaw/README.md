@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function to get the ASimDisabledParsers watchlist
+# Log Analytics KQL function An ASIM function to get the ASimDisabledParsers watchlist
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function to get the ASimDisabledParsers watchlist
+ARM template for deploying the Log Analytics KQL function An ASIM function to get the ASimDisabledParsers watchlist
 
 This ASIM function reads the ASimDisabledParsers watchlist. It is more performant than using the general _GetWatchlist function.
 
