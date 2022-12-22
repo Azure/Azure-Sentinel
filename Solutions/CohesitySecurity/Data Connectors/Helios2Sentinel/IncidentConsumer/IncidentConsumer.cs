@@ -1,23 +1,46 @@
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Clients.ActiveDirectory;
-using System.IO;
-using System.Net;
-using System.Reflection;
-using System.Windows;
-using System;
-using System.Threading.Tasks;
+using Microsoft.WindowsAzure.Storage;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Collections;
+using System.Dynamic;
+using System.IO;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Text.Json;
+using System.Text;
+using System.Threading.Tasks;
+using System;
 
 namespace IncidentConsumer
 {
     public class IncidentConsumer
     {
-        string TenantId = Environment.GetEnvironmentVariable("TenantId");
-        string ClientId = Environment.GetEnvironmentVariable("ClientId");
-        string ClientKey = Environment.GetEnvironmentVariable("ClientKey");
+        private const string keyVaultName = "Cohesity-Vault";
+        string TenantId = GetSecret("TenantId");
+        string ClientId = GetSecret("ClientId");
+        string ClientKey = GetSecret("ClientKey");
         const string ARM_ENDPOINT = "https://management.azure.com/";
+
+        private static string GetSecret(string secretName)
+        {
+            var kvUri = $"https://{IncidentConsumer.keyVaultName}.vault.azure.net";
+            var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            var secret = secretClient.GetSecret(secretName);
+            return  secret.Value.Value;
+        }
 
         /*
          * need to rewrite GetAccessTokenAsync function
@@ -77,9 +100,9 @@ namespace IncidentConsumer
             log.LogInformation("queueItem --> " + queueItem);
             string token = GetAccessTokenAsync(ARM_ENDPOINT).Result;
             log.LogInformation("token --> " + token);
-            string subscription = Environment.GetEnvironmentVariable("subscription");
-            string resourceGroup = Environment.GetEnvironmentVariable("resourceGroup");
-            string workspace = Environment.GetEnvironmentVariable("workspace");
+            string subscription = GetSecret("subscription");
+            string resourceGroup = GetSecret("resourceGroup");
+            string workspace = GetSecret("workspace");
             dynamic body = JsonConvert.DeserializeObject(queueItem);
             string incidentID = Guid.NewGuid().ToString();
             string URI = $"{ARM_ENDPOINT}subscriptions/{subscription}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{workspace}/providers/Microsoft.SecurityInsights/incidents/{incidentID}?api-version=2021-10-01";

@@ -1,3 +1,6 @@
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
+using Helios2Sentinel;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs.Extensions.Http;
@@ -5,11 +8,14 @@ using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.WindowsAzure.Storage;
+using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 using System.Collections.Generic;
 using System.Collections;
+using System.Dynamic;
 using System.IO;
 using System.Net.Http.Headers;
 using System.Net.Http;
@@ -18,25 +24,22 @@ using System.Text.Json;
 using System.Text;
 using System.Threading.Tasks;
 using System;
-using System.Dynamic;
-using Newtonsoft.Json.Converters;
-using Microsoft.WindowsAzure.Storage;
-using Helios2Sentinel;
 
 namespace Helios2Sentinel
 {
     public class IncidentProducer
     {
+        private const string keyVaultName = "Cohesity-Vault";
         private static readonly object queueLock = new object();
         private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
-        private static string containerName = Environment.GetEnvironmentVariable("containerName");
-        private static string blobStorageConnectionString = Environment.GetEnvironmentVariable("BlobStorageConnectionString");
+        private static string containerName = GetSecret("containerName");
+        private static string blobStorageConnectionString = GetSecret("BlobStorageConnectionString");
         public static long GetPreviousUnixTime(ILogger log)
         {
             DateTime previousDateTime = DateTime.Now;
             try
             {
-                previousDateTime = previousDateTime.AddDays(long.Parse(Environment.GetEnvironmentVariable("startDaysAgo")));
+                previousDateTime = previousDateTime.AddDays(long.Parse(GetSecret("startDaysAgo")));
             }
             catch  (Exception ex)
             {
@@ -63,7 +66,7 @@ namespace Helios2Sentinel
         {
             return new Lazy<ConnectionMultiplexer>(() =>
             {
-                return ConnectionMultiplexer.Connect(Environment.GetEnvironmentVariable("connectStr"));
+                return ConnectionMultiplexer.Connect(GetSecret("connectStr"));
             });
         }
 
@@ -189,8 +192,8 @@ namespace Helios2Sentinel
             try
             {
                 var db = Connection.GetDatabase();
-                string apiKey = Environment.GetEnvironmentVariable("apiKey");
-                string blobKey = Environment.GetEnvironmentVariable("workspace") + "\\" + apiKey;
+                string apiKey = GetSecret("ApiKey");
+                string blobKey = GetSecret("workspace") + "\\" + apiKey;
 
                 try
                 {
@@ -216,7 +219,7 @@ namespace Helios2Sentinel
                 log.LogInformation("requestUriString --> " + requestUriString);
                 using HttpClient client = new ();
                 client.DefaultRequestHeaders.Accept.Clear();
-                client.DefaultRequestHeaders.Add("apiKey", System.Environment.GetEnvironmentVariable("apiKey"));
+                client.DefaultRequestHeaders.Add("apiKey", GetSecret("apiKey"));
                 await using Stream stream = await client.GetStreamAsync(requestUriString);
                 StreamReader reader = new StreamReader(stream);
                 dynamic alerts = JsonConvert.DeserializeObject(reader.ReadToEnd());
@@ -247,6 +250,14 @@ namespace Helios2Sentinel
             {
                 log.LogError("Exception --> 3 " + ex.Message);
             }
+        }
+
+        private static string GetSecret(string secretName)
+        {
+            var kvUri = $"https://{IncidentProducer.keyVaultName}.vault.azure.net";
+            var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            var secret = secretClient.GetSecret(secretName);
+            return  secret.Value.Value;
         }
     }
 }
