@@ -74,7 +74,7 @@ def customize_event(line):
                         "TargetFileName", "FirewallRule", "TaskName", "TaskExecCommand", "TargetAddress", "TargetProcessId",
                         "SourceFileName", "RegObjectName", "RegValueName", "ServiceObjectName", "RegistryPath", "RawProcessId",
                         "event_platform", "CommandLine", "ParentProcessId", "ParentCommandLine", "ParentBaseFileName",
-                        "GrandParentBaseFileName", "RemotePort", "VolumeDeviceType", "VolumeName", "ClientComputerName", "ProductId"
+                        "GrandParentBaseFileName", "RemotePort", "VolumeDeviceType", "VolumeName", "ClientComputerName", "ProductId", "ComputerName"
                     ]
     required_fields_data = {}
     custom_fields_data = {}
