@@ -93,6 +93,9 @@ class AzureSentinelConnector:
                     try_number += 1
                 else:
                     logging.error(str(err))
+                    if not hasattr(self, "failed_sent_events_number"):
+                        setattr(self, "failed_sent_events_number", 0)
+                    
                     self.failed_sent_events_number += events_number
                     raise err
             else:
