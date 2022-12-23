@@ -1,6 +1,4 @@
 try:
-    # WARNING: unicodedata2 support is going to be removed in 3.0
-    # Python is quickly catching up.
     import unicodedata2 as unicodedata
 except ImportError:
     import unicodedata  # type: ignore[no-redef]
@@ -11,9 +9,9 @@ from codecs import IncrementalDecoder
 from encodings.aliases import aliases
 from functools import lru_cache
 from re import findall
-from typing import Generator, List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Tuple, Union
 
-from _multibytecodec import MultibyteIncrementalDecoder
+from _multibytecodec import MultibyteIncrementalDecoder  # type: ignore
 
 from .constant import (
     ENCODING_MARKS,
@@ -28,7 +26,7 @@ from .constant import (
 @lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
 def is_accentuated(character: str) -> bool:
     try:
-        description: str = unicodedata.name(character)
+        description = unicodedata.name(character)  # type: str
     except ValueError:
         return False
     return (
@@ -43,11 +41,11 @@ def is_accentuated(character: str) -> bool:
 
 @lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
 def remove_accent(character: str) -> str:
-    decomposed: str = unicodedata.decomposition(character)
+    decomposed = unicodedata.decomposition(character)  # type: str
     if not decomposed:
         return character
 
-    codes: List[str] = decomposed.split(" ")
+    codes = decomposed.split(" ")  # type: List[str]
 
     return chr(int(codes[0], 16))
 
@@ -57,7 +55,7 @@ def unicode_range(character: str) -> Optional[str]:
     """
     Retrieve the Unicode range official name from a single character.
     """
-    character_ord: int = ord(character)
+    character_ord = ord(character)  # type: int
 
     for range_name, ord_range in UNICODE_RANGES_COMBINED.items():
         if character_ord in ord_range:
@@ -69,13 +67,12 @@ def unicode_range(character: str) -> Optional[str]:
 @lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
 def is_latin(character: str) -> bool:
     try:
-        description: str = unicodedata.name(character)
+        description = unicodedata.name(character)  # type: str
     except ValueError:
         return False
     return "LATIN" in description
 
 
-@lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
 def is_ascii(character: str) -> bool:
     try:
         character.encode("ascii")
@@ -86,12 +83,12 @@ def is_ascii(character: str) -> bool:
 
 @lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
 def is_punctuation(character: str) -> bool:
-    character_category: str = unicodedata.category(character)
+    character_category = unicodedata.category(character)  # type: str
 
     if "P" in character_category:
         return True
 
-    character_range: Optional[str] = unicode_range(character)
+    character_range = unicode_range(character)  # type: Optional[str]
 
     if character_range is None:
         return False
@@ -101,12 +98,12 @@ def is_punctuation(character: str) -> bool:
 
 @lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
 def is_symbol(character: str) -> bool:
-    character_category: str = unicodedata.category(character)
+    character_category = unicodedata.category(character)  # type: str
 
     if "S" in character_category or "N" in character_category:
         return True
 
-    character_range: Optional[str] = unicode_range(character)
+    character_range = unicode_range(character)  # type: Optional[str]
 
     if character_range is None:
         return False
@@ -116,7 +113,7 @@ def is_symbol(character: str) -> bool:
 
 @lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
 def is_emoticon(character: str) -> bool:
-    character_range: Optional[str] = unicode_range(character)
+    character_range = unicode_range(character)  # type: Optional[str]
 
     if character_range is None:
         return False
@@ -129,7 +126,7 @@ def is_separator(character: str) -> bool:
     if character.isspace() or character in {"｜", "+", ",", ";", "<", ">"}:
         return True
 
-    character_category: str = unicodedata.category(character)
+    character_category = unicodedata.category(character)  # type: str
 
     return "Z" in character_category
 
@@ -140,7 +137,7 @@ def is_case_variable(character: str) -> bool:
 
 
 def is_private_use_only(character: str) -> bool:
-    character_category: str = unicodedata.category(character)
+    character_category = unicodedata.category(character)  # type: str
 
     return character_category == "Co"
 
@@ -200,17 +197,6 @@ def is_unicode_range_secondary(range_name: str) -> bool:
     return any(keyword in range_name for keyword in UNICODE_SECONDARY_RANGE_KEYWORD)
 
 
-@lru_cache(maxsize=UTF8_MAXIMAL_ALLOCATION)
-def is_unprintable(character: str) -> bool:
-    return (
-        character.isspace() is False  # includes \n \t \r \v
-        and character.isprintable() is False
-        and character != "\x1A"  # Why? Its the ASCII substitute character.
-        and character != "\ufeff"  # bug discovered in Python,
-        # Zero Width No-Break Space located in 	Arabic Presentation Forms-B, Unicode 1.1 not acknowledged as space.
-    )
-
-
 def any_specified_encoding(sequence: bytes, search_zone: int = 4096) -> Optional[str]:
     """
     Extract using ASCII-only decoder any specified encoding in the first n-bytes.
@@ -218,21 +204,18 @@ def any_specified_encoding(sequence: bytes, search_zone: int = 4096) -> Optional
     if not isinstance(sequence, bytes):
         raise TypeError
 
-    seq_len: int = len(sequence)
+    seq_len = len(sequence)  # type: int
 
-    results: List[str] = findall(
+    results = findall(
         RE_POSSIBLE_ENCODING_INDICATION,
         sequence[: min(seq_len, search_zone)].decode("ascii", errors="ignore"),
-    )
+    )  # type: List[str]
 
     if len(results) == 0:
         return None
 
     for specified_encoding in results:
         specified_encoding = specified_encoding.lower().replace("-", "_")
-
-        encoding_alias: str
-        encoding_iana: str
 
         for encoding_alias, encoding_iana in aliases.items():
             if encoding_alias == specified_encoding:
@@ -259,7 +242,7 @@ def is_multi_byte_encoding(name: str) -> bool:
         "utf_32_be",
         "utf_7",
     } or issubclass(
-        importlib.import_module("encodings.{}".format(name)).IncrementalDecoder,
+        importlib.import_module("encodings.{}".format(name)).IncrementalDecoder,  # type: ignore
         MultibyteIncrementalDecoder,
     )
 
@@ -270,7 +253,7 @@ def identify_sig_or_bom(sequence: bytes) -> Tuple[Optional[str], bytes]:
     """
 
     for iana_encoding in ENCODING_MARKS:
-        marks: Union[bytes, List[bytes]] = ENCODING_MARKS[iana_encoding]
+        marks = ENCODING_MARKS[iana_encoding]  # type: Union[bytes, List[bytes]]
 
         if isinstance(marks, bytes):
             marks = [marks]
@@ -289,9 +272,6 @@ def should_strip_sig_or_bom(iana_encoding: str) -> bool:
 def iana_name(cp_name: str, strict: bool = True) -> str:
     cp_name = cp_name.lower().replace("-", "_")
 
-    encoding_alias: str
-    encoding_iana: str
-
     for encoding_alias, encoding_iana in aliases.items():
         if cp_name in [encoding_alias, encoding_iana]:
             return encoding_iana
@@ -303,10 +283,10 @@ def iana_name(cp_name: str, strict: bool = True) -> str:
 
 
 def range_scan(decoded_sequence: str) -> List[str]:
-    ranges: Set[str] = set()
+    ranges = set()  # type: Set[str]
 
     for character in decoded_sequence:
-        character_range: Optional[str] = unicode_range(character)
+        character_range = unicode_range(character)  # type: Optional[str]
 
         if character_range is None:
             continue
@@ -321,20 +301,16 @@ def cp_similarity(iana_name_a: str, iana_name_b: str) -> float:
     if is_multi_byte_encoding(iana_name_a) or is_multi_byte_encoding(iana_name_b):
         return 0.0
 
-    decoder_a = importlib.import_module(
-        "encodings.{}".format(iana_name_a)
-    ).IncrementalDecoder
-    decoder_b = importlib.import_module(
-        "encodings.{}".format(iana_name_b)
-    ).IncrementalDecoder
+    decoder_a = importlib.import_module("encodings.{}".format(iana_name_a)).IncrementalDecoder  # type: ignore
+    decoder_b = importlib.import_module("encodings.{}".format(iana_name_b)).IncrementalDecoder  # type: ignore
 
-    id_a: IncrementalDecoder = decoder_a(errors="ignore")
-    id_b: IncrementalDecoder = decoder_b(errors="ignore")
+    id_a = decoder_a(errors="ignore")  # type: IncrementalDecoder
+    id_b = decoder_b(errors="ignore")  # type: IncrementalDecoder
 
-    character_match_count: int = 0
+    character_match_count = 0  # type: int
 
     for i in range(255):
-        to_be_decoded: bytes = bytes([i])
+        to_be_decoded = bytes([i])  # type: bytes
         if id_a.decode(to_be_decoded) == id_b.decode(to_be_decoded):
             character_match_count += 1
 
@@ -364,61 +340,3 @@ def set_logging_handler(
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(format_string))
     logger.addHandler(handler)
-
-
-def cut_sequence_chunks(
-    sequences: bytes,
-    encoding_iana: str,
-    offsets: range,
-    chunk_size: int,
-    bom_or_sig_available: bool,
-    strip_sig_or_bom: bool,
-    sig_payload: bytes,
-    is_multi_byte_decoder: bool,
-    decoded_payload: Optional[str] = None,
-) -> Generator[str, None, None]:
-
-    if decoded_payload and is_multi_byte_decoder is False:
-        for i in offsets:
-            chunk = decoded_payload[i : i + chunk_size]
-            if not chunk:
-                break
-            yield chunk
-    else:
-        for i in offsets:
-            chunk_end = i + chunk_size
-            if chunk_end > len(sequences) + 8:
-                continue
-
-            cut_sequence = sequences[i : i + chunk_size]
-
-            if bom_or_sig_available and strip_sig_or_bom is False:
-                cut_sequence = sig_payload + cut_sequence
-
-            chunk = cut_sequence.decode(
-                encoding_iana,
-                errors="ignore" if is_multi_byte_decoder else "strict",
-            )
-
-            # multi-byte bad cutting detector and adjustment
-            # not the cleanest way to perform that fix but clever enough for now.
-            if is_multi_byte_decoder and i > 0 and sequences[i] >= 0x80:
-
-                chunk_partial_size_chk: int = min(chunk_size, 16)
-
-                if (
-                    decoded_payload
-                    and chunk[:chunk_partial_size_chk] not in decoded_payload
-                ):
-                    for j in range(i, i - 4, -1):
-                        cut_sequence = sequences[j:chunk_end]
-
-                        if bom_or_sig_available and strip_sig_or_bom is False:
-                            cut_sequence = sig_payload + cut_sequence
-
-                        chunk = cut_sequence.decode(encoding_iana, errors="ignore")
-
-                        if chunk[:chunk_partial_size_chk] in decoded_payload:
-                            break
-
-            yield chunk

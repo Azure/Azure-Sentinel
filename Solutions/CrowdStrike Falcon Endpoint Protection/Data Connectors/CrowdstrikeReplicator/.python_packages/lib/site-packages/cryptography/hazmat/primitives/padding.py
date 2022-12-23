@@ -104,15 +104,15 @@ def _byte_unpadding_check(
     return buffer_[:-pad_size]
 
 
-class PKCS7:
+class PKCS7(object):
     def __init__(self, block_size: int):
         _byte_padding_check(block_size)
         self.block_size = block_size
 
-    def padder(self) -> PaddingContext:
+    def padder(self):
         return _PKCS7PaddingContext(self.block_size)
 
-    def unpadder(self) -> PaddingContext:
+    def unpadder(self):
         return _PKCS7UnpaddingContext(self.block_size)
 
 
@@ -163,7 +163,7 @@ class _PKCS7UnpaddingContext(PaddingContext):
         return result
 
 
-class ANSIX923:
+class ANSIX923(object):
     def __init__(self, block_size: int):
         _byte_padding_check(block_size)
         self.block_size = block_size

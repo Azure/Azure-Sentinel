@@ -3,6 +3,7 @@
 # for complete details.
 
 
+import struct
 import typing
 
 from cryptography.hazmat.primitives.ciphers import Cipher
@@ -25,9 +26,10 @@ def _wrap_core(
             # AES has a 128-bit block size) and since we're using ECB it is
             # safe to reuse the encryptor for the entire operation
             b = encryptor.update(a + r[i])
-            a = (
-                int.from_bytes(b[:8], byteorder="big") ^ ((n * j) + i + 1)
-            ).to_bytes(length=8, byteorder="big")
+            # pack/unpack are safe as these are always 64-bit chunks
+            a = struct.pack(
+                ">Q", struct.unpack(">Q", b[:8])[0] ^ ((n * j) + i + 1)
+            )
             r[i] = b[-8:]
 
     assert encryptor.finalize() == b""
@@ -64,9 +66,13 @@ def _unwrap_core(
     n = len(r)
     for j in reversed(range(6)):
         for i in reversed(range(n)):
+            # pack/unpack are safe as these are always 64-bit chunks
             atr = (
-                int.from_bytes(a, byteorder="big") ^ ((n * j) + i + 1)
-            ).to_bytes(length=8, byteorder="big") + r[i]
+                struct.pack(
+                    ">Q", struct.unpack(">Q", a)[0] ^ ((n * j) + i + 1)
+                )
+                + r[i]
+            )
             # every decryption operation is a discrete 16 byte chunk so
             # it is safe to reuse the decryptor for the entire operation
             b = decryptor.update(atr)
@@ -85,9 +91,7 @@ def aes_key_wrap_with_padding(
     if len(wrapping_key) not in [16, 24, 32]:
         raise ValueError("The wrapping key must be a valid AES key length")
 
-    aiv = b"\xA6\x59\x59\xA6" + len(key_to_wrap).to_bytes(
-        length=4, byteorder="big"
-    )
+    aiv = b"\xA6\x59\x59\xA6" + struct.pack(">i", len(key_to_wrap))
     # pad the key to wrap if necessary
     pad = (8 - (len(key_to_wrap) % 8)) % 8
     key_to_wrap = key_to_wrap + b"\x00" * pad
@@ -116,10 +120,10 @@ def aes_key_unwrap_with_padding(
     if len(wrapped_key) == 16:
         # RFC 5649 - 4.2 - exactly two 64-bit blocks
         decryptor = Cipher(AES(wrapping_key), ECB()).decryptor()
-        out = decryptor.update(wrapped_key)
+        b = decryptor.update(wrapped_key)
         assert decryptor.finalize() == b""
-        a = out[:8]
-        data = out[8:]
+        a = b[:8]
+        data = b[8:]
         n = 1
     else:
         r = [wrapped_key[i : i + 8] for i in range(0, len(wrapped_key), 8)]
@@ -133,7 +137,7 @@ def aes_key_unwrap_with_padding(
     #    MLI = LSB(32,A).
     # 3) Let b = (8*n)-MLI, and then check that the rightmost b octets of
     #    the output data are zero.
-    mli = int.from_bytes(a[4:], byteorder="big")
+    (mli,) = struct.unpack(">I", a[4:])
     b = (8 * n) - mli
     if (
         not bytes_eq(a[:4], b"\xa6\x59\x59\xa6")

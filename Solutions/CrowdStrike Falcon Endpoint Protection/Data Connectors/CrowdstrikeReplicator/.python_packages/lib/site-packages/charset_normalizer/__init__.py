@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf_8 -*-
 """
 Charset-Normalizer
 ~~~~~~~~~~~~~~

@@ -16,7 +16,6 @@ from .utils import (
     is_separator,
     is_symbol,
     is_thai,
-    is_unprintable,
     remove_accent,
     unicode_range,
 )
@@ -58,12 +57,12 @@ class MessDetectorPlugin:
 
 class TooManySymbolOrPunctuationPlugin(MessDetectorPlugin):
     def __init__(self) -> None:
-        self._punctuation_count: int = 0
-        self._symbol_count: int = 0
-        self._character_count: int = 0
+        self._punctuation_count = 0  # type: int
+        self._symbol_count = 0  # type: int
+        self._character_count = 0  # type: int
 
-        self._last_printable_char: Optional[str] = None
-        self._frenzy_symbol_in_word: bool = False
+        self._last_printable_char = None  # type: Optional[str]
+        self._frenzy_symbol_in_word = False  # type: bool
 
     def eligible(self, character: str) -> bool:
         return character.isprintable()
@@ -96,17 +95,17 @@ class TooManySymbolOrPunctuationPlugin(MessDetectorPlugin):
         if self._character_count == 0:
             return 0.0
 
-        ratio_of_punctuation: float = (
+        ratio_of_punctuation = (
             self._punctuation_count + self._symbol_count
-        ) / self._character_count
+        ) / self._character_count  # type: float
 
         return ratio_of_punctuation if ratio_of_punctuation >= 0.3 else 0.0
 
 
 class TooManyAccentuatedPlugin(MessDetectorPlugin):
     def __init__(self) -> None:
-        self._character_count: int = 0
-        self._accentuated_count: int = 0
+        self._character_count = 0  # type: int
+        self._accentuated_count = 0  # type: int
 
     def eligible(self, character: str) -> bool:
         return character.isalpha()
@@ -125,20 +124,26 @@ class TooManyAccentuatedPlugin(MessDetectorPlugin):
     def ratio(self) -> float:
         if self._character_count == 0:
             return 0.0
-        ratio_of_accentuation: float = self._accentuated_count / self._character_count
+        ratio_of_accentuation = (
+            self._accentuated_count / self._character_count
+        )  # type: float
         return ratio_of_accentuation if ratio_of_accentuation >= 0.35 else 0.0
 
 
 class UnprintablePlugin(MessDetectorPlugin):
     def __init__(self) -> None:
-        self._unprintable_count: int = 0
-        self._character_count: int = 0
+        self._unprintable_count = 0  # type: int
+        self._character_count = 0  # type: int
 
     def eligible(self, character: str) -> bool:
         return True
 
     def feed(self, character: str) -> None:
-        if is_unprintable(character):
+        if (
+            character.isspace() is False  # includes \n \t \r \v
+            and character.isprintable() is False
+            and character != "\x1A"  # Why? Its the ASCII substitute character.
+        ):
             self._unprintable_count += 1
         self._character_count += 1
 
@@ -155,10 +160,10 @@ class UnprintablePlugin(MessDetectorPlugin):
 
 class SuspiciousDuplicateAccentPlugin(MessDetectorPlugin):
     def __init__(self) -> None:
-        self._successive_count: int = 0
-        self._character_count: int = 0
+        self._successive_count = 0  # type: int
+        self._character_count = 0  # type: int
 
-        self._last_latin_character: Optional[str] = None
+        self._last_latin_character = None  # type: Optional[str]
 
     def eligible(self, character: str) -> bool:
         return character.isalpha() and is_latin(character)
@@ -192,9 +197,9 @@ class SuspiciousDuplicateAccentPlugin(MessDetectorPlugin):
 
 class SuspiciousRange(MessDetectorPlugin):
     def __init__(self) -> None:
-        self._suspicious_successive_range_count: int = 0
-        self._character_count: int = 0
-        self._last_printable_seen: Optional[str] = None
+        self._suspicious_successive_range_count = 0  # type: int
+        self._character_count = 0  # type: int
+        self._last_printable_seen = None  # type: Optional[str]
 
     def eligible(self, character: str) -> bool:
         return character.isprintable()
@@ -214,8 +219,10 @@ class SuspiciousRange(MessDetectorPlugin):
             self._last_printable_seen = character
             return
 
-        unicode_range_a: Optional[str] = unicode_range(self._last_printable_seen)
-        unicode_range_b: Optional[str] = unicode_range(character)
+        unicode_range_a = unicode_range(
+            self._last_printable_seen
+        )  # type: Optional[str]
+        unicode_range_b = unicode_range(character)  # type: Optional[str]
 
         if is_suspiciously_successive_range(unicode_range_a, unicode_range_b):
             self._suspicious_successive_range_count += 1
@@ -232,9 +239,9 @@ class SuspiciousRange(MessDetectorPlugin):
         if self._character_count == 0:
             return 0.0
 
-        ratio_of_suspicious_range_usage: float = (
+        ratio_of_suspicious_range_usage = (
             self._suspicious_successive_range_count * 2
-        ) / self._character_count
+        ) / self._character_count  # type: float
 
         if ratio_of_suspicious_range_usage < 0.1:
             return 0.0
@@ -244,25 +251,25 @@ class SuspiciousRange(MessDetectorPlugin):
 
 class SuperWeirdWordPlugin(MessDetectorPlugin):
     def __init__(self) -> None:
-        self._word_count: int = 0
-        self._bad_word_count: int = 0
-        self._foreign_long_count: int = 0
+        self._word_count = 0  # type: int
+        self._bad_word_count = 0  # type: int
+        self._foreign_long_count = 0  # type: int
 
-        self._is_current_word_bad: bool = False
-        self._foreign_long_watch: bool = False
+        self._is_current_word_bad = False  # type: bool
+        self._foreign_long_watch = False  # type: bool
 
-        self._character_count: int = 0
-        self._bad_character_count: int = 0
+        self._character_count = 0  # type: int
+        self._bad_character_count = 0  # type: int
 
-        self._buffer: str = ""
-        self._buffer_accent_count: int = 0
+        self._buffer = ""  # type: str
+        self._buffer_accent_count = 0  # type: int
 
     def eligible(self, character: str) -> bool:
         return True
 
     def feed(self, character: str) -> None:
         if character.isalpha():
-            self._buffer += character
+            self._buffer = "".join([self._buffer, character])
             if is_accentuated(character):
                 self._buffer_accent_count += 1
             if (
@@ -282,7 +289,7 @@ class SuperWeirdWordPlugin(MessDetectorPlugin):
             character.isspace() or is_punctuation(character) or is_separator(character)
         ) and self._buffer:
             self._word_count += 1
-            buffer_length: int = len(self._buffer)
+            buffer_length = len(self._buffer)  # type: int
 
             self._character_count += buffer_length
 
@@ -339,8 +346,8 @@ class CjkInvalidStopPlugin(MessDetectorPlugin):
     """
 
     def __init__(self) -> None:
-        self._wrong_stop_count: int = 0
-        self._cjk_character_count: int = 0
+        self._wrong_stop_count = 0  # type: int
+        self._cjk_character_count = 0  # type: int
 
     def eligible(self, character: str) -> bool:
         return True
@@ -365,17 +372,17 @@ class CjkInvalidStopPlugin(MessDetectorPlugin):
 
 class ArchaicUpperLowerPlugin(MessDetectorPlugin):
     def __init__(self) -> None:
-        self._buf: bool = False
+        self._buf = False  # type: bool
 
-        self._character_count_since_last_sep: int = 0
+        self._character_count_since_last_sep = 0  # type: int
 
-        self._successive_upper_lower_count: int = 0
-        self._successive_upper_lower_count_final: int = 0
+        self._successive_upper_lower_count = 0  # type: int
+        self._successive_upper_lower_count_final = 0  # type: int
 
-        self._character_count: int = 0
+        self._character_count = 0  # type: int
 
-        self._last_alpha_seen: Optional[str] = None
-        self._current_ascii_only: bool = True
+        self._last_alpha_seen = None  # type: Optional[str]
+        self._current_ascii_only = True  # type: bool
 
     def eligible(self, character: str) -> bool:
         return True
@@ -439,7 +446,6 @@ class ArchaicUpperLowerPlugin(MessDetectorPlugin):
         return self._successive_upper_lower_count_final / self._character_count
 
 
-@lru_cache(maxsize=1024)
 def is_suspiciously_successive_range(
     unicode_range_a: Optional[str], unicode_range_b: Optional[str]
 ) -> bool:
@@ -518,16 +524,16 @@ def mess_ratio(
     Compute a mess ratio given a decoded bytes sequence. The maximum threshold does stop the computation earlier.
     """
 
-    detectors: List[MessDetectorPlugin] = [
+    detectors = [
         md_class() for md_class in MessDetectorPlugin.__subclasses__()
-    ]
+    ]  # type: List[MessDetectorPlugin]
 
-    length: int = len(decoded_sequence) + 1
+    length = len(decoded_sequence) + 1  # type: int
 
-    mean_mess_ratio: float = 0.0
+    mean_mess_ratio = 0.0  # type: float
 
     if length < 512:
-        intermediary_mean_mess_ratio_calc: int = 32
+        intermediary_mean_mess_ratio_calc = 32  # type: int
     elif length <= 1024:
         intermediary_mean_mess_ratio_calc = 64
     else:

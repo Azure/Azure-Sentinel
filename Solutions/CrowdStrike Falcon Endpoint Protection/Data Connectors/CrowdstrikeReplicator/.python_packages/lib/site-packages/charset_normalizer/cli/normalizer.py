@@ -3,12 +3,7 @@ import sys
 from json import dumps
 from os.path import abspath
 from platform import python_version
-from typing import List, Optional
-
-try:
-    from unicodedata2 import unidata_version
-except ImportError:
-    from unicodedata import unidata_version
+from typing import List
 
 from charset_normalizer import from_fp
 from charset_normalizer.models import CliDetectionResult
@@ -48,7 +43,7 @@ def query_yes_no(question: str, default: str = "yes") -> bool:
             sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
 
 
-def cli_detect(argv: Optional[List[str]] = None) -> int:
+def cli_detect(argv: List[str] = None) -> int:
     """
     CLI assistant using ARGV and ArgumentParser
     :param argv:
@@ -116,7 +111,7 @@ def cli_detect(argv: Optional[List[str]] = None) -> int:
         "-t",
         "--threshold",
         action="store",
-        default=0.2,
+        default=0.1,
         type=float,
         dest="threshold",
         help="Define a custom maximum amount of chaos allowed in decoded content. 0. <= chaos <= 1.",
@@ -124,8 +119,8 @@ def cli_detect(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--version",
         action="version",
-        version="Charset-Normalizer {} - Python {} - Unicode {}".format(
-            __version__, python_version(), unidata_version
+        version="Charset-Normalizer {} - Python {}".format(
+            __version__, python_version()
         ),
         help="Show version information and exit.",
     )
@@ -234,7 +229,7 @@ def cli_detect(argv: Optional[List[str]] = None) -> int:
                         my_file.close()
                     continue
 
-                o_: List[str] = my_file.name.split(".")
+                o_ = my_file.name.split(".")  # type: List[str]
 
                 if args.replace is False:
                     o_.insert(-1, best_guess.encoding)

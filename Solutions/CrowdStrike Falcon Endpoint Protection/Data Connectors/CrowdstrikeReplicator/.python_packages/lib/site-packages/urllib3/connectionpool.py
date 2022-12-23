@@ -767,8 +767,6 @@ class HTTPConnectionPool(ConnectionPool, RequestMethods):
                 isinstance(e, BaseSSLError)
                 and self.proxy
                 and _is_ssl_error_message_from_http_proxy(e)
-                and conn.proxy
-                and conn.proxy.scheme == "https"
             ):
                 e = ProxyError(
                     "Your proxy appears to only use HTTP and not HTTPS, "
@@ -862,7 +860,7 @@ class HTTPConnectionPool(ConnectionPool, RequestMethods):
             )
 
         # Check if we should retry the HTTP response.
-        has_retry_after = bool(response.headers.get("Retry-After"))
+        has_retry_after = bool(response.getheader("Retry-After"))
         if retries.is_retry(method, response.status, has_retry_after):
             try:
                 retries = retries.increment(method, url, response=response, _pool=self)
