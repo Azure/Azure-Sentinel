@@ -32,7 +32,7 @@ namespace Helios2Sentinel
         private const string keyVaultName = "Cohesity-Vault";
         private static readonly object queueLock = new object();
         private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
-        private static string containerName = GetSecret("containerName");
+        private static string containerName = "extra-parameters";
         private static string blobStorageConnectionString = GetSecret("BlobStorageConnectionString");
         public static long GetPreviousUnixTime(ILogger log)
         {
@@ -71,7 +71,7 @@ namespace Helios2Sentinel
         }
 
         public static async Task ParseAlertToQueue(
-            [Queue("%CohesityQueueName%"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
+            [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             dynamic alert, ILogger log)
         {
             dynamic output = new ExpandoObject();
@@ -183,7 +183,7 @@ namespace Helios2Sentinel
 #else
             [TimerTrigger("* */5 * * * *")]TimerInfo myTimer,
 #endif
-            [Queue("%CohesityQueueName%"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
+            [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");

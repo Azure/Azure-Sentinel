@@ -95,7 +95,7 @@ namespace IncidentConsumer
         }
 
         [FunctionName("IncidentConsumer")]
-        public void Run([QueueTrigger("%CohesityQueueName%", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
+        public void Run([QueueTrigger("cohesity-incidents", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
         {
             log.LogInformation("queueItem --> " + queueItem);
             string token = GetAccessTokenAsync(ARM_ENDPOINT).Result;
