@@ -3,16 +3,8 @@
 This playbook closes the corresponding Helios ticket.
 
 ## Prerequisites
-1. Create the _DataHawk API_ key:
-* Go to the Cohesity DataHawk [login](https://helios.cohesity.com/#/login) page.
-* Enter your credentials and select _Log In_. The _Summary_ page is displayed.
-* Navigate to _Settings > Access Management_. The _Users_ tab is displayed.
-* Select _Add API Key_. The API Key Details is displayed.
-* Enter a name for the API key.
-* Select _Save_.
-2. Create your Azure key vault (see [instructions](https://learn.microsoft.com/en-us/azure/key-vault/general/quick-create-portal)).
-* Create the _ApiKey_ secret and assign the _API Key_ value from the previous step to it. Now your API key is securely saved in the Azure KeyVault.
-**Note:** If you already did these steps for [another playbook](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Cohesity_Restore_From_Last_Snapshot#readme), then you can skip them and reuse the same _ApiKey_ secret for this one.
+1. Install [this](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) Azure function configuration.
+**Note:** If you already did it for another playbook, then proceed to the deployment steps.
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
@@ -29,6 +21,18 @@ This playbook closes the corresponding Helios ticket.
   * Authorize your KeyVault connection by selecting it and clicking on _General\Edit API Connection_
     * Press the _Authorize_ button and select the appropriate account. Enter your key vault name if prompted. You can find your key vault name [here](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults).
 * **Note**: If you can't authorize the connections using the steps above, you can always open your playbook in _Development Tools\Logic App Designer_, click on every connection block, and then click on the _Change connection_ link in the right pane. Then you can either create a new connection, choose a different one or authorize the one that is marked with an "i" sign.
+
+## Troubleshooting
+If you'd like to use this playbook without installing the [Azure functions configuration](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md), then you need to do a few manual steps _before_ deployment.
+1. Create the _DataHawk API_ key:
+* Go to the Cohesity Helios [login](https://helios.cohesity.com/#/login) page.
+* Enter your credentials and select _Log In_. The _Summary_ page is displayed.
+* Navigate to _Settings > Access Management_. The _Users_ tab is displayed.
+* Select _Add API Key_. The API Key Details is displayed.
+* Enter a name for the API key.
+* Select _Save_.
+2. Create your Azure KeyVault (see [instructions](https://learn.microsoft.com/en-us/azure/key-vault/general/quick-create-portal)).
+* Create the _ApiKey_ secret and assign the _API Key_ value from the previous step to it. Now your API key is securely saved in the Azure KeyVault.
 
 #  References
 - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm)
