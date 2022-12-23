@@ -1,0 +1,65 @@
+id: 7b05e0bd-2c6d-4416-b08b-4004a4edeb30
+name: Possible DNS Tunneling or Data Exfilteration Activity (DNS Solution)
+description: |
+  'Typical domain name lengths are short whereas domain name query used for data exfiltration or tunneling can often be very large in size. The hunting query looks for Names that are more than 150 characters in length.'
+
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+tactics:
+  - Exfiltration
+
+query: |
+  // Setting URI length threshold count, shorter URI's may cause noise, change as needed
+  let lookback=1day;
+  let uriThreshold = 150;
+  let minersDomains=dynamic(["cnr.io", "kr0.io", "arcticwolf.net", "webcfs00.com", "barracudabrts.com", "trendmicro.com", "sophosxl.net", 
+  "spotify.com", "e5.sk", "mcafee.com", "opendns.com", "spameatingmonkey.net", "_ldap", "_kerberos", "modsecurity.org", 
+  "fdmarc.net", "ipass.com", "wpad"]);
+  imDns(starttime=ago(lookback),endtime=now())
+  | summarize count() by SrcIpAddr, DnsQuery
+  | where not(DnsQuery has_any (minersDomains))
+  | extend Urilength = strlen(DnsQuery)
+  | where Urilength >= uriThreshold
+
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: FullNameLookup
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr

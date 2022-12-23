@@ -1,0 +1,70 @@
+id: c5d0fea4-dc84-437e-b859-692b6358238e
+name: DNS requests to Risky Domains (ASIM DNS Solution)
+description: |
+  'Query searches for requests to risky Domains'
+
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+tactics:
+  - Exfiltration
+
+query: |
+  let lookback=1d;
+  let DNS_IOCs = materialize(_GetWatchlist('DNSMonitoringConfiguration2')
+    | where Type == 'Hunting' and Enabled == 'TRUE'
+    | project
+        SearchKey,
+        Name,
+        Description,
+        Type,
+        ThresholdType,
+        Threshold,
+        Severity,
+        Tactic,
+        Enabled);
+  imDns (starttime=ago(lookback),endtime=now())
+  | join kind=inner['DNS_IOCs'] on $left.DnsQuery == $right.SearchKey
+  | project SrcIpAddr, DnsQuery, EventResultDetails,Name, Description
+
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: FullNameLookup
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
