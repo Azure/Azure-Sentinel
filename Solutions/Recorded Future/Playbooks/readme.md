@@ -11,18 +11,18 @@ The following article describes roles and permissions for working with Microsoft
 To install and manage Playbooks/Logic Apps, the followong permissions are required on the resourcegroup [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) + [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
 
 # Connectors Authorization 
-Each connector needs to be authorize after playbook installation. Expand all nodes in the logic app after installation and look for blocks marked with a warning sign. Open and autorize the connection. more information about each connector can be found below. 
+Each connector needs to be authorized after playbook installation. Expand all nodes in the logic app after installation and look for blocks marked with a warning sign. Open and authorize the connection. More information about each connector can be found below. 
 
 We use the following connectors in Recordedd Future solution:
 - **/recordedfuturev2** Microsoft power platform connectors 
-https://learn.microsoft.com/en-us/connectors/recordedfuturev2/  . All logic apps require an APIKey to communicate with the Recorded Future API. To obtain an APIKey, please visit [Recorded Future](https://www.recordedfuture.com/integrations/azure/).
+https://learn.microsoft.com/en-us/connectors/recordedfuturev2/  . All logic apps require an APIKey to communicate with the Recorded Future API. To obtain an APIKey, please visit [Recorded Future Requesting API Tokens](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens).
 - **/microsoftgraphsecurity** - Microsoft power platform connectors https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/
 - **/azuresentinel** - Microsoft power platform connectors https://learn.microsoft.com/en-us/connectors/azuresentinel/
 
 
 # Deployment
 
-> **Due to internal Microsoft Logic Apps dependencies, please deploy first the ImportToSentinel playbook before any of the IndicatorProcessor one.**
+> **Due to internal Microsoft Logic Apps dependencies, please deploy ImportToSentinel playbook before any of the IndicatorProcessor playbooks.**
 
 ## ImportToSentinel
 
@@ -61,17 +61,23 @@ This playbook leverages the Recorded Future API to automate the ingestion of Rec
 
 ## Response (Enrichment) - IP, Domain, Hash, URL
 
-This playbook leverages the Recorded Future API to automatically enrich the IP, Domain, Url and Hash indicators, found in incidents, with the following Recorded Future context: Risk Score, Risk Rules, Reasearch links, technical links and Link to Intelligence Card. The enrichment content will be posted as a comment in the Microsoft Sentinel incident. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/azure/). 
+This playbook leverages the Recorded Future API to automatically enrich the IP, Domain, Url and Hash indicators, found in incidents, with the following Recorded Future context: Risk Score, Risk Rules, research links, technical links and Link to Intelligence Card. The enrichment content will be posted as a comment in the Microsoft Sentinel incident. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/azure/). 
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash.json)
 
+
+
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/LogicAppDark.png)
 
-When the enrichment playbook is installed and configured. Create an automation rule to automate the enrichment process. The playbook will enrich known entities in the incident and write back data from Recorded Future as a comment. 
+### Configuration of Enrichment playbook
+After the enrichment playbook is installed and connections are configured. Create an automation rule to automate the enrichment process. The enrichment playbook will add recorded future intelligence to known entities in the incident as incident comment. 
+
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRuleMenu.png)<br/>
-Select automation rule and enrichment playbook to run.
+
+In Sentinel goto Automation and create [Automation rule]. Give the new rule a name, select trigger [When incident is created], Action [Run playbook] and select [RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash] as the playbook to run. 
+
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png)<br/>
-After the automation rule is created, the enrichment playbook will run automatically when a new incident is created. Enrichment of known entities will be written as a comment in the incident.
-![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/EnrichmentExampleDark.png)<br/>
+
+This will trigger Recorded Future playbook to run when any incident is created. Recorded future will then enrich the incident if it contains entities of type IP, Domain, Url and FileHash. 
