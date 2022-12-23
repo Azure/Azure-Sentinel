@@ -258,9 +258,10 @@ class AzureTableStorageConnector:
     
     def ingest_table_data(self,file_name,bucket,status):
         currentTime =  datetime.datetime.utcnow()
+        onlyFileName = file_name.split('/')[-1]
         my_status_record = {
-            u'PartitionKey': "StatusData",
-            u'RowKey': file_name + " - " + currentTime.strftime('%a, %d %b %Y %H:%M:%S GMT'),
+            u'PartitionKey': onlyFileName,
+            u'RowKey': onlyFileName + " - " + currentTime.strftime('%a, %d %b %Y %H:%M:%S GMT'),
             u'StatusTime': datetime.datetime.utcnow(),
             u'Bucket' : bucket,
             u'FileName' : file_name,
