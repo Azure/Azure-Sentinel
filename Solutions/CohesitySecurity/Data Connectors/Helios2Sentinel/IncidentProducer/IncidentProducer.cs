@@ -1,3 +1,6 @@
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
+using Helios2Sentinel;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs.Extensions.Http;
@@ -5,11 +8,14 @@ using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.WindowsAzure.Storage;
+using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 using System.Collections.Generic;
 using System.Collections;
+using System.Dynamic;
 using System.IO;
 using System.Net.Http.Headers;
 using System.Net.Http;
@@ -18,24 +24,22 @@ using System.Text.Json;
 using System.Text;
 using System.Threading.Tasks;
 using System;
-using System.Dynamic;
-using Newtonsoft.Json.Converters;
-using Microsoft.WindowsAzure.Storage;
-using Helios2Sentinel;
 
 namespace Helios2Sentinel
 {
     public class IncidentProducer
     {
+        private const string keyVaultName = "Cohesity-Vault";
         private static readonly object queueLock = new object();
         private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
-        private static string containerName = Environment.GetEnvironmentVariable("containerName");
+        private static string containerName = "extra-parameters";
+        private static string blobStorageConnectionString = GetSecret("BlobStorageConnectionString");
         public static long GetPreviousUnixTime(ILogger log)
         {
             DateTime previousDateTime = DateTime.Now;
             try
             {
-                previousDateTime = previousDateTime.AddDays(long.Parse(Environment.GetEnvironmentVariable("startDaysAgo")));
+                previousDateTime = previousDateTime.AddDays(long.Parse(GetSecret("startDaysAgo")));
             }
             catch  (Exception ex)
             {
@@ -62,41 +66,32 @@ namespace Helios2Sentinel
         {
             return new Lazy<ConnectionMultiplexer>(() =>
             {
-                return ConnectionMultiplexer.Connect(Environment.GetEnvironmentVariable("connectStr"));
+                return ConnectionMultiplexer.Connect(GetSecret("connectStr"));
             });
         }
 
         public static async Task ParseAlertToQueue(
-            [Queue("%CohesityQueueName%"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
+            [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             dynamic alert, ILogger log)
         {
             dynamic output = new ExpandoObject();
             output.properties = new ExpandoObject();
-            output.properties.Description = alert.alertDocument.alertDescription + ". Alert cause: " + alert.alertDocument.alertCause + ". Additional Info: " + alert.alertDocument.alertHelpText + ". Helios ID: " + alert.id;
             output.properties.title = "Cluster: " + alert.clusterName;
             output.properties.status = ((string)alert.alertState).Equals("kOpen", StringComparison.OrdinalIgnoreCase) ? "New" : "Closed";
             output.properties.severity = "Medium";
 
             string id = alert.id;
             int i = 0;
+            long sev = 70;
 
             foreach (var prop in alert.propertyList)
             {
                 switch (i)
                 {
-                case 12:
-                    long sev = long.Parse((string)prop.value);
-                    if (sev >= 70)
-                        output.properties.severity = "High";
-                    else if (sev < 30)
-                        output.properties.severity = "Low";
-                    else
-                        output.properties.severity = "Medium";
-                    break;
                 case 0:
-                case 10:
                 case 4:
                 case 7:
+                case 10:
                 case 11:
                     TextWriter(id, (string)prop.key, (string)prop.value, log);
                     break;
@@ -107,10 +102,21 @@ namespace Helios2Sentinel
                 case 3:
                     output.properties.title += ". Source: " + prop.value;
                     break;
+                case 12:
+                    sev = long.Parse((string)prop.value);
+
+                    if (sev >= 70)
+                        output.properties.severity = "High";
+                    else if (sev < 30)
+                        output.properties.severity = "Low";
+                    else
+                        output.properties.severity = "Medium";
+                    break;
                 }
                 i++;
                 if (i == 13) break;
             }
+            output.properties.Description = alert.alertDocument.alertDescription + ". Alert cause: " + alert.alertDocument.alertCause + ". Anomaly Strength: " + sev + ". Additional Info: " + alert.alertDocument.alertHelpText + ". Helios ID: " + alert.id;
 
             lock (queueLock)
             {
@@ -118,15 +124,23 @@ namespace Helios2Sentinel
             }
         }
 
-        private static void WriteData(string storageConnectionString, string path, string data)
+        private static string GetData(string path)
         {
-            if (CloudStorageAccount.TryParse(storageConnectionString, out var storageAccount))
+            if (CloudStorageAccount.TryParse(blobStorageConnectionString, out var storageAccount))
             {
+                // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
                 var cloudBlobClient = storageAccount.CreateCloudBlobClient();
                 var container = cloudBlobClient.GetContainerReference(containerName);
                 var blobRef = container.GetBlockBlobReference(path);
-                var dataAsBytes = Encoding.UTF8.GetBytes(data);
-                blobRef.UploadFromByteArrayAsync(dataAsBytes, 0, dataAsBytes.Length).Wait();
+
+                using (var ms = new MemoryStream())
+                    using (var sr = new StreamReader(ms))
+                    {
+                        var task = blobRef.DownloadToStreamAsync(ms);
+                        task.Wait();
+                        ms.Position = 0;
+                        return sr.ReadToEnd();
+                    }
             }
             else
             {
@@ -134,19 +148,32 @@ namespace Helios2Sentinel
             }
         }
 
-        private static void TextWriter(string incidentID, string param, string value, ILogger log)
+        private static void WriteData(string path, string data, ILogger log)
         {
             try
             {
-                string Blob = incidentID + "\\" + param; // ID unique to the incident
-                var blobStorageConnectionString = Environment.GetEnvironmentVariable("BlobStorageConnectionString");
-                var blobStorageKeys = Environment.GetEnvironmentVariable("BlobStorageAccountKeys");
-                WriteData(blobStorageConnectionString, Blob, value);
+                if (CloudStorageAccount.TryParse(blobStorageConnectionString, out var storageAccount))
+                {
+                    var cloudBlobClient = storageAccount.CreateCloudBlobClient();
+                    var container = cloudBlobClient.GetContainerReference(containerName);
+                    var blobRef = container.GetBlockBlobReference(path);
+                    var dataAsBytes = Encoding.UTF8.GetBytes(data);
+                    blobRef.UploadFromByteArrayAsync(dataAsBytes, 0, dataAsBytes.Length).Wait();
+                }
+                else
+                {
+                    throw new InvalidProgramException("Invalid format string");
+                }
             }
             catch (Exception ex)
             {
                 log.LogError("Exception --> " + ex.Message);
             }
+        }
+
+        private static void TextWriter(string incidentID, string param, string value, ILogger log)
+        {
+            WriteData(incidentID + "\\" + param, value, log);
         }
 
         [FunctionName("IncidentProducer")]
@@ -156,7 +183,7 @@ namespace Helios2Sentinel
 #else
             [TimerTrigger("* */5 * * * *")]TimerInfo myTimer,
 #endif
-            [Queue("%CohesityQueueName%"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
+            [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             ILogger log)
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
@@ -165,12 +192,12 @@ namespace Helios2Sentinel
             try
             {
                 var db = Connection.GetDatabase();
-                string apiKey = Environment.GetEnvironmentVariable("apiKey");
-                string redisKey = Environment.GetEnvironmentVariable("workspace") + apiKey;
+                string apiKey = GetSecret("ApiKey");
+                string blobKey = GetSecret("workspace") + "\\" + apiKey;
 
                 try
                 {
-                    startDateUsecs = long.Parse(db.StringGet(redisKey));
+                    startDateUsecs = long.Parse(GetData(blobKey));
                 }
                 catch  (Exception ex)
                 {
@@ -192,7 +219,7 @@ namespace Helios2Sentinel
                 log.LogInformation("requestUriString --> " + requestUriString);
                 using HttpClient client = new ();
                 client.DefaultRequestHeaders.Accept.Clear();
-                client.DefaultRequestHeaders.Add("apiKey", System.Environment.GetEnvironmentVariable("apiKey"));
+                client.DefaultRequestHeaders.Add("apiKey", GetSecret("apiKey"));
                 await using Stream stream = await client.GetStreamAsync(requestUriString);
                 StreamReader reader = new StreamReader(stream);
                 dynamic alerts = JsonConvert.DeserializeObject(reader.ReadToEnd());
@@ -215,7 +242,7 @@ namespace Helios2Sentinel
 
                 if (t.Status == TaskStatus.RanToCompletion)
                 {
-                    db.StringSet(redisKey, endDateUsecs.ToString());
+                    WriteData(blobKey, endDateUsecs.ToString(), log);
                 }
                 log.LogInformation("new startDateUsecs --> " + endDateUsecs.ToString());
             }
@@ -223,6 +250,14 @@ namespace Helios2Sentinel
             {
                 log.LogError("Exception --> 3 " + ex.Message);
             }
+        }
+
+        private static string GetSecret(string secretName)
+        {
+            var kvUri = $"https://{IncidentProducer.keyVaultName}.vault.azure.net";
+            var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+            var secret = secretClient.GetSecret(secretName);
+            return  secret.Value.Value;
         }
     }
 }

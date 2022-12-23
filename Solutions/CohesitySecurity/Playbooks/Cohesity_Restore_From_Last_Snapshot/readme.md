@@ -3,17 +3,8 @@
 This playbook restores the latest good Helios snapshot. It’s recommended for running by Backup Admins _only_ after they make sure that the existing data is compromised and rollback to the previous snapshot, even at the expense of data loss, is _really required_.
 
 ## Prerequisites
-1. Create the _DataHawk API_ key:
-* Go to the Cohesity Helios [login](https://helios.cohesity.com/#/login) page.
-* Enter your credentials and select _Log In_. The _Summary_ page is displayed.
-* Navigate to _Settings > Access Management_. The _Users_ tab is displayed.
-* Select _Add API Key_. The API Key Details is displayed.
-* Enter a name for the API key.
-* Select _Save_.
-2. Create your Azure KeyVault (see [instructions](https://learn.microsoft.com/en-us/azure/key-vault/general/quick-create-portal)).
-* Create the _ApiKey_ secret and assign the _API Key_ value from the previous step to it. Now your API key is securely saved in the Azure KeyVault.
-
-**Note:** If you already did these steps for [another playbook](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Cohesity_Close_Helios_Incident/readme.md), then you can skip them and reuse the same _ApiKey_ secret for this one.
+1. Install [this](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) Azure function configuration.
+**Note:** If you already did it for another playbook (see [example](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Cohesity_Close_Helios_Incident/readme.md)), then proceed to the deployment steps.
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
@@ -36,6 +27,18 @@ This playbook restores the latest good Helios snapshot. It’s recommended for r
 * Select _Configure Permissions_ to open the _Manage Permissions_ panel.
 * Select the required resource group and click _Apply_.
 * Select _Done_.
+
+## Troubleshooting
+* If you'd like to use this playbook without installing the [Azure functions configuration](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md), then you need to do a few manual steps _before_ deployment.
+1. Create the _DataHawk API_ key:
+* Go to the Cohesity Helios [login](https://helios.cohesity.com/#/login) page.
+* Enter your credentials and select _Log In_. The _Summary_ page is displayed.
+* Navigate to _Settings > Access Management_. The _Users_ tab is displayed.
+* Select _Add API Key_. The API Key Details is displayed.
+* Enter a name for the API key.
+* Select _Save_.
+2. Create your Azure KeyVault (see [instructions](https://learn.microsoft.com/en-us/azure/key-vault/general/quick-create-portal)).
+* Create the _ApiKey_ secret and assign the _API Key_ value from the previous step to it. Now your API key is securely saved in the Azure KeyVault.
 
 #  References
  - [Cohesity support documentation](https://docs.cohesity.com/ui/login?redirectPath=%2FHomePage%2FContent%2FTechGuides%2FTechnicalGuides.htm).

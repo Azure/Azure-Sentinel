@@ -12,7 +12,7 @@ This playbook closes the corresponding Helios ticket.
 * Select _Save_.
 2. Create your Azure key vault (see [instructions](https://learn.microsoft.com/en-us/azure/key-vault/general/quick-create-portal)).
 * Create the _ApiKey_ secret and assign the _API Key_ value from the previous step to it. Now your API key is securely saved in the Azure KeyVault.
-**Note:** If you already did these steps for [another playbook](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Cohesity_Close_Helios_Incident#readme), then you can skip them and reuse the same _ApiKey_ secret for this one.
+**Note:** If you already did these steps for [another playbook](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Cohesity_Restore_From_Last_Snapshot#readme), then you can skip them and reuse the same _ApiKey_ secret for this one.
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
