@@ -259,10 +259,11 @@ class AzureTableStorageConnector:
     def ingest_table_data(self,file_name,bucket,status):
         currentTime =  datetime.datetime.utcnow()
         my_status_record = {
-            u'PartitionKey': file_name,
+            u'PartitionKey': "StatusData",
             u'RowKey': file_name + " - " + currentTime.strftime('%a, %d %b %Y %H:%M:%S GMT'),
             u'StatusTime': datetime.datetime.utcnow(),
             u'Bucket' : bucket,
+            u'FileName' : file_name,
             u'Status': status
         }
         status_record = self._get_table_client("crowdstrikestatus").create_entity(entity=my_status_record)

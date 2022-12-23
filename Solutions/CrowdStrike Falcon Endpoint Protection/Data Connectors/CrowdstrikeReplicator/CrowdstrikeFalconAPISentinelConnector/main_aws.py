@@ -93,7 +93,7 @@ async def main(mytimer: func.TimerRequest):
         logging.info(filterStr)
         result = connTable.query_table_data(filterStr)
         for entity in result:
-             failedFiles.append({entity['Bucket'],entity['PartitionKey']})
+             failedFiles.append({entity['Bucket'],entity['FileName']})
 
     logging.info("Processing {} failed files.".format(len(failedFiles)))
     if len(failedFiles):
@@ -150,7 +150,7 @@ async def download_message_failedfiles(failedFiles, session):
         cors = []
         for s3_file in failedFiles:
             body = {}
-            body["links"] = [s3_file["PartitionKey"]]
+            body["links"] = [s3_file["FileName"]]
             body["bucket"] = s3_file["bucket"]
             logging.info("Starting processing for {}.".format(str(body['links'])))
             cors.append(_make_request(session, uri, json.dumps(body)))            
