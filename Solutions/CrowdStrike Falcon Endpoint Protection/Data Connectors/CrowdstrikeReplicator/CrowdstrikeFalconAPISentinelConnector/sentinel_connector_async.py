@@ -8,9 +8,8 @@ import aiohttp
 import asyncio
 from collections import deque
 
-
 class AzureSentinelConnectorAsync:
-    def __init__(self, session: aiohttp.ClientSession, log_analytics_uri, workspace_id, shared_key, log_type, queue_size=1000, queue_size_bytes=25 * (2**20)):
+    def __init__(self, session: aiohttp.ClientSession, log_analytics_uri, workspace_id, shared_key, log_type, queue_size=1000, queue_size_bytes=28 * (2**20)):
         self.log_analytics_uri = log_analytics_uri
         self.workspace_id = workspace_id
         self.shared_key = shared_key
@@ -33,6 +32,10 @@ class AzureSentinelConnectorAsync:
         if events:
             await self._flush(events)
 
+    async def sendBulk(self, events):
+        if events and len(events) >= self.queue_size:
+            await self._flush(events)
+
     async def flush(self):
         await self._flush(list(self._queue))
 
@@ -53,7 +56,10 @@ class AzureSentinelConnectorAsync:
     async def _post_data(self, session: aiohttp.ClientSession, workspace_id, shared_key, body, log_type):
         logging.debug('Start sending data to sentinel')
         events_number = len(body)
-        body = json.dumps(body)
+        starttime = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        body = self.customize_event_bulk(body)
+        endtime = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        logging.info('Customization started at {} and ended at {}'.format(starttime,endtime))
         method = 'POST'
         content_type = 'application/json'
         resource = '/api/logs'
@@ -66,14 +72,13 @@ class AzureSentinelConnectorAsync:
             'content-type': content_type,
             'Authorization': signature,
             'Log-Type': log_type,
-            'x-ms-date': rfc1123date
+            'x-ms-date': rfc1123date,
+            'time-generated-field' : "timestamp_iso"
         }
 
         try_number = 1
         while True:
             try:
-                if len(body) < 10:
-                    logging.info(body)
                 await self._make_request(session, uri, body, headers)
             except Exception as err:
                 if try_number < 3:
@@ -85,13 +90,14 @@ class AzureSentinelConnectorAsync:
                     self.failed_sent_events_number += events_number
                     raise err
             else:
-                logging.debug('{} events have been successfully sent to Azure Sentinel'.format(events_number))
+                logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
                 break
 
 
     async def _make_request(self, session, uri, body, headers):
-        async with session.post(uri, data=body, headers=headers, ssl=False) as response:
+        async with session.post(uri, data=body, headers=headers) as response:
+            await response.text()
             if not (200 <= response.status <= 299):
                 raise Exception("Error during sending events to Azure Sentinel. Response code: {}".format(response.status))
 
