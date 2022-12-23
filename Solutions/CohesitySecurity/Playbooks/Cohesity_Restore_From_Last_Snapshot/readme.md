@@ -29,7 +29,7 @@ This playbook restores the latest good Helios snapshot. It’s recommended for r
 * Select _Done_.
 
 ## Troubleshooting
-* If you'd like to use this playbook without installing the [Azure functions configuration](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md), then you need to do a few manual steps _before_ deployment.
+If you'd like to use this playbook without installing the [Azure functions configuration](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md), then you need to do a few manual steps _before_ deployment.
 1. Create the _DataHawk API_ key:
 * Go to the Cohesity Helios [login](https://helios.cohesity.com/#/login) page.
 * Enter your credentials and select _Log In_. The _Summary_ page is displayed.
