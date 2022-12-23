@@ -1,0 +1,89 @@
+id: 89ba52fa-96a7-4653-829a-ca49bb13336c
+name: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM DNS Solution)
+description: |
+  'Identifies clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period). This analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+queryFrequency: 1d
+queryPeriod: 10d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+query: |
+  let threshold = materialize (_GetWatchlist('DNSMonitoringConfiguration2')
+  | where Name=='Potential DGA(Domain Generation Algorithm) detected' and Enabled == 'TRUE' and Type == 'Detection'
+  | project toint(Threshold));
+  let lookback = 10d;
+  let referenceendtime = 1d;
+  //let threshold = 100;
+  let nxDomainDnsEvents = (stime: datetime, etime: datetime) {
+    imDns(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)
+    | where DnsQueryTypeName in ("A", "AAAA")
+    | where ipv4_is_match("127.0.0.1", SrcIpAddr) == False
+    | where DnsQuery !contains "/" and DnsQuery contains "."
+  };
+  nxDomainDnsEvents (stime=ago(referenceendtime), etime=now())
+  | extend sld = tostring(split(DnsQuery, ".")[-2])
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(sld) by SrcIpAddr
+  | where dcount_sld > toscalar(threshold)
+  // Filter out previously seen IPs
+  | join kind=leftanti (nxDomainDnsEvents (stime=ago(lookback), etime=ago(referenceendtime))
+    | extend sld = tostring(split(DnsQuery, ".")[-2])
+    | summarize dcount(sld) by SrcIpAddr
+    | where dcount_sld > toscalar(threshold))
+    on SrcIpAddr
+  // Pull out sample NXDomain responses for those remaining potentially infected IPs
+  | join kind = inner (nxDomainDnsEvents (stime=ago(lookback), etime=now())
+    | summarize by DnsQuery, SrcIpAddr)
+    on SrcIpAddr
+  | summarize
+    StartTimeUtc = min(StartTimeUtc),
+    EndTimeUtc = max(EndTimeUtc),
+    sampleNXDomainList=make_list(DnsQuery, 100)
+    by SrcIpAddr, dcount_sld
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+
+alertDetailsOverride:
+  alertDisplayNameFormat: "Potential DGA (Domain Generation Algorithm) originating from ClientIP: {{SrcIpAddr}} has been detected."
+  alertDescriptionFormat: "Domains include: {{sampleNXDomainList}}\n\nIdentifies clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period). This analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema"
+version: 1.0.0
+kind: Scheduled

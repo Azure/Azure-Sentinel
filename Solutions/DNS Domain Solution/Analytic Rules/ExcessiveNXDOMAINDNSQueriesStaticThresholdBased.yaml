@@ -1,0 +1,70 @@
+id: 4ab8b09e-3c23-4974-afbe-7e653779eb2b
+name: Excessive NXDOMAIN DNS Queries - Static threshold based (ASIM DNS Solution)
+description: |
+  'This rule creates an incident in the event where client generates excessive amounts of DNS queries for non-existent domains.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+query: |
+  let threshold = materialize (_GetWatchlist('DNSMonitoringConfiguration2')
+    | where Name == 'Excessive NXDOMAIN DNS Queries'
+        and Enabled == 'TRUE'
+        and Type == 'Detection'
+    | project toint(Threshold));
+  imDns(responsecodename='NXDOMAIN')
+  | summarize NXDOMAINCount=count() by SrcIpAddr, bin(TimeGenerated, 15m)
+  | where NXDOMAINCount > toscalar(threshold)
+  | join kind=inner (imDns(responsecodename='NXDOMAIN')
+    | summarize DNSQueries = makeset(DnsQuery) by SrcIpAddr)
+    on SrcIpAddr
+
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+
+alertDetailsOverride:
+  alertDisplayNameFormat: "Excessive NXDOMAIN DNS Queries - detected from ClientIP: {{SrcIpAddr}}"
+  alertDescriptionFormat: "DNSQuery list: {{DNSQueries}}\n\nThis rule creates an incident in the event where client generates excessive amounts of DNS queries for non-existent domains."
+version: 1.0.0
+kind: Scheduled

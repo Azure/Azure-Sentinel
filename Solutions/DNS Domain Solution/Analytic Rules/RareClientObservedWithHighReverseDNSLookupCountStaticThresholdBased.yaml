@@ -1,0 +1,76 @@
+id: 77b7c820-5f60-4779-8bdb-f06e21add5f1
+name: Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)
+description: |
+  'Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+queryFrequency: 1d
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+query: |
+  let lookback = 14d;
+  let AnomalyThreshold = 2.5;
+  let timeframe = 1d;
+  imDns(responsecodename='NXDOMAIN', starttime=ago(lookback), endtime=now())
+  | make-series EventCount=count() on TimeGenerated in range (ago(lookback), now(), timeframe) by SrcIpAddr
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, AnomalyThreshold, -1, 'linefit')
+  | mv-expand anomalies, score, baseline, TimeGenerated, EventCount
+  | extend
+    anomalies = toint(anomalies),
+    score = toint(score),
+    baseline = toint(baseline),
+    EventTime = todatetime(TimeGenerated),
+    Total = tolong(EventCount)
+  | where TimeGenerated >= ago(timeframe)
+  | where score > 2 * AnomalyThreshold
+  | join kind=inner(imDns(responsecodename='NXDOMAIN', starttime=ago(timeframe), endtime=now())
+    | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)
+    on SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+
+alertDetailsOverride:
+  alertDisplayNameFormat: "Rare client has been observed with high reverse DNS lookup count  - ClientIP: {{SrcIpAddr}}"
+  alertDescriptionFormat: "DNSQuery list: {{DNSQueries}}.\n\nIdentifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity."
+version: 1.0.0
+kind: Scheduled

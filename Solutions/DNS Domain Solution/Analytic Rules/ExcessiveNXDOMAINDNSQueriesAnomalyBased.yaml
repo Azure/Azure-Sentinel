@@ -1,0 +1,76 @@
+id: 02f23312-1a33-4390-8b80-f7cd4df4dea0
+name: Excessive NXDOMAIN DNS Queries - Anomaly based (ASIM DNS Solution)
+description: |
+  'This rule creates an incident in the event where client generates excessive amounts of DNS queries for non-existent domains. This uses anomaly based dynamic thresholding method.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+query: |
+  let lookback = 14d;
+  let AnomalyThreshold = 2.5;
+  let timeframe = 1d;
+  imDns(responsecodename='NXDOMAIN', starttime=ago(lookback), endtime=now())
+  | make-series EventCount=count() on TimeGenerated in range (ago(lookback), now(), timeframe) by SrcIpAddr
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, AnomalyThreshold, -1, 'linefit')
+  | mv-expand anomalies, score, baseline, TimeGenerated, EventCount
+  | extend
+    anomalies = toint(anomalies),
+    score = toint(score),
+    baseline = toint(baseline),
+    EventTime = todatetime(TimeGenerated),
+    Total = tolong(EventCount)
+  | where TimeGenerated >= ago(timeframe)
+  | where score > 2 * AnomalyThreshold
+  | join kind=inner(imDns(responsecodename='NXDOMAIN', starttime=ago(timeframe), endtime=now())
+    | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)
+    on SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+
+alertDetailsOverride:
+  alertDisplayNameFormat: "[Anomaly] Excessive NXDOMAIN DNS Queries - detected from ClientIP: {{SrcIpAddr}}"
+  alertDescriptionFormat: "More than Baseline 'NXDOMAIN' Queries were generated.\nDNSQuery list: {{DNSQueries}}.\nBaseline 'NXDOMAIN' count from this client: {{baseline}}\nCurrent 'NXDOMAIN' count from this client: {{Total}}"
+version: 1.0.0
+kind: Scheduled

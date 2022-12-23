@@ -1,0 +1,67 @@
+id: 5b8344eb-fa28-4ac3-bcff-bc19d5d63089
+name: Multiple errors reported for same DNSQuery - Static threshold based (ASIM DNS Solution)
+description: |
+  'This creates an incident in the event where multiple clients are logging errors for the same DNSQuery.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+query: |
+  let threshold = materialize (_GetWatchlist('DNSMonitoringConfiguration2')
+  | where Name=='Multiple errors reported for same DNSQuery' and Enabled == 'TRUE' and Type == 'Detection'
+  | project toint(Threshold));
+  //let threshold = 2;
+  let errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
+  imDns
+  | where EventResultDetails has_any (errors)
+  | summarize SrcIPs = make_set(SrcIpAddr, 100) by DnsQuery, bin(TimeGenerated, 10min)
+  | where array_length(SrcIPs) >= toscalar(threshold)
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+
+alertDetailsOverride:
+  alertDisplayNameFormat: "Multiple errors reported for same DNSQuery - {{DnsQuery}}"
+  alertDescriptionFormat: "Clients requesting this DNSQuery include: {{SrcIPs}}\n\nThis creates an incident in the event where multiple clients are logging errors for the same DNSQuery."
+version: 1.0.0
+kind: Scheduled

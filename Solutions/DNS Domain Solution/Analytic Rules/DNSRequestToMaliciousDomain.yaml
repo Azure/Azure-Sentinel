@@ -1,0 +1,82 @@
+id: 8e4a010a-972c-4124-8c27-1efcd7e3125a
+name: DNS Request to Malicious Domain (ASIM DNS Solution)
+description: |
+  'Search DNS logs for Domain IOCs present in Watchlist 'DNSMonitoringConfiguration'. Incident is created if DNSQuery matches with any value present in the Watchlist.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoUmbrellaDataConnector
+    dataTypes:
+      - Cisco_Umbrella_proxy_CL
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+  - connectorId: NXLogDnsLogs
+    dataTypes:
+      - NXLog_DNS_Server_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ISCBind
+    dataTypes:
+      - Syslog
+
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+query: |
+  let DNS_IOCs = materialize(_GetWatchlist('DNSMonitoringConfiguration2')
+    | where Type == 'Detection' and Enabled == 'TRUE'
+    | project
+        SearchKey,
+        Name,
+        Description,
+        Type,
+        ThresholdType,
+        Threshold,
+        Severity,
+        Tactic,
+        Enabled);
+  imDns
+  | join kind=inner['DNS_IOCs'] on $left.DnsQuery == $right.SearchKey
+  | project
+    SrcIpAddr,
+    DnsQuery,
+    EventResultDetails,
+    Name,
+    Description,
+    TimeGenerated,
+    Tactic,
+    Severity
+
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+
+alertDetailsOverride:
+  alertDisplayNameFormat: "Request to malicious Domain '{{DnsQuery}}' by ClientIP: {{SrcIpAddr}} has been detected."
+  alertDescriptionFormat: "Alert Details:\nName: {{Name}}\nDescription: {{Description}}\nTimeGenerated: {{TimeGenerated}}"
+version: 1.0.0
+kind: Scheduled
