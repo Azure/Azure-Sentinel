@@ -37,7 +37,7 @@ MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_
 # Defines max number of events that can be sent in one request to Azure Sentinel
 MAX_BUCKET_SIZE = int(os.environ.get('MAX_BUCKET_SIZE', 2000))
 
-MAX_FILES_PER_INSTANCE = 2
+MAX_FILES_PER_INSTANCE = int(os.environ.get('MAX_FILES_PER_INSTANCE', 2000))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():

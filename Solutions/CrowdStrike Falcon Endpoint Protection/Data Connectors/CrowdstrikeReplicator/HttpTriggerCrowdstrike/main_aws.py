@@ -211,10 +211,11 @@ class SentinelTableHelper:
         return self.__eventToTable
     
     async def send_events(self,event):
-        try:
-            event["timestamp_iso"] = datetime.datetime.fromtimestamp(int(event["timestamp"]) / 1000.0).strftime('%a, %d %b %Y %H:%M:%S GMT')
-        except Exception as exc:
-            event["TimeGenerated"] = event["timestamp"]
+        if "timestamp" in event:
+            try:
+                event["timestamp_iso"] = datetime.datetime.fromtimestamp(int(event["timestamp"]) / 1000.0).strftime('%a, %d %b %Y %H:%M:%S GMT')
+            except Exception as exc:
+                event["TimeGenerated"] = event["timestamp"]
 
         eventToTable = self.get_mapping_dict()
         if "event_simpleName" in event and event['event_simpleName'] in eventToTable.keys():
