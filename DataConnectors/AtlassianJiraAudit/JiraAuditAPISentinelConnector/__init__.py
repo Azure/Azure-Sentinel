@@ -71,7 +71,7 @@ def get_result(time_range):
     to_time = time_range[1]
     offset = 0
     limit = 1000
-    element_count = None
+    element_count = 0
     global_element_count = 0
     while element_count != 0:
         result = get_result_request(offset,limit,from_time,to_time)
