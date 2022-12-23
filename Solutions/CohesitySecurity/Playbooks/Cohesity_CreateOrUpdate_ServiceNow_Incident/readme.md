@@ -12,7 +12,7 @@ This playbook creates a ticket in ServiceNow. It can be also used for updating t
 * __Playbook Name:__ Enter the playbook name here.
 
 ## Post-Deployment instructions
-1. Update ServiceNow credentials in the playbook (read more about editing connections [here](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/understanding-api-connections-for-your-microsoft-sentinel/ba-p/2593973))
+1. Enter and authorize ServiceNow credentials in the playbook (read more about editing connections [here](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/understanding-api-connections-for-your-microsoft-sentinel/ba-p/2593973))
 * Go to _Logic Apps_.
 * Choose your app (playbook).
 * Select _Development Tools\API Connections_.
