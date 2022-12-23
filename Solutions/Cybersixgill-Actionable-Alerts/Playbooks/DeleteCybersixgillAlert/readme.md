@@ -25,6 +25,12 @@ Client ID and Client Secret can be obtained from [Cybersixgill Developer Portal]
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https%3A%2F%2Fportal.azure.com%2F%23create%2FMicrosoft.Template%2Furi%2Fhttps%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCybersixgill-Actionable-Alerts%2FPlaybooks%2FDeleteCybersixgillAlert%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https%3A%2F%2Fportal.azure.us%2F%23create%2FMicrosoft.Template%2Furi%2Fhttps%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCybersixgill-Actionable-Alerts%2FPlaybooks%2FDeleteCybersixgillAlert%2Fazuredeploy.json)
 
+2. Fill in the required parameters:
+    * Playbook Name: Enter the playbook name here (Ex: DeleteCybersixgillAlert)
+    * Keyvault name : Enter the key vault name where secret key is stored.
+    * Client ID key name: Key name for Cybersixgill Client ID stored api secret.
+    * Client Secret key name: Key name for Cybersixgill Client Secret the stored api secret.
+
 # Post-deployment
 #### a. Authorize connections (Perform this action if needed)
 Once deployment is complete, you will need to authorize each connection.

@@ -27,8 +27,8 @@ Client ID and Client Secret can be obtained from [Cybersixgill Developer Portal]
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex: CybersixgillAlertStatusUpdate)
     * Keyvault name : Enter the key vault name where secret key is stored.
-    * Cybersixgill Client ID : Key name for Cybersixgill Client ID stored api secret.
-    * Cybersixgill Client Secret : Key name for Cybersixgill Client Secret the stored api secret.
+    * Client ID key name: Key name for Cybersixgill Client ID stored api secret.
+    * Client Secret key name: Key name for Cybersixgill Client Secret the stored api secret.
 
 ### Post-Deployment 
 #### a. Authorize connections (Perform this action if needed)
