@@ -24,19 +24,16 @@
             "quote": "'",
             "delimiter": ",",
             "query": "ESI_ExchConfigAvailableEnvironments(Target=\"On-Premises\") | where ESIEnvironment != \"\"",
-            "value": [
-              "B13"
-            ],
             "typeSettings": {
-              "additionalResourceOptions": [
-                "value::all"
-              ],
-              "selectAllValue": "All",
+              "limitSelectTo": 1,
+              "additionalResourceOptions": [],
               "showDefault": false
             },
-            "defaultValue": "value::all",
             "queryType": 0,
-            "resourceType": "microsoft.operationalinsights/workspaces"
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "CONTOSO"
+            ]
           },
           {
             "id": "a88b4e41-eb2f-41bf-92d8-27c83650a4b8",
@@ -45,7 +42,7 @@
             "label": "Collection time",
             "type": 2,
             "isRequired": true,
-            "query": "let _configurationEnv = split(iff(isnull({EnvironmentList}) or isempty({EnvironmentList}) or tolower({EnvironmentList}) == \"all\",\"All\",tostring({EnvironmentList})),',');\r\nESIExchangeConfig_CL\r\n| extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize Collection = max(Collection)\r\n| project Collection = \"lastdate\", Selected = true\r\n| join kind= fullouter  ( ESIExchangeConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| where TimeGenerated > ago(90d)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize by Collection\r\n) on Collection\r\n| project Value = iif(Selected,Collection,Collection1), Label = iif(Selected,\"Last Known date\",Collection1), Selected\r\n| sort by Selected, Value desc",
+            "query": "let _configurationEnv = split(iff(isnull({EnvironmentList}) or isempty({EnvironmentList}) or tolower({EnvironmentList}) == \"all\",\"All\",tostring({EnvironmentList})),',');\r\nESIExchangeConfig_CL\r\n| extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize Collection = max(Collection)\r\n| project Collection = \"lastdate\", Selected = true\r\n| join kind= fullouter  ( ESIExchangeConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n    | where ScopedEnvironment in (_configurationEnv)\r\n    | where TimeGenerated > ago(90d)\r\n    | extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n    | summarize by Collection \r\n    | join kind= fullouter ( ESIExchangeConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n        | where ScopedEnvironment in (_configurationEnv)\r\n        | where TimeGenerated > ago(90d)\r\n        | extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n        | extend PreciseCollection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd HH:mm ')\r\n        | summarize by PreciseCollection, Collection \r\n        | join kind=leftouter (\r\n            ESIExchangeConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n            | where ScopedEnvironment in (_configurationEnv)\r\n            | where TimeGenerated > ago(90d)\r\n            | extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n            | extend PreciseCollection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd HH:mm')\r\n            | summarize by PreciseCollection, Collection \r\n            | summarize count() by Collection\r\n        ) on Collection\r\n    ) on Collection\r\n) on Collection\r\n| project Value = iif(Selected,Collection,iif(count_ > 1,PreciseCollection,Collection1)), Label = iif(Selected,\"Last Known date\",iif(count_ > 1,PreciseCollection,Collection1)), Selected\r\n| sort by Selected, Value desc",
             "typeSettings": {
               "additionalResourceOptions": [],
               "showDefault": false
@@ -191,8 +188,9 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let ExchCUSU = externaldata (Productname:string, CU:string, SU:string, BuildNbAll:string, BuilCUNb:string, Major:string, CUBuildNb:string, SUBuildNb:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/ExchBuildNumber.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\n//ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n//| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\nExchangeConfiguration(SpecificSectionList=\"ExchVersion\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend  VersionNumber = tostring(CmdletResultValue.ProductVersion)\r\n| extend  Server = tostring(CmdletResultValue.Server)\r\n| join kind= inner  (ExchCUSU) on $left.VersionNumber == $right.BuildNbAll\r\n| distinct Server,VersionNumber,Productname,CU,SU\r\n| extend Server = strcat(\"💻 \",Server)\r\n| sort by Server asc\r\n",
+              "query": "let ExchCUSU = externaldata (Productname:string, CU:string, SU:string, BuildNbAll:string, BuilCUNb:string, Major:string, CUBuildNb:string, SUBuildNb:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/ExchBuildNumber.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\n//ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n//| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\nExchangeConfiguration(SpecificSectionList=\"ExchVersion\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend  VersionNumber = tostring(CmdletResultValue.ProductVersion)\r\n| extend  Server = tostring(CmdletResultValue.Server)\r\n| join kind= leftouter  (ExchCUSU) on $left.VersionNumber == $right.BuildNbAll\r\n| distinct Server,VersionNumber,Productname,CU,SU\r\n| extend Server = strcat(\"💻 \",Server)\r\n| extend Productname = case ( VersionNumber startswith \"15.02\", \"Exchange 2019\", VersionNumber startswith \"15.01\", \"Exchange 2016\",  VersionNumber startswith \"15.00\",\"Exchange 2013\", \"Exchange 2010\")\r\n| extend CU = iff( CU <> \"\", CU, \"New CU or SU not yet in the List\")\r\n| extend SU = iff( SU <> \"\", SU, \"New CU or SU not yet in the List\")\r\n| sort by Server asc\r\n",
               "size": 3,
+              "showAnalytics": true,
               "title": "Exchange servers CU-SU level",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces"
@@ -204,7 +202,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let ExchCUSU = externaldata (Productname:string, CU:string, SU:string, BuildNbAll:string, BuilCUNb:string, Major:string, CUBuildNb:string, SUBuildNb:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/ExchBuildNumber.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\nExchangeConfiguration(SpecificSectionList=\"ExchVersion\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n//| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\n| extend  VersionNumber = tostring(CmdletResultValue.ProductVersion)\r\n| extend  Server = tostring(CmdletResultValue.Server)\r\n| join kind= inner  (ExchCUSU) on $left.VersionNumber == $right.BuildNbAll\r\n| extend Version =strcat (Productname,\"-\",CU)\r\n| summarize dcount(Server) by Version",
+              "query": "let ExchCUSU = externaldata (Productname:string, CU:string, SU:string, BuildNbAll:string, BuilCUNb:string, Major:string, CUBuildNb:string, SUBuildNb:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/ExchBuildNumber.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| project Productname,CU,SU,BuildNbAll,BuilCUNb,Major,CUBuildNb,SUBuildNb;\r\nExchangeConfiguration(SpecificSectionList=\"ExchVersion\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n//| extend  VersionNumber = strcat(CmdletResultValue.AdminDisplayVersion.Major,\".\",CmdletResultValue.AdminDisplayVersion.Minor,\".\",CmdletResultValue.AdminDisplayVersion.Build)\r\n| extend  VersionNumber = tostring(CmdletResultValue.ProductVersion)\r\n| extend  Server = tostring(CmdletResultValue.Server)\r\n| join kind= leftouter  (ExchCUSU) on $left.VersionNumber == $right.BuildNbAll\r\n| extend CU = iff( CU <> \"\", CU, \"New CU/SU not yet in the CU List\")\r\n| extend Version =strcat (VersionNumber,\"-\",CU,\"-\",SU)\r\n| summarize dcount(Server) by Version",
               "size": 3,
               "title": "Version break down",
               "queryType": 0,
@@ -245,8 +243,9 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"AdminAuditLog\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend AdminAuditLogEnabled = iff(CmdletResultValue.AdminAuditLogEnabled == \"FALSE\", \" ❌ Disabled, High Risk\", \"✅ Enabled\")\r\n| extend AdminAuditLogCmdlets = tostring(CmdletResultValue.AdminAuditLogCmdlets)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,2)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,0,indexof(AdminAuditLogCmdlets, '\"]') )\r\n| extend AdminAuditLogExcludedCmdlets = tostring(CmdletResultValue.AdminAuditLogExcludedCmdlets)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,2)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,0,indexof(AdminAuditLogExcludedCmdlets, ']'))\r\n//| extend AdminAuditLogAgeLimit = CmdletResultValue.AdminAuditLogAgeLimit //tostring(CmdletResultValue.AdminAuditLogAgeLimit)\r\n| extend AdminAuditLogAgeLimit = tostring(CmdletResultValue.AdminAuditLogAgeLimit)\r\n| extend AdminAuditLogAgeLimit = substring(AdminAuditLogAgeLimit,8)\r\n| extend AdminAuditLogAgeLimit =substring(AdminAuditLogAgeLimit,0,indexof(AdminAuditLogAgeLimit, ','))\r\n| project-away CmdletResultValue\r\n",
+                    "query": "let SensitiveCMDLet = externaldata (Cmdlet:string, UserOriented:string, Parameters:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/CmdletWatchlist.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| project Cmdlet,UserOriented,Parameters;\r\nlet AAL = (ExchangeConfiguration(SpecificSectionList=\"AdminAuditLog\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend AdminAuditLogExcludedCmdlets = CmdletResultValue.AdminAuditLogExcludedCmdlets\r\n| project AdminAuditLogExcludedCmdlets);\r\nlet SentsitivecmdletTrack = toscalar(SensitiveCMDLet | where Cmdlet has_any ( AAL)| project Cmdlet);\r\nExchangeConfiguration(SpecificSectionList=\"AdminAuditLog\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend AdminAuditLogEnabled = iff(CmdletResultValue.AdminAuditLogEnabled == \"FALSE\", \" ❌ Disabled, High Risk\", \"✅ Enabled\")\r\n| extend AdminAuditLogAgeLimit = tostring(CmdletResultValue.AdminAuditLogAgeLimit)\r\n| extend AdminAuditLogAgeLimit = substring(AdminAuditLogAgeLimit,8)\r\n| extend AdminAuditLogAgeLimit =substring(AdminAuditLogAgeLimit,0,indexof(AdminAuditLogAgeLimit, ','))\r\n| extend AdminAuditLogAgeLimit = iff(toint(AdminAuditLogAgeLimit) == 0,strcat(\"❌ No AdminAuditlog recorded \",AdminAuditLogAgeLimit), iff(toint(AdminAuditLogAgeLimit) <=30,strcat(\"⚠️ Value to low except if exported \",AdminAuditLogAgeLimit), strcat(\"✅\",AdminAuditLogAgeLimit)))\r\n| extend AdminAuditLogCmdlets = tostring(CmdletResultValue.AdminAuditLogCmdlets)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,2)\r\n| extend AdminAuditLogCmdlets = substring(AdminAuditLogCmdlets,0,indexof(AdminAuditLogCmdlets, '\"]') )\r\n| extend AdminAuditLogCmdlets = replace_string(AdminAuditLogCmdlets,'\"',\"\")\r\n| extend Comment_AdminAuditLogCmdlets = iff( AdminAuditLogCmdlets == \"*\",\"✅ Default configuration\",\"❌ Only AdminAuditLogCmdlets will be logged\")\r\n| extend AdminAuditLogExcludedCmdlets = tostring(CmdletResultValue.AdminAuditLogExcludedCmdlets)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,2)\r\n| extend AdminAuditLogExcludedCmdlets = substring(AdminAuditLogExcludedCmdlets,0,indexof(AdminAuditLogExcludedCmdlets, ']'))\r\n| extend AdminAuditLogExcludedCmdlets = replace_string(AdminAuditLogExcludedCmdlets,'\"',\"\")\r\n//| extend Cmdlet = replace_string(AdminAuditLogExcludedCmdlets,'\"',\"\")\r\n//| extend AALECSplit = tostring(split(AdminAuditLogExcludedCmdlets,\",\"))\r\n| project-away CmdletResultValue\r\n| extend Comment_AdminAuditLogExcludedCmdlet = case(  isnotempty( SentsitivecmdletTrack ),\"❌ Some excluded CmdLets are part of Sensitive Cmdlets\",AdminAuditLogExcludedCmdlets <>\"\",\"⚠️ Some Cmdlets are excluded \",\"✅ No Excluded CmdLet\")",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
                   },
@@ -288,6 +287,7 @@
               "version": "KqlItem/1.0",
               "query": "ExchangeConfiguration(SpecificSectionList=\"PopSettings\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| join kind = leftouter(ExchangeConfiguration(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangePop3\")\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString\r\n| join (ExchangeConfiguration(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangePop3BE\" )\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString) on ServerName) on ServerName\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| extend LoginType =  iff(CmdletResultValue.LoginType== 1 , \"⛔ PlainText, High Risk\", iff(CmdletResultValue.LoginType== 2, \"⚠️ PlainTextAuthentication\",\"✅ SecureLogin\"))\r\n| extend ProtocolLogEnabled =  tostring(CmdletResultValue.ProtocolLogEnabled)\r\n| extend ServiceName =  iff(tostring(ServiceName)==\"\", \"Service Status not retrieved\",tostring(ServiceName))\r\n| extend Status =  tostring(Status)\r\n| extend BackendEndService=  tostring(ServiceName1)\r\n| extend StartupType =  tostring(StartupType)\r\n| extend BEStatus =  tostring(Status1)\r\n| extend BEStartupType =  tostring(StartupType1)\r\n| project ServerName,LoginType,ServiceName,Status,StartupType,BackendEndService,BEStatus,BEStartupType,ProtocolLogEnabled\r\n| sort by ServerName asc",
               "size": 3,
+              "showAnalytics": true,
               "title": "Pop Authentication : should not be set as Plaintext",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -345,6 +345,7 @@
               "version": "KqlItem/1.0",
               "query": "ExchangeConfiguration(SpecificSectionList=\"IMAPSettings\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| join kind = leftouter(ExchangeConfiguration(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangeIMAP4\")\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString\r\n| join (ExchangeConfiguration(SpecificSectionList=\"POPIMAPServicesStatus\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name contains (\"MSExchangeIMAP4BE\" )\r\n| project ServerName= tostring(CmdletResultValue.Server), ServiceName=CmdletResultValue.Name, Status=CmdletResultValue.StatusString,StartupType=CmdletResultValue.StartTypeString) on ServerName) on ServerName\r\n| extend ServerName =  tostring(CmdletResultValue.Server.Name)\r\n| extend LoginType =  iff(CmdletResultValue.LoginType== 1 , \"⛔ PlainText, High Risk\", iff(CmdletResultValue.LoginType== 2, \"⚠️ PlainTextAuthentication\",\"✅ SecureLogin\"))\r\n| extend ProtocolLogEnabled =  tostring(CmdletResultValue.ProtocolLogEnabled)\r\n| extend ServiceName =  iff(tostring(ServiceName)==\"\", \"Service Status not retrieved\",tostring(ServiceName))\r\n| extend Status =  tostring(Status)\r\n| extend BackendEndService=  tostring(ServiceName1)\r\n| extend StartupType =  tostring(StartupType)\r\n| extend BEStatus =  tostring(Status1)\r\n| extend BEStartupType =  tostring(StartupType1)\r\n| project ServerName,LoginType,ServiceName,Status,StartupType,BackendEndService,BEStatus,BEStartupType,ProtocolLogEnabled\r\n| sort by ServerName asc",
               "size": 3,
+              "showAnalytics": true,
               "title": "IMAP Authentication  : should not be set as Plaintext",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -426,6 +427,7 @@
                     "version": "KqlItem/1.0",
                     "query": "let StandardGroup = dynamic([\"Authenticated Users\", \"Domain Admins\",  \"Enterprise Admins\",\"Schema Admins\", \"Exchange Trusted Subsystem\", \"Exchange Servers\",\"Organization Management\", \"Public Folder Management\",\"Delegated Setup\", \"ANONYMOUS LOGON\", \"NETWORK SERVICE\", \"SYSTEM\", \"Everyone\",\"Managed Availability Servers\"]);\r\nlet Exchsrv =ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| summarize make_list(CmdletResultValue.Name);\r\nExchangeConfiguration(SpecificSectionList=\"PartConfPerm\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.Deny !contains \"True\" and CmdletResultValue.IsInherited !contains \"True\"\r\n| where (CmdletResultValue.AccessRights == \"[983551]\") in ({GenericAll})\r\n| where not (CmdletResultValue.UserString has_any (StandardGroup)) in ({NonStandardPermissions})\r\n| where not (CmdletResultValue.UserString has_any (Exchsrv))in ({NonStandardPermissions})\r\n| extend Name =  tostring(CmdletResultValue.Identity.Name)\r\n| extend Account =  tostring(CmdletResultValue.UserString )\r\n| extend AccessRights =  iff (tostring(CmdletResultValue.AccessRightsString) contains \"GenericAll\", strcat (\"❌ \",tostring(CmdletResultValue.AccessRightsString)), tostring(CmdletResultValue.AccessRightsString))\r\n| extend ExtendedRights =   iff (tostring(CmdletResultValue.ExtendedRightsString) contains \"-As\", strcat (\"❌ \",tostring(CmdletResultValue.ExtendedRightsString)), tostring(CmdletResultValue.ExtendedRightsString))\r\n| extend InheritanceType =  tostring(CmdletResultValue.InheritanceType)\r\n| extend DN = tostring(CmdletResultValue.Identity.DistinguishedName)\r\n| project-away CmdletResultValue\r\n| sort by DN desc",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
@@ -474,7 +476,7 @@
               "version": "KqlItem/1.0",
               "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList})\r\n| where CmdletResultValue.Name !contains \"Deleg\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and  CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| where CmdletResultValue.Role.Name contains \"Export\" or CmdletResultValue.Role.Name contains \"Impersonation\" or CmdletResultValue.Role.Name contains \"Search\"\r\n| summarize dcount(tostring(CmdletResultValue.RoleAssigneeName)) by role=tostring(CmdletResultValue.Role.Name)",
               "size": 3,
-              "title": "Number of accounts with sensitive RBAC roles",
+              "title": "Number of delegations for sensitive RBAC roles",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "tiles",
@@ -536,8 +538,9 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList})\r\n| where CmdletResultValue.Role.Name contains \"Impersonation\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList})\r\n| where CmdletResultValue.Role.Name contains \"Impersonation\" and CmdletResultValue.RoleAssigneeName != \"Hygiene Management\" and CmdletResultValue.Name !contains \"Deleg\"\r\n//| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = case(CmdletResultValue.RoleAssigneeType== \"0\" or CmdletResultValue.RoleAssigneeType== \"2\" , \"User\", CmdletResultValue.RoleAssigneeType== \"10\",\"Group\",\"LinkedGroup\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)\r\n| extend RoleAssignmentDelegationType = iff(CmdletResultValue.RoleAssignmentDelegationType ==\"6\" , \"Delegating\", \"Regular\") \r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",tostring(CmdletResultValue.RoleAssigneeName)), strcat(\"👪 \", tostring(CmdletResultValue.RoleAssigneeName)) )\r\n| project RoleAssigneeName, RoleAssigneeType, CustomRecipientWriteScope, CustomConfigWriteScope, RecipientWriteScope, ConfigWriteScope, ConfigReadScope, RecipientReadScope, ManagementRoleAssignement, RoleAssignmentDelegationType, WhenCreated, WhenChanged",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
                   },
@@ -581,8 +584,9 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Role.Name contains \"export\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Role.Name contains \"export\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| extend RoleAssigneeType = case(CmdletResultValue.RoleAssigneeType== \"0\" or CmdletResultValue.RoleAssigneeType== \"2\" , \"User\", CmdletResultValue.RoleAssigneeType== \"10\",\"Group\",\"LinkedGroup\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)\r\n| extend RoleAssignmentDelegationType = iff(CmdletResultValue.RoleAssignmentDelegationType ==\"6\" , \"Delegating\", \"Regular\") \r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",tostring(CmdletResultValue.RoleAssigneeName)), strcat(\"👪 \", tostring(CmdletResultValue.RoleAssigneeName)) )\r\n| project RoleAssigneeName, RoleAssigneeType, CustomRecipientWriteScope, CustomConfigWriteScope, RecipientWriteScope, ConfigWriteScope, ConfigReadScope, RecipientReadScope, ManagementRoleAssignement, RoleAssignmentDelegationType, WhenCreated, WhenChanged",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
@@ -640,8 +644,9 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Role.Name contains \"search\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| where CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType== \"0\" , \"User\", \"Group\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",RoleAssigneeName), strcat(\"👪 \", RoleAssigneeName) )\r\n| project-away CmdletResultValue",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Role.Name contains \"search\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| where CmdletResultValue.RoleAssigneeName != \"Exchange Online-ApplicationAccount\" and CmdletResultValue.RoleAssigneeName != \"Discovery Management\"\r\n| extend RoleAssigneeType = case(CmdletResultValue.RoleAssigneeType== \"0\" or CmdletResultValue.RoleAssigneeType== \"2\" , \"User\", CmdletResultValue.RoleAssigneeType== \"10\",\"Group\",\"LinkedGroup\")\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope.Name)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope.Name)\r\n| extend RecipientWriteScope = case(CmdletResultValue.RecipientWriteScope==\"0\",\"None\",CmdletResultValue.RecipientWriteScope==\"2\",\"Organization\",CmdletResultValue.RecipientWriteScope==\"3\",\"MyGAL\", CmdletResultValue.RecipientWriteScope==\"4\",\"Self\",CmdletResultValue.RecipientWriteScope==\"7\", \"CustomRecipientScope\",CmdletResultValue.RecipientWriteScope==\"8\",\"MyDistributionGroups\",\"NotApplicable\")\r\n| extend ConfigWriteScope = case(CmdletResultValue.ConfigWriteScope==\"0\",\"None\",CmdletResultValue.ConfigWriteScope==\"7\",\"CustomConfigScope\",CmdletResultValue.ConfigWriteScope==\"10\",\"OrganizationConfig\",\"NotApplicable\")\r\n| extend ConfigReadScope = iff(CmdletResultValue.ConfigReadScope == \"0\" , \"None\", \"OrganizationConfig\")\r\n| extend RecipientReadScope = case(CmdletResultValue.RecipientReadScope==\"2\",\"Organization\",CmdletResultValue.RecipientReadScope==\"3\",\"MyGAL\",CmdletResultValue.RecipientReadScope==\"4\",\"Self\",\"NotApplicable\")\r\n| extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)\r\n| extend RoleAssignmentDelegationType = iff(CmdletResultValue.RoleAssignmentDelegationType ==\"6\" , \"Delegating\", \"Regular\") \r\n| extend RoleAssigneeName = iff( RoleAssigneeType == \"User\", strcat(\"🧑‍🦰 \",tostring(CmdletResultValue.RoleAssigneeName)), strcat(\"👪 \", tostring(CmdletResultValue.RoleAssigneeName)) )\r\n| project RoleAssigneeName, RoleAssigneeType, CustomRecipientWriteScope, CustomConfigWriteScope, RecipientWriteScope, ConfigWriteScope, ConfigReadScope, RecipientReadScope, ManagementRoleAssignement, RoleAssignmentDelegationType, WhenCreated, WhenChanged",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
@@ -787,8 +792,8 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"MailboxDatabaseReceiveAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Account = tostring(CmdletResultValue.UserString)\r\n| extend DatabaseName = tostring(CmdletResultValue.Identity.Name)\r\n| summarize Count =count() by Account,DatabaseName\r\n| project Account,Count,DatabaseName\r\n",
                     "size": 3,
+                    "showAnalytics": true,
                     "title": "ReceiveAs Extended Right on databases",
-                    "showExportToExcel": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
@@ -845,8 +850,8 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"MailboxDatabaseSendAs\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Account = tostring(CmdletResultValue.UserString)\r\n| extend DatabaseName = tostring(CmdletResultValue.Identity.Name)\r\n| summarize Count =count() by Account,DatabaseName\r\n| project Account,Count,DatabaseName",
                     "size": 3,
+                    "showAnalytics": true,
                     "title": "SendAs Extended Right on databases",
-                    "showExportToExcel": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
@@ -952,6 +957,7 @@
               "version": "KqlItem/1.0",
               "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| where CmdletResultValue.MemberPath !contains \"Exchange Trusted Subsystem\"\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| where ObjectClass !contains \"group\"\r\n| summarize Count=count() by MemberPath,Parentgroup\r\n| project Parentgroup=strcat(\"💻 \",Parentgroup),Count,MemberPath\r\n//| sort by MemberPath asc",
               "size": 3,
+              "showAnalytics": true,
               "title": "Total Number of local Administrators per server - Limited = Yes shows only non standard content",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1036,6 +1042,7 @@
               "version": "KqlItem/1.0",
               "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0 \r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = tostring(CmdletResultValue.LastLogonString)\r\n| extend LastPwdSet = tostring(CmdletResultValue.LastPwdSetString)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| summarize Count=count() by MemberPath,Parentgroup,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| project  Parentgroup = strcat(\"💻  \",Parentgroup),Count,MemberPath,Level,ObjectClass,LastLogon,LastPwdSet,Enabled,DN\r\n| sort by Parentgroup asc ",
               "size": 3,
+              "showAnalytics": true,
               "title": " Total Non standard Groups and accounts including nested groups",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1138,8 +1145,8 @@
               "version": "KqlItem/1.0",
               "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level == 1\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup))\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )\r\n| project-away  CmdletResultValue\r\n| summarize Count=count(), Servers=make_set(Parentgroup) by MemberPath\r\n| sort by Count desc",
               "size": 3,
+              "showAnalytics": true,
               "title": "Non Standard accounts summary",
-              "showExportToExcel": true,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "gridSettings": {
@@ -1204,7 +1211,7 @@
                   "name": "Server",
                   "type": 2,
                   "query": "ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
-                  "value": null,
+                  "value": "IT-X2016-02",
                   "typeSettings": {
                     "additionalResourceOptions": [],
                     "showDefault": false
@@ -1239,6 +1246,7 @@
               "version": "KqlItem/1.0",
               "query": "let StandardGroup = dynamic([\"Administrator\", \"Domain Admins\",\"Exchange Trusted Subsystem\",\"Organization Management\", \"Admins du domaine\"]);\r\nExchangeConfiguration(SpecificSectionList=\"LocalAminGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Level != 0 \r\n| where CmdletResultValue.Parentgroup contains \"{Server}\"\r\n| where not (CmdletResultValue.MemberPath has_any (StandardGroup)) in ({Limited})\r\n| project CmdletResultValue\r\n| extend Parentgroup = trim_end(@'\\\\Local Administrators',tostring(CmdletResultValue.Parentgroup))\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend ParentId = iif( MemberPath contains \"\\\\\", strcat(split(MemberPath,\"\\\\\")[0] ,toint(Level)-1 ), \"\")\r\n| extend Id = strcat(MemberPath, Level )\r\n| project-away  CmdletResultValue\r\n| sort by MemberPath asc\r\n| project-reorder ParentId, Id\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )",
               "size": 3,
+              "showAnalytics": true,
               "title": "Local Administrators group content",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1424,6 +1432,7 @@
                     "version": "KqlItem/1.0",
                     "query": "let ETSValidcontnet = union kind=outer (ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfiguration(SpecificSectionList=\"DAG\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(Identity));\r\nExchangeConfiguration(SpecificSectionList=\"ETS\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet)\r\n| extend Name = strcat (\"⛔\",tostring(CmdletResultValue.Name))\r\n| project Name ",
                     "size": 3,
+                    "showAnalytics": true,
                     "title": "Exchange Trusted SubSystem nonstandard content - Critical risk",
                     "noDataMessage": "Content of Exchange Trusted SubSystem as Expected",
                     "noDataMessageStyle": 3,
@@ -1442,6 +1451,7 @@
                     "version": "KqlItem/1.0",
                     "query": "let ETSValidcontnet = union kind=outer (ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(CmdletResultValue.Name)), (ExchangeConfiguration(SpecificSectionList=\"DAG\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")| project Name = tostring(Identity));\r\nExchangeConfiguration(SpecificSectionList=\"EWP\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Name !in (ETSValidcontnet) and CmdletResultValue.Name != \"Exchange Trusted Subsystem\"\r\n| extend Name = strcat (\"⛔\",tostring(CmdletResultValue.Name))\r\n| project Name ",
                     "size": 3,
+                    "showAnalytics": true,
                     "title": "Exchange Windows Permissions direct nonstandard content",
                     "noDataMessage": "Content of Exchange Windows Permissions as Expected",
                     "noDataMessageStyle": 3,
@@ -1554,6 +1564,7 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"ExGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| search CmdletResultValue.Parentgroup == \"{Group}\"\r\n| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n//| extend LastLogon = iif ( todatetime (CmdletResultValue.LastLogonString) < ago(-366d), CmdletResultValue.LastLogonString,strcat(\"💥\",CmdletResultValue.LastLogonString))\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
@@ -1655,6 +1666,7 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"ADGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| search CmdletResultValue.Parentgroup == \"{Group}\"\r\n| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend Level = tostring(CmdletResultValue.Level)\r\n| extend ObjectClass = tostring(CmdletResultValue.ObjectClass)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| extend MemberPath = case( ObjectClass == \"group\", strcat( \"👪 \", MemberPath), ObjectClass == \"computer\", strcat( \"💻 \", MemberPath), strcat( \"🧑‍🦰 \", MemberPath) )\r\n",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
@@ -1769,7 +1781,7 @@
             "content": {
               "version": "NotebookGroup/1.0",
               "groupType": "editable",
-              "title": "Receive Connectors OpenRelay configured with the Extended Right \"ms-Exch-SMTP-Accept-Any-Recipient\" for Anonymous",
+              "title": "Receive Connectors OpenRelay using Extended Right \"ms-Exch-SMTP-Accept-Any-Recipient\" for Anonymous",
               "items": [
                 {
                   "type": 1,
@@ -1785,13 +1797,72 @@
                   "name": "ReceiveConnectorsHelp"
                 },
                 {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "fa5f9749-d6f8-436f-ae00-cba306713bac",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "Server",
+                        "type": 2,
+                        "query": "ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.ServerRole <> \"64\"\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "timeContext": {
+                          "durationMs": 86400000
+                        },
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": null
+                      },
+                      {
+                        "id": "14912e83-60a1-4a21-a34b-500d4662a666",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "NoIPRestriction",
+                        "type": 10,
+                        "isRequired": true,
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[\r\n { \"value\": \"True\", \"label\": \"Yes\" },\r\n { \"value\": \"True,False\", \"label\": \"No\", \"selected\":\"False\" }\r\n]",
+                        "timeContext": {
+                          "durationMs": 86400000
+                        }
+                      }
+                    ],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "parameters - 2"
+                },
+                {
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"RCAnonymous\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project Identity,CmdletResultValue\r\n| extend Identity = tostring(Identity)\r\n| extend DistinguishedName = tostring(CmdletResultValue.Identity.DistinguishedName)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc ",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"RCAnonymous\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project Identity,CmdletResultValue\r\n| extend Identity = tostring(Identity)\r\n| extend Server = replace_string(replace_string(tostring(split(CmdletResultValue.DistinguishedName,\",\",3)),\"[\\\"CN=\",\"\"),\"\\\"]\",\"\")\r\n|join kind=leftouter  ( ExchangeConfiguration(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\") ) on $left.Identity == $right.Name\r\n| where CmdletResultValue1.Server.Name contains \"{Server}\"\r\n| where (CmdletResultValue1.RemoteIPRanges contains \"0.0.0.0\" or CmdletResultValue1.RemoteIPRanges contains \"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff\") in ({NoIPRestriction})\r\n| where CmdletResultValue1.PermissionGroupsString contains \"Anonymous\" //> 12 and CmdletResultValue.PermissionGroups != 14 and CmdletResultValue.PermissionGroups != 16\r\n| extend Server = tostring(CmdletResultValue1.Server.Name)\r\n| extend Name = tostring(CmdletResultValue1.Name)\r\n| extend TransportRole = iff(CmdletResultValue1.TransportRole== \"32\" , \"HubTransport\", \"FrontendTransport\")\r\n| extend Enabled = tostring(CmdletResultValue1.Enabled)\r\n| extend PermissionGroups = tostring(CmdletResultValue1.PermissionGroupsString) \r\n| extend AuthMechanism = tostring(CmdletResultValue1.AuthMechanismString)\r\n| mv-expand RemoteIPall=CmdletResultValue1.RemoteIPRanges\r\n| mv-expand BindingAllall=CmdletResultValue1.Bindings\r\n| extend RemoteIP= RemoteIPall.Expression\r\n| extend IP= strcat (BindingAllall.Address,\"-\",BindingAllall.Port)\r\n| summarize Bindings = make_set(tostring(IP)),RemoteIPRange = make_set(tostring(RemoteIP)) by Server,Name,TransportRole,Enabled,PermissionGroups,AuthMechanism\r\n| sort  by Server asc",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
-                    "resourceType": "microsoft.operationalinsights/workspaces"
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "sortBy": [
+                        {
+                          "itemKey": "Server",
+                          "sortOrder": 1
+                        }
+                      ]
+                    },
+                    "sortBy": [
+                      {
+                        "itemKey": "Server",
+                        "sortOrder": 1
+                      }
+                    ]
                   },
                   "name": "RCAnonymousQuery",
                   "styleSettings": {
@@ -1800,14 +1871,14 @@
                 }
               ]
             },
-            "name": "Receive Connector Open Relay using \"ms-Exch-SMTP-Accept-Any-Recipient\" for Anonymous"
+            "name": "Receive Connectors OpenRelay using Extended Right \"ms-Exch-SMTP-Accept-Any-Recipient\" for Anonymous"
           },
           {
             "type": 12,
             "content": {
               "version": "NotebookGroup/1.0",
               "groupType": "editable",
-              "title": "Receive Connectors OpenRelay configured with Authentication Externally Secured",
+              "title": "Receive Connectors OpenRelay using Authentication ExternalAuthoritative",
               "items": [
                 {
                   "type": 1,
@@ -1832,14 +1903,26 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "Server",
                         "type": 2,
-                        "query": "ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
-                        "value": null,
+                        "query": "ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.ServerRole <> \"64\"\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
                         "typeSettings": {
                           "additionalResourceOptions": [],
                           "showDefault": false
                         },
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": null
+                      },
+                      {
+                        "id": "4ef1d2a2-a13f-4bd4-9e66-2d9a15ad8a7a",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "NoIPRestriction",
+                        "type": 10,
+                        "description": "See Receive Connectors with no IP restriction",
+                        "isRequired": true,
+                        "typeSettings": {
+                          "additionalResourceOptions": []
+                        },
+                        "jsonData": "[\r\n { \"value\": \"True\", \"label\": \"Yes\" },\r\n { \"value\": \"True,False\", \"label\": \"No\", \"selected\":\"False\" }\r\n]"
                       }
                     ],
                     "style": "pills",
@@ -1852,8 +1935,9 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Server.Name contains \"{Server}\"\r\n| where CmdletResultValue.AuthMechanismString contains \"ExternalAuthoritative\" //> 12 and CmdletResultValue.PermissionGroups != 14 and CmdletResultValue.PermissionGroups != 16\r\n| project CmdletResultValue\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend TransportRole = iff(CmdletResultValue.TransportRole== \"32\" , \"HubTransport\", \"FrontendTransport\")\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend PermissionGroups = tostring(CmdletResultValue.AuthenticationsString) \r\n//| extend Bindings = iif(tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port )!=\"\",tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port),\",\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port))),tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port))))\r\n//| extend RemoteIPRanges = tostring(CmdletResultValue.RemoteIPRanges)\r\n| extend AuthMechanism = tostring(CmdletResultValue.AuthMechanismString)\r\n| mv-expand RemoteIPall=CmdletResultValue.RemoteIPRanges\r\n| mv-expand BindingAllall=CmdletResultValue.Bindings\r\n| extend RemoteIP= RemoteIPall.Expression\r\n| extend IP= strcat (BindingAllall.Address,\"-\",BindingAllall.Port)\r\n| summarize Bindings = make_set(tostring(IP)),RemoteIPRange = make_set(tostring(RemoteIP)) by Server,Name,TransportRole,Enabled,PermissionGroups,AuthMechanism\r\n| sort  by Server asc\r\n",
-                    "size": 3,
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Server.Name contains \"{Server}\"\r\n| where (CmdletResultValue.RemoteIPRanges contains \"0.0.0.0\" or CmdletResultValue.RemoteIPRanges contains \"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff\") in ({NoIPRestriction})\r\n| where CmdletResultValue.AuthMechanismString contains \"ExternalAuthoritative\" //> 12 and CmdletResultValue.PermissionGroups != 14 and CmdletResultValue.PermissionGroups != 16\r\n| project CmdletResultValue\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend TransportRole = iff(CmdletResultValue.TransportRole== \"32\" , \"HubTransport\", \"FrontendTransport\")\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend PermissionGroups = tostring(CmdletResultValue.PermissionGroupsString)\r\n//| extend Bindings = iif(tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port )!=\"\",tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port),\",\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port))),tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port))))\r\n//| extend RemoteIPRanges = tostring(CmdletResultValue.RemoteIPRanges)\r\n| extend AuthMechanism = tostring(CmdletResultValue.AuthMechanismString)\r\n| mv-expand RemoteIPall=CmdletResultValue.RemoteIPRanges\r\n| mv-expand BindingAllall=CmdletResultValue.Bindings\r\n| extend RemoteIP= RemoteIPall.Expression\r\n| extend IP= strcat (BindingAllall.Address,\"-\",BindingAllall.Port)\r\n| summarize Bindings = make_set(tostring(IP)),RemoteIPRange = make_set(tostring(RemoteIP)) by Server,Name,TransportRole,Enabled,PermissionGroups,AuthMechanism\r\n| sort  by Server asc\r\n",
+                    "size": 1,
+                    "showAnalytics": true,
                     "title": "Receive Connectors configure with Externally Secured Authentication",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1891,7 +1975,7 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "This view shows all Receive Connectors configured with Anonymous authentication. It is not recommended to configure connectors with Anonymous authentication.\r\n\r\nWith this configuration, any machine can initiate an SMTP session with your servers. This can then be used send emails (SPAM/Virus/Phishing....) to all the mailboxes in the organization. The mail will be seen as an internal mail and might bypass some protections.\r\n\r\nIf you absolute need this configuration because some of your application does not support Authentication, it is strongly recommended to limit the IP addresses that can establish SMTP sessions with Exchange. Do not use range of subnet.",
+                    "json": "This view shows all Receive Connectors configured with Anonymous authentication. It is not recommended to configure connectors with Anonymous authentication.\r\n\r\nWhen configured with Anonymous and No Ip Restriction, any machine can initiate an SMTP session with the Receive Connectors. This can then be used send emails (SPAM/Virus/Phishing....) to all the mailboxes in the organization. The mail will be seen as an internal mail and might bypass some protections.\r\n\r\nIf you absolute need this configuration because some of your application does not support Authentication, it is strongly recommended to limit the IP addresses that can establish SMTP sessions with Exchange. Do not use range of subnet.\r\nThis section has an option button to display \r\n     All Receive Connectors with Anonymous (No)\r\n     All Receive Connectors with Anonymous and with no IP Restriction (Yes)",
                     "style": "info"
                   },
                   "conditionalVisibility": {
@@ -1911,14 +1995,26 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "Server",
                         "type": 2,
-                        "query": "ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
-                        "value": null,
+                        "query": "ExchangeConfiguration(SpecificSectionList=\"ExchangeServers\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| where CmdletResultValue.ServerRole <> \"64\"\r\n| extend SRVName = tostring(CmdletResultValue.Name)\r\n| distinct SRVName\r\n| sort by SRVName asc",
                         "typeSettings": {
                           "additionalResourceOptions": [],
                           "showDefault": false
                         },
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": null
+                      },
+                      {
+                        "id": "bcb24a01-9242-4fec-b30a-02b0583cbc87",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "NoIPRestriction",
+                        "type": 10,
+                        "isRequired": true,
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[\r\n { \"value\": \"True\", \"label\": \"Yes\" },\r\n { \"value\": \"True,False\", \"label\": \"No\", \"selected\":\"False\" }\r\n]"
                       }
                     ],
                     "style": "pills",
@@ -1931,8 +2027,9 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Server.Name contains \"{Server}\"\r\n| where CmdletResultValue.PermissionGroupsString contains \"Anonymous\" //> 12 and CmdletResultValue.PermissionGroups != 14 and CmdletResultValue.PermissionGroups != 16\r\n| project CmdletResultValue\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend TransportRole = iff(CmdletResultValue.TransportRole== \"32\" , \"HubTransport\", \"FrontendTransport\")\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend PermissionGroups = tostring(CmdletResultValue.PermissionGroupsString) \r\n//| extend Bindings = iif(tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port )!=\"\",tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port),\",\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[1].Port))),tostring(strcat(tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Address),\"-\",tostring(parse_json(tostring(CmdletResultValue.Bindings))[0].Port))))\r\n//| extend RemoteIPRanges = tostring(CmdletResultValue.RemoteIPRanges)\r\n| extend AuthMechanism = tostring(CmdletResultValue.AuthMechanismString)\r\n| mv-expand RemoteIPall=CmdletResultValue.RemoteIPRanges\r\n| mv-expand BindingAllall=CmdletResultValue.Bindings\r\n| extend RemoteIP= RemoteIPall.Expression\r\n| extend IP= strcat (BindingAllall.Address,\"-\",BindingAllall.Port)\r\n| summarize Bindings = make_set(tostring(IP)),RemoteIPRange = make_set(tostring(RemoteIP)) by Server,Name,TransportRole,Enabled,PermissionGroups,AuthMechanism\r\n| sort  by Server asc\r\n",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"ReceiveConnector\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.Server.Name contains \"{Server}\"\r\n| where (CmdletResultValue.RemoteIPRanges contains \"0.0.0.0\" or CmdletResultValue.RemoteIPRanges contains \"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff\") in ({NoIPRestriction})\r\n| where CmdletResultValue.PermissionGroupsString contains \"Anonymous\" //> 12 and CmdletResultValue.PermissionGroups != 14 and CmdletResultValue.PermissionGroups != 16\r\n| project CmdletResultValue\r\n| extend Server = tostring(CmdletResultValue.Server.Name)\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend TransportRole = iff(CmdletResultValue.TransportRole== \"32\" , \"HubTransport\", \"FrontendTransport\")\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend PermissionGroups = tostring(CmdletResultValue.PermissionGroupsString) \r\n| extend AuthMechanism = tostring(CmdletResultValue.AuthMechanismString)\r\n| mv-expand RemoteIPall=CmdletResultValue.RemoteIPRanges\r\n| mv-expand BindingAllall=CmdletResultValue.Bindings\r\n| extend RemoteIP= RemoteIPall.Expression\r\n| extend IP= strcat (BindingAllall.Address,\"-\",BindingAllall.Port)\r\n| summarize Bindings = make_set(tostring(IP)),RemoteIPRange = make_set(tostring(RemoteIP)) by Server,Name,TransportRole,Enabled,PermissionGroups,AuthMechanism\r\n| sort  by Server asc\r\n",
                     "size": 1,
+                    "showAnalytics": true,
                     "title": "Receive Connectors configure with Anonymous Permission",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1986,6 +2083,7 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"TransportRule\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Identity = iif( CmdletResultValue.Identity contains \"OrgHierarchyToIgnore\",tostring(CmdletResultValue.Identity.Name),tostring(CmdletResultValue.Identity))\r\n| extend State = tostring(CmdletResultValue.State)\r\n| extend SentTo = tostring(CmdletResultValue.SentToString)\r\n| extend BlindCopyTo = tostring(CmdletResultValue.BlindCopyToString)\r\n| extend CopyTo = tostring(CmdletResultValue.CopyToString)\r\n| extend RedirectMessageTo = tostring(CmdletResultValue.RedirectMessageToString)\r\n| extend Mode = tostring(CmdletResultValue.Identity.Mode)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc",
                     "size": 1,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
                   },
@@ -2024,6 +2122,7 @@
               "version": "KqlItem/1.0",
               "query": "ExchangeConfiguration(SpecificSectionList=\"JournalRule\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Identity = tostring(CmdletResultValue.Identity)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend JournalEmailAddress = tostring(CmdletResultValue.JournalEmailAddress)\r\n| extend Recipient = tostring(CmdletResultValue.Recipient)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc\r\n",
               "size": 3,
+              "showAnalytics": true,
               "title": "Journal Rules configured in your environment",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces"
@@ -2059,6 +2158,7 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"MbxDBJournaling\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| where CmdletResultValue.JournalRecipient !=\"\"\r\n| project CmdletResultValue\r\n| extend Identity = tostring(CmdletResultValue.Identity.Name)\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend JournalRecipient = tostring(CmdletResultValue.JournalRecipient)\r\n| project-away CmdletResultValue\r\n| sort  by Identity asc\r\n",
                     "size": 3,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
                   },
@@ -2097,6 +2197,7 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"RemoteDomain\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Name =  tostring(CmdletResultValue.Name)\r\n| extend Address =  tostring(CmdletResultValue.DomainName.Address)\r\n| extend AutoForwardEnabled =  iff (CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.Address == \"*\", strcat (\"❌\",tostring(CmdletResultValue.AutoForwardEnabled)),iff(CmdletResultValue.AutoForwardEnabled== \"true\" and CmdletResultValue.Address != \"*\", strcat (\"⚠️\",tostring(CmdletResultValue.AutoForwardEnabled)),strcat (\"✅\",tostring(CmdletResultValue.AutoForwardEnabled))))\r\n| project-away CmdletResultValue\r\n| sort  by Address asc ",
                     "size": 1,
+                    "showAnalytics": true,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
                   },
@@ -2111,11 +2212,15 @@
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"AcceptedDomain\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"On-Premises\")\r\n| project CmdletResultValue\r\n| extend Name =  tostring(CmdletResultValue.Name)\r\n| extend Address =  tostring(CmdletResultValue.DomainName.Address)\r\n| extend Address =  iff (CmdletResultValue.DomainName.Address== \"*\" , strcat (\"❌ : OpenRelay configuration\",tostring(CmdletResultValue.AutoForwardEnabled)),\"Accepted Domains not configured as OpenRelay\")\r\n| extend DomainType =  case(CmdletResultValue.DomainType==\"0\",\"Authoritative Domain\",CmdletResultValue.DomainType==\"1\",\"ExternalRelay\",CmdletResultValue.DomainType==\"2\",\"InternalRelay\",\"NotApplicable\")\r\n| project-away CmdletResultValue\r\n| sort  by Address desc ",
                     "size": 1,
+                    "showAnalytics": true,
                     "title": "Accepted domain with *",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces"
                   },
-                  "name": "query - 4"
+                  "name": "query - 4",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
                 }
               ]
             },
@@ -2131,5 +2236,6 @@
       "name": "Transport Security configuration"
     }
   ],
+  "fromTemplateId": "sentinel-MicrosoftExchangeSecurityReview",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
