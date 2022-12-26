@@ -47,6 +47,9 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
+  - Name: pack
+    Type: bool
+    Default: false
 ParserQuery: |
   let parser = (
     starttime:datetime=datetime(null), 
@@ -58,7 +61,8 @@ ParserQuery: |
     hostname_has_any:dynamic=dynamic([]),
     dvcaction:dynamic=dynamic([]), 
     eventresult:string='*', 
-    disabled:bool=false)
+    disabled:bool=false,
+    pack:bool=false)
   {
     let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)[
       false, true, 'Inbound',
@@ -76,6 +80,7 @@ ParserQuery: |
       and   (isnull(endtime) or TimeGenerated<=endtime)
     | where not(disabled)
     | where metadata_type_s == 'metadata_isession'
+    | project-away MG, ManagementGroupName, RawData, SourceSystem, TenantId
     | where array_length(dvcaction) == 0
     | where eventresult == "*"
     | where  (isnull(dstportnumber) or dstportnumber==id_resp_p_d)
@@ -165,23 +170,27 @@ ParserQuery: |
     | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
     | lookup EventSubTypeLookup on conn_state_s
     // -- preserving non-normalized important fields
-    | project-rename 
-        first_orig_resp_data_pkt = first_orig_resp_data_pkt_s,
-        first_resp_orig_data_pkt = first_resp_orig_data_pkt_s,
-        orig_sluid = orig_sluid_s, 
-        resp_sluid = resp_sluid_s,
-        orig_huid = orig_huid_s,
-        resp_huid = resp_huid_s,
-        community_id = community_id_s,
-        resp_multihome = resp_multihomed_b,
-        host_multihomed = host_multihomed_b
-    | extend
-        first_orig_resp_data_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
-        first_orig_resp_pkt_time = unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
-        first_resp_orig_data_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
-        first_resp_orig_pkt_time = unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
+    | extend AdditionalFields = iff (
+        pack, 
+        bag_pack (
+          "first_orig_resp_data_pkt", first_orig_resp_data_pkt_s,
+          "first_resp_orig_data_pkt", first_resp_orig_data_pkt_s,
+          "orig_sluid", orig_sluid_s, 
+          "resp_sluid", resp_sluid_s,
+          "orig_huid", orig_huid_s,
+          "resp_huid", resp_huid_s,
+          "community_id", community_id_s,
+          "resp_multihome", resp_multihomed_b,
+          "host_multihomed", host_multihomed_b,
+          "first_orig_resp_data_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
+          "first_orig_resp_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
+          "first_resp_orig_data_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
+          "first_resp_orig_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
+        ),
+        dynamic([])
+      )
     | project-away
         *_d, *_s, *_b, *_g, Computer
   };
-  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled, pack=pack)
 
