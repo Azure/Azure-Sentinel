@@ -1,8 +1,8 @@
 Id: 678b6e84-0308-461c-ae43-6bb287a9d970
 Parser:
   Title: DNS activity ASIM parser for Infoblox NIOS
-  Version: '0.5.1'
-  LastUpdated: Sept 22 2022
+  Version: '0.6'
+  LastUpdated: Dec 11 2022
 Product:
   Name: Infoblox NIOS
 Normalization:
@@ -22,8 +22,9 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+ let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;
  let response = (disabled: boolean=false) {
-    Syslog
+    SyslogProjected
     | where not(disabled)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
     | parse SyslogMessage with *
@@ -39,10 +40,10 @@ ParserQuery: |
     | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
     | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
     | extend EventSubType = "response"
-    | project-away DnsResponseNameIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away SyslogMessage, ProcessName, DnsResponseNameIndex
   };
   let request = (disabled: boolean=false) {
-    Syslog 
+    SyslogProjected 
     | where not(disabled)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
     | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
@@ -60,7 +61,7 @@ ParserQuery: |
     | extend 
         EventSubType = "request",
         DnsResponseCodeName = "NA"
-    | project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away SyslogMessage, ProcessName
   };
   let parser = (disabled:boolean=false) {
     union response (disabled), request (disabled)
@@ -84,12 +85,6 @@ ParserQuery: |
         IpAddr=SrcIpAddr,
         Src=SrcIpAddr,
         EventResultDetails = DnsResponseCodeName
-    // -- Backward Compatibility
-    | extend
-        Query=DnsQuery,
-        QueryTypeName=DnsQueryTypeName,
-        ResponseCodeName=DnsResponseCodeName,
-        QueryClassName=DnsQueryClassName,
-        Flags=DnsFlags
+    | project-away HostIP
   };
   parser (disabled)
