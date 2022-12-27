@@ -1,0 +1,171 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for Microsoft Windows Events audit events
+  Version: '0.1'
+  LastUpdated: Dec 20 2022
+Product:
+  Name: Microsoft Windows
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Office 365 Management Activity API schema
+  Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
+Description: |
+  This ASIM parser supports filtering and normalizing Microsoft Windows Events audit events (1102) in the SecurityEvent, WindowsEvent and Event tables to the ASIM Audit Event schema.
+ParserName: vimAuditEventMicrosoftWindowsEvents
+EquivalentBuiltInParser: _Im_AuditEvent_EventMicrosoftWindowsEvents
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+   let parser=  (
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null),
+        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        eventresult:string='*',
+        actorusername_has_any:dynamic=dynamic([]),
+        eventtype_in:dynamic=dynamic([]),
+        operation_has_any:dynamic=dynamic([]),
+        object_has_any:dynamic=dynamic([]),
+        newvalue_has_any:dynamic=dynamic([]),
+        disabled:bool = false
+    ) {    
+    union 
+    (
+        union 
+        (
+            SecurityEvent
+            | where 
+                (isnull(starttime) or TimeGenerated >= starttime) 
+                and (isnull(endtime) or TimeGenerated <= endtime)
+                and not(disabled)
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
+            | where EventID == 1102
+        ),
+        (
+            Event
+            | where 
+                (isnull(starttime) or TimeGenerated >= starttime) 
+                and (isnull(endtime) or TimeGenerated <= endtime)
+                and not(disabled)
+            | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
+            | where EventID == 1102
+        )
+        | where
+           (array_length(srcipaddr_has_any_prefix) == 0)
+           and (array_length(newvalue_has_any) == 0)
+           and (array_length(object_has_any) == 0 or "Logs" in (object_has_any))
+           and (array_length(operation_has_any) == 0 or "Delete Logs" has_any (operation_has_any))
+           and (array_length(eventtype_in) == 0 or "Delete" in (eventtype_in))
+           and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))
+        | parse-kv EventData as 
+            (
+                SubjectUserSid:string,
+                SubjectUserName:string,
+                SubjectDomainName:string,
+                SubjectLogonId:string
+            ) 
+            with (regex=@'<(\w+)>([^<]*)<')
+        | where 
+            array_length(actorusername_has_any) == 0 
+            or SubjectUserName has_any (actorusername_has_any) 
+            or SubjectDomainName has_any (actorusername_has_any)
+        | project-away EventData
+    ),
+    (
+        WindowsEvent 
+        | where 
+            (isnull(starttime) or TimeGenerated >= starttime) 
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and not(disabled)
+        | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type
+        | where EventID == 1102
+        | where (array_length(srcipaddr_has_any_prefix) == 0)
+           and (array_length(newvalue_has_any) == 0)
+           and (array_length(object_has_any) == 0 or "Logs" in (object_has_any))
+           and (array_length(operation_has_any) == 0 or "Delete Logs" has_any (operation_has_any))
+           and (array_length(eventtype_in) == 0 or "Delete" in (eventtype_in))
+        | extend
+            SubjectUserSid = tostring(EventData.SubjectUserSid),
+            SubjectUserName = tostring(EventData.SubjectUserName),
+            SubjectDomainName = tostring(EventData.SubjectDomainName),
+            SubjectLogonId = tostring(EventData.SubjectLogonId)
+        | where 
+            array_length(actorusername_has_any) == 0 
+            or SubjectUserName has_any (actorusername_has_any) 
+            or SubjectUserName has_any (actorusername_has_any)
+        | project-away EventData
+    )
+    | project-rename
+        ActorUserId = SubjectUserSid,
+        DvcHostname = Computer,
+        ActorSessionId = SubjectLogonId,
+        DvcId = _ResourceId
+    | extend
+        EventCount = int(1),
+        EventType = "Delete",
+        Operation = "Delete Logs",
+        Object = "Logs",
+        EventResult = "Success",
+        EventStartTime = TimeGenerated, 
+        EventEndTime= TimeGenerated,
+        EventProduct = 'Windows',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'AuditEvent',
+        ActorUserIdType = 'SID',
+        ActorUsername = iff (SubjectDomainName == "", SubjectUserName, strcat (SubjectDomainName, '\\', SubjectUserName)),
+        ActorUsernameType = iff (SubjectDomainName == "", 'Simple', 'Windows'),
+        DvcIdType = iff (DvcId == "", "", "AzureResourceID"),
+        EventOriginalType = tostring(EventID)
+    // Aliases
+    | extend 
+        User=ActorUsername,
+        ActorUserSid = ActorUserId,
+        Dvc = DvcHostname
+    | project-away Subject*, EventID
+   };
+   parser (
+      starttime = starttime,
+      endtime = endtime,
+      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+      actorusername_has_any = actorusername_has_any,
+      eventtype_in = eventtype_in,
+      eventresult = eventresult,
+      operation_has_any = operation_has_any,
+      object_has_any=object_has_any,
+      newvalue_has_any=newvalue_has_any,
+      disabled=disabled
+   )

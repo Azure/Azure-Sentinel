@@ -1,5 +1,5 @@
 Parser:
-  Title: Audit Event ASIM parser for Azure administrative activity
+  Title: Audit Event ASIM filtering parser for Azure administrative activity
   Version: '0.1'
   LastUpdated: Dec 20 2022
 Product:
@@ -13,15 +13,54 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Azure administrative activity in the AzureActivity table to the ASIM Audit Event schema.
-ParserName: ASimAuditEventAzureActivity
-EquivalentBuiltInParser: _ASim_AuditEvent_AzureActivity
+  This ASIM parser supports filtering and normalizing Azure administrative activity in the AzureActivity table to the ASIM Audit Event schema.
+ParserName: vimAuditEventAzureActivity
+EquivalentBuiltInParser: _Im_AuditEvent_AzureActivity
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
+
 ParserQuery: |
-  let parser=(disabled:bool=false){
+  let parser=  (
+            starttime:datetime=datetime(null), 
+            endtime:datetime=datetime(null),
+            srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+            eventresult:string='*',
+            actorusername_has_any:dynamic=dynamic([]),
+            eventtype_in:dynamic=dynamic([]),
+            operation_has_any:dynamic=dynamic([]),
+            object_has_any:dynamic=dynamic([]),
+            newvalue_has_any:dynamic=dynamic([]),
+            disabled:bool = false
+    ){
      let AzureActivityOperationLookup = datatable (op:string, EventType:string) 
     [
       'ACTION', 'Execute',
@@ -76,8 +115,38 @@ ParserQuery: |
     ];
     AzureActivity 
     | where not(disabled)
+    | where
+        (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (array_length(newvalue_has_any) == 0)
     | where CategoryValue == "Administrative"
     | project-away HTTPRequest, Level, SourceSystem, EventSubmissionTimestamp, TenantId, OperationId, Hierarchy, Category, ResourceId, ResourceProvider, Resource
+    | where 
+        (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(CallerIpAddress,srcipaddr_has_any_prefix))
+        and (array_length(actorusername_has_any) == 0 or Caller has_any (actorusername_has_any))
+        and (array_length(operation_has_any) == 0 or OperationNameValue has_any (operation_has_any))
+        and (array_length(object_has_any) == 0 or Properties  has_any (object_has_any))
+    // --
+    // Calculate and filter by EventType
+    | extend op = toupper(tostring(split(OperationNameValue,"/")[-1]))
+    | lookup AzureActivityOperationLookup on op
+    | extend EventType = iff (EventType == "", "Other", EventType)
+    | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+    | project-away op
+    // --
+    // Calculate EventResult, EventResultDetails, and EventResultOriginalDetails
+    | extend
+        EventOriginalResultDetails = strcat (
+            ActivityStatusValue, 
+            iff (ActivitySubstatusValue !="", strcat(' [', ActivitySubstatusValue, ']'), "")
+        )
+    | extend 
+        ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex "\\d+", "", ActivitySubstatusValue)
+    | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue
+    | extend EventResult = iff(EventResult == "", "Other", EventResult)
+    | where eventresult == "*" or (EventResult == eventresult) // Not optimized
+    | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+    | project-away ActivityStatus*, ActivitySubstatus*    // 
     | project-rename 
         Operation = OperationNameValue,
         SrcIpAddr = CallerIpAddress,
@@ -95,19 +164,6 @@ ParserQuery: |
         ObjectType = "Cloud Resource",
         TargetAppName = "Azure",
         TargetAppType = "CSP"
-    // --
-    // Calculate EventResult, EventResultDetails, and EventResultOriginalDetails
-    | extend
-        EventOriginalResultDetails = strcat (
-            ActivityStatusValue, 
-            iff (ActivitySubstatusValue !="", strcat(' [', ActivitySubstatusValue, ']'), "")
-        )
-    | extend 
-        ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex "\\d+", "", ActivitySubstatusValue)
-    | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue
-    | extend EventResult = iff(EventResult == "", "Other", EventResult)
-    | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-    | project-away ActivityStatus*, ActivitySubstatus*
     // --
     // Calculate Actor
     | extend 
@@ -131,12 +187,6 @@ ParserQuery: |
             strcat ("/subscriptions/", SubscriptionId, "/resourceGroups/", ResourceGroup, "/providers/", ResourceProviderValue, "/",resource, iff (entity_name != "", strcat("/", entity_name), ""))
         )
     | project-away entity, resource,entity_name, _SubscriptionId, SubscriptionId, ResourceGroup, ResourceProviderValue
-    // --
-    // Calculate EnentType
-    | extend op = toupper(tostring(split(Operation,"/")[-1]))
-    | lookup AzureActivityOperationLookup on op
-    | extend EventType = iff (EventType == "", "Other", EventType)
-    | project-away op
     // Aliases
     | extend AdditionalFields = pack_dictionary("Authorization", Authorization_d, "Claims", Claims_d, "Error", Properties_d.statusMessage)
     | extend 
@@ -149,4 +199,16 @@ ParserQuery: |
     | project-away OperationName, Properties*, Authorization*, Claims*
     // -- Properties*
   };
-  parser (disabled=disabled)
+  parser
+  (
+    starttime = starttime,
+    endtime = endtime,
+    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+    actorusername_has_any = actorusername_has_any,
+    eventtype_in = eventtype_in,
+    eventresult = eventresult,
+    operation_has_any = operation_has_any,
+    object_has_any=object_has_any,
+    newvalue_has_any=newvalue_has_any,
+    disabled=disabled
+  )
