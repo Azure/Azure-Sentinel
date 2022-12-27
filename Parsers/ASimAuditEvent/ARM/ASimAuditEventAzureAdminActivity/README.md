@@ -1,6 +1,6 @@
-# Microsoft SharePoint ASIM AuditEvent Normalization Parser
+# Microsoft Azure ASIM AuditEvent Normalization Parser
 
-ARM template for ASIM AuditEvent schema parser for Microsoft SharePoint.
+ARM template for ASIM AuditEvent schema parser for Microsoft Azure.
 
 This ASIM parser supports normalizing Azure administrative activity in the AzureActivity table to the ASIM Audit Event schema.
 
