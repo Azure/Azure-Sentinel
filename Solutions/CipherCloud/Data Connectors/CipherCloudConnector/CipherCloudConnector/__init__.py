@@ -9,7 +9,9 @@ import requests
 import re
 import os
 import logging
-from state_manager import StateManager
+from azure.storage.fileshare import ShareClient
+from azure.storage.fileshare import ShareFileClient
+from azure.core.exceptions import ResourceNotFoundError
 
 jwt_api_key = os.environ['LookoutClientId']
 logging.info(jwt_api_key)
@@ -20,18 +22,12 @@ logging.info(customer_id)
 shared_key = os.environ['WorkspaceKey']
 logging.info(shared_key)
 connection_string = os.environ['AzureWebJobsStorage']
-# Authurl = os.environ['LookoutAuthUrl']
-# connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
-# baseurl = os.environ.get('Baseurl')
-# table_name = "Lookoutlogs_CL"
-# chunksize = 10000
-
 
 Authurl = "https://alnepal-ms.alpha.flexilis.com/apigw/v1/authenticate"
-baseurl = "https://usw2pmm01-ms.usw2.lkt.cloud"
+baseurl =  os.environ['Baseurl'] 
 table_name = "Lookoutlogs"
-chunksize = 10000
+chunksize = 500
 token = ""
 
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -40,6 +36,24 @@ pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern, str(logAnalyticsUri))
 if (not match):
     raise Exception("Lookout: Invalid Log Analytics Uri.")
+
+class StateManager:
+    def __init__(self, connection_string, share_name='funcstatemarkershare', file_path='funcstatemarkerfile'):
+        self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
+        self.file_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=file_path)
+
+    def post(self, marker_text: str):
+        try:
+            self.file_cli.upload_file(marker_text)
+        except ResourceNotFoundError:
+            self.share_cli.create_share()
+            self.file_cli.upload_file(marker_text)
+
+    def get(self):
+        try:
+            return self.file_cli.download_file().readall().decode()
+        except ResourceNotFoundError:
+            return None
 
 
 class LookOut:
@@ -164,7 +178,7 @@ class Sentinel:
             logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
             self.fail_processed = self.fail_processed + chunk_count    
 
-def __init__(mytimer: func.TimerRequest) -> None:
+def main(mytimer: func.TimerRequest) -> None:
 #if __name__ == '__main__':
     utc_timestamp = datetime.datetime.utcnow().replace(
         tzinfo=datetime.timezone.utc).isoformat()
@@ -194,7 +208,7 @@ def __init__(mytimer: func.TimerRequest) -> None:
       finalresult += results_events
     if(results_Violations is not None):
         finalresult += results_Violations
-    logging.info("Final result count"+len(finalresult)) 
+    
     if(len(finalresult) > 0):
      body = json.dumps(finalresult)
     if(len(finalresult) > 2000):   
