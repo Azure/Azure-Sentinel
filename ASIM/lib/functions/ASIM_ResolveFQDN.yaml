@@ -13,18 +13,28 @@ FunctionName: ASIM_ResolveFQDN
 EquivalentBuiltInFunction: _ASIM_ResolveFQDN
 FunctionParams:
   - Name: T
-    Type: table:(TimeGenerated:datetime)
+    Type: table:(*)
   - Name: field
     Type: string
 
 FunctionQuery: |
     T
     | extend ExtractedHostname = column_ifexists (field,'')
-    | extend SplitHostname = split(ExtractedHostname,".")
+    | extend DotSplitHostname = split(ExtractedHostname,".")
+    | extend SlashSplitHostname = split(ExtractedHostname,"\\")
+    | extend DomainType = case(
+        array_length(SlashSplitHostname) > 1, "Windows",
+        array_length(DotSplitHostname) > 1, "FQDN",
+        ""
+    )
     | extend 
-        Domain = tostring(strcat_array(array_slice(SplitHostname, 1, -1), '.')),
-        FQDN = iif (array_length(SplitHostname) > 1, ExtractedHostname, ''),
-        DomainType = iif (array_length(SplitHostname) > 1, 'FQDN', '')
-    | extend
-        ExtractedHostname = tostring(SplitHostname[0])    
-    | project-away SplitHostname
+        FQDN = iif (DomainType == '', '', ExtractedHostname),
+        Domain = case (
+            DomainType == "Windows", SlashSplitHostname[0],
+            DomainType == "FQDN", tostring(strcat_array(array_slice(DotSplitHostname, 1, -1), '.')),
+            ""),
+        ExtractedHostname = case (
+            DomainType == "Windows", SlashSplitHostname[1],
+            DomainType == "FQDN", DotSplitHostname[0],
+            ExtractedHostname)   
+    | project-away DotSplitHostname, SlashSplitHostname

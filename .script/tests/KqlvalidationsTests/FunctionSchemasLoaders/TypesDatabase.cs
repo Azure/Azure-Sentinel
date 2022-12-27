@@ -19,6 +19,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
             { "int", "0" },
             { "dynamic", "dynamic([])" },
             { "table:(TimeGenerated:datetime)", "range TimeGenerated from ago(3d) to now() step 1d" },
+            { "table:(*)", "datatable() []" },
         };
     }
 }
