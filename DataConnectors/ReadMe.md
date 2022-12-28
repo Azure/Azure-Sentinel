@@ -178,7 +178,7 @@ Once you have a working POC, you are ready to build, validate the data connector
    * [DataConnector_API_AzureFunctionApp_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json)
   
 3. **Validate the Connector UX** – Follow these steps to render and validate the connector UX you just built
-    1.	The test utility can be accessed by this URL - https://portal.azure.com/?feature.BringYourOwnConnector=true
+    1.	The test utility can be accessed by this URL - https://aka.ms/sentineldataconnectorvalidateurl
     2.  Go to Microsoft Sentinel -> Data Connectors 
     3.	Click the “import” button and select the json file you created as follows.
     ![Import button](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/validateUX_stepc.png)

@@ -15,7 +15,7 @@ Digital transformation has opened up opportunities for greater agility and growt
 
 To address this potential risk, organizations are embracing the power and ease of SailPoint Identity Security. This innovative identity platform takes the complexity out of identity; making it intuitive for IT staff to configure and manage and enabling business users with the access they need to get their work done.
 
-The SailPoint IdentityNow custom connector enables Azure Sentinel customers to utilize the deep, enriched contextual data and governance capabilities of the SailPoint Identity Security to better drive identity-aware security practices.
+The SailPoint IdentityNow custom connector enables Microsoft Sentinel customers to utilize the deep, enriched contextual data and governance capabilities of the SailPoint Identity Security to better drive identity-aware security practices.
 
 # Prerequisites
 

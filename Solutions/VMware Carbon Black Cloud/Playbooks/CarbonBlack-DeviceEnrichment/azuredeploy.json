@@ -1,0 +1,364 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Endpoint enrichment - Carbon Black", 
+    "description": "This playbook will collect device information from Carbon Black and post a report on the incident.",
+    "prerequisites": ["1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.\n\n 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key) \n\n 3. Find Organization key by referring this link [ Find Organization key by referring this link ](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)"],
+    "lastUpdateTime": "2022-07-29T00:00:00.000Z", 
+    "mainSteps": ["When a new Sentinel incident is created,this playbook gets triggered and performs below actions \n\n 1. Fetches the devices information from CarbonBlack \n\n 2. Enrich the incident with device information by adding a comment to the incident \n\n ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/Incident_Comment.PNG?raw=true) \n\n ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/images/designerOverviewLight.png?raw=true)"],
+    "entities": ["Host"], 
+    "tags": ["Enrichment"], 
+    "postDeployment": ["** Authorize connections ** \n\n Once deployment is complete, you will need to authorize each connection. \n\n 1. Click the Microsoft Sentinel connection resource \n\n 2. Click edit API connection \n\n 3. Click Authorize \n\n 4. Sign in \n\n 5. Click Save \n\n 6. Repeat step 2&3 while for CarbonBlack connector Connection to authorize connector API of the playbook (For authorizing the CarbonBlack API connection, API Key needs to be provided. API Key Value is the combination of API Key / API ID) \n\n ** Configurations in Sentinel ** \n\n 1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with risky device \n\n 2. Configure the automation rules to trigger this playbook"],
+    "support": {
+        "tier": "community" 
+    },
+    "author": {
+        "name": "Accenture"
+    },
+    "releaseNotes": [
+    {
+      "version": "1.0.0",
+      "title": "Endpoint enrichment - Carbon Black",
+      "notes": [
+        "Initial version"
+      ]
+    }
+    ]
+},
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "EndpointEnrichment-CarbonBlack",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Logic Apps resource to be created"
+      }
+    },
+    "CustomConnectorName":{
+      "defaultValue": "CarbonBlackCloudConnector",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the custom connector which interacts with Carbon Black"
+      }
+    },
+    "OrganizationKey": {
+      "defaultValue": "OrganizationKey",
+      "type": "string",
+      "metadata": {
+        "description": "CarbonBlack Org Key"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "CarbonBlackConnectionName": "[concat('CarbonBlackCloudConnector-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('CarbonBlackConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+          "displayName": "[variables('AzureSentinelConnectionName')]",
+          "customParameterValues": {},
+          "parameterValueType": "Alternative",
+          "api": {
+              "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+          }
+      }
+  },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "tags": {
+        "hidden-SentinelTemplateName": "EndpointEnrichment-CarbonBlack",
+        "hidden-SentinelTemplateVersion": "1.0"
+    },
+    "identity": {
+      "type": "SystemAssigned"
+  },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Add_comment_to_incident_(V3)": {
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p>@{outputs('Compose')} &nbsp;<span style=\"font-size: 16px\"><strong>CarbonBlack DeviceEnrichment Playbook<br>\n</strong></span><span style=\"font-size: 16px\">CarbonBlack DeviceEnrichment playbook was triggered and collected the following information from Carbon Black:<br>\n<br>\n</span><span style=\"font-size: 16px\">@{body('Create_HTML_table_to_format_the_results_returned')}</span><span style=\"font-size: 16px\"></span></p>"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Comment"
+              }
+            },
+            "Append_Hosts_list": {
+              "runAfter": {
+                "Entities_-_Get_Hosts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "HostsList",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              },
+              "description": "Variable to append all the hosts returned from provider"
+            },
+            "Compose": {
+              "runAfter": {
+                "Create_HTML_table_to_format_the_results_returned": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "<img src=\"https://avatars.githubusercontent.com/u/2071378?s=280&v=4\" alt=\"Lamp\" width=\"32\" height=\"32\">"
+            },
+            "Create_HTML_table_to_format_the_results_returned": {
+              "runAfter": {
+                "Search_devices_in_your_organization": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Table",
+              "inputs": {
+                "columns": [
+                  {
+                    "header": "Devicename",
+                    "value": "@item()?['name']"
+                  },
+                  {
+                    "header": "Quarantined",
+                    "value": "@item()?['quarantined']"
+                  },
+                  {
+                    "header": "Policyname",
+                    "value": "@item()?['policy_name']"
+                  },
+                  {
+                    "header": "PolicyId",
+                    "value": "@item()?['policy_id']"
+                  },
+                  {
+                    "header": "DeviceownerId",
+                    "value": "@item()?['device_owner_id']"
+                  },
+                  {
+                    "header": "DeviceId",
+                    "value": "@item()?['id']"
+                  },
+                  {
+                    "header": "Devicestatus",
+                    "value": "@item()?['status']"
+                  },
+                  {
+                    "header": "Operatingsystem",
+                    "value": "@item()?['os']"
+                  },
+                  {
+                    "header": "OperatingsystemVersion",
+                    "value": "@item()?['os_version']"
+                  },
+                  {
+                    "header": "Organizationname",
+                    "value": "@item()?['organization_name']"
+                  },
+                  {
+                    "header": "Email",
+                    "value": "@item()?['email']"
+                  },
+                  {
+                    "header": "Sensorstates",
+                    "value": "@join(item()?['sensor_states'],',')"
+                  },
+                  {
+                    "header": "LastreportedTime",
+                    "value": "@item()?['last_reported_time']"
+                  },
+                  {
+                    "header": "SensorVersion",
+                    "value": "@{item()?['sensor_version']}"
+                  }
+                ],
+                "format": "HTML",
+                "from": "@body('Search_devices_in_your_organization')?['results']"
+              },
+              "description": "Format the device information"
+            },
+            "Entities_-_Get_Hosts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/host"
+              }
+            },
+            "For_each_Hosts": {
+              "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+              "actions": {
+                "Append_hosts_to_format_the_Lucense_query": {
+                  "runAfter": {},
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "HostsList",
+                    "value": "name : @{items('For_each_Hosts')?['HostName']}"
+                  }
+                }
+              },
+              "runAfter": {
+                "Organization_Id": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach",
+              "description": "Iterate over hosts returned from provider"
+            },
+            "Join_Hosts_with_OR_operator": {
+              "runAfter": {
+                "For_each_Hosts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Join",
+              "inputs": {
+                "from": "@variables('HostsList')",
+                "joinWith": " OR "
+              },
+              "description": "Format the Lucense query to pass as a parameter to the search organizations in your organization"
+            },
+            "Organization_Id": {
+              "runAfter": {
+                "Append_Hosts_list": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "OrganizationKey",
+                    "type": "string",
+                    "value": "[parameters('OrganizationKey')]"
+                  }
+                ]
+              },
+              "description": "Configured Organization Id"
+            },
+            "Search_devices_in_your_organization": {
+              "runAfter": {
+                "Join_Hosts_with_OR_operator": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "query": "@body('Join_Hosts_with_OR_operator')"
+                },
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['CarbonBlackCloudConnector']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/appservices/v6/orgs/@{encodeURIComponent(variables('OrganizationKey'))}/devices/_search"
+              },
+              "description": "Search devices in organization by providing filter criteria"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "CarbonBlackCloudConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CarbonBlackConnectionName'))]",
+                "connectionName": "[variables('CarbonBlackConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                      "type": "ManagedServiceIdentity"
+                  }
+              }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

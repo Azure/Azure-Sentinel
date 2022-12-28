@@ -1,0 +1,35 @@
+id: 8ea8b2af-f1ce-4464-964c-6763641cc4f6
+name: BitLocker Key Retrieval
+description: |
+    'Looks for users retrieving BitLocker keys. Enriches these logs with a summary of alerts associated with the user accessing the keys.
+    Use this query to start looking for anomalous patterns of key retrieval.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-devices#bitlocker-key-retrieval'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1555
+query: |
+  AuditLogs
+    | where OperationName =~ "Read BitLocker key"
+    | extend userPrincipalName = tolower(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
+    | extend KeyId = tostring(TargetResources[0].displayName)
+    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+    | summarize keys_accessed=dcount(KeyId), ipAddresses=make_set(ipAddress) by userPrincipalName
+    | join kind=leftouter (SecurityAlert
+    | where ProviderName =~ "IPC"
+    | extend userPrincipalName = tolower(tostring(parse_json(ExtendedProperties).["User Account"]))
+    | summarize user_alert_count=count() by userPrincipalName) on userPrincipalName
+    | project userPrincipalName, keys_accessed, ipAddresses, user_alert_count
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: userPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress

@@ -37,7 +37,7 @@ Once deployment is complete, authorize each connection.
 
 1. Open playbook which has been deployed
 2. Click API connection on left side blade
-3. Click the Azure Sentinel connection resource
+3. Click the Microsoft Sentinel connection resource
 4. Click edit API connection
 5. Click Authorize
 6. Sign in
@@ -46,5 +46,5 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident. An incident should have the *IPAddress* custom entity that contains IP address. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
+1. In Microsoft Sentinel, analytical rules should be configured to trigger an incident. An incident should have the *IPAddress* custom entity that contains IP address. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
 2. Configure the automation rules to trigger the playbook.

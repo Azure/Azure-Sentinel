@@ -1,0 +1,668 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "IP Enrichment - Master Playbook",
+        "description": "This playbook enriches each malicious IP address and creates comment for its nested playbooks.",
+        "mainSteps": [
+            "1. Fetches a list of potentially malicious IP addresses.",
+            "2. Each nested playbook receives the list of IP addresses and performs respective defined automated actions on it.",
+            "3. Response from individual playbooks are returned to master playbook for incident comment. "
+        ],
+        "prerequisites": [
+            "Atlease one of the below mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group. Capture the name of all deployed playbooks during deployment.",
+            "- EnrichIP-GeoFromIp-Nested is a nested playbook that handles enrichment for GeoIP",
+            "- EnrichIP-HYAS-Insight-IP-C2-Attribution-Nested is a nested playbook that handles enrichment for HYAS Insights.",
+            "- EnrichIP-RecordedFuture-IOCEnrichment-Nested is a nested playbook that handles enrichment for Recorded Future.",
+            "- EnrichIP-RiskIQ-Whois-Ip-Nested is a nested playbook that handles enrichment for RiskIQ.",
+            "- EnrichIP-VirusTotal-Nested is a nested playbook that handles enrichment for VirusTotal."
+        ],
+        "lastUpdateTime": "2022-07-06T00:00:00.000Z",
+        "entities": [ "IP" ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "MasterPlaybookName": {
+            "defaultValue": "MasterPlaybook_IP_Enrichment",
+            "type": "String",
+            "metadata": {
+                "description": "Enter name for master playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "GeoIPPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for GeoIP playbook without spaces"
+            }
+        },
+        "HYASInsightsPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for HYASInsights playbook without spaces"
+            }
+        },
+        "RecordedFuturePlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for RecordedFuture playbook without spaces"
+            }
+        },
+        "RiskIQPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for RiskIQ playbook without spaces"
+            }
+        },
+        "VirusTotalPlaybookName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter name for VirusTotal playbook without spaces"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentienl-',parameters('MasterPlaybookName'))]",
+        "Defaultplaybookname": "MSDefaultNestedPlaybook",
+        "GeoIPID": "[if(not(empty(parameters('GeoIPPlaybookName'))),parameters('GeoIPPlaybookName'),variables('Defaultplaybookname'))]",
+        "HYASInsightsID": "[if(not(empty(parameters('HYASInsightsPlaybookName'))),parameters('HYASInsightsPlaybookName'),variables('Defaultplaybookname'))]",
+        "RecordedFutureID": "[if(not(empty(parameters('RecordedFuturePlaybookName'))),parameters('RecordedFuturePlaybookName'),variables('Defaultplaybookname'))]",
+        "RiskIQID": "[if(not(empty(parameters('RiskIQPlaybookName'))),parameters('RiskIQPlaybookName'),variables('Defaultplaybookname'))]",
+        "VirusTotalID": "[if(not(empty(parameters('VirusTotalPlaybookName'))),parameters('VirusTotalPlaybookName'),variables('Defaultplaybookname'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2017-07-01",
+            "condition": "[or(empty(parameters('GeoIPPlaybookName')),empty(parameters('HYASInsightsPlaybookName')),empty(parameters('RecordedFuturePlaybookName')),empty(parameters('RiskIQPlaybookName')),empty(parameters('VirusTotalPlaybookName')))]",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('Defaultplaybookname')]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Response": {
+                            "runAfter": {},
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            },
+            "type": "Microsoft.Logic/workflows"
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('MasterPlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Logic/workflows', variables('Defaultplaybookname'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+            "triggers": {
+                "Microsoft_Sentinel_incident": {
+                    "type": "ApiConnectionWebhook",
+                    "inputs": {
+                        "body": {
+                            "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                        },
+                        "path": "/incident-creation"
+                    }
+                }
+            },
+            "actions": {
+                "Condition_to_check_any_one_of_the_playbook_failed_before_closing_the_incident": {
+                    "actions": {
+                        "Update_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "status": "Closed"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "path": "/Incidents"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Filter_Success_Status_Codes": [
+                            "Succeeded"
+                        ]
+                    },
+                    "expression": {
+                        "and": [
+                            {
+                                "lessOrEquals": [
+                                    "@length(body('Filter_Success_Status_Codes'))",
+                                    0
+                                ]
+                            }
+                        ]
+                    },
+                    "type": "If"
+                },
+                "Entities_-_Get_IPs": {
+                    "runAfter": {},
+                    "type": "ApiConnection",
+                    "inputs": {
+                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "host": {
+                            "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                        },
+                        "method": "post",
+                        "path": "/entities/ip"
+                    }
+                },
+                "Filter_Success_Status_Codes": {
+                    "runAfter": {
+                        "Geo-Ip_Scope": [
+                            "Succeeded"
+                        ],
+                        "HYAS_insights_Scope": [
+                            "Succeeded"
+                        ],
+                        "Recorded_Future_Scope": [
+                            "Succeeded"
+                        ],
+                        "RiskIQ_Scope": [
+                            "Succeeded"
+                        ],
+                        "VirusTotal_Scope": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Query",
+                    "inputs": {
+                        "from": "@variables('Status Codes')",
+                        "where": "@not(equals(item(), 200))"
+                    }
+                },
+                "Geo-Ip_Scope": {
+                    "actions": {
+                        "Append_Geo-Ip_status_code": {
+                            "runAfter": {
+                                "Get-GeoFromIpAndTagIncident-nested": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                                "name": "Status Codes",
+                                "value": "@outputs('Get-GeoFromIpAndTagIncident-nested')['statusCode']"
+                            }
+                        },
+                        "Get-GeoFromIpAndTagIncident-nested": {
+                            "runAfter": {},
+                            "type": "Workflow",
+                            "inputs": {
+                                "body": {
+                                    "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                },
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('GeoIPID'))]"
+                                    }
+                                }
+                            }
+                        },
+                        "Verify_Geo-Ip_response_body": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_Geo-IP": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Get-GeoFromIpAndTagIncident-nested')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Append_Geo-Ip_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@outputs('Get-GeoFromIpAndTagIncident-nested')['headers']?['x-ms-workflow-name']",
+                                            "MSDefaultNestedPlaybook"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Scope"
+                },
+                "HYAS_insights_Scope": {
+                    "actions": {
+                        "Append_HYAS_insights_status_code": {
+                            "runAfter": {
+                                "Enrich-Sentinel-Incident-HYAS-Insight-IP-C2-Attribution-nested": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                                "name": "Status Codes",
+                                "value": "@outputs('Enrich-Sentinel-Incident-HYAS-Insight-IP-C2-Attribution-nested')['statusCode']"
+                            }
+                        },
+                        "Condition": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_HYAS_insights": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Enrich-Sentinel-Incident-HYAS-Insight-IP-C2-Attribution-nested')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Append_HYAS_insights_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@outputs('Enrich-Sentinel-Incident-HYAS-Insight-IP-C2-Attribution-nested')['headers']?['x-ms-workflow-name']",
+                                            "MSDefaultNestedPlaybook"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Enrich-Sentinel-Incident-HYAS-Insight-IP-C2-Attribution-nested": {
+                            "runAfter": {},
+                            "type": "Workflow",
+                            "inputs": {
+                                "body": {
+                                    "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                },
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('HYASInsightsID'))]"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Scope"
+                },
+                "Initialize_variable": {
+                    "runAfter": {
+                        "Entities_-_Get_IPs": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "Status Codes",
+                                "type": "array",
+                                "value": []
+                            }
+                        ]
+                    }
+                },
+                "Recorded_Future_Scope": {
+                    "actions": {
+                        "Append_to_array_variable": {
+                            "runAfter": {
+                                "RecordedFuture-IP_Enrichment-nested": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                                "name": "Status Codes",
+                                "value": "@outputs('RecordedFuture-IP_Enrichment-nested')['statusCode']"
+                            }
+                        },
+                        "RecordedFuture-IP_Enrichment-nested": {
+                            "runAfter": {},
+                            "type": "Workflow",
+                            "inputs": {
+                                "body": {
+                                    "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                },
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('RecordedFutureID'))]"
+                                    }
+                                }
+                            }
+                        },
+                        "Verify_Recorderd_Future_response_body": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_Recorded_Future": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('RecordedFuture-IP_Enrichment-nested')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Append_to_array_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('RecordedFuture-IP_Enrichment-nested')['headers']?['x-ms-workflown-name']",
+                                            ""
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Scope"
+                },
+                "RiskIQ_Scope": {
+                    "actions": {
+                        "Append_RisqIP_status_code": {
+                            "runAfter": {
+                                "RiskIQ-Data-Whois-Ip-nested": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                                "name": "Status Codes",
+                                "value": "@outputs('RiskIQ-Data-Whois-Ip-nested')['statusCode']"
+                            }
+                        },
+                        "RiskIQ-Data-Whois-Ip-nested": {
+                            "runAfter": {},
+                            "type": "Workflow",
+                            "inputs": {
+                                "body": {
+                                    "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('RiskIQID'))]"
+                                    }
+                                }
+                            }
+                        },
+                        "Verify_RiskIQ_response_body": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_RiskIQ": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('RiskIQ-Data-Whois-Ip-nested')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Append_RisqIP_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@outputs('RiskIQ-Data-Whois-Ip-nested')['headers']?['x-ms-workflow-name']",
+                                            "MSDefaultNestedPlaybook"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Scope"
+                },
+                "VirusTotal_Scope": {
+                    "actions": {
+                        "Append_to_VirusTotal_status_code": {
+                            "runAfter": {
+                                "Get-VirusTotalIPReport-nested": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                                "name": "Status Codes",
+                                "value": "@outputs('Get-VirusTotalIPReport-nested')['statusCode']"
+                            }
+                        },
+                        "Get-VirusTotalIPReport-nested": {
+                            "runAfter": {},
+                            "type": "Workflow",
+                            "inputs": {
+                                "body": {
+                                    "IPs": "@body('Entities_-_Get_IPs')?['IPs']"
+                                },
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', variables('VirusTotalID'))]"
+                                    }
+                                }
+                            }
+                        },
+                        "Verify_VirusTotal_response_body": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_VirusTotal": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{body('Get-VirusTotalIPReport-nested')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Append_to_VirusTotal_status_code": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@outputs('Get-VirusTotalIPReport-nested')['headers']?['x-ms-workflow-name']",
+                                            "MSDefaultNestedPlaybook"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Scope"
+                }
+            },
+            "outputs": {}
+        },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

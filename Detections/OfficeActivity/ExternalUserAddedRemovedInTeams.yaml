@@ -17,27 +17,28 @@ tactics:
 relevantTechniques:
   - T1136
 query: |
+  let TeamsAddDel = (Op:string){
   OfficeActivity
   | where OfficeWorkload =~ "MicrosoftTeams"
-  | where Operation =~ "MemberAdded"
-  | extend UPN = tostring(parse_json(Members)[0].UPN)
-  | where UPN contains ("#EXT#")
-  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName
-  | join (
-   OfficeActivity
-  | where OfficeWorkload =~ "MicrosoftTeams"
-  | where Operation =~ "MemberRemoved"
-  | extend UPN = tostring(parse_json(Members)[0].UPN)
-  | where UPN contains ("#EXT#")
-  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName
-  ) on UPN
+  | where Operation == Op
+  | where Members has ("#EXT#")
+  | mv-expand Members
+  | extend UPN = tostring(Members.UPN)
+  | where UPN has ("#EXT#")
+  | project TimeGenerated, Operation, UPN, UserId, TeamName
+  };
+  let TeamsAdd = TeamsAddDel("MemberAdded")
+  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName;
+  let TeamsDel = TeamsAddDel("MemberRemoved")
+  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName;
+  TeamsAdd
+  | join kind=inner (TeamsDel) on UPN
   | where TimeDeleted > TimeAdded
   | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName
-  | extend timestamp = TimeAdded, AccountCustomEntity = UPN
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
+        columnName: UPN
+version: 1.1.0
 kind: Scheduled

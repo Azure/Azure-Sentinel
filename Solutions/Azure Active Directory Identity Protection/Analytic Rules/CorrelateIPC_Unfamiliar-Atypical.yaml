@@ -1,0 +1,57 @@
+id: a3df4a32-4805-4c6d-8699-f3c888af2f67
+name: Correlate Unfamiliar sign-in properties and atypical travel alerts
+description: |
+  'The combination of an Unfamiliar sign-in properties alert and an Atypical travel alert about the same user within a +10m or -10m window is considered a high severity incident.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert (IPC)
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let Alert1 = 
+  SecurityAlert
+  | where AlertName == "Unfamiliar sign-in properties"
+  | extend UserPrincipalName = tostring(parse_json(ExtendedProperties).["User Account"])
+  | extend Alert1Time = TimeGenerated
+  | extend Alert1 = AlertName
+  | extend Alert1Severity = AlertSeverity
+  ;
+  let Alert2 = 
+  SecurityAlert
+  | where AlertName == "Atypical travel"
+  | extend UserPrincipalName = tostring(parse_json(ExtendedProperties).["User Account"])
+  | extend Alert2Time = TimeGenerated
+  | extend Alert2 = AlertName
+  | extend Alert2Severity = AlertSeverity
+  | extend CurrentLocation = strcat(tostring(parse_json(tostring(parse_json(Entities)[2].Location)).CountryCode), "|", tostring(parse_json(tostring(parse_json(Entities)[2].Location)).State), "|", tostring(parse_json(tostring(parse_json(Entities)[2].Location)).City))
+  | extend PreviousLocation = strcat(tostring(parse_json(tostring(parse_json(Entities)[3].Location)).CountryCode), "|", tostring(parse_json(tostring(parse_json(Entities)[3].Location)).State), "|", tostring(parse_json(tostring(parse_json(Entities)[3].Location)).City))
+  | extend CurrentIPAddress = tostring(parse_json(Entities)[2].Address)
+  | extend PreviousIPAddress = tostring(parse_json(Entities)[3].Address)
+  ;
+  Alert1
+  | join kind=inner Alert2 on UserPrincipalName
+  | where abs(datetime_diff('minute', Alert1Time, Alert2Time)) <=10
+  | extend TimeDelta = Alert1Time - Alert2Time
+  | project UserPrincipalName, Alert1, Alert1Time, Alert1Severity, Alert2, Alert2Time, Alert2Severity, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress
+  | extend AccountCustomEntity = UserPrincipalName
+  | extend IPCustomEntity = CurrentIPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

@@ -5,7 +5,7 @@ description: |
   This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'
 alertDetailsOverride:
   alertDisplayNameFormat: Potential port scan from {{SrcIpAddr}}
-  alertDescriptionFormat: A port scan has been performed from address {{SrcIpAddr}} over {{AttemptedPortsCount}} pots within 5 minutes. This may indicate that a [port scanner](https://en.wikipedia.org/wiki/Port_scanner) is trying to identify open ports in order to penetrate a system. 
+  alertDescriptionFormat: A port scan has been performed from address {{SrcIpAddr}} over {{AttemptedPortsCount}} ports within 5 minutes. This may indicate that a [port scanner](https://en.wikipedia.org/wiki/Port_scanner) is trying to identify open ports in order to penetrate a system. 
 
 severity: Medium
 requiredDataConnectors:
@@ -30,6 +30,18 @@ requiredDataConnectors:
   - connectorId: PaloAltoNetworks
     dataTypes:
       - CommonSecurityLog
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream_CL
 
 queryFrequency: 1h
 queryPeriod: 1h
@@ -40,15 +52,16 @@ tactics:
 relevantTechniques:
   - T1046
 tags:
-  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/SophosXGFirewall/PortScanDetected.yaml
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Analytic%20Rules/PortScanDetected.yaml
     version: 1.0.0
   - Schema: ASimNetworkSessions
-    SchemaVersion: 0.2.1
+    SchemaVersion: 0.2.4
 query: |
   let PortScanThreshold = 50;
   _Im_NetworkSession
   | where ipv4_is_private(SrcIpAddr) == False
-  | summarize AttemptedPortsCount=dcount(DstPortNumber) by SrcIpAddr, bin(TimeGenerated, 5m)
+  | where SrcIpAddr !in ("127.0.0.1", "::1")
+  | summarize AttemptedPortsCount=dcount(DstPortNumber), AttemptedPorts=make_set(DstPortNumber, 100), ReportedBy=make_set(strcat(EventVendor, "/", EventProduct), 20) by SrcIpAddr, bin(TimeGenerated, 5m)
   | where AttemptedPortsCount > PortScanThreshold
 
 entityMappings:
@@ -60,5 +73,5 @@ entityMappings:
 customDetails:
   AttemptedPortsCount: AttemptedPortsCount
 
-version: 1.0.0
+version: 1.0.2
 kind: Scheduled

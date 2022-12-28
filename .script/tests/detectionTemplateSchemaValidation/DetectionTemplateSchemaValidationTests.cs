@@ -130,7 +130,8 @@ namespace Kqlvalidations.Tests
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
-            var duplicationsById = templatesAsObjects.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
+            var templatesAsObjectsAfterSkipping = templatesAsObjects.Where(s => !TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds.Contains(s["id"].Value<string>()));
+            var duplicationsById = templatesAsObjectsAfterSkipping.GroupBy(a => a["id"]).Where(group => group.Count() > 1); //Finds duplications -> ids that there are more than 1 template from
             var duplicatedId = "";
             if (duplicationsById.Count() > 0)
             {
@@ -149,9 +150,12 @@ namespace Kqlvalidations.Tests
             var templatesAsStrings = yamlFiles.Select(yaml => GetYamlFileAsString(Path.GetFileName(yaml)));
 
             var templatesAsObjects = templatesAsStrings.Select(yaml => JObject.Parse(ConvertYamlToJson(yaml)));
-            var invalidTemplateRuleKindsAndIds = templatesAsObjects
+            var templatesAfterRemovingSkipFiles = templatesAsObjects
+                                                    .Where(template => !TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds.Contains(template["id"].ToString()));
+
+            var invalidTemplateRuleKindsAndIds = templatesAfterRemovingSkipFiles
                 .Where(template => !Enum.TryParse(typeof(AlertRuleKind), template["kind"].ToString(), ignoreCase: false, out _))
-                .Select(template => (templdateId: template["id"].ToString(), templateKind: template["kind"].ToString()))
+                .Select(template => (templdateId: template["id"].ToString(), templateKind: template["kind"].Value<string>()))
                 .ToList();
 
             string exceptionMessage = "";
@@ -170,7 +174,7 @@ namespace Kqlvalidations.Tests
             // Get file present in detection folder or else check in solution analytics rules folder
             try
             {
-                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("Detection")).Single();
+                detectionsYamlFile = Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("\\Detections\\") || s.Contains("/Detections/")).Single();
             }
             catch (Exception e) when (e.Message.Contains("Sequence contains no elements"))
             {
