@@ -1,7 +1,7 @@
 Parser:
   Title:  Network Session ASIM filtering parser for M365 Defender for Endpoint
-  Version: '0.3'
-  LastUpdated: Jun 15, 2022
+  Version: '0.3.1'
+  LastUpdated: Dec 28 2022
 Product:
   Name: M365 Defender for Endpoint
 Normalization:
@@ -78,6 +78,7 @@ ParserQuery: |
     | where not(disabled)
     | lookup DirectionLookup on ActionType
     | where Outbound == select_outbound
+    | project-away AppGuardContainerId, LocalIPType, MachineGroup, RemoteIPType, SourceSystem, TenantId, Timestamp, Outbound
     // ***************  Prefilterring *****************************************************************
     |where  (array_length(dvcaction)==0 )     /// if filtered by action return nothing
            and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort)
@@ -119,6 +120,10 @@ ParserQuery: |
       EventType = 'NetworkSession',
       EventSeverity = "Informational",
       DvcIdType = 'MDEid'
+    | project-away 
+        ReportId
+    | project-rename 
+        EventOriginalResultDetails = ActionType
     | extend
       RemoteUrl = extract (@"(?:https?://)?(.*)", 1, RemoteUrl)
     | extend
@@ -131,6 +136,7 @@ ParserQuery: |
         Protocol == "Unknown", "",
         toupper(Protocol)
       )
+    | project-away Protocol
     | extend  
       DvcHostname = tostring(SplitHostname[0]),
       DvcDomain = tostring(strcat_array(array_slice(SplitHostname, 1, -1), '.')),
@@ -138,6 +144,7 @@ ParserQuery: |
       UrlHostname = tostring(SplitUrl[0]),
       UrlDomain = tostring(strcat_array(array_slice(SplitUrl, 1, -1), '.')),
       UrlFQDN = iif(RemoteUrl contains ".", RemoteUrl, "")
+    | project-away RemoteUrl, DeviceName
     | extend
       DvcDomainType = iif(DvcFQDN != "", "FQDN", ""),
       UrlDomainType = iff(UrlFQDN != "", "FQDN", ""),
@@ -171,14 +178,13 @@ ParserQuery: |
        SrcUsernameType = UsernameType,
        SrcUserAadId = InitiatingProcessAccountObjectId,
        SrcUserId = InitiatingProcessAccountSid,
-       SrcUserUpn = InitiatingProcessAccountUpn,
-       SrcUserDomain = InitiatingProcessAccountDomain
+       SrcUserUpn = InitiatingProcessAccountUpn
     | extend
        SrcUsername = User,
        SrcDvcId = DvcId,
        SrcDvcIdType = 'MDEid',
        SrcUserIdType = "SID",
-      DstHostname = UrlHostname
+       DstHostname = UrlHostname
     | project-rename
        DstDomain = UrlDomain,
        DstFQDN = UrlFQDN,
@@ -225,8 +231,7 @@ ParserQuery: |
        DstUsernameType = UsernameType,
        DstUserAadId = InitiatingProcessAccountObjectId,
        DstUserId = InitiatingProcessAccountSid,
-       DstUserUpn = InitiatingProcessAccountUpn,
-       DstUserDomain = InitiatingProcessAccountDomain,
+       DstUserUpn = InitiatingProcessAccountUpn
        SrcDomain = UrlDomain,
        SrcFQDN = UrlFQDN,
        SrcDomainType = UrlDomainType
@@ -254,13 +259,13 @@ ParserQuery: |
        ParentProcessCreationTime = InitiatingProcessParentCreationTime
     | extend
        Process = DstProcessName,
-       ProcessId = DstProcessId,
        DstAppName = DstProcessName,
        DstAppType = "Process"
   ;
   union InboundNetworkEvents, OutboundNetworkEvents
+  | project-rename 
+     Hostname = UrlHostname
   | extend // aliases
-     Hostname = tostring(UrlHostname),
      IpAddr = SrcIpAddr,
      Src = SrcIpAddr,
      Dst = DstIpAddr 

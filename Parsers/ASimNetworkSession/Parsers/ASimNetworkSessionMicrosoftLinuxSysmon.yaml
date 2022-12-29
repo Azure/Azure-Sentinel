@@ -1,7 +1,7 @@
 Parser:
   Title:  Network Session ASIM parser for Sysmon for Linux
-  Version: '0.3'
-  LastUpdated: Jun 16, 2022
+  Version: '0.3.1'
+  LastUpdated: Dec 28 2022
 Product:
   Name: Sysmon for Linux
 Normalization:
@@ -24,7 +24,6 @@ ParserQuery: |
    let DirectionNetworkEvents =
     Syslog | where not(disabled)
     | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>3</EventID>')
-    | project-away ProcessName, ProcessID
     | parse SyslogMessage with * '<Data Name="SourceIp">' SrcIpAddr:string '</Data>' *
     | extend outbound = (SrcIpAddr == HostIP or SrcIpAddr in ('127.0.0.1', '0.0.0.0'))
     ;
@@ -55,6 +54,7 @@ ParserQuery: |
           '<Data Name="DestinationPort">' DstPortNumber:int '</Data>'
           '<Data Name="DestinationPortName">' DstPortName:string '</Data>'
           *
+          | project-away DstPortName, DestinationIsIpv6, Initiated, SourceIsIpv6, SrcPortName, RuleName
     };
     let OutboundNetworkEvents = 
       DirectionNetworkEvents
@@ -62,27 +62,31 @@ ParserQuery: |
       | invoke parser ()
       | extend
         SrcUsernameType = 'Simple',
+        SrcAppType = 'Process'
+      | project-rename 
         SrcUsername = User,
         SrcProcessId = ProcessId, 
         SrcProcessGuid = ProcessGuid,
-        SrcProcessName = Process,
-        SrcAppName = Process,
-        SrcAppType = 'Process'
+        SrcProcessName = Process
+      | extend
+        SrcAppName = SrcProcessName
       | project-away SyslogMessage
     ;
     let InboundNetworkEvents = 
-        DirectionNetworkEvents
-        | where not(outbound)
-        | invoke parser ()
-        | extend
+      DirectionNetworkEvents
+      | where not(outbound)
+      | invoke parser ()
+      | extend
         DstUsernameType = 'Simple',
+        DstAppType = 'Process'
+      | project-rename 
         DstUsername = User,
         DstProcessId = ProcessId, 
         DstProcessGuid = ProcessGuid,
-        DstProcessName = Process,
-        DstAppName = Process,
-        DstAppType = 'Process' 
-        | project-away SyslogMessage
+        DstProcessName = Process
+      | extend
+        DstAppName = DstProcessName
+      | project-away SyslogMessage
     ; 
     let SysmonForLinuxNetwork=
         union OutboundNetworkEvents, InboundNetworkEvents
@@ -97,11 +101,11 @@ ParserQuery: |
             EventResult = 'Success',
             EventSeverity = 'Informational',
             DvcOs = 'Linux',
-            Protocol = toupper(Protocol),
+            NetworkProtocol = toupper(Protocol),
             NetworkDirection = iff(outbound, "Outbound", "Inbound"),
             EventOriginalType = '3' // Set with a constant value to avoid parsing
         | project-away
-            outbound
+            outbound, Protocol
         | project-rename 
             DvcIpAddr = HostIP,
             DvcHostname = SysmonComputer

@@ -25,15 +25,9 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
-    '', 'Informational', 
-    '0', 'Informational',
-    '1', 'Low',
-    '2', 'Medium',
-    '3', 'High'
-  ];
+  let VMConnectionProjected = VMConnection | project-away AdditionalInformation, AgentId, TenantId, TLPLevel, SourceSystem, IsActive, *ReportedDateTime, LinksFailed, LinksLive, LinksTerminated, Description, Responses, ResponseTimeMin, ResponseTimeMax, RemoteClassification, RemoteDnsQuestions;
   let outbound = (disabled:bool=false) {
-    VMConnection
+    VMConnectionProjected
     | where not (disabled)
     | where Direction == "outbound"
     | extend
@@ -45,21 +39,12 @@ ParserQuery: |
         DstGeoLatitude = RemoteLatitude,
         SrcAppId = Process,
         SrcAppName = ProcessName,
-        SrcDvcId = Machine
-    | extend hostelements = split(Computer,'.')
-    | extend 
-        SrcHostname = tostring(hostelements[0]),
-        SrcDomain = strcat_array(array_slice(hostelements,1,-1), '.')
-    | extend
-        SrcDomainType = iff(SrcDomain != "", "FQDN", ""),
-        SrcFQDN = iff(SrcDomain != "", Computer, "")
-    | extend DstFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
-    | extend DstDomainType = iff(DstFQDN != "", "FQDN", "")
-    | extend hostelements = split(DstFQDN,'.')
-    | extend 
-        DstHostname = iff(DstFQDN != "", tostring(hostelements[0]), ""),
-        DstDomain = iff(DstFQDN != "", strcat_array(array_slice(hostelements,1,-1), '.'), "")
-    | project-away hostelements
+        SrcDvcId = Machine,
+        ThreatField = iff (MaliciousIp != "", "DstIpAddr", "")
+    | invoke _ASIM_ResolveSrcFQDN ("Computer")
+    | extend FQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+    | invoke _ASIM_ResolveDstFQDN("FQDN")
+    | project-away Computer, RemoteDnsCanonicalNames
     | extend
         RemoteFQDN = DstFQDN,
         RemoteHostname = DstHostname,
@@ -72,7 +57,7 @@ ParserQuery: |
         LocalIpAddr = SourceIp
   };
   let inbound = (disabled:bool=false) {
-    VMConnection
+    VMConnectionProjected
     | where not (disabled)
     | where Direction == "inbound"
     | extend
@@ -83,21 +68,12 @@ ParserQuery: |
         SrcGeoLatitude = RemoteLatitude,
         DstAppId = Process,
         DstAppName = ProcessName,
-        DstDvcId = Machine
-    | extend hostelements = split(Computer,'.')
-    | extend 
-        DstHostname = tostring(hostelements[0]),
-        DstDomain = strcat_array(array_slice(hostelements,1,-1), '.')
-    | extend
-        DstDomainType = iff(DstDomain != "", "FQDN", ""),
-        DstFQDN = iff(DstDomain != "", Computer, "")
-    | extend SrcFQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
-    | extend SrcDomainType = iff(SrcFQDN != "", "FQDN", "")
-    | extend hostelements = split(SrcFQDN,'.')
-    | extend 
-        SrcHostname = iff(SrcFQDN != "", tostring(hostelements[0]), ""),
-        SrcDomain = iff(SrcFQDN != "", strcat_array(array_slice(hostelements,1,-1), '.'), "")
-    | project-away hostelements
+        DstDvcId = Machine,
+        ThreatField = iff (MaliciousIp != "", "SrcIpAddr", "")
+    | invoke _ASIM_ResolveDstFQDN ("Computer")
+    | extend FQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+    | invoke _ASIM_ResolveSrcFQDN("FQDN")
+    | project-away Computer, RemoteDnsCanonicalNames
     | extend
         RemoteFQDN = SrcFQDN,
         RemoteHostname = SrcHostname,
@@ -120,6 +96,7 @@ ParserQuery: |
       EventSchema = "NetworkSession",
       EventSchemaVersion = "0.2.2",
       EventType = "EndpointNetworkSession",
+      DvcIdType = "VMConnectionId",
       NetworkDirection = iff(Direction=="inbound", "Inbound", "Outbound"),
       EventEndTime = TimeGenerated
     | project-rename
@@ -134,18 +111,21 @@ ParserQuery: |
       LocalAppId = Process,
       LocalAppName = ProcessName,
       DvcId = Machine,
-      RemoteIpAddr = RemoteIp
+      RemoteIpAddr = RemoteIp,
+      EventReportUrl = ReportReferenceLink,
+      ThreatIpAddr = MaliciousIp
     // -- Calculated fields
     | extend EventOriginalSeverity = tostring(Severity)
     | lookup SeverityLookup on EventOriginalSeverity
     | extend
       EventResult = "Success",
       LocalAppType = "Process",
-      NetworkDuration = toint(ResponseTimeMax),
+      NetworkDuration = toint(ResponseTimeSum/LinksEstablished) ,
       ThreatRiskLevel = toint(Confidence),
       NetworkProtocol = toupper(Protocol),
       SrcBytes = tolong(BytesSent),
       DstBytes = tolong(BytesReceived)
+    | project-away BytesSent, BytesReceived, Confidence, ResponseTimeSum, Protocol, Direction, Severity, LinksEstablished
     // -- Aliases
     | extend
       IpAddr = RemoteIpAddr,
