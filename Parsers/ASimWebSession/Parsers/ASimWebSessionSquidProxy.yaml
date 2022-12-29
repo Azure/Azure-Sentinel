@@ -59,15 +59,11 @@ ParserQuery: |
       EventResult = iff (EventOriginalResultDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or toint(EventResultDetails) >= 400, "Failure", "Success"),
       DstIpAddrIsHost = DstIpAddr matches regex @"^[^\:]*[a-zA-Z]$"
     | extend 
-      DstFQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
+      FQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
       DstIpAddr = iif (DstIpAddr == "-" or DstIpAddrIsHost, "", DstIpAddr)
     | extend 
-      EventSeverity = iff(EventResult == "Success", "Informational", "Low"),
-      DstFQDNparts = split (DstFQDN, ".")
-    | extend    
-      DstHostname = tostring(DstFQDNparts[0]),
-      DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),"."),
-      DstDomainType = "FQDN"
+      EventSeverity = iff(EventResult == "Success", "Informational", "Low")
+    | invoke _ASIM_ResolveDstFQDN ('FQDN')
    // -- aliases
     | extend 
       EventStartTime = EventEndTime,
@@ -78,6 +74,6 @@ ParserQuery: |
       Src = SrcIpAddr,
       Dst = DstHostname,
       Hostname = DstHostname
-    | project-away AccessRawLog, RawData
+    | project-away AccessRawLog, RawData, *_s, MG, ManagementGroupName, SourceSystem, TenantId, DstIpAddrIsHost
   };
-  parser (disabled)
+  parser (disabled=disabled)
