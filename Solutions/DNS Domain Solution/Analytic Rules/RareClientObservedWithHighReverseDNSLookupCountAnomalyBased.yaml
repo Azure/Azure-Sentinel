@@ -1,7 +1,7 @@
 id: 0fe6bde4-b215-480c-99b4-84a96edcdbd7
 name: Rare client observed with high reverse DNS lookup count - Anomaly based (ASIM DNS Solution)
 description: |
-  'Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+  'Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nThis uses anomaly based dynamic thresholding method.\n\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema'
 severity: Medium
 status: Available 
 tags:
@@ -44,11 +44,14 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - CommandAndControl
+  - Reconnaissance
 relevantTechniques:
 query: |
+  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
+    | where wl_RuleName == 'Anomaly - Rare client observed with high reverse DNS lookup'
+        and wl_Type == 'Detection'
+    | project toint(wl_AnomalyThreshold));
   let SearchDomain = dynamic(["in-addr.arpa"]);
-  let AnomalyThreshold = 2.5;
   let lookback = 14days;
   let timeframe = 1day;
   //let threshold = 10;
@@ -58,7 +61,7 @@ query: |
   };
   DNSEvents(stime=ago(lookback), etime=now())
   | make-series EventCount=count() on TimeGenerated in range (ago(lookback), now(), timeframe) by SrcIpAddr
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, AnomalyThreshold, -1, 'linefit')
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, toscalar(threshold), -1, 'linefit')
   | mv-expand anomalies, score, baseline, TimeGenerated, EventCount
   | extend
     anomalies = toint(anomalies),
@@ -67,7 +70,8 @@ query: |
     EventTime = todatetime(TimeGenerated),
     Total = tolong(EventCount)
   | where TimeGenerated >= ago(timeframe)
-  | where score > 2 * AnomalyThreshold
+  | where score >= toscalar(threshold)
+  //| where score > 2 * AnomalyThreshold
   | extend Severity='Medium', Tactic='Discovery'
   | join kind = inner (DNSEvents(stime=ago(timeframe), etime=now())
     | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
@@ -78,7 +82,7 @@ eventGroupingSettings:
 customDetails:
 
 alertDetailsOverride:
-  alertDisplayNameFormat: "[Anomaly] Rare client has been observed with high reverse DNS lookup count  - ClientIP: {{SrcIpAddr}}"
-  alertDescriptionFormat: "More than baseline reverse lookup DNS queries were generated.\nDNSQuery list: {{DNSQueries}}.\nBaseline reverse lookup count from this client: {{baseline}}\nCurrent reverse lookup count from this client: {{Total}}\n\nIdentifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity."
+  alertDisplayNameFormat: "[Anomaly] Rare client has been observed as making high reverse DNS lookup count  - ClientIP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "Client identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse lookup count baseline for this client is: '{{baseline}}'\n\nCurrent reverse lookup count by this client showing as: '{{Total}}'\nIdentifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity."
 version: 1.0.0
 kind: Scheduled

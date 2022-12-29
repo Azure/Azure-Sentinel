@@ -1,7 +1,7 @@
 id: 4ab8b09e-3c23-4974-afbe-7e653779eb2b
-name: Excessive NXDOMAIN DNS Queries - Static threshold based (ASIM DNS Solution)
+name: Detect excessive NXDOMAIN DNS queries - Static threshold based (ASIM DNS Solution)
 description: |
-  'This rule creates an incident in the event where client generates excessive amounts of DNS queries for non-existent domains.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+  'This rule creates an incident in the event where client generates excessive amount of DNS queries for non-existent domains.\n\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema'
 severity: Medium
 status: Available 
 tags:
@@ -47,11 +47,10 @@ tactics:
   - CommandAndControl
 relevantTechniques:
 query: |
-  let threshold = materialize (_GetWatchlist('DNSMonitoringConfiguration2')
-    | where Name == 'Excessive NXDOMAIN DNS Queries'
-        and Enabled == 'TRUE'
-        and Type == 'Detection'
-    | project toint(Threshold));
+  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
+    | where wl_RuleName == 'Excessive NXDOMAIN DNS Queries'
+        and wl_Type == 'Detection'
+    | project threshold=toint(wl_Threshold));
   imDns(responsecodename='NXDOMAIN')
   | summarize NXDOMAINCount=count() by SrcIpAddr, bin(TimeGenerated, 15m)
   | where NXDOMAINCount > toscalar(threshold)
@@ -59,12 +58,14 @@ query: |
     | summarize DNSQueries = makeset(DnsQuery) by SrcIpAddr)
     on SrcIpAddr
 
+
+
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
 
 alertDetailsOverride:
-  alertDisplayNameFormat: "Excessive NXDOMAIN DNS Queries - detected from ClientIP: {{SrcIpAddr}}"
-  alertDescriptionFormat: "DNSQuery list: {{DNSQueries}}\n\nThis rule creates an incident in the event where client generates excessive amounts of DNS queries for non-existent domains."
+  alertDisplayNameFormat: "[Static threshold] Excessive NXDOMAIN DNS Queries has been detected from ClientIP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "Client source is generating excessive amount of DNS queries for non-existent domains.\n\nDnsQueries requested by the client include:\n\n'{{DNSQueries}}'"
 version: 1.0.0
 kind: Scheduled

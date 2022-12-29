@@ -1,7 +1,7 @@
 id: c5d0fea4-dc84-437e-b859-692b6358238e
-name: DNS requests to Risky Domains (ASIM DNS Solution)
+name: DNS request to Risky Domains (ASIM DNS Solution)
 description: |
-  'Query searches for requests to risky Domains'
+  'Query searches for requests to risky Domains. To tune the query to your environment configure it using the 'DNS Solution Domain IOCs' watchlist.'
 
 tags:
   - Schema: ASimNetworkSessions
@@ -39,31 +39,39 @@ requiredDataConnectors:
       - Syslog
 
 tactics:
-  - Exfiltration
+  - CommandAndControl
 
 query: |
   let lookback=1d;
-  let DNS_IOCs = materialize(_GetWatchlist('DNSMonitoringConfiguration2')
-    | where Type == 'Hunting' and Enabled == 'TRUE'
+  let DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')
+    | where wl_Type == 'Hunting' and wl_Enabled == 'TRUE'
     | project
-        SearchKey,
-        Name,
-        Description,
-        Type,
-        ThresholdType,
-        Threshold,
-        Severity,
-        Tactic,
-        Enabled);
-  imDns (starttime=ago(lookback),endtime=now())
-  | join kind=inner['DNS_IOCs'] on $left.DnsQuery == $right.SearchKey
-  | project SrcIpAddr, DnsQuery, EventResultDetails,Name, Description
+        wl_DNSDomain,
+        wl_Name,
+        wl_Description,
+        wl_Type,
+        wl_ThresholdType,
+        wl_Threshold,
+        wl_Severity,
+        wl_Tactic,
+        wl_Enabled);
+  imDns(starttime=ago(lookback),endtime=now())
+  | join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain
+  | project
+    SrcIpAddr,
+    DnsQuery,
+    EventResultDetails,
+    Name=wl_Name,
+    Description=wl_Description,
+    TimeGenerated,
+    Tactic=wl_Tactic,
+    Severity=wl_Severity
 
 entityMappings:
   - entityType: DNS
     fieldMappings:
       - identifier: DomainName
-        columnName: FullNameLookup
+        columnName: DnsQuery
   - entityType: IP
     fieldMappings:
       - identifier: Address

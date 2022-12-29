@@ -1,7 +1,8 @@
-id: 83e70a34-d96f-419d-815b-43d1499e88ed
-name: Connection to Unpopular Website Detected (ASIM DNS Solution)
+id: 50f0cdfb-8b01-4eca-823d-2bbe6b8a5b95
+name: '[Anomaly] Anomalous Increase in DNS activity by Clients (ASIM DNS Solution)
 description: |
-  'Show DNSQueries not found in top 1 million query list in past 14 days. Note that to enhance performance, the query uses summarized data generated from the summarization logic App.'
+  'Checks for anomalous increase in DNS activity per client source in last 24hour as compared to last 14 days. Note that to enhance performance, the query uses summarized data generated from the summarization logic App.'
+
 tags:
   - Schema: ASimNetworkSessions
     SchemaVersion: 0.2.4
@@ -41,10 +42,15 @@ tactics:
   - CommandAndControl
 
 query: |
+  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
+    | where wl_RuleName == 'Anomaly - Anomalous Increase in DNS activity by Clients'
+       and wl_Type == 'Hunting'
+    | project toint(wl_AnomalyThreshold));
   let min_t = ago(14d);
   let max_t = now();
   let dt = 1d;
-  let AnomalyThreshold = 2.5;
+  //let AnomalyThreshold = 2.5;
+  let Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
   // calculate avg. eps(events per second)
   let eps = materialize (imDns
     | project TimeGenerated
@@ -79,18 +85,16 @@ query: |
     | summarize maxv = max(v)
     | extend sumexist = (maxv > 1)
     );
-    let allData =materialize( union isfuzzy=true
+  let allData = union isfuzzy=true
         (
         (datatable(exists: int, sumexist: bool)[1, false]
         | where toscalar(eps) > 1000
         | join (summarizationexist) on sumexist)
         | join (
-            imDns(starttime=todatetime(ago(2d)), endtime=ago(dt))
-            | where TimeGenerated > maxSummarizedTime
-            | summarize Count=count() by DnsQuery
-            | top 1000000 by Count
-            | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)
-            | extend exists=int(1)
+            imDns(starttime=todatetime(ago(2d)), endtime=now())
+            | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)
+            | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+            | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
             )
             on exists
         | project-away exists, maxv, sum*
@@ -100,12 +104,10 @@ query: |
         | where toscalar(eps) between (501 .. 1000)
         | join (summarizationexist) on sumexist)
         | join (
-            imDns(starttime=todatetime(ago(3d)), endtime=ago(dt))
-            | where TimeGenerated > maxSummarizedTime
-            | summarize Count=count() by DnsQuery
-            | top 1000000 by Count
-            | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)
-            | extend exists=int(1)
+            imDns(starttime=todatetime(ago(3d)), endtime=now())
+            | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)
+            | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+            | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
             )
             on exists
         | project-away exists, maxv, sum*
@@ -115,34 +117,35 @@ query: |
         | where toscalar(eps) <= 500
         | join (summarizationexist) on sumexist)
         | join (
-            imDns(starttime=todatetime(ago(4d)), endtime=ago(dt))
-            | where TimeGenerated > maxSummarizedTime
-            | summarize Count=count() by DnsQuery
-            | top 1000000 by Count
-            | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)
-            | extend exists=int(1)
+            imDns(starttime=todatetime(ago(4d)), endtime=now())
+            | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)
+            | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+            | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
             )
             on exists
         | project-away exists, maxv, sum*
         ),
         (
         DNS_Summarized_Logs_ip1_CL
-        | where EventTime_t between (min_t .. ago(dt)) and isnotempty(DnsQuery_s)
-        | project-rename
-            DnsQuery=DnsQuery_s,
-            Count=count__d
-        | extend Count = toint(Count)
-        | summarize TotalCount=toint(sum(Count)) by DnsQuery
-        | top 1000000 by TotalCount
-        | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)
-        )
+        | where EventTime_t > ago(14d) and isnotempty(SrcIpAddr_s)
+        | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)
         );
-  imDns(starttime=ago(1d),endtime=now())
-  | summarize Count=count() by DnsQuery
-  | where isnotempty(DnsQuery) and DnsQuery !in (allData)
+  allData
+  | make-series TotalEventCountPerDay= sum(Count) on EventTime in range (min_t, max_t, dt) by SrcIpAddr
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalEventCountPerDay, toscalar(threshold), -1, 'linefit')
+  | mv-expand anomalies, score, baseline, EventTime, TotalEventCountPerDay
+  | extend
+    anomalies = toint(anomalies),
+    score = toint(score),
+    baseline = toint(baseline),
+    EventTime = todatetime(EventTime),
+    TotalEvents = tolong(TotalEventCountPerDay)
+  | where EventTime >= ago(dt)
+  | where score >= toscalar(threshold)
+  | order by score
 
 entityMappings:
-  - entityType: DNS
+  - entityType: IP
     fieldMappings:
-      - identifier: DomainName
-        columnName: DNSQuery
+      - identifier: Address
+        columnName: SrcIpAddr

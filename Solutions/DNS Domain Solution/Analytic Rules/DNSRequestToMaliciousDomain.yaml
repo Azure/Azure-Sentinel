@@ -1,7 +1,7 @@
 id: 8e4a010a-972c-4124-8c27-1efcd7e3125a
-name: DNS Request to Malicious Domain (ASIM DNS Solution)
+name: Detect DNS request to malicious Domain (ASIM DNS Solution)
 description: |
-  'Search DNS logs for Domain IOCs present in Watchlist 'DNSMonitoringConfiguration'. Incident is created if DNSQuery matches with any value present in the Watchlist.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+  'This Analytics rule looks for Domain IOCs in DNS query logs. Incident will be created if DNSQuery matches with any value present in the Watchlist - 'DNSMonitoringConfiguration'.\n\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema'
 severity: Medium
 status: Available 
 tags:
@@ -47,36 +47,37 @@ tactics:
   - CommandAndControl
 relevantTechniques:
 query: |
-  let DNS_IOCs = materialize(_GetWatchlist('DNSMonitoringConfiguration2')
-    | where Type == 'Detection' and Enabled == 'TRUE'
+  let DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')
+    | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'
     | project
-        SearchKey,
-        Name,
-        Description,
-        Type,
-        ThresholdType,
-        Threshold,
-        Severity,
-        Tactic,
-        Enabled);
+        wl_DNSDomain,
+        wl_Name,
+        wl_Description,
+        wl_Type,
+        wl_ThresholdType,
+        wl_Threshold,
+        wl_Severity,
+        wl_Tactic,
+        wl_Enabled);
   imDns
-  | join kind=inner['DNS_IOCs'] on $left.DnsQuery == $right.SearchKey
+  | join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain
   | project
     SrcIpAddr,
     DnsQuery,
     EventResultDetails,
-    Name,
-    Description,
+    Name=wl_Name,
+    Description=wl_Description,
     TimeGenerated,
-    Tactic,
-    Severity
+    Tactic=wl_Tactic,
+    Severity=wl_Severity
+
 
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
 
 alertDetailsOverride:
-  alertDisplayNameFormat: "Request to malicious Domain '{{DnsQuery}}' by ClientIP: {{SrcIpAddr}} has been detected."
-  alertDescriptionFormat: "Alert Details:\nName: {{Name}}\nDescription: {{Description}}\nTimeGenerated: {{TimeGenerated}}"
+  alertDisplayNameFormat: "Reqest to malicious Domain '{{DnsQuery}}' by ClientIP: '{{SrcIpAddr}}' has been detected."
+  alertDescriptionFormat: "Alert details:\nName: '{{Name}}'\nDescription: '{{Description}}'\nTimeGenerated: '{{TimeGenerated}}'"
 version: 1.0.0
 kind: Scheduled

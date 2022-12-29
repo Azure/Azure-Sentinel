@@ -1,7 +1,7 @@
 id: 77b7c820-5f60-4779-8bdb-f06e21add5f1
 name: Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)
 description: |
-  'Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+  'Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema'
 severity: Medium
 status: Available 
 tags:
@@ -40,37 +40,46 @@ requiredDataConnectors:
       - Syslog
 
 queryFrequency: 1d
-queryPeriod: 8d
+queryPeriod: 10d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - CommandAndControl
+  - Reconnaissance
 relevantTechniques:
 query: |
-  let lookback = 14d;
-  let AnomalyThreshold = 2.5;
-  let timeframe = 1d;
-  imDns(responsecodename='NXDOMAIN', starttime=ago(lookback), endtime=now())
-  | make-series EventCount=count() on TimeGenerated in range (ago(lookback), now(), timeframe) by SrcIpAddr
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, AnomalyThreshold, -1, 'linefit')
-  | mv-expand anomalies, score, baseline, TimeGenerated, EventCount
-  | extend
-    anomalies = toint(anomalies),
-    score = toint(score),
-    baseline = toint(baseline),
-    EventTime = todatetime(TimeGenerated),
-    Total = tolong(EventCount)
-  | where TimeGenerated >= ago(timeframe)
-  | where score > 2 * AnomalyThreshold
-  | join kind=inner(imDns(responsecodename='NXDOMAIN', starttime=ago(timeframe), endtime=now())
-    | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)
+  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
+    | where wl_RuleName == 'Rare client observed with high reverse DNS lookup'
+        and wl_Type == 'Detection'
+    | project toint(wl_Threshold));
+  let stime = 10d;
+  let etime = 1d;
+  //let threshold = 10;
+  let SearchDomain = dynamic(["in-addr.arpa"]);
+  imDns(starttime=ago(etime), domain_has_any=SearchDomain)
+  | summarize
+    StartTimeUtc = min(TimeGenerated),
+    EndTimeUtc = max(TimeGenerated),
+    dcount(DnsQuery)
+    by SrcIpAddr
+  | where dcount_DnsQuery > toscalar(threshold)
+  | project StartTimeUtc, EndTimeUtc, SrcIpAddr, dcount_DnsQuery 
+  | join kind=leftanti (imDns(starttime=ago(stime), endtime=etime, domain_has_any=SearchDomain) 
+    | where DnsQuery contains "in-addr.arpa" 
+    | summarize dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated, 1d)
+    | where dcount_DnsQuery > toscalar(threshold)
+    | project SrcIpAddr, dcount_DnsQuery 
+    )
     on SrcIpAddr
+  | join kind=inner (imDns(starttime=ago(etime), domain_has_any=SearchDomain)
+    | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
+    on SrcIpAddr
+
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
 
 alertDetailsOverride:
-  alertDisplayNameFormat: "Rare client has been observed with high reverse DNS lookup count  - ClientIP: {{SrcIpAddr}}"
-  alertDescriptionFormat: "DNSQuery list: {{DNSQueries}}.\n\nIdentifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity."
+  alertDisplayNameFormat: "[Static threshold] Rare client has been observed as making high reverse DNS lookup count  - ClientIP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "Client identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'"
 version: 1.0.0
 kind: Scheduled

@@ -1,7 +1,7 @@
 id: 02f23312-1a33-4390-8b80-f7cd4df4dea0
-name: Excessive NXDOMAIN DNS Queries - Anomaly based (ASIM DNS Solution)
+name: Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)
 description: |
-  'This rule creates an incident in the event where client generates excessive amounts of DNS queries for non-existent domains. This uses anomaly based dynamic thresholding method.\n\nThis analytic rule uses ASIM and supports any built-in or custom source that supports the ASIM DNS schema'
+  'This rule creates an incident in the event where client generates excessive amount of DNS queries for non-existent domains. This uses anomaly based dynamic thresholding method.\n\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema'
 severity: Medium
 status: Available 
 tags:
@@ -47,30 +47,73 @@ tactics:
   - CommandAndControl
 relevantTechniques:
 query: |
-  let lookback = 14d;
-  let AnomalyThreshold = 2.5;
-  let timeframe = 1d;
-  imDns(responsecodename='NXDOMAIN', starttime=ago(lookback), endtime=now())
-  | make-series EventCount=count() on TimeGenerated in range (ago(lookback), now(), timeframe) by SrcIpAddr
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, AnomalyThreshold, -1, 'linefit')
-  | mv-expand anomalies, score, baseline, TimeGenerated, EventCount
+  let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
+    | where wl_RuleName == 'Anomaly - Excessive NXDOMAIN DNS Queries'
+        and wl_Type == 'Detection'
+    | project toint(wl_AnomalyThreshold));
+  //let lookback = 14d;
+  let min_t = ago(14d);
+  let max_t = now();
+  let dt = 1d;
+  let summarizationexist = materialize(
+    union isfuzzy=true 
+        (
+        DNS_Summarized_Logs_ip1_CL
+        | where EventTime_t > ago(1d) 
+        | project v = int(2)
+        ),
+        (
+        print int(1) 
+        | project v = print_0
+        )
+    | summarize maxv = max(v)
+    | extend sumexist = (maxv > 1)
+    );
+  let allData = union isfuzzy=true
+        (
+        (datatable(exists: int, sumexist: bool)[1, false]
+        //| where toscalar(eps) >= 0
+        | join (summarizationexist) on sumexist)
+        | join (
+            imDns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)
+            //| where TimeGenerated > min_t
+            | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+            | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+            )
+            on exists
+        | project-away exists, maxv, sum*
+        ),
+        (
+        DNS_Summarized_Logs_ip1_CL
+        | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
+        | project-rename
+            SrcIpAddr=SrcIpAddr_s,
+            Count=count__d,
+            EventTime=EventTime_t
+        | extend Count = toint(Count)
+        );
+  allData
+  | make-series EventCount=sum(Count) on EventTime in range (min_t, max_t, dt) by SrcIpAddr
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, toscalar(threshold), -1, 'linefit')
+  | mv-expand anomalies, score, baseline, EventTime, EventCount
   | extend
     anomalies = toint(anomalies),
     score = toint(score),
     baseline = toint(baseline),
-    EventTime = todatetime(TimeGenerated),
+    EventTime = todatetime(EventTime),
     Total = tolong(EventCount)
-  | where TimeGenerated >= ago(timeframe)
-  | where score > 2 * AnomalyThreshold
-  | join kind=inner(imDns(responsecodename='NXDOMAIN', starttime=ago(timeframe), endtime=now())
+  | where EventTime >= ago(dt)
+  | where score >= toscalar(threshold)
+  | join kind=inner(imDns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)
     | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)
     on SrcIpAddr
+
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
 
 alertDetailsOverride:
-  alertDisplayNameFormat: "[Anomaly] Excessive NXDOMAIN DNS Queries - detected from ClientIP: {{SrcIpAddr}}"
-  alertDescriptionFormat: "More than Baseline 'NXDOMAIN' Queries were generated.\nDNSQuery list: {{DNSQueries}}.\nBaseline 'NXDOMAIN' count from this client: {{baseline}}\nCurrent 'NXDOMAIN' count from this client: {{Total}}"
+  alertDisplayNameFormat: "[Anomaly] Excessive NXDOMAIN DNS Queries has been detected from ClientIP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "Client source is generating excessive amount of DNS queries for non-existent domains.\n\n'NXDOMAIN' error count baseline for this client is: '{{baseline}}'\n\nCurrent 'NXDOMAIN' error count from this client showing as: '{{Total}}'\n\nDNSQuery list include:\n\n'{{DNSQueries}}'"
 version: 1.0.0
 kind: Scheduled
