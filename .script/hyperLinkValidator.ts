@@ -15,7 +15,14 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             console.log(`Skipping Hyperlink validation for file path : '${filePath}' as change is not in 'Data' and/or 'Data Connectors' folder`)
             return ExitCode.SUCCESS;
         }
-    
+
+        //IGNORE BELOW FILES
+        if (filePath.includes("azuredeploy") || filePath.includes("host.json") || filePath.includes("proxies.json") || filePath.includes("function.json") || filePath.includes("requirements.txt") || filePath.includes(".py") || filePath.includes(".ps1"))
+        {
+            console.log(`Skipping Hyperlink validation for file path : '${filePath}'`)
+            return ExitCode.SUCCESS;
+        }
+
         const content = fs.readFileSync(filePath, "utf8");
 
         //get http or https links from the content
@@ -40,10 +47,11 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 console.log(`File: '${filePath}' has Total Invalid Links: ${invalidLinks.length}`)
                 console.log(`Below are the invalid links:`)
                 invalidLinks.forEach(l => {
-                logger.logError(`\n ${l}`);
+                    logger.logWarning(`\n ${l}`);
                 });
 
-                throw new Error(`Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
+                // throw new Error(`Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
+                console.log(`Warning: Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`)
             }
         }
 

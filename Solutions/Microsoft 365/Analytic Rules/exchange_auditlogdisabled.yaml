@@ -1,0 +1,39 @@
+id: 194dd92e-d6e7-4249-85a5-273350a7f5ce
+name: Exchange AuditLog disabled
+description: |
+  'Identifies when the exchange audit logging has been disabled which may be an adversary attempt
+  to evade detection or avoid other defenses.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  OfficeActivity
+  | where UserType in~ ("Admin","DcAdmin")
+  // Only admin or global-admin can disable audit logging
+  | where Operation =~ "Set-AdminAuditLogConfig"
+  | extend AdminAuditLogEnabledValue = tostring(parse_json(tostring(parse_json(tostring(array_slice(parse_json(Parameters),3,3)))[0])).Value)
+  | where AdminAuditLogEnabledValue =~ "False"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters, AdminAuditLogEnabledValue
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.1
+kind: Scheduled
