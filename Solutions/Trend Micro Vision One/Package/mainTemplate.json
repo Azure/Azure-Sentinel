@@ -40,7 +40,7 @@
   "variables": {
     "solutionId": "trendmicro.trend_micro_vision_one_xdr_mss",
     "_solutionId": "[variables('solutionId')]",
-    "WorkbenchID": "workbenchId_s",
+	 "WorkbenchID": "workbenchId_s",
     "_WorkbenchID": "[variables('WorkbenchID')]",
     "XDRCustomerID": "xdrCustomerID_g",
     "_XDRCustomerID": "[variables('XDRCustomerID')]",
@@ -51,18 +51,18 @@
     "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
     "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
     "_dataConnectorId1": "[variables('dataConnectorId1')]",
-    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
     "dataConnectorVersion1": "1.0.0",
-    "workbookVersion1": "1.2.0",
+    "workbookVersion1": "1.3.0",
     "workbookContentId1": "TrendMicroXDR",
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
-    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-Workbook-',variables('_workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
     "_workbookContentId1": "[variables('workbookContentId1')]",
-    "analyticRuleVersion1": "1.0.1",
+    "analyticRuleVersion1": "1.0.2",
     "analyticRulecontentId1": "0febd8cc-1b8d-45ed-87b3-e1e8a57d14cd",
     "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
     "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
-    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-AnalyticsRule-',variables('_analyticRulecontentId1'))]"
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]"
   },
   "resources": [
     {
@@ -92,7 +92,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Trend Micro Vision One data connector with template version 2.0.0",
+        "description": "Trend Micro Vision One data connector with template version 2.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -299,6 +299,7 @@
       "dependsOn": [
         "[variables('_dataConnectorId1')]"
       ],
+      "location": "[parameters('workspace-location')]",
       "properties": {
         "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
         "contentId": "[variables('_dataConnectorContentId1')]",
@@ -495,7 +496,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "TrendMicroXDROverviewWorkbook Workbook with template version 2.0.0",
+        "description": "TrendMicroXDROverviewWorkbook Workbook with template version 2.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -524,7 +525,7 @@
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
               "properties": {
-                "description": "@{workbookKey=TrendMicroXDR; logoFileName=trendmicro_logo.svg; description=Gain insights from Trend Micro Vision One with this overview of the Alerts triggered.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.2.0; title=Trend Micro Vision One Alert Overview; templateRelativePath=TrendMicroXDROverview.json; subtitle=; provider=Trend Micro}.description",
+                "description": "@{workbookKey=TrendMicroXDR; logoFileName=trendmicro_logo.svg; description=Gain insights from Trend Micro Vision One with this overview of the Alerts triggered.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.3.0; title=Trend Micro Vision One Alert Overview; templateRelativePath=TrendMicroXDROverview.json; subtitle=; provider=Trend Micro}.description",
                 "parentId": "[variables('workbookId1')]",
                 "contentId": "[variables('_workbookContentId1')]",
                 "kind": "Workbook",
@@ -588,7 +589,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Create Incident for XDR Alerts Analytics Rule with template version 2.0.0",
+        "description": "Create Incident for XDR Alerts_AnalyticalRules Analytics Rule with template version 2.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion1')]",
@@ -602,109 +603,116 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "displayName": "TrendMicroXDRWorkbench",
-                "description": "",
-                "severity": "High",
+                "description": "This Query creates an incident based on Trend Micro Vision One Workbench Alerts and maps the impacted entities for Microsoft Sentinel usage.",
+                "displayName": "Create Incident for XDR Alerts",
                 "enabled": false,
-                "query": "TrendMicro_XDR_WORKBENCH_CL\n| extend Severity = case(severity_s == \"low\", \"Informational\",\n                         severity_s == \"medium\", \"Low\",\n                         severity_s == \"high\", \"Medium\",\n                         \"High\"\n                        )\n| extend \n    UserAccountName_s = todynamic(UserAccountName_s)[0],\n    UserAccountNTDomain_s = todynamic(UserAccountNTDomain_s)[0],\n    FileName_s = todynamic(FileName_s)[0],\n    FileDirectory_s = todynamic(FileDirectory_s)[0],\n    ProcessCommandLine_s = todynamic(ProcessCommandLine_s)[0],\n    RegistryKey_s = todynamic(RegistryKey_s)[0],\n    RegistryValue_s = todynamic(RegistryValue_s)[0],\n    RegistryValueName_s = todynamic(RegistryValueName_s)[0]",
+                "query": "TrendMicro_XDR_WORKBENCH_CL\n| extend Severity = case(severity_s == \"low\", \"Informational\",\n                        severity_s == \"medium\", \"Low\",\n                        severity_s == \"high\", \"Medium\",\n                        \"High\"\n                        )\n| extend \n    UserAccountName_s = todynamic(UserAccountName_s)[0],\n    UserAccountNTDomain_s = todynamic(UserAccountNTDomain_s)[0],\n    FileName_s = todynamic(FileName_s)[0],\n    FileDirectory_s = todynamic(FileDirectory_s)[0],\n    ProcessCommandLine_s = todynamic(ProcessCommandLine_s)[0],\n    RegistryKey_s = todynamic(RegistryKey_s)[0],\n    RegistryValue_s = todynamic(RegistryValue_s)[0],\n    RegistryValueName_s = todynamic(RegistryValueName_s)[0]\n",
                 "queryFrequency": "PT5M",
                 "queryPeriod": "PT5M",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
                 "triggerOperator": "GreaterThan",
                 "triggerThreshold": 0,
-                "suppressionDuration": "PT5H",
-                "suppressionEnabled": false,
-                "tactics": [],
-                "alertRuleTemplateName": null,
-                "incidentConfiguration": {
-                  "createIncident": true,
-                  "groupingConfiguration": {
-                    "enabled": true,
-                    "reopenClosedIncident": false,
-                    "lookbackDuration": "PT5M",
-                    "matchingMethod": "Selected",
-                    "groupByCustomDetails": [
-                      "WorkbenchID"
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "TrendMicroXDR",
+                    "dataTypes": [
+                      "TrendMicro_XDR_WORKBENCH_CL"
                     ]
                   }
-                },
+                ],
+                "entityMappings": [
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "UserAccountName_s",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "UserAccountNTDomain_s",
+                        "identifier": "NTDomain"
+                      }
+                    ],
+                    "entityType": "Account"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "FileName_s",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "FileDirectory_s",
+                        "identifier": "Directory"
+                      }
+                    ],
+                    "entityType": "File"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "ProcessCommandLine_s",
+                        "identifier": "CommandLine"
+                      }
+                    ],
+                    "entityType": "Process"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "RegistryKey_s",
+                        "identifier": "Key"
+                      }
+                    ],
+                    "entityType": "RegistryKey"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "ProcessCommandLine_s",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "RegistryValue_s",
+                        "identifier": "Value"
+                      }
+                    ],
+                    "entityType": "RegistryValue"
+                  }
+                ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
-                "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "{{workbenchName_s}}",
-                  "alertDescriptionFormat": "{{description_s}}",
-                  "alertSeverityColumnName": "Severity"
-                },
                 "customDetails": {
-                  "XDRCustomerID": "[variables('_XDRCustomerID')]",
-                  "WorkbenchID": "[variables('_WorkbenchID')]",
-                  "WorkbenchName": "workbenchName_s",
+                  "Provider": "alertProvider_s",
+                  "ImpactScopeSummary": "impactScope_Summary_s",
                   "WorkbenchLink": "workbenchLink_s",
-                  "PriorityScore": "priorityScore_d",
+                  "WorkbenchName": "workbenchName_s",
                   "CreatedAt": "createdTime_t",
                   "Severity": "severity_s",
-                  "ImpactScopeSummary": "impactScope_Summary_s",
-                  "Provider": "alertProvider_s"
+                  "XDRCustomerID": "[variables('_XDRCustomerID')]",
+                  "WorkbenchID": "[variables('_WorkbenchID')]",
+                  "PriorityScore": "priorityScore_d"
                 },
-                "entityMappings": [
-                  {
-                    "entityType": "Account",
-                    "fieldMappings": [
-                      {
-                        "identifier": "Name",
-                        "columnName": "UserAccountName_s"
-                      },
-                      {
-                        "identifier": "NTDomain",
-                        "columnName": "UserAccountNTDomain_s"
-                      }
-                    ]
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "{{workbenchName_s}}",
+                  "alertSeverityColumnName": "Severity",
+                  "alertDescriptionFormat": "{{description_s}}"
+                },
+                "incidentConfiguration": {
+                  "groupingConfiguration": {
+                    "groupByCustomDetails": [
+                      "WorkbenchID"
+                    ],
+                    "enabled": true,
+                    "lookbackDuration": "5m",
+                    "reopenClosedIncident": false,
+                    "matchingMethod": "Selected"
                   },
-                  {
-                    "entityType": "File",
-                    "fieldMappings": [
-                      {
-                        "identifier": "Name",
-                        "columnName": "FileName_s"
-                      },
-                      {
-                        "identifier": "Directory",
-                        "columnName": "FileDirectory_s"
-                      }
-                    ]
-                  },
-                  {
-                    "entityType": "Process",
-                    "fieldMappings": [
-                      {
-                        "identifier": "CommandLine",
-                        "columnName": "ProcessCommandLine_s"
-                      }
-                    ]
-                  },
-                  {
-                    "entityType": "RegistryKey",
-                    "fieldMappings": [
-                      {
-                        "identifier": "Key",
-                        "columnName": "RegistryKey_s"
-                      }
-                    ]
-                  },
-                  {
-                    "entityType": "RegistryValue",
-                    "fieldMappings": [
-                      {
-                        "identifier": "Name",
-                        "columnName": "RegistryValueName_s"
-                      },
-                      {
-                        "identifier": "Value",
-                        "columnName": "RegistryValue_s"
-                      }
-                    ]
-                  }
-                ]
+                  "createIncident": true
+                }
               }
             },
             {
@@ -712,7 +720,7 @@
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
               "properties": {
-                "description": "Trend Micro Vision One Analytics Rule",
+                "description": "Trend Micro Vision One Analytics Rule 1",
                 "parentId": "[variables('analyticRuleId1')]",
                 "contentId": "[variables('_analyticRulecontentId1')]",
                 "kind": "AnalyticsRule",
@@ -739,8 +747,9 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.0",
+        "version": "2.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
