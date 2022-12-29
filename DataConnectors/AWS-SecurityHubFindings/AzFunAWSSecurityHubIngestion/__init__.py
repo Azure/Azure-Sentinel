@@ -21,6 +21,7 @@ from boto3.session import Session
 import azure.functions as func
 from azure.identity import AzureCliCredential, ChainedTokenCredential, ManagedIdentityCredential, DefaultAzureCredential
 import botocore
+from azure.core.exceptions import ClientAuthenticationError
 
 client_id = os.environ.get('ClientID')
 sentinel_customer_id = os.environ.get('WorkspaceID')
