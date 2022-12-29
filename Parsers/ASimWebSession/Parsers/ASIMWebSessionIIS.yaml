@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for Windows IIS logs
   Version: '0.1'
-  LastUpdated: Dec 13, 2022
+  LastUpdated: Dec 29, 2022
 Product:
   Name: Internet Information Services (IIS)
 Normalization:
@@ -73,6 +73,15 @@ ParserQuery: |
                 csUriQuery = tostring(csUriQuery),
                 csUriStem = tostring(csUriStem),
                 tempURLconstruct = iff(csUriQuery == "", csUriStem, strcat(csUriStem,"?",csUriQuery))
+        | extend 
+                ipv6_parts = extract_all (@'^\[(.+)\](?:\:(\d+))?$',csHost)[0],
+                ipv4_parts = extract_all (@'^(\d+\.\d+\.\d+\.\d+)(?:\:(\d+))?$',csHost)[0],
+                host_parts = extract_all (@'^([^\\\d:]+)(?:\:(\d+))?$',csHost)[0]
+        | extend         
+                DstIpAddr = coalesce(ipv4_parts[0], ipv6_parts[0]),
+                DstPortNumber = coalesce(ipv4_parts[1], ipv6_parts[1], host_parts[1]),
+                HttpHost = coalesce (host_parts[0], HttpHost)
+        | project-away ipv4_parts, ipv6_parts, host_parts              
         | extend                
                 Url = case( 
                            (tostring(sPort) has "80") and sPort == "80" and HttpHost == "Default Web Site", strcat("http://",tostring(Dst),tostring(tempURLconstruct)),
