@@ -95,6 +95,7 @@ ParserQuery: |
                 EventReportUrl = ReportReferenceLink,
                 EventOriginalSubType = scSubStatus
            | extend
+                SrcUsername = User,
                 DstNatIpAddr = iff(csHost <> "", Dst, ""),
                 EventType = 'WebServerSession',            
                 EventVendor = 'Microsoft',
@@ -112,7 +113,10 @@ ParserQuery: |
                 EventSeverity = iff(EventResult == "Success", "Informational", "Low"),
                 csUriQuery = tostring(csUriQuery),
                 csUriStem = tostring(csUriStem),
-                tempURLconstruct = iff(csUriQuery == "", csUriStem, strcat(csUriStem,"?",csUriQuery))
+                tempURLconstruct = iff(csUriQuery == "", csUriStem, strcat(csUriStem,"?",csUriQuery)),
+                sPort = tostring(sPort),
+                HttpHost = iff ( HttpHost == "-", "", HttpHost),
+                csHost = iff ( csHost == "-", "", csHost)  //remove empty values
         | extend 
                 ipv6_parts = extract_all (@'^\[(.+)\](?:\:(\d+))?$',csHost)[0],
                 ipv4_parts = extract_all (@'^(\d+\.\d+\.\d+\.\d+)(?:\:(\d+))?$',csHost)[0],
@@ -134,18 +138,22 @@ ParserQuery: |
           (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
           and (ASimMatchingIpAddr != "No match")
         )
-        | extend                
-                Url = case( 
-                           (tostring(sPort) has "80") and sPort == "80" and HttpHost == "Default Web Site", strcat("http://",tostring(Dst),tostring(tempURLconstruct)),
-                           (tostring(sPort) has "80") and sPort <> "80" and HttpHost == "Default Web Site", strcat("http://",tostring(Dst),":",tostring(sPort),tostring(tempURLconstruct)),
-                           (tostring(sPort) has "80") and sPort == "80" and HttpHost <> "Default Web Site", strcat("http://",tostring(HttpHost),tostring(tempURLconstruct)),
-                           (tostring(sPort) has "80") and sPort <> "80" and HttpHost <> "Default Web Site", strcat("http://",tostring(HttpHost),":",tostring(sPort),tostring(tempURLconstruct)),
-                           (tostring(sPort) has "443") and HttpHost == "Default Web Site" and sPort == "443" , strcat("https://",tostring(Dst),tostring(tempURLconstruct)), 
-                           (tostring(sPort) has "443") and HttpHost == "Default Web Site" and sPort <> "443", strcat("https://",tostring(Dst),":",tostring(sPort),tostring(tempURLconstruct)), 
-                           (tostring(sPort) has "443") and sPort == "443" and HttpHost <> "Default Web Site", strcat("http://",tostring(HttpHost),tostring(tempURLconstruct)),
-                           (tostring(sPort) has "443") and sPort <> "443" and HttpHost <> "Default Web Site", strcat("http://",tostring(HttpHost),":",tostring(sPort),tostring(tempURLconstruct)),
-                           strcat("http://",tostring(Src),":",tostring(sPort),tostring(tempURLconstruct)) 
-                           ) // we guess the URLs based upon ports, might be incorrect.
+        | extend         
+                DstIpAddr = coalesce(ipv4_parts[0], ipv6_parts[0]),
+                DstPortNumber = coalesce(ipv4_parts[1], ipv6_parts[1], host_parts[1]),
+                HttpHost = coalesce (host_parts[0], HttpHost)
+        | project-away ipv4_parts, ipv6_parts, host_parts              
+        | extend 
+                schema = iff (sPort has "443", "https://", "http://"),
+                port = iff (sPort in ("80", "443"), "", strcat (":", sPort)),
+                host = case ( 
+                HttpHost == "Default Web Site", Dst,
+                HttpHost != "", HttpHost,
+                Dst
+               )
+         | extend 
+                 Url = strcat (schema, host, port, tempURLconstruct)
+        | project-away schema, host, port, tempURLconstruct
         | where
              ((array_length(url_has_any) == 0) or (Url has_any (url_has_any)))
         | project-away 
@@ -168,7 +176,6 @@ ParserQuery: |
                 sComputerName,
                 sPort,
                 sc*,
-                tempURLconstruct,
                 StorageAccount
   };        
   parser (starttime, endtime, srcipaddr_has_any_prefix, ipaddr_has_any_prefix, url_has_any, httpuseragent_has_any, eventresultdetails_in, eventresult, disabled)
