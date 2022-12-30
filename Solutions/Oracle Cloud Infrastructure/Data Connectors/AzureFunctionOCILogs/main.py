@@ -18,7 +18,7 @@ StreamOcid = os.environ['StreamOcid']
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'
-
+CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
@@ -42,10 +42,13 @@ def main(mytimer: func.TimerRequest):
 
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
-    cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
+    if CURSOR_TYPE.lower() == 'group' :
+        cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
+    else :
+        cursor = get_cursor_by_partition(stream_client, StreamOcid, partition="2")
+    
     process_events(stream_client, StreamOcid, cursor, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
-
 
 def parse_key(key_input):
     try:
@@ -94,6 +97,15 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
                                                                    commit_on_get=True)
     response = sc.create_group_cursor(sid, cursor_details)
     return response.data.value
+
+def get_cursor_by_partition(client, stream_id, partition):
+    print("Creating a cursor for partition {}".format(partition))
+    cursor_details = oci.streaming.models.CreateCursorDetails(
+        partition=partition,
+        type=oci.streaming.models.CreateCursorDetails.TYPE_TRIM_HORIZON)
+    response = client.create_cursor(stream_id, cursor_details)
+    cursor = response.data.value
+    return cursor
 
 
 def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector, start_ts):
