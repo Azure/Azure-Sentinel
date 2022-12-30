@@ -1,0 +1,45 @@
+id: bff093b2-500e-4ae5-bb49-a5b1423cbd5b
+name: External user added and removed in short timeframe
+description: |
+  'This detection flags the occurances of external user accounts that are added to a Team and then removed within
+  one hour.'
+severity: Low
+status: Available 
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+  let TeamsAddDel = (Op:string){
+  OfficeActivity
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation == Op
+  | where Members has ("#EXT#")
+  | mv-expand Members
+  | extend UPN = tostring(Members.UPN)
+  | where UPN has ("#EXT#")
+  | project TimeGenerated, Operation, UPN, UserId, TeamName
+  };
+  let TeamsAdd = TeamsAddDel("MemberAdded")
+  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName;
+  let TeamsDel = TeamsAddDel("MemberRemoved")
+  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName;
+  TeamsAdd
+  | join kind=inner (TeamsDel) on UPN
+  | where TimeDeleted > TimeAdded
+  | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UPN
+version: 2.0.0
+kind: Scheduled
