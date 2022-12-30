@@ -57,7 +57,7 @@ def main(mytimer: func.TimerRequest) -> None:
         credential_chain = ChainedTokenCredential(managed_identity, azure_cli, default_azure_credential)
         token_meta = credential_chain.get_token(client_id)
         token = token_meta.token
-    except azure.core.exceptions.ClientAuthenticationError as error:
+    except ClientAuthenticationError as error:
         logging.info ("Authenticating to Azure AD: %s" % error)
     
     sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
