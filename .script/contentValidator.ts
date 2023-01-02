@@ -13,7 +13,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         
         if (hasAzureSentinelText)
         {
-            throw new Error(`Please replace text 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
+            throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
         }
     }
     return ExitCode.SUCCESS;
