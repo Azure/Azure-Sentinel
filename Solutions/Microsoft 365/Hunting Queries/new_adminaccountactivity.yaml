@@ -1,0 +1,48 @@
+id: 723c5f46-133f-4f1e-ada6-5c138f811d75
+name: New Admin account activity seen which was not seen historically
+description: |
+  'This will help you discover any new admin account activity which was seen and were not seen historically.
+  Any new accounts seen in the results can be validated and investigated for any suspicious activities.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Exchange)
+tactics:
+  - PrivilegeEscalation
+  - Collection
+relevantTechniques:
+  - T1078
+  - T1114
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let historicalActivity=
+  OfficeActivity
+  | where TimeGenerated between(lookback..starttime)
+  | where RecordType=="ExchangeAdmin" and UserType in ("Admin","DcAdmin")
+  | summarize historicalCount=count() by UserId;
+  let recentActivity = OfficeActivity
+  | where TimeGenerated between(starttime..endtime)
+  | where UserType in ("Admin","DcAdmin")
+  | summarize recentCount=count() by UserId;
+  recentActivity | join kind = leftanti (
+     historicalActivity
+  ) on UserId
+  | project UserId,recentCount
+  | order by recentCount asc, UserId
+  | join kind = rightsemi
+  (OfficeActivity
+  | where TimeGenerated between(starttime..endtime)
+  | where RecordType == "ExchangeAdmin" | where UserType in ("Admin","DcAdmin"))
+  on UserId
+  | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by RecordType, Operation, UserType, UserId, OriginatingServer, ResultStatus
+  | extend timestamp = StartTime, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 2.0.0

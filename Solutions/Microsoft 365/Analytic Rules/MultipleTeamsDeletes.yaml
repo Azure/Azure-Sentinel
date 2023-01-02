@@ -1,0 +1,37 @@
+id: 173f8699-6af5-484a-8b06-8c47ba89b380
+name: Multiple Teams deleted by a single user
+description: |
+  'This detection flags the occurrences of deleting multiple teams within an hour.
+  This data is a part of Office 365 Connector in Microsoft Sentinel.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1489
+query: |
+  // Adjust this value to change how many Teams should be deleted before including
+  let max_delete_count = 3;
+  // Adjust this value to change the timewindow the query runs over
+    OfficeActivity
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where Operation =~ "TeamDeleted"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(TeamName) by UserId
+  | where array_length(DeletedTeams) > max_delete_count
+  | extend timestamp = StartTime, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 2.0.1
+kind: Scheduled
