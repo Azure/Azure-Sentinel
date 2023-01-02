@@ -30,7 +30,7 @@ class poller:
 
     def parse_desc(self, data):
         """
-            adds more newlines to description for good display on Azure sentinel incidents
+            adds more newlines to description for good display on Microsoft Sentinel incidents
         """
         arr = data.splitlines()
         res = ""
