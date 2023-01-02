@@ -42,15 +42,15 @@
     "_solutionId": "[variables('solutionId')]",
     "email": "thijs.xhaflaire@jamf.com",
     "_email": "[variables('email')]",
-    "parserVersion1": "1.0.0",
-    "parserContentId1": "JamfProtect-Parser",
-    "_parserContentId1": "[variables('parserContentId1')]",
-    "parserName1": "JamfProtect",
-    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
-    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
-    "_parserId1": "[variables('parserId1')]",
-    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "jamfprotect",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "jamfprotect",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
     "workbookVersion1": "2.0.0",
     "workbookContentId1": "JamfProtectWorkbook",
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
@@ -76,72 +76,124 @@
     {
       "type": "Microsoft.Resources/templateSpecs",
       "apiVersion": "2021-05-01",
-      "name": "[variables('parserTemplateSpecName1')]",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
       "tags": {
         "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "Parser"
+        "hidden-sentinelContentType": "DataConnector"
       },
       "properties": {
-        "description": "JamfProtect Data Parser with template",
-        "displayName": "JamfProtect Data Parser template"
+        "description": "Jamf Protect data connector with template",
+        "displayName": "Jamf Protect template"
       }
     },
     {
       "type": "Microsoft.Resources/templateSpecs/versions",
       "apiVersion": "2021-05-01",
-      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
       "location": "[parameters('workspace-location')]",
       "tags": {
         "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "Parser"
+        "hidden-sentinelContentType": "DataConnector"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "JamfProtect Data Parser with template version 2.1.0",
+        "description": "Jamf Protect data connector with template version 2.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "[variables('parserVersion1')]",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
           "parameters": {},
           "variables": {},
           "resources": [
             {
-              "name": "[variables('_parserName1')]",
-              "apiVersion": "2020-08-01",
-              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
               "properties": {
-                "eTag": "*",
-                "displayName": "JamfProtect",
-                "category": "Samples",
-                "functionAlias": "JamfProtect",
-                "query": "\n{\n    \"id\": \"jamfprotect\",\n    \"title\": \"Jamf Protect\",\n    \"publisher\": \"Jamf\",\n    \"descriptionMarkdown\": \"The [Jamf Protect](https://www.jamf.com/products/jamf-protect/) connector provides the capability to read raw event data from Jamf Protect in Microsoft Sentinel.\",\n    \"graphQueries\": [\n        {\n            \"metricName\": \"Total Activities data received\",\n            \"legend\": \"jamfprotect_CL\",\n            \"baseQuery\": \"jamfprotect_CL\"\n        }\n    ],\n    \"sampleQueries\": [\n        {\n            \"description\" : \"Jamf Protect - All events.\",\n            \"query\": \"jamfprotect_CL\\n | sort by TimeGenerated desc\"\n        },\n        {\n            \"description\" : \"Jamf Protect - All active endpoints.\",\n            \"query\": \"jamfprotect_CL\\n | where input_host_hostname_s <> \"\"\\n | summarize Event = count() by input_host_hostname_s\\n | project-rename HostName = input_host_hostname_s\\n | sort by Event desc\"\n        },\n        {\n            \"description\" : \"Jamf Protect - Top 10 endpoints with Alerts\",\n            \"query\": \"jamfprotect_CL\\n | where topicType_s == \"alert\" and input_eventType_s <> \"\" and input_host_hostname_s <> \"\"\\n | summarize Event = count() by input_host_hostname_s\\n | project-rename HostName = input_host_hostname_s\\n | top 10 by Event\"\n        },\n    ],\n    \"dataTypes\": [\n        {\n            \"name\": \"jamfprotect_CL\",\n            \"lastDataReceivedQuery\": \"jamfprotect_CL\\n            | summarize Time = max(TimeGenerated)\\n            | where isnotempty(Time)\"\n        }\n    ],\n    \"connectivityCriterias\": [\n        {\n            \"type\": \"IsConnectedQuery\",\n            \"value\": [\n                \"jamfprotect_CL\\n            | summarize LastLogReceived = max(TimeGenerated)\\n            | project IsConnected = LastLogReceived > ago(30d)\"\n            ]\n        }\n    ],\n    \"availability\": {\n        \"status\": 1,\n        \"isPreview\": true\n    },\n    \"permissions\": {\n        \"resourceProvider\": [\n            {\n                \"provider\": \"Microsoft.OperationalInsights/workspaces\",\n                \"permissionsDisplayText\": \"read and write permissions on the workspace are required.\",\n                \"providerDisplayName\": \"Workspace\",\n                \"scope\": \"Workspace\",\n                \"requiredPermissions\": {\n                    \"write\": true,\n                    \"read\": true,\n                    \"delete\": true\n                }\n            }\n        ],\n        \"customs\": []\n    },\n    \"instructionSteps\": [{\n            \"title\": \"\",\n            \"description\": \"This connector reads data from the jamfprotect_CL table created by Jamf Protect in a Microsoft Analytics Workspace, if the [data forwarding](https://docs.jamf.com/jamf-protect/documentation/Data_Forwarding_to_a_Third_Party_Storage_Solution.html?hl=sentinel#task-4227) option is enabled in Jamf Protect then raw event data is sent to the Microsoft Sentinel Ingestion API.\"\n        }\n    ]\n}",
-                "version": 1,
-                "tags": [
-                  {
-                    "name": "description",
-                    "value": "JamfProtect"
-                  }
-                ]
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Jamf Protect",
+                  "publisher": "Jamf",
+                  "descriptionMarkdown": "The [Jamf Protect](https://www.jamf.com/products/jamf-protect/) connector provides the capability to read raw event data from Jamf Protect in Microsoft Sentinel.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Activities data received",
+                      "legend": "jamfprotect_CL",
+                      "baseQuery": "jamfprotect_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Jamf Protect - All events.",
+                      "query": "jamfprotect_CL\n | sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Jamf Protect - All active endpoints.",
+                      "query": "jamfprotect_CL\n | where notempty(input_host_hostname_s) | summarize Event = count() by input_host_hostname_s\n | project-rename HostName = input_host_hostname_s\n | sort by Event desc"
+                    },
+                    {
+                      "description": "Jamf Protect - Top 10 endpoints with Alerts",
+                      "query": "jamfprotect_CL\n | where topicType_s == 'alert' and notempty(input_eventType_s) and notempty(input_host_hostname_s)\n | summarize Event = count() by input_host_hostname_s\n | project-rename HostName = input_host_hostname_s\n | top 10 by Event"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "jamfprotect_CL",
+                      "lastDataReceivedQuery": "jamfprotect_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "jamfprotect_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": []
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "This connector reads data from the jamfprotect_CL table created by Jamf Protect in a Microsoft Analytics Workspace, if the [data forwarding](https://docs.jamf.com/jamf-protect/documentation/Data_Forwarding_to_a_Third_Party_Storage_Solution.html?hl=sentinel#task-4227) option is enabled in Jamf Protect then raw event data is sent to the Microsoft Sentinel Ingestion API."
+                    }
+                  ]
+                }
               }
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
-              "dependsOn": [
-                "[variables('_parserName1')]"
-              ],
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
               "properties": {
-                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
-                "contentId": "[variables('_parserContentId1')]",
-                "kind": "Parser",
-                "version": "[variables('parserVersion1')]",
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
                 "source": {
-                  "name": "Jamf Protect",
                   "kind": "Solution",
+                  "name": "Jamf Protect",
                   "sourceId": "[variables('_solutionId')]"
                 },
                 "author": {
@@ -161,32 +213,18 @@
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-      "apiVersion": "2021-06-01",
-      "name": "[variables('_parserName1')]",
-      "location": "[parameters('workspace-location')]",
-      "properties": {
-        "eTag": "*",
-        "displayName": "JamfProtect",
-        "category": "Samples",
-        "functionAlias": "JamfProtect",
-        "query": "\n{\n    \"id\": \"jamfprotect\",\n    \"title\": \"Jamf Protect\",\n    \"publisher\": \"Jamf\",\n    \"descriptionMarkdown\": \"The [Jamf Protect](https://www.jamf.com/products/jamf-protect/) connector provides the capability to read raw event data from Jamf Protect in Microsoft Sentinel.\",\n    \"graphQueries\": [\n        {\n            \"metricName\": \"Total Activities data received\",\n            \"legend\": \"jamfprotect_CL\",\n            \"baseQuery\": \"jamfprotect_CL\"\n        }\n    ],\n    \"sampleQueries\": [\n        {\n            \"description\" : \"Jamf Protect - All events.\",\n            \"query\": \"jamfprotect_CL\\n | sort by TimeGenerated desc\"\n        },\n        {\n            \"description\" : \"Jamf Protect - All active endpoints.\",\n            \"query\": \"jamfprotect_CL\\n | where input_host_hostname_s <> \"\"\\n | summarize Event = count() by input_host_hostname_s\\n | project-rename HostName = input_host_hostname_s\\n | sort by Event desc\"\n        },\n        {\n            \"description\" : \"Jamf Protect - Top 10 endpoints with Alerts\",\n            \"query\": \"jamfprotect_CL\\n | where topicType_s == \"alert\" and input_eventType_s <> \"\" and input_host_hostname_s <> \"\"\\n | summarize Event = count() by input_host_hostname_s\\n | project-rename HostName = input_host_hostname_s\\n | top 10 by Event\"\n        },\n    ],\n    \"dataTypes\": [\n        {\n            \"name\": \"jamfprotect_CL\",\n            \"lastDataReceivedQuery\": \"jamfprotect_CL\\n            | summarize Time = max(TimeGenerated)\\n            | where isnotempty(Time)\"\n        }\n    ],\n    \"connectivityCriterias\": [\n        {\n            \"type\": \"IsConnectedQuery\",\n            \"value\": [\n                \"jamfprotect_CL\\n            | summarize LastLogReceived = max(TimeGenerated)\\n            | project IsConnected = LastLogReceived > ago(30d)\"\n            ]\n        }\n    ],\n    \"availability\": {\n        \"status\": 1,\n        \"isPreview\": true\n    },\n    \"permissions\": {\n        \"resourceProvider\": [\n            {\n                \"provider\": \"Microsoft.OperationalInsights/workspaces\",\n                \"permissionsDisplayText\": \"read and write permissions on the workspace are required.\",\n                \"providerDisplayName\": \"Workspace\",\n                \"scope\": \"Workspace\",\n                \"requiredPermissions\": {\n                    \"write\": true,\n                    \"read\": true,\n                    \"delete\": true\n                }\n            }\n        ],\n        \"customs\": []\n    },\n    \"instructionSteps\": [{\n            \"title\": \"\",\n            \"description\": \"This connector reads data from the jamfprotect_CL table created by Jamf Protect in a Microsoft Analytics Workspace, if the [data forwarding](https://docs.jamf.com/jamf-protect/documentation/Data_Forwarding_to_a_Third_Party_Storage_Solution.html?hl=sentinel#task-4227) option is enabled in Jamf Protect then raw event data is sent to the Microsoft Sentinel Ingestion API.\"\n        }\n    ]\n}",
-        "version": 1
-      }
-    },
-    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "apiVersion": "2022-01-01-preview",
-      "location": "[parameters('workspace-location')]",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
       "dependsOn": [
-        "[variables('_parserId1')]"
+        "[variables('_dataConnectorId1')]"
       ],
+      "location": "[parameters('workspace-location')]",
       "properties": {
-        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
-        "contentId": "[variables('_parserContentId1')]",
-        "kind": "Parser",
-        "version": "[variables('parserVersion1')]",
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
         "source": {
           "kind": "Solution",
           "name": "Jamf Protect",
@@ -201,6 +239,81 @@
           "email": "support@jamf.com",
           "tier": "Partner",
           "link": "https://www.jamf.com/support/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Jamf Protect",
+          "publisher": "Jamf",
+          "descriptionMarkdown": "The [Jamf Protect](https://www.jamf.com/products/jamf-protect/) connector provides the capability to read raw event data from Jamf Protect in Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Total Activities data received",
+              "legend": "jamfprotect_CL",
+              "baseQuery": "jamfprotect_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "jamfprotect_CL",
+              "lastDataReceivedQuery": "jamfprotect_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "jamfprotect_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Jamf Protect - All events.",
+              "query": "jamfprotect_CL\n | sort by TimeGenerated desc"
+            },
+            {
+              "description": "Jamf Protect - All active endpoints.",
+              "query": "jamfprotect_CL\n | where notempty(input_host_hostname_s) | summarize Event = count() by input_host_hostname_s\n | project-rename HostName = input_host_hostname_s\n | sort by Event desc"
+            },
+            {
+              "description": "Jamf Protect - Top 10 endpoints with Alerts",
+              "query": "jamfprotect_CL\n | where topicType_s == 'alert' and notempty(input_eventType_s) and notempty(input_host_hostname_s)\n | summarize Event = count() by input_host_hostname_s\n | project-rename HostName = input_host_hostname_s\n | top 10 by Event"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": []
+          },
+          "instructionSteps": [
+            {
+              "description": "This connector reads data from the jamfprotect_CL table created by Jamf Protect in a Microsoft Analytics Workspace, if the [data forwarding](https://docs.jamf.com/jamf-protect/documentation/Data_Forwarding_to_a_Third_Party_Storage_Solution.html?hl=sentinel#task-4227) option is enabled in Jamf Protect then raw event data is sent to the Microsoft Sentinel Ingestion API."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
         }
       }
     },
@@ -800,9 +913,9 @@
           "operator": "AND",
           "criteria": [
             {
-              "kind": "Parser",
-              "contentId": "[variables('_parserContentId1')]",
-              "version": "[variables('parserVersion1')]"
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
             },
             {
               "kind": "Workbook",
