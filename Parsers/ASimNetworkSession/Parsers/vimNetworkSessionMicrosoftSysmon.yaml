@@ -357,17 +357,42 @@ ParserQuery: |
                 Src = IpAddr,
                 DvcIpAddr  = IpAddr,
                 Dst = DstIpAddr,
-                TmpSrcDomain = tostring(split(SrcHostname, "\\")[0]),
-                TmpDvcDomain = tostring(split(Dvc, "\\")[0]),
-                TmpDstDomain = tostring(split(DstHostname, "\\")[0])
+                TmpSrcDomain = case(
+                                     array_length(split(SrcHostname, ".")) <= 1 and SrcHostname !has "\\", "",
+                                     array_length(split(SrcHostname, ".")) >= 2 and SrcHostname !has "\\" , strcat(tostring(split(SrcHostname, ".")[-2]),".",tostring(split(SrcHostname, ".")[-1])),
+                                     SrcHostname has "\\", tostring(split(SrcHostname, "\\")[0])
+                                     ),
+                TmpDvcDomain = case(
+                                     array_length(split(Dvc, ".")) <= 1 and Dvc !has "\\", "",
+                                     array_length(split(Dvc, ".")) >= 2 and Dvc !has "\\" , strcat(tostring(split(Dvc, ".")[-2]),".",tostring(split(Dvc, ".")[-1])),
+                                     Dvc has "\\", tostring(split(Dvc, "\\")[0])
+                                     ),
+                TmpDstDomain = case(
+                                     array_length(split(DstHostname, ".")) <= 1 and DstHostname !has "\\", "",
+                                     array_length(split(DstHostname, ".")) >= 2 and DstHostname !has "\\" , strcat(tostring(split(DstHostname, ".")[-2]),".",tostring(split(DstHostname, ".")[-1])),
+                                     DstHostname has "\\", tostring(split(DstHostname, "\\")[0])
+                                     )      
     | extend
                 
                 SrcDomain = iff(TmpSrcDomain == SrcHostname, "", TmpSrcDomain),
                 DvcDomain = iff(TmpDvcDomain == Dvc, "", TmpDvcDomain),
                 DstDomain = iff(TmpDstDomain == DstHostname, "", TmpDstDomain),
-                SrcDomainType = iff(isnotempty(SrcDomain), "Windows", ""),
-                DvcDomainType = iff(isnotempty(DvcDomain), "Windows", ""),
-                DstDomainType = iff(isnotempty(DstDomain), "Windows", ""),
+                SrcDomainType = case(
+                                     isnotempty(SrcDomain) and array_length(split(SrcHostname, ".")) >= 2, "FQDN",
+                                     isnotempty(SrcDomain and SrcHostname has "\\", "Windows",
+                                     ""
+                                     ),
+                 DvcDomainType = case(
+                                     isnotempty(DvcDomain) and array_length(split(DvcDomain, ".")) >= 2, "FQDN",
+                                     isnotempty(DvcDomain and DvcDomain has "\\", "Windows",
+                                     ""
+                                     ),
+                 DstDomainType = case(
+                                     isnotempty(DstDomain) and array_length(split(DstDomain, ".")) >= 2, "FQDN",
+                                     isnotempty(DstDomain and DstDomain has "\\", "Windows",
+                                     ""
+                                     ),
+                NetworkProtocolVersion = iff((DestinationIsIpv6) or (SourceIsIpv6), "IPV6", "IPV4")
       | extend
                 SrcHostname = iff( SrcHostname == "-", "", SrcHostname),
                 DstHostname = iff( DstHostname == "-", "", DstHostname) // let's make empty values actually empty
