@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM parser for Sysmon for Windows
-  Version: '0.3.1'
-  LastUpdated: Oct 18 2022
+  Version: '0.3.2'
+  LastUpdated: Dec 26 2022
 Product:
   Name: Microsoft Windows Events Sysmon
 Normalization:
@@ -48,40 +48,47 @@ ParserQuery: |
       ];
     let ParsedDnsEvent_Event =(disabled:bool=false) {
         Event | where not(disabled)
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source // , _ItemId 
         | where Source == "Microsoft-Windows-Sysmon" and EventID==22
+        | project-away Source, EventID
         | parse EventData with 
            *'<Data Name="RuleName">' RuleName:string '</Data>' 
             '<Data Name="UtcTime">' EventEndTime:datetime '</Data>'
-            '<Data Name="ProcessGuid">{' ProcessGuid:string '}</Data>'
-            '<Data Name="ProcessId">' ProcessId:string '</Data>'
+            '<Data Name="ProcessGuid">{' SrcProcessGuid:string '}</Data>'
+            '<Data Name="ProcessId">' SrcProcessId:string '</Data>'
             '<Data Name="QueryName">' DnsQuery:string '</Data>'
             '<Data Name="QueryStatus">' DnsResponseCode:int  '</Data>'
             '<Data Name="QueryResults">' DnsResponseName:string '</Data>'
-            '<Data Name="Image">' Process:string '</Data>'*
+            '<Data Name="Image">' Process:string '</Data>'
+            '<Data Name="Image">' SrcProcessName:string '</Data>'
         | parse EventData with * '<Data Name="User">'SrcUsername:string '</Data>' *
-        | project-away EventData, ParameterXml, RenderedDescription
+        | project-away EventData
     };
     let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
         WindowsEvent | where not(disabled)
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId,  Provider // , _ItemId 
         | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
+        | project-away Provider, EventID      
         | extend 
             RuleName = tostring(EventData.RuleName),
             EventEndTime = todatetime(EventData.UtcTime),
-            ProcessGuid = extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
-            ProcessId = tostring(EventData.ProcessId),  
+            SrcProcessGuid = extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
+            SrcProcessId = tostring(EventData.ProcessId),  
             DnsQuery = tostring(EventData.QueryName),
             DnsResponseCode = toint(EventData.QueryStatus),
             DnsResponseName = tostring(EventData.QueryResults),
-            Process = tostring(EventData.Image),
+            SrcProcessName = tostring(EventData.Image),
             SrcUsername = tostring(EventData.User)
         | project-away EventData
     };
     union isfuzzy=true ParsedDnsEvent_Event(disabled), ParsedDnsEvent_WindowsEvent(disabled)
       | lookup RCodeTable on DnsResponseCode
       | project-rename 
-          DvcHostname = Computer
+          DvcHostname = Computer,
+          // EventUid = _ItemId, 
+          DvcScopeId = _SubscriptionId
       | extend
-          EventOriginalUid = '22',
+          EventOriginalType = '22',
           EventCount=int(1),
           EventProduct = 'Sysmon',
           EventVendor = 'Microsoft',
@@ -102,8 +109,5 @@ ParserQuery: |
           Hostname=DvcHostname,
           Src = DvcHostname,
           DnsResponseCode = toint(iff (DnsResponseCode > 9000 and DnsResponseCode < 9100, DnsResponseCode-9000, DnsResponseCode)),
-          User = SrcUsername
-      // -- Backward Computability
-      | extend
-          Query=DnsQuery,
-          ResponseCodeName=DnsResponseCodeName
+          User = SrcUsername,
+          Process = SrcProcessName
