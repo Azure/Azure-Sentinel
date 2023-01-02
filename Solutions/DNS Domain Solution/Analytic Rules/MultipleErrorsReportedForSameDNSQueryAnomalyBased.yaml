@@ -58,7 +58,7 @@ query: |
   let AnomalyThreshold = 2.5;
   let Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
   // calculate avg. eps(events per second)
-  let eps = materialize (imDns | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
+  let eps = materialize (_Im_Dns | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
   let maxSummarizedTime = toscalar (
     union isfuzzy=true 
         (
@@ -90,7 +90,7 @@ query: |
   let allData = union isfuzzy=true
   (
     (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) > 1000 | join (summarizationexist) on sumexist) | join (
-    imDns(starttime=todatetime(ago(2d)), endtime=now())
+    _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())
     | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
     | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
     | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
@@ -99,7 +99,7 @@ query: |
   ),
   (
     (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (summarizationexist) on sumexist) | join (
-    imDns(starttime=todatetime(ago(3d)), endtime=now())
+    _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())
     | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
     | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
     | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
@@ -108,7 +108,7 @@ query: |
   ),
   (
     (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) <= 500 | join (summarizationexist) on sumexist) | join (
-    imDns(starttime=todatetime(ago(4d)), endtime=now())
+    _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())
     | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
     | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
     | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
@@ -122,17 +122,16 @@ query: |
         | extend Count = toint(Count) 
   );
   allData
-  | make-series TotalIPCount= dcount(SrcIpAddr) on TimeGenerated in range (min_t, max_t, dt) by DnsQuery
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, AnomalyThreshold, -1, 'linefit')
-  | mv-expand anomalies, score, baseline, TimeGenerated, TotalIPCount
+  | make-series TotalIPCount=dcount(SrcIpAddr) on EventTime from min_t to max_t step dt by DnsQuery
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, toscalar(threshold), -1, 'linefit')
+  | mv-expand anomalies, score, baseline, EventTime, TotalIPCount
   | extend
     anomalies = toint(anomalies),
     score = toint(score),
     baseline = toint(baseline),
-    EventTime = todatetime(TimeGenerated),
+    EventTime = todatetime(EventTime),
     TotalIPs = tolong(TotalIPCount)
-  | where TimeGenerated >= ago(dt)
-  //| where score > 2 * AnomalyThreshold
+  | where EventTime >= ago(dt)
   | where score >= toscalar(threshold)
   | join kind=inner(allData | where TimeGenerated>ago(dt) | summarize SrcIps = make_set(SrcIpAddr,1000) by DnsQuery) on DnsQuery
 

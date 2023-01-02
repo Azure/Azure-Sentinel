@@ -51,7 +51,6 @@ query: |
     | where wl_RuleName == 'Anomaly - Excessive NXDOMAIN DNS Queries'
         and wl_Type == 'Detection'
     | project toint(wl_AnomalyThreshold));
-  //let lookback = 14d;
   let min_t = ago(14d);
   let max_t = now();
   let dt = 1d;
@@ -72,10 +71,9 @@ query: |
   let allData = union isfuzzy=true
         (
         (datatable(exists: int, sumexist: bool)[1, false]
-        //| where toscalar(eps) >= 0
         | join (summarizationexist) on sumexist)
         | join (
-            imDns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)
+            _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)
             //| where TimeGenerated > min_t
             | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
             | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
@@ -86,14 +84,10 @@ query: |
         (
         DNS_Summarized_Logs_ip1_CL
         | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
-        | project-rename
-            SrcIpAddr=SrcIpAddr_s,
-            Count=count__d,
-            EventTime=EventTime_t
-        | extend Count = toint(Count)
+        | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)
         );
   allData
-  | make-series EventCount=sum(Count) on EventTime in range (min_t, max_t, dt) by SrcIpAddr
+  | make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr
   | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, toscalar(threshold), -1, 'linefit')
   | mv-expand anomalies, score, baseline, EventTime, EventCount
   | extend
@@ -104,9 +98,11 @@ query: |
     Total = tolong(EventCount)
   | where EventTime >= ago(dt)
   | where score >= toscalar(threshold)
-  | join kind=inner(imDns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)
+  | join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)
     | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)
     on SrcIpAddr
+
+
 
 eventGroupingSettings:
   aggregationKind: AlertPerResult

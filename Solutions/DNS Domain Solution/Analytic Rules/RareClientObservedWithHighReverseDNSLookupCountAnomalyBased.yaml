@@ -52,28 +52,26 @@ query: |
         and wl_Type == 'Detection'
     | project toint(wl_AnomalyThreshold));
   let SearchDomain = dynamic(["in-addr.arpa"]);
-  let lookback = 14days;
-  let timeframe = 1day;
-  //let threshold = 10;
+  let min_t = ago(14d);
+  let max_t = now();
+  let timeframe = 1d;
   let DNSEvents=(stime: datetime, etime: datetime) {
-    imDns(starttime=stime, endtime=etime, domain_has_any=SearchDomain)
-  //| where DnsQuery has "in-addr.arpa"
+    _Im_Dns(starttime=stime, endtime=etime, domain_has_any=SearchDomain)
   };
-  DNSEvents(stime=ago(lookback), etime=now())
-  | make-series EventCount=count() on TimeGenerated in range (ago(lookback), now(), timeframe) by SrcIpAddr
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, toscalar(threshold), -1, 'linefit')
-  | mv-expand anomalies, score, baseline, TimeGenerated, EventCount
+  DNSEvents(stime=min_t, etime=max_t)
+  | make-series QueryCount=dcount(DnsQuery) on TimeGenerated from min_t to max_t step timeframe by SrcIpAddr
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')
+  | mv-expand anomalies, score, baseline, TimeGenerated, QueryCount
   | extend
     anomalies = toint(anomalies),
     score = toint(score),
     baseline = toint(baseline),
     EventTime = todatetime(TimeGenerated),
-    Total = tolong(EventCount)
-  | where TimeGenerated >= ago(timeframe)
+    Total = tolong(QueryCount)
+  | where EventTime >= ago(timeframe)
   | where score >= toscalar(threshold)
-  //| where score > 2 * AnomalyThreshold
   | extend Severity='Medium', Tactic='Discovery'
-  | join kind = inner (DNSEvents(stime=ago(timeframe), etime=now())
+  | join kind = inner (DNSEvents(stime=ago(timeframe), etime=max_t)
     | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
     on SrcIpAddr
 

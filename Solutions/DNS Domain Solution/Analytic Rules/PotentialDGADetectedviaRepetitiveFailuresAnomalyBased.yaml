@@ -55,10 +55,9 @@ query: |
     | project toint(wl_AnomalyThreshold));
   let min_t = ago(14d);
   let max_t = now();
-  let dt = 1d;
-  let AnomalyThreshold = 2.5;
+  let timeframe = 1d;
   // calculate avg. eps(events per second)
-  let eps = materialize (imDns
+  let eps = materialize (_Im_Dns
     | project TimeGenerated
     | where TimeGenerated > ago(5m)
     | count
@@ -97,7 +96,7 @@ query: |
         | where toscalar(eps) > 1000
         | join (summarizationexist) on sumexist)
         | join (
-            imDns(responsecodename='NXDOMAIN', starttime=todatetime(ago(2d)), endtime=now())
+            _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(2d)), endtime=now())
             | where TimeGenerated > maxSummarizedTime
             | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
             | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
@@ -110,7 +109,7 @@ query: |
         | where toscalar(eps) between (501 .. 1000)
         | join (summarizationexist) on sumexist)
         | join (
-            imDns(responsecodename='NXDOMAIN', starttime=todatetime(ago(3d)), endtime=now())
+            _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(3d)), endtime=now())
             | where TimeGenerated > maxSummarizedTime
             | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
             | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
@@ -123,7 +122,7 @@ query: |
         | where toscalar(eps) <= 500
         | join (summarizationexist) on sumexist)
         | join (
-            imDns(responsecodename='NXDOMAIN', starttime=todatetime(ago(4d)), endtime=now())
+            _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(4d)), endtime=now())
             | where TimeGenerated > maxSummarizedTime
             | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)
             | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
@@ -139,30 +138,25 @@ query: |
             DnsQuery=DnsQuery_s,
             Count=count__d,
             EventTime=EventTime_t
-        | extend Count = toint(Count) 
+        | extend Count = toint(Count)
         );
   allData
-  // extract sld(second level domain)
-  | extend sld = tostring(split(DnsQuery, ".")[-2])
-  // Make series of sld list per hour for each SrcIpAddr for past 14 days
-  | make-series sldCount=dcount(sld) on TimeGenerated in range (min_t, max_t, dt) by SrcIpAddr
+  //| extend sld = tostring(split(DnsQuery, ".")[-2])
+  | make-series QueryCount=dcount(DnsQuery) on EventTime from min_t to max_t step timeframe by SrcIpAddr
   // include calculated Anomalies, Score and Baseline
-  | extend (anomalies, score, baseline) = series_decompose_anomalies(sldCount, AnomalyThreshold, -1, 'linefit')
-  | mv-expand anomalies, score, baseline, TimeGenerated, sldCount
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')
+  | mv-expand anomalies, score, baseline, EventTime, QueryCount
   | extend
     anomalies = toint(anomalies),
     score = toint(score),
     baseline = toint(baseline),
-    EventTime = todatetime(TimeGenerated),
-    Total = tolong(sldCount)
-  // take only 1 hour of data
-  | where TimeGenerated > ago(dt)
-  // take records where Anomaly score is greater than two times of Anomaly threshold
-  //| where score > 2 * AnomalyThreshold
+    EventTime = todatetime(EventTime),
+    Total = tolong(QueryCount)
+  | where EventTime >= ago(timeframe)
   | where score >= toscalar(threshold)
   // Join the allData to include DnsQuery details
   | join kind=inner(allData
-    | where TimeGenerated > ago(dt)
+    | where TimeGenerated >= ago(timeframe)
     | summarize DNSQueries = make_set(DnsQuery, 1000) by SrcIpAddr)
     on SrcIpAddr
   | extend Severity='Medium', Tactic='Command n Control'
