@@ -12,10 +12,8 @@ from dateutil.parser import parse as parse_date
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 from .state_manager_async import StateManagerAsync
 
-
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
 logging.getLogger('charset_normalizer').setLevel(logging.ERROR)
-
 
 INSIGHTVM_APIKEY = os.environ['InsightVMAPIKey']
 INSIGHTVM_REGION = os.environ['InsightVMCloudRegion']
