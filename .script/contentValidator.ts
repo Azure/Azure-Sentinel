@@ -5,17 +5,15 @@ import * as logger from "./utils/logger";
 
 export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
 {
-    // CHECK IF FILE CONTAINS "Azure Sentinel". IF YES THEN ERROR ELSE SUCCESS. THIS IS BECAUSE WE NOW WORK ON
     if (!filePath.includes("azure-pipelines"))
     {
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel"
-        const replaceWithText = "Microsoft Sentinel"
         const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
         
         if (hasAzureSentinelText)
         {
-            throw new Error(`'${searchText}' text is not allowed. Please replace '${searchText}' text with '${replaceWithText}' in file '${filePath}'`);
+            throw new Error(`Please replace text 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
         }
     }
     return ExitCode.SUCCESS;
