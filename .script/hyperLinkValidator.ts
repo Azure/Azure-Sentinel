@@ -138,7 +138,7 @@ let CheckOptions = {
         return ValidateHyperlinks(filePath)
     },
     onExecError: async (e: any) => {
-        logger.logError(e);
+        logger.logError(`${e}`);
     },
     onFinalFailed: async () => {
         logger.logError("An error occurred, please open an issue");
