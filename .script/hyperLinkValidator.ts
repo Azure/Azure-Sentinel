@@ -30,18 +30,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
         console.log('===========start=============')
         const pr = await GetPRDetails();
-        console.log(pr);
-        if (pr != null || pr != undefined)
-        {
-            var targetBranch: string = pr.targetBranch;
-            var sourceBranch: string = pr.sourceBranch;
 
-            console.log(`Target Branch is ${targetBranch}, Source Branch is ${sourceBranch}`)
-            let options = [pr.targetBranch, pr.sourceBranch, filePath];
-            let diffSummary = await git.diff(options);
-            console.log(`diffSummary is ${diffSummary}`)
-            console.log('===========end=============')
+        if (typeof pr === "undefined") {
+            console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
+            return ExitCode.ERROR;
         }
+
         const content = fs.readFileSync(filePath, "utf8");
 
         //get http or https links from the content
@@ -58,7 +52,40 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 const isValid = await isValidLink(link);
                 if (!isValid) 
                 {
-                    invalidLinks.push(link);
+                    // CHECK IF LINK IS A GITHUB LINK
+                    var isGithubLink = false;
+                    if (link.includes('https://raw.githubusercontent.com'))
+                    {
+                        console.log("inside of githubusercontent")
+                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
+                        isGithubLink = true;
+                    }
+                    else if (link.includes('https://github.com'))
+                    {
+                        console.log("inside of github")
+                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
+                        isGithubLink = true;
+                    }
+
+                    if (isGithubLink)
+                    {
+                        console.log("inside of if condition")
+                        var targetBranch: string = pr.targetBranch;
+                        var sourceBranch: string = pr.sourceBranch;
+                
+                        console.log(`Target Branch is ${targetBranch}, Source Branch is ${sourceBranch}`)
+                        let options = [pr.targetBranch, pr.sourceBranch, filePath];
+                        let changedFiles = await git.diff(options);
+                        console.log(`changedFiles is ${changedFiles}`)
+                        console.log('===========end=============')
+                        const imageIndex = link.lastIndexOf('/')
+                        const imageName = link.substring(imageIndex + 1)
+                        const filterChangedFiles1 = changedFiles.filter(changedFilePath => changedFilePath);
+                        console.log(`filtered files1 are ${filterChangedFiles1}`)
+                        const filterChangedFiles2 = changedFiles.filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
+                        console.log(`filtered files2 are ${filterChangedFiles2}`)
+                        invalidLinks.push(link);
+                    }
                 }
             }
 
