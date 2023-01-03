@@ -311,6 +311,7 @@ Do {
 			Write-Host "API concurrency limit reached.`nError @ line #$line. `nI'm exiting!"
 		}
 		Invoke-WebRequest -Headers $hdrs -Uri "$($base)/session/" -Method Post -Body "action=logout" -WebSession $LogonSession
+		$keep_running = $false
 		Exit
 	}
 } while($keep_running) # end of main while loop
