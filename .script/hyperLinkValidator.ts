@@ -64,7 +64,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         console.log(`Searched Files are ${searchedFiles}`);
                         var searchedLength = searchedFiles.length;
                         console.log(`length is ${searchedLength}`)
-                        if (searchedFiles.length < 0)
+                        if (searchedFiles.length <= 0)
                         {
                             invalidLinks.push(link);
                         }
