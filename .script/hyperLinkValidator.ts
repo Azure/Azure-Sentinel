@@ -24,13 +24,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             return ExitCode.SUCCESS;
         }
 
-        console.log('===========start=============')
-        const pr = await GetPRDetails();
 
-        if (typeof pr === "undefined") {
-            console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
-            return ExitCode.ERROR;
-        }
 
         const content = fs.readFileSync(filePath, "utf8");
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
@@ -54,17 +48,22 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
                     if (isGithubLink)
                     {
-                        let changedFiles = await pr.diff();
+                        const pr = await GetPRDetails();
+                        if (typeof pr === "undefined") 
+                        {
+                            console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
+                            return ExitCode.ERROR;
+                        }
+
+                        const changedFiles = await pr.diff();
                         const imageIndex = link.lastIndexOf('/');
                         const imageName = link.substring(imageIndex + 1);
-                        console.log(`image name to search is ${imageName}`);
                         const filesChangedInPR = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath);
                         console.log(`List of files changed in PR are ${filesChangedInPR}`);
+                        
                         const searchedFiles = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
-                        console.log(`Searched Files are ${searchedFiles}`);
-                        var searchedLength = searchedFiles.length;
-                        console.log(`length is ${searchedLength}`)
-                        if (searchedFiles.length <= 0)
+                        var searchedFilesLength = searchedFiles.length;
+                        if (searchedFilesLength <= 0)
                         {
                             invalidLinks.push(link);
                         }
@@ -74,12 +73,11 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
             if (invalidLinks.length > 0)
             {
-                //console.log(`Please update below given hyperlink(s) as they seems to be broken:`)
                 invalidLinks.forEach(l => {
                     logger.logError(`\n ${l}`);
                 });
 
-                throw new Error(`In file '${filePath}', there are total '${invalidLinks.length}' broken links. Please rectify below given hyperlinks: \n ${invalidLinks}`);
+                throw new Error(`File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`);
             }
         }
 
