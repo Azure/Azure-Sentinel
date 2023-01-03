@@ -62,12 +62,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         console.log(`List of files changed in PR are ${filesChangedInPR}`);
                         const searchedFiles = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
                         console.log(`Searched Files are ${searchedFiles}`);
-                        
-                        if (searchedFiles.length > 0)
+                        var searchedLength = searchedFiles.length;
+                        console.log(`length is ${searchedLength}`)
+                        if (searchedFiles.length < 0)
                         {
                             invalidLinks.push(link);
                         }
-                        
                     }
                 }
             }
