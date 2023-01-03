@@ -2,11 +2,11 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import { GetPRDetails } from "./utils/gitWrapper";
-import gitP, { SimpleGit } from 'simple-git/promise';
+//import gitP, { SimpleGit } from 'simple-git/promise';
 import * as logger from "./utils/logger";
 
-const workingDir: string = process.cwd();
-const git: SimpleGit = gitP(workingDir);
+//const workingDir: string = process.cwd();
+//const git: SimpleGit = gitP(workingDir);
 
 export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> 
 {
