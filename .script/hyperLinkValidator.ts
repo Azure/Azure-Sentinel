@@ -80,9 +80,9 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         console.log('===========end=============')
                         const imageIndex = link.lastIndexOf('/')
                         const imageName = link.substring(imageIndex + 1)
-                        const filterChangedFiles1 = changedFiles.filter(changedFilePath => changedFilePath);
+                        const filterChangedFiles1 = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath);
                         console.log(`filtered files1 are ${filterChangedFiles1}`)
-                        const filterChangedFiles2 = changedFiles.filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
+                        const filterChangedFiles2 = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
                         console.log(`filtered files2 are ${filterChangedFiles2}`)
                         invalidLinks.push(link);
                     }
