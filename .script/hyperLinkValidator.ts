@@ -2,11 +2,7 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import { GetPRDetails } from "./utils/gitWrapper";
-//import gitP, { SimpleGit } from 'simple-git/promise';
 import * as logger from "./utils/logger";
-
-//const workingDir: string = process.cwd();
-//const git: SimpleGit = gitP(workingDir);
 
 export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> 
 {
@@ -37,9 +33,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         }
 
         const content = fs.readFileSync(filePath, "utf8");
-
-        //get http or https links from the content
-        //const links = content.match(/https?:\/\/[^\s]+/g);
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
         if (links) 
         {
@@ -54,37 +47,27 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 {
                     // CHECK IF LINK IS A GITHUB LINK
                     var isGithubLink = false;
-                    if (link.includes('https://raw.githubusercontent.com'))
+                    if (link.includes('https://raw.githubusercontent.com') || link.includes('https://github.com'))
                     {
-                        console.log("inside of githubusercontent")
-                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
-                        isGithubLink = true;
-                    }
-                    else if (link.includes('https://github.com'))
-                    {
-                        console.log("inside of github")
-                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
                         isGithubLink = true;
                     }
 
                     if (isGithubLink)
                     {
-                        console.log("inside of if condition")
-                        var targetBranch: string = pr.targetBranch;
-                        var sourceBranch: string = pr.sourceBranch;
-                
-                        console.log(`Target Branch is ${targetBranch}, Source Branch is ${sourceBranch}`)
-                        //let options = [pr.targetBranch, pr.sourceBranch, filePath];
                         let changedFiles = await pr.diff();
-                        console.log(`changedFiles is ${changedFiles}`)
-                        console.log('===========end=============')
-                        const imageIndex = link.lastIndexOf('/')
-                        const imageName = link.substring(imageIndex + 1)
-                        const filterChangedFiles1 = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath);
-                        console.log(`filtered files1 are ${filterChangedFiles1}`)
-                        const filterChangedFiles2 = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
-                        console.log(`filtered files2 are ${filterChangedFiles2}`)
-                        invalidLinks.push(link);
+                        const imageIndex = link.lastIndexOf('/');
+                        const imageName = link.substring(imageIndex + 1);
+                        console.log(`image name to search is ${imageName}`);
+                        const filesChangedInPR = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath);
+                        console.log(`List of files changed in PR are ${filesChangedInPR}`);
+                        const searchedFiles = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
+                        console.log(`Searched Files are ${searchedFiles}`);
+                        
+                        if (searchedFiles.length > 0)
+                        {
+                            invalidLinks.push(link);
+                        }
+                        
                     }
                 }
             }
