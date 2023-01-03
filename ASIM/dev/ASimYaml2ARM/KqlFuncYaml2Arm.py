@@ -114,10 +114,10 @@ for f in folders:
     else:
         logging.warning (f'File or folder "{f}" does not exist.')
 
-files = list(dict.fromkeys(files))  # -- remove duplicates
+files = sorted(list(dict.fromkeys(files))) # -- remove duplicates
 
 if len(files) == 0:
-    raise SystemExit ('No files to prcess.')
+    raise SystemExit ('No files to process.')
 
 # -- Read and prepare templates
 func_arm_template = json.load(open(os.path.join(templates_dir, 'func_arm_template.json'), 'r'))

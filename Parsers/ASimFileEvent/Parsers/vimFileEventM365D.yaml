@@ -1,0 +1,87 @@
+Parser:
+  Title: File Activity ASIM parser for Sysmon for M365 Defender for Endpoint 
+  Version: '0.1'
+  LastUpdated: June 28, 2021
+Product:
+  Name: 'M365 Defender for EndPoint'
+Normalization:
+  Schema: FileEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/ASimFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Microsoft 365 Defender DeviceFileEvents
+  Link: https://docs.microsoft.commicrosoft-365/security/defender/advanced-hunting-devicefileevents-table?view=o365-worldwide
+Description: This ASIM parser supports normalizing M365 Defender, stored in the DeviceFileEvents table, for Endpoint events to the ASIM file activity schema.
+ParserName: vimFileEventM365D
+ParserQuery: |
+  let ASIM_ResolveDvcFQDN = (T:(*), field:string) {
+    T
+    | extend ExtractedHostname = column_ifexists (field,'')
+    | extend SplitHostname = split(ExtractedHostname,".")
+    | extend 
+        DvcDomain = tostring(strcat_array(array_slice(SplitHostname, 1, -1), '.')),
+        DvcFQDN = iif (array_length(SplitHostname) > 1, ExtractedHostname, ''),
+        DvcDomainType = iif (array_length(SplitHostname) > 1, 'FQDN', '')
+    | extend
+        DvcHostname = tostring(SplitHostname[0])    
+    | project-away SplitHostname
+  };
+  let parser=(){
+    DeviceFileEvents
+    | project-rename
+       SrcIpAddr = RequestSourceIP, 
+       DvcId = DeviceId,
+       TargetFileMD5 = MD5,
+       TargetFileSHA1 = SHA1,
+       TargetFileSHA256 = SHA256,
+       NetworkApplicationProtocol = RequestProtocol,
+       ActingProcessCommandLine = InitiatingProcessCommandLine,
+       ActingProcessName =InitiatingProcessFolderPath, // Unlike FileName ActingProcessName includes full path  // Previously: ActingProcessFileName=initiatingProcessFileName
+       ActingProcessMD5 = InitiatingProcessMD5,
+       ActingProcessSHA1 = InitiatingProcessSHA1,
+       ActingProcessSHA256 = InitiatingProcessSHA256,
+       ActingProcessParentFileName = InitiatingProcessParentFileName,
+       ActingProcessCreationTime = InitiatingProcessCreationTime,
+       ActingProcessParentCreationTime = InitiatingProcessParentCreationTime,
+       ActorUserSid = InitiatingProcessAccountSid,
+       ActorUserAadId = InitiatingProcessAccountObjectId,
+       ActorUserUpn = InitiatingProcessAccountUpn
+    | extend 
+       ActorWindowsUsername = strcat(InitiatingProcessAccountDomain,'\\', InitiatingProcessAccountName) // -- Copy to process
+    | extend
+       EventCount = int(1),
+       EventOriginalUid = tostring(ReportId),
+       ActingProcessId = tostring(InitiatingProcessId),
+       EventStartTime = TimeGenerated, 
+       EventEndTime= TimeGenerated,
+       EventType=ActionType, // [FileCreated, FileDeleted, FileModified, FileRenamed] 
+       EventResult = 'Success',
+       EventProduct = 'M365 Defender for Endpoint',
+       EventVendor = 'Microsoft',
+       EventSchemaVersion = '0.1.0',
+       ActorUsername = coalesce(ActorUserUpn, ActorWindowsUsername), // -- Copy to process as well.
+       ActorUsernameType = iff(isempty(ActorUserUpn), 'Windows', 'Upn'), // -- Copy to process as well.
+       ActorUserId = coalesce(ActorUserAadId, ActorUserSid), // -- copy to process as well
+       ActorUserIdType = iff(isempty(ActorUserSid),'AADID','SID'), // -- copy to process as well
+       TargetFilePath = iff(ActionType=='FileDeleted', strcat(FolderPath, '\\', FileName), FolderPath),
+       TargetFilePathType = 'Windows Local',
+       SrcFileName = coalesce(PreviousFileName,tostring(split(trim_end(@'/',tostring(split (FileOriginUrl,'?')[0] )),'/')[-1])),
+       SrcFilePath = iff(isempty(PreviousFileName), trim_end(@'/',tostring(split (FileOriginUrl,'?')[0] )),strcat(PreviousFolderPath,'\\',PreviousFileName)),
+       Hash=coalesce(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5)
+     | invoke ASIM_ResolveDvcFQDN('DeviceName')
+     | extend
+         HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5),Hash)])     
+     //  ****** Aliases
+     | extend 
+        User=ActorUsername,
+        Dvc=DvcHostname,
+        FilePath=TargetFilePath,
+        Process = ActingProcessName,
+        CommandLine = ActingProcessCommandLine
+     //| project-away
+     //   Initiating*, ReportId
+    };
+    parser
