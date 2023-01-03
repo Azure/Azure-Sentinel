@@ -1,5 +1,5 @@
 function getModifiedAsimSchemas() {
-    $schemas = ("ASimDns", "ASimWebSession", "ASimNetworkSession", "ASimProcessEvent")
+    $schemas = ("ASimDns", "ASimWebSession", "ASimNetworkSession", "ASimProcessEvent", "ASimAuditEvent")
     $midifiedSchemas = @()
     foreach ($schema in $schemas) {
         $filesThatWereChanged= Invoke-Expression "git diff origin/master  --name-only -- $($PSScriptRoot)/../Parsers/$($schema)/Parsers"

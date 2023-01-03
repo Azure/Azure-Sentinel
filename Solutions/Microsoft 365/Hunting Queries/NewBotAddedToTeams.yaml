@@ -1,0 +1,37 @@
+id: bf76e508-9282-4cf1-9cc1-5c20c3dea2ee
+name: Previously unseen bot or application added to Teams
+description: |
+  'This hunting query helps identify new, and potentially unapproved applications or bots being added to Teams.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Teams)
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1176
+  - T1119
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let historical_bots = (
+  OfficeActivity
+  | where TimeGenerated between(lookback..starttime)
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  | where isnotempty(AddonName)
+  | project AddonName);
+  OfficeActivity
+  | where TimeGenerated between(starttime..endtime)
+  | where OfficeWorkload =~ "MicrosoftTeams"
+  // Look for add-ins we have never seen before
+  | where AddonName in (historical_bots)
+  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 2.0.0
