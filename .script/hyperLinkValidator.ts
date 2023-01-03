@@ -24,8 +24,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             return ExitCode.SUCCESS;
         }
 
-
-
         const content = fs.readFileSync(filePath, "utf8");
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
         if (links) 
@@ -57,10 +55,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
                         const changedFiles = await pr.diff();
                         const imageIndex = link.lastIndexOf('/');
-                        const imageName = link.substring(imageIndex + 1);
-                        const filesChangedInPR = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath);
-                        console.log(`List of files changed in PR are ${filesChangedInPR}`);
-                        
+                        const imageName = link.substring(imageIndex + 1);                        
                         const searchedFiles = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
                         var searchedFilesLength = searchedFiles.length;
                         if (searchedFilesLength <= 0)
@@ -142,8 +137,8 @@ let CheckOptions = {
     onCheckFile: (filePath: string) => {
         return ValidateHyperlinks(filePath)
     },
-    onExecError: async () => {
-        logger.logError(`HyperLink Validation Failed.`);
+    onExecError: async (e: any) => {
+        logger.logError(e);
     },
     onFinalFailed: async () => {
         logger.logError("An error occurred, please open an issue");
