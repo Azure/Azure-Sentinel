@@ -48,31 +48,34 @@ tactics:
 relevantTechniques:
 query: |
   let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
-    | where wl_RuleName == 'Rare client observed with high reverse DNS lookup'
-        and wl_Type == 'Detection'
-    | project toint(wl_Threshold));
-  let stime = 10d;
-  let etime = 1d;
-  //let threshold = 10;
-  let SearchDomain = dynamic(["in-addr.arpa"]);
-  _Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)
-  | summarize
-    StartTimeUtc = min(TimeGenerated),
-    EndTimeUtc = max(TimeGenerated),
-    dcount(DnsQuery)
-    by SrcIpAddr
+  | where wl_RuleName == 'Potential DGA(Domain Generation Algorithm) detected' and wl_Type == 'Detection'
+  | project toint(wl_Threshold));
+  let lookback = 10d;
+  let referenceendtime = 1d;
+  //let threshold = 100;
+  let nxDomainDnsEvents = (stime: datetime, etime: datetime) {
+    _Im_Dns(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)
+    | where DnsQueryTypeName in ("A", "AAAA")
+    | where ipv4_is_match("127.0.0.1", SrcIpAddr) == False
+    | where DnsQuery !contains "/" and DnsQuery contains "."
+  };
+  nxDomainDnsEvents (stime=ago(referenceendtime), etime=now())
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(DnsQuery) by SrcIpAddr
   | where dcount_DnsQuery > toscalar(threshold)
-  | project StartTimeUtc, EndTimeUtc, SrcIpAddr, dcount_DnsQuery 
-  | join kind=leftanti (_Im_Dns(starttime=ago(stime), endtime=etime, domain_has_any=SearchDomain) 
-    | where DnsQuery contains "in-addr.arpa" 
-    | summarize dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated, 1d)
-    | where dcount_DnsQuery > toscalar(threshold)
-    | project SrcIpAddr, dcount_DnsQuery 
-    )
+  // Filter out previously seen IPs
+  | join kind=leftanti (nxDomainDnsEvents (stime=ago(lookback), etime=ago(referenceendtime))
+    | summarize dcount(DnsQuery) by SrcIpAddr
+    | where dcount_DnsQuery> toscalar(threshold))
     on SrcIpAddr
-  | join kind=inner (_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)
-    | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)
+  // Pull out sample NXDomain responses for those remaining potentially infected IPs
+  | join kind = inner (nxDomainDnsEvents (stime=ago(lookback), etime=now())
+    | summarize by DnsQuery, SrcIpAddr)
     on SrcIpAddr
+  | summarize
+    StartTimeUtc = min(StartTimeUtc),
+    EndTimeUtc = max(EndTimeUtc),
+    sampleNXDomainList=make_list(DnsQuery, 100)
+    by SrcIpAddr, dcount_DnsQuery
 
 eventGroupingSettings:
   aggregationKind: AlertPerResult
