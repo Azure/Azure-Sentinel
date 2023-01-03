@@ -62,6 +62,10 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         {
                             invalidLinks.push(link);
                         }
+                        else
+                        {
+                            console.log(`Skipping Hyperlink validation for '${link}' in file path : '${filePath}'`);
+                        }
                     }
                 }
             }
