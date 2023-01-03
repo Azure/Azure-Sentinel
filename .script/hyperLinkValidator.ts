@@ -38,20 +38,39 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 //check if the link is valid
                 const isValid = await isValidLink(link);
                 if (!isValid) {
-                    invalidLinks.push(link)
+                    // CHECK IF LINK IS A GITHUB LINK
+                    var verifyUpdatedLink = '';
+                    if (link.includes('https://raw.githubusercontent.com'))
+                    {
+                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
+                        verifyUpdatedLink = '';
+                        
+                    }
+                    else if (link.includes('https://github.com'))
+                    {
+                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
+                        verifyUpdatedLink = '';
+                    }
+
+                    if (!verifyUpdatedLink)
+                    {
+                        const isUpdatedLinkValid = await isValidLink(verifyUpdatedLink);
+                        if (!isUpdatedLinkValid)
+                        {
+                            invalidLinks.push(link);
+                        }
+                    }
                 }
             }
 
             if (invalidLinks.length > 0)
             {
-                console.log(`File: '${filePath}' has Total Invalid Links: ${invalidLinks.length}`)
-                console.log(`Below are the invalid links:`)
+                //console.log(`Please update below given hyperlink(s) as they seems to be broken:`)
                 invalidLinks.forEach(l => {
-                    logger.logWarning(`\n ${l}`);
+                    logger.logError(`\n ${l}`);
                 });
 
-                // throw new Error(`Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`);
-                console.log(`Warning: Total Invalid Links Count '${invalidLinks.length}'. Invalid Links in given file path '${filePath}' are as below: \n ${invalidLinks}`)
+                throw new Error(`In file '${filePath}', there are total '${invalidLinks.length}' broken links. Please rectify below given hyperlinks: \n ${invalidLinks}`);
             }
         }
 
