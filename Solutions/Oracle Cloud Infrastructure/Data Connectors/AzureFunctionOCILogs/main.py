@@ -20,6 +20,7 @@ SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
+PARTITIONS = os.getenv('Partition',"1")
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -45,7 +46,7 @@ def main(mytimer: func.TimerRequest):
     if CURSOR_TYPE.lower() == 'group' :
         cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
     else :
-        cursor = get_cursor_by_partition(stream_client, StreamOcid, partition="2")
+        cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
     
     process_events(stream_client, StreamOcid, cursor, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
