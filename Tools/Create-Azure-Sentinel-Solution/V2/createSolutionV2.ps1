@@ -241,7 +241,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         name    = "workbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
-                                            text =  $contentToImport.WorkbookBladeDescription ? $contentToImport.WorkbookBladeDescription : "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences.";
+                                            text =  $contentToImport.WorkbookBladeDescription ? $contentToImport.WorkbookBladeDescription : "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view.";
                                         }
                                     },
                                     [PSCustomObject] @{
@@ -1402,17 +1402,18 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         function getAllDataTypeNames($dataTypesArray) {
                             $typeResult = @()
                             foreach ($dataType in $dataTypesArray) {
+                                if($typeResult -ne "")
+                                {
+                                    $typeResult += ", "
+                                }
                                 $typeResult += $dataType.name
                             }
                             return $typeResult
                         }
                         $connectorDataType = $(getConnectorDataTypes $connectorData.dataTypes)
                         $isParserAvailable = $($contentToImport.Parsers -and ($contentToImport.Parsers.Count -gt 0))
-                        $baseDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Microsoft Sentinel workspace. Configure and enable this data connector in the Data Connector gallery after this Solution deploys."
+                        $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $(getAllDataTypeNames $connectorData.dataTypes) data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
                         $parserText = "The Solution installs a parser that transforms the ingested data into Microsoft Sentinel normalized format. The normalized format enables better correlation of different types of data from different data sources to drive end-to-end outcomes seamlessly in security monitoring, hunting, incident investigation and response scenarios in Microsoft Sentinel."
-                        $customLogsText = "$baseDescriptionText This data connector creates custom log table(s) $(getAllDataTypeNames $connectorData.dataTypes) in your Microsoft Sentinel / Azure Log Analytics workspace."
-                        $syslogText = "$baseDescriptionText The logs will be received in the Syslog table in your Microsoft Sentinel / Azure Log Analytics workspace."
-                        $commonSecurityLogText = "$baseDescriptionText The logs will be received in the CommonSecurityLog table in your Microsoft Sentinel / Azure Log Analytics workspace."
                         $connectorDescriptionText = $(if ($connectorDataType -eq $commonSecurityLog) { $commonSecurityLogText } elseif ($connectorDataType -eq $syslog) { $syslogText } else { $customLogsText })
 
                         $baseDataConnectorStep = [PSCustomObject] @{
