@@ -88,12 +88,12 @@ ParserQuery: |
         )
       ;    
   let Sysmon3_NetworkWindowsEvent =    
-  WindowsEvent
-    | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
-    | where not(disabled)
-    | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3
+      WindowsEvent
+      | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
+      | where not(disabled)
+      | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3
     // ***************  Prefilterring *****************************************************************
-    | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+      | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
             and (array_length(ip_any)==0 
                   or has_any_ipv4_prefix(EventData,ip_any)
                 ) 
@@ -101,17 +101,17 @@ ParserQuery: |
                   or EventData has_any(hostname_has_any))  // can we not just check on "Computer" in this case? I took this from the Linux Sysmon example
             and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
     // ***************  Prefilterring *****************************************************************   
-    | extend
+      | extend
             SrcIpAddr = tostring(EventData.SourceIp),
             DstIpAddr = tostring(EventData.DestinationIp),
             DstHostname = tostring(EventData.DestinationHostname),
             SrcHostname = tostring(EventData.SrcHostname),
             Initiated = tobool(EventData.Initiated)
-    | extend 
-    SourceIsInternal = iff (
+      | extend 
+        SourceIsInternal = iff (
           ipv4_is_private(SrcIpAddr) , "true", "false")
-    | extend 
-    DestinationIsInternal = iff (
+      | extend 
+        DestinationIsInternal = iff (
           ipv4_is_private(DstIpAddr) , "true", "false")  // this works only on ipv4 and on RFC standard internal Ips
     ;
     let EventParser = (T: (EventData: string)) {
@@ -139,13 +139,11 @@ ParserQuery: |
          DstPortNumber = DestinationPort,
          EventStartTime = UtcTime
     | extend
-         NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6), "IPv6", "IPv4")
+         NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6), "IPv6", "IPv4"),
+	 ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]),
+	 NetworkDirection = iff(Initiated, "Outbound", "Inbound")	
     | project-away
-        SourceIsIpv6, DestinationIsIpv6
-    | extend 
-                ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0])
-    | extend
-		NetworkDirection = iff(Initiated, "Outbound", "Inbound")				
+        SourceIsIpv6, DestinationIsIpv6	
     };
     let NetworkEvents = 
     Sysmon3_NetworkEvent
@@ -211,13 +209,12 @@ ParserQuery: |
     | project-away EventData
     | extend
          ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]),
-         NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6), "IPv6", "IPv4")
+         NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6), "IPv6", "IPv4"),
+	 NetworkDirection = iff(Initiated, "Outbound", "Inbound")
     | project-rename
-    SrcPortNumber = SourcePort
+         SrcPortNumber = SourcePort
     | project-away
-            SourceIsIpv6, DestinationIsIpv6
-	| extend
-		NetworkDirection = iff(Initiated, "Outbound", "Inbound")		
+            SourceIsIpv6, DestinationIsIpv6		
          };
     let WindowsEvents = 
     Sysmon3_NetworkWindowsEvent
@@ -334,6 +331,6 @@ ParserQuery: |
                 EventOriginId,
                 ProcessGuid,
                 ProcessId,
-				ExtractedHostname
+                ExtractedHostname
       ;
       SysmonForWindowsNetworks
