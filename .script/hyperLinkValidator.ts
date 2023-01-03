@@ -69,11 +69,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             if (invalidLinks.length > 0)
             {
                 var errorMessage= `File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`
-                console.log("aa")
-                console.log(`File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`)
-                console.log("bb")
-                console.log(errorMessage.replace(",", "\n"));
-                throw new Error(`File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`);
+                throw new Error(errorMessage.replace(",", "\n"));
             }
         }
 
@@ -139,7 +135,7 @@ let CheckOptions = {
         return ValidateHyperlinks(filePath)
     },
     onExecError: async (e: any) => {
-        logger.logError(`${e.replace(",", "\n")}`);
+        logger.logError(`${e}`);
     },
     onFinalFailed: async () => {
         logger.logError("An error occurred, please open an issue");
