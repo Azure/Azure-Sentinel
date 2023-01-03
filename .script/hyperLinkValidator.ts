@@ -74,8 +74,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         var sourceBranch: string = pr.sourceBranch;
                 
                         console.log(`Target Branch is ${targetBranch}, Source Branch is ${sourceBranch}`)
-                        let options = [pr.targetBranch, pr.sourceBranch, filePath];
-                        let changedFiles = await git.diff(options);
+                        //let options = [pr.targetBranch, pr.sourceBranch, filePath];
+                        let changedFiles = await pr.diff();
                         console.log(`changedFiles is ${changedFiles}`)
                         console.log('===========end=============')
                         const imageIndex = link.lastIndexOf('/')
