@@ -1,7 +1,7 @@
 Parser:
   Title:  Network Session Event ASIM filtering parser for Sysmon (Event 3)
   Version: '0.0.2'
-  LastUpdated: Dec 29, 2022
+  LastUpdated: Jan 3, 2023
 Product:
   Name: Windows Sysmon
 Normalization:
@@ -128,9 +128,7 @@ ParserQuery: |
           SourceIsIpv6:bool,
           SourcePort:int,
           DestinationIsIpv6:bool,
-          DestinationIp:string,
           DestinationPort:int,
-          SourceHostname:string,
           DestinationHostname:string,
           UtcTime:datetime
           ) 
@@ -145,13 +143,13 @@ ParserQuery: |
     | project-away
         SourceIsIpv6, DestinationIsIpv6
     | extend 
-                ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0])    
+                ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0])
+    | extend
+		NetworkDirection = iff(Initiated, "Outbound", "Inbound")				
     };
-    let OutboundNetworkEvents = 
+    let NetworkEvents = 
     Sysmon3_NetworkEvent
     | where Source == "Microsoft-Windows-Sysmon" and EventID==3 // we want to ensure we only have the Event table and not the WindowsEvent table
-    | where Initiated
-    | extend NetworkDirection = "Outbound"
     | invoke EventParser ()
     | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
@@ -178,52 +176,20 @@ ParserQuery: |
     | where ASimMatchingHostname != "No match"
     | project-away temp_*
     | extend 
-        SrcUsernameType = 'Simple',
-        SrcProcessName = tostring(Image),
-        SrcAppName = tostring(Image),
-        SrcAppType = 'Process',
-        SrcUsername = tostring(User), 
-        SrcProcessId = tostring(ProcessId),
-        SrcProcessGuid = ProcessGuid
-    | project-away
-     Image, Initiated
-    ;
-    let InboundNetworkEvents = 
-    Sysmon3_NetworkEvent
-    | where Source == "Microsoft-Windows-Sysmon" and EventID==3 // we want to ensure we only have the Event table and not the WindowsEvent table
-    | where not(Initiated)
-    | extend NetworkDirection = "Inbound"
-    | invoke EventParser ()
-    | extend 
-             temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
-           , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
-    | extend ASimMatchingIpAddr = case(
-            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
-            , temp_isSrcMatch, "SrcIpAddr"
-            , temp_isDstMatch, "DstIpAddr"
-            , "No match"
-    )
-    | where ASimMatchingIpAddr != "No match"
-    | extend temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
-            , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
-    | extend ASimMatchingHostname = case(
-            array_length(hostname_has_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcHostMatch and temp_isDstHostMatch), "Both" // has to be checked before the individual 
-            , temp_isSrcHostMatch, "SrcHostname"
-            , temp_isDstHostMatch, "DstHostname"
-            , "No match"
-    )
-    | where ASimMatchingHostname != "No match"
-    | project-away temp_*
-    | extend 
-        DstUsernameType = 'Simple',
-        DstUsername = tostring(User),
-        DstProcessId = tostring(ProcessId),
-        DstProcessName = tostring(Image),
-        DstProcessGuid = ProcessGuid,
-        DstAppName = tostring(Image),
-        DstAppType = 'Process'
+            SrcUsernameType = 'Simple',
+            SrcUsername = iff(not(Initiated), tostring(User), ""),
+            SrcProcessId = iff(not(Initiated), tostring(ProcessId), ""),
+            SrcProcessGuid = iff(not(Initiated), ProcessGuid, ""),
+            SrcProcessName = iff(not(Initiated), tostring(Image), ""),
+            SrcAppName = iff(not(Initiated), tostring(Image), ""),
+            SrcAppType = iff(not(Initiated), 'Process', ""),
+            DstUsernameType = 'Simple',
+            DstUsername = iff(Initiated, tostring(User), ""),
+            DstProcessId = iff(Initiated, tostring(ProcessId), ""),
+            DstProcessGuid = iff(Initiated, ProcessGuid, ""),
+            DstProcessName = iff(Initiated, tostring(Image), ""),
+            DstAppName = iff(Initiated, tostring(Image), ""),
+            DstAppType = iff(Initiated, 'Process', "")
     | project-away
      Image, Initiated
     ;
@@ -250,12 +216,12 @@ ParserQuery: |
     SrcPortNumber = SourcePort
     | project-away
             SourceIsIpv6, DestinationIsIpv6
+	| extend
+		NetworkDirection = iff(Initiated, "Outbound", "Inbound")		
          };
-    let OutboundNetworkWindowsEvents = 
+    let WindowsEvents = 
     Sysmon3_NetworkWindowsEvent
     | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3 // we want to ensure this only applies to WindowsEvents
-    | where Initiated
-    | extend NetworkDirection = "Outbound"
     | invoke WindowsEventParser ()
           | extend 
              temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
@@ -280,57 +246,25 @@ ParserQuery: |
     | where ASimMatchingHostname != "No match"
     | project-away temp_* 
     | extend 
-        SrcUsernameType = 'Simple',
-        SrcAppName = tostring(Image),
-        SrcAppType = 'Process',
-        SrcUsername = tostring(User),
-        SrcProcessId =  tostring(ProcessId),
-        SrcProcessGuid = ProcessGuid,
-        SrcProcessName = tostring(Image)
-    | project-away
-     Image, Initiated
-      ;
-  let  inboundNetworkWindowsEvents = 
-  Sysmon3_NetworkWindowsEvent
-    | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3 // we want to ensure this only applies to WindowsEvents
-    | where not(Initiated)
-    | extend NetworkDirection = "Inbound"
-    | invoke WindowsEventParser ()
-          | extend 
-             temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) 
-           , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
-    | extend ASimMatchingIpAddr = case(
-            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
-            , temp_isSrcMatch, "SrcIpAddr"
-            , temp_isDstMatch, "DstIpAddr"
-            , "No match"
-    )       
-    | where ASimMatchingIpAddr != "No match"
-    | extend  temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
-            , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
-    | extend  ASimMatchingHostname = case(
-            array_length(hostname_has_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcHostMatch and temp_isDstHostMatch), "Both" // has to be checked before the individual 
-            , temp_isSrcHostMatch, "SrcHostname"
-            , temp_isDstHostMatch, "DstHostname"
-            , "No match"
-    )
-    | where ASimMatchingHostname != "No match"
-    | project-away temp_* 
-    | extend 
-        DstUsernameType = 'Simple',
-        DstProcessName = tostring(Image),
-        DstAppName = tostring(Image),
-        DstAppType = 'Process',
-        DstUsername = tostring(User), 
-        DstProcessId = tostring(ProcessId),
-        DstProcessGuid = ProcessGuid
+            SrcUsernameType = 'Simple',
+            SrcUsername = iff(not(Initiated), tostring(User), ""),
+            SrcProcessId = iff(not(Initiated), tostring(ProcessId), ""),
+            SrcProcessGuid = iff(not(Initiated), ProcessGuid, ""),
+            SrcProcessName = iff(not(Initiated), tostring(Image), ""),
+            SrcAppName = iff(not(Initiated), tostring(Image), ""),
+            SrcAppType = iff(not(Initiated), 'Process', ""),
+            DstUsernameType = 'Simple',
+            DstUsername = iff(Initiated, tostring(User), ""),
+            DstProcessId = iff(Initiated, tostring(ProcessId), ""),
+            DstProcessGuid = iff(Initiated, ProcessGuid, ""),
+            DstProcessName = iff(Initiated, tostring(Image), ""),
+            DstAppName = iff(Initiated, tostring(Image), ""),
+            DstAppType = iff(Initiated, 'Process', "")
     | project-away
      Image, Initiated
       ;
   let SysmonForWindowsNetworks =
-  union OutboundNetworkEvents, InboundNetworkEvents, OutboundNetworkWindowsEvents, inboundNetworkWindowsEvents
+  union NetworkEvents, WindowsEvents
       | project-rename 
                 Dvc = Computer,
                 IpAddr = SrcIpAddr,
@@ -399,6 +333,7 @@ ParserQuery: |
                 EventLog,
                 EventOriginId,
                 ProcessGuid,
-                ProcessId
+                ProcessId,
+				ExtractedHostname
       ;
       SysmonForWindowsNetworks
