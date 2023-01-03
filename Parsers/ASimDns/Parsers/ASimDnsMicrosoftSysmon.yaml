@@ -73,7 +73,7 @@ ParserQuery: |
             DnsResponseName = QueryResults,
             SrcProcessName = Image,
             SrcUsername = User
-        | project-away EventData
+        //| project-away EventData
     };
     let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
         WindowsEvent | where not(disabled)
@@ -84,6 +84,7 @@ ParserQuery: |
             RuleName = tostring(EventData.RuleName),
             EventEndTime = todatetime(EventData.UtcTime),
             SrcProcessGuid = tostring(EventData.ProcessGuid),
+            // extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
             SrcProcessId = tostring(EventData.ProcessId),  
             DnsQuery = tostring(EventData.QueryName),
             DnsResponseCode = toint(EventData.QueryStatus),
@@ -94,13 +95,14 @@ ParserQuery: |
         | parse SrcProcessGuid with '{' SrcProcessGuid '}'
     };
     union isfuzzy=true 
-        ParsedDnsEvent_Event(disabled), 
+        //ParsedDnsEvent_Event(disabled), 
         ParsedDnsEvent_WindowsEvent(disabled)
       | lookup RCodeTable on DnsResponseCode
       | project-rename 
           DvcHostname = Computer,
           // EventUid = _ItemId, 
-          DvcScopeId = _SubscriptionId
+          DvcScopeId = _SubscriptionId,
+          DvcId = _ResourceId
       | extend
           EventOriginalType = '22',
           EventCount=int(1),
@@ -116,7 +118,8 @@ ParserQuery: |
           SrcUsernameType = 'Windows',
           RuleName = iff (RuleName == "-", "", RuleName),
           DnsResponseName = iff (DnsResponseName == "-", "", DnsResponseName),
-          DnsResponseCodeName = iff (DnsResponseCodeName == "", "NA", DnsResponseCodeName)
+          DnsResponseCodeName = iff (DnsResponseCodeName == "", "NA", DnsResponseCodeName),
+          DvcIdType = iff (DvcId != "", "AzureResourceId", "")
       // -- Aliases
       | extend 
           EventResultDetails = DnsResponseCodeName,
@@ -128,6 +131,7 @@ ParserQuery: |
           DnsResponseCode = toint(iff (DnsResponseCode > 9000 and DnsResponseCode < 9100, DnsResponseCode-9000, DnsResponseCode)),
           User = SrcUsername,
           Process = SrcProcessName,
-          Rule = RuleName
+          Rule = RuleName,
+          DvcAzureResourceId = DvcId
     };
     parser(disabled=disabled)
