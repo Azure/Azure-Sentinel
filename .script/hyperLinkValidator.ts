@@ -1,7 +1,12 @@
 import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
+import { GetPRDetails } from "./utils/gitWrapper";
+import gitP, { SimpleGit } from 'simple-git/promise';
 import * as logger from "./utils/logger";
+
+const workingDir: string = process.cwd();
+const git: SimpleGit = gitP(workingDir);
 
 export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> 
 {
@@ -23,6 +28,14 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             return ExitCode.SUCCESS;
         }
 
+        console.log('===========start=============')
+        const pr = await GetPRDetails();
+        console.log(`Target Branch is ${pr.targetBranch}, Source Branch is ${pr.sourceBranch}`)
+        let options = [pr.targetBranch, pr.sourceBranch, filePath];
+        let diffSummary = await git.diff(options);
+        console.log(`diffSummary is ${diffSummary}`)
+        console.log('===========end=============')
+
         const content = fs.readFileSync(filePath, "utf8");
 
         //get http or https links from the content
@@ -37,29 +50,9 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
                 //check if the link is valid
                 const isValid = await isValidLink(link);
-                if (!isValid) {
-                    // CHECK IF LINK IS A GITHUB LINK
-                    var verifyUpdatedLink = '';
-                    if (link.includes('https://raw.githubusercontent.com'))
-                    {
-                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
-                        verifyUpdatedLink = '';
-                        
-                    }
-                    else if (link.includes('https://github.com'))
-                    {
-                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
-                        verifyUpdatedLink = '';
-                    }
-
-                    if (!verifyUpdatedLink)
-                    {
-                        const isUpdatedLinkValid = await isValidLink(verifyUpdatedLink);
-                        if (!isUpdatedLinkValid)
-                        {
-                            invalidLinks.push(link);
-                        }
-                    }
+                if (!isValid) 
+                {
+                    invalidLinks.push(link);
                 }
             }
 
