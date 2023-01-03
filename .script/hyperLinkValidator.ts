@@ -30,12 +30,18 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
         console.log('===========start=============')
         const pr = await GetPRDetails();
-        console.log(`Target Branch is ${pr.targetBranch}, Source Branch is ${pr.sourceBranch}`)
-        let options = [pr.targetBranch, pr.sourceBranch, filePath];
-        let diffSummary = await git.diff(options);
-        console.log(`diffSummary is ${diffSummary}`)
-        console.log('===========end=============')
+        console.log(pr);
+        if (pr != null || pr != undefined)
+        {
+            var targetBranch: string = pr.targetBranch;
+            var sourceBranch: string = pr.sourceBranch;
 
+            console.log(`Target Branch is ${targetBranch}, Source Branch is ${sourceBranch}`)
+            let options = [pr.targetBranch, pr.sourceBranch, filePath];
+            let diffSummary = await git.diff(options);
+            console.log(`diffSummary is ${diffSummary}`)
+            console.log('===========end=============')
+        }
         const content = fs.readFileSync(filePath, "utf8");
 
         //get http or https links from the content
