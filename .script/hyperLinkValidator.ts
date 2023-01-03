@@ -68,10 +68,11 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
             if (invalidLinks.length > 0)
             {
-                invalidLinks.forEach(l => {
-                    logger.logError(`\n ${l}`);
-                });
-
+                var errorMessage= `File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`
+                console.log("aa")
+                console.log(`File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`)
+                console.log("bb")
+                console.log(errorMessage.replace(",", "\n"));
                 throw new Error(`File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`);
             }
         }
@@ -138,7 +139,7 @@ let CheckOptions = {
         return ValidateHyperlinks(filePath)
     },
     onExecError: async (e: any) => {
-        logger.logError(`${e}`);
+        logger.logError(`${e.replace(",", "\n")}`);
     },
     onFinalFailed: async () => {
         logger.logError("An error occurred, please open an issue");
