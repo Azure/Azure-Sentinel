@@ -1445,19 +1445,14 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         function getAllDataTypeNames($dataTypesArray) {
                             $typeResult = @()
                             foreach ($dataType in $dataTypesArray) {
-                                if($typeResult -ne "")
-                                {
-                                    $typeResult += ", "
-                                }
                                 $typeResult += $dataType.name
                             }
                             return $typeResult
                         }
                         $connectorDataType = $(getConnectorDataTypes $connectorData.dataTypes)
                         $isParserAvailable = $($contentToImport.Parsers -and ($contentToImport.Parsers.Count -gt 0))
-                        $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $(getAllDataTypeNames $connectorData.dataTypes) data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+                        $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName $connectorDataType data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
                         $parserText = "The Solution installs a parser that transforms the ingested data into Microsoft Sentinel normalized format. The normalized format enables better correlation of different types of data from different data sources to drive end-to-end outcomes seamlessly in security monitoring, hunting, incident investigation and response scenarios in Microsoft Sentinel."
-                        $connectorDescriptionText = $(if ($connectorDataType -eq $commonSecurityLog) { $commonSecurityLogText } elseif ($connectorDataType -eq $syslog) { $syslogText } else { $customLogsText })
 
                         $baseDataConnectorStep = [PSCustomObject] @{
                             name       = "dataconnectors";
