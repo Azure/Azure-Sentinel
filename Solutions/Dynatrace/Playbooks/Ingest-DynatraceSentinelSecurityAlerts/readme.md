@@ -9,7 +9,7 @@ This playbook will Report all Microsoft Sentinel Security Alerts to Dynatrace. Y
 
 ** Post Install Notes:**
 
-The Logic App creates and uses a Managed System Identity (MSI). 
+The Logic App uses a Managed System Identity (MSI). 
 
 Assign RBAC 'Microsoft Sentinel Reader' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
 

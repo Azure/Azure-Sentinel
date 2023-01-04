@@ -11,7 +11,7 @@ This playbook will Report all Microsoft Sentinel Security Alerts related to a Dy
 
 Authorize the Azure Monitor Logs API Connection associated with the logic app deployed into the ResourceGroup.
 
-The Logic App creates and uses a Managed System Identity (MSI) to query the Log Analytics Workspace. 
+The Logic App uses a Managed System Identity (MSI) to query the Log Analytics Workspace. 
 
 Assign RBAC 'Microsoft Sentinel Reader' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
 

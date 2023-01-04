@@ -9,7 +9,7 @@ This playbook will ingest Microsoft Defender 365 insights to Dynatrace. You need
 
 ** Post Install Notes:**
 
-The Logic App creates and uses a Managed System Identity (MSI). 
+The Logic App uses a Managed System Identity (MSI). 
 
 Assign RBAC 'Microsoft Sentinel Reader' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
 
