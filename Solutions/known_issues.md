@@ -3,7 +3,7 @@
 ## Known Issue #1 – Resource Group selection during solution Deployment
 Microsoft Sentinel solutions deploy resources for Microsoft Sentinel scenarios. This means the resource group selected for deployment needs to have Microsoft Sentinel enabled for the deployment to succeed, specifically for Microsoft Sentinel resources like analytics rules, hunting queries etc. Hence do not select a ‘New’ resource group while deploying an Microsoft Sentinel solution as that would result in deployment failure as a new resource group would not have Microsoft Sentinel enabled by default. 
 
-![Microsoft Sentinel solutions resource group selection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions_resource_group.png)
+![Microsoft Sentinel solutions resource group selection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Images/solutions_resource_group1.png)
 
 ## Known Issue #2 – Solution Re-deployment or update
 Updating or Redeploying or Reinstalling the Solution creates duplicate content items in the respective feature galleries. The Solutions package includes content like analytic rules, workbooks etc. that gets saved in the Active rules gallery, saved workbooks gallery etc., respectively. Overwriting the content would mean loss in customizations if any to any content post Solution deployment. Hence, duplicate content items are created so that you can decide and delete the extraneous content as needed.
