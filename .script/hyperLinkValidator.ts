@@ -1,6 +1,7 @@
 import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
+import { GetPRDetails } from "./utils/gitWrapper";
 import * as logger from "./utils/logger";
 
 export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> 
@@ -24,9 +25,6 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
         }
 
         const content = fs.readFileSync(filePath, "utf8");
-
-        //get http or https links from the content
-        //const links = content.match(/https?:\/\/[^\s]+/g);
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
         if (links) 
         {
@@ -37,27 +35,36 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
                 //check if the link is valid
                 const isValid = await isValidLink(link);
-                if (!isValid) {
+                if (!isValid) 
+                {
                     // CHECK IF LINK IS A GITHUB LINK
-                    var verifyUpdatedLink = '';
-                    if (link.includes('https://raw.githubusercontent.com'))
+                    var isGithubLink = false;
+                    if (link.includes('https://raw.githubusercontent.com') || link.includes('https://github.com'))
                     {
-                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
-                        verifyUpdatedLink = '';
-                        
-                    }
-                    else if (link.includes('https://github.com'))
-                    {
-                        // REPLACE master IN URL WITH BRANCH NAME AND CHECK IF THE URL IS IN THE PR. IF STILL NOT VALID THROW ERROR.
-                        verifyUpdatedLink = '';
+                        isGithubLink = true;
                     }
 
-                    if (!verifyUpdatedLink)
+                    if (isGithubLink)
                     {
-                        const isUpdatedLinkValid = await isValidLink(verifyUpdatedLink);
-                        if (!isUpdatedLinkValid)
+                        const pr = await GetPRDetails();
+                        if (typeof pr === "undefined") 
+                        {
+                            console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
+                            return ExitCode.ERROR;
+                        }
+
+                        const changedFiles = await pr.diff();
+                        const imageIndex = link.lastIndexOf('/');
+                        const imageName = link.substring(imageIndex + 1);                        
+                        const searchedFiles = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
+                        var searchedFilesLength = searchedFiles.length;
+                        if (searchedFilesLength <= 0)
                         {
                             invalidLinks.push(link);
+                        }
+                        else
+                        {
+                            console.log(`Skipping Hyperlink validation for '${link}' in file path : '${filePath}'`);
                         }
                     }
                 }
@@ -65,12 +72,8 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
             if (invalidLinks.length > 0)
             {
-                //console.log(`Please update below given hyperlink(s) as they seems to be broken:`)
-                invalidLinks.forEach(l => {
-                    logger.logError(`\n ${l}`);
-                });
-
-                throw new Error(`In file '${filePath}', there are total '${invalidLinks.length}' broken links. Please rectify below given hyperlinks: \n ${invalidLinks}`);
+                var errorMessage= `File '${filePath}' has total '${invalidLinks.length}' broken hyperlinks. Please rectify below given hyperlinks: \n ${invalidLinks}`
+                throw new Error(errorMessage.replace(",", "\n"));
             }
         }
 
@@ -135,8 +138,8 @@ let CheckOptions = {
     onCheckFile: (filePath: string) => {
         return ValidateHyperlinks(filePath)
     },
-    onExecError: async () => {
-        logger.logError(`HyperLink Validation Failed.`);
+    onExecError: async (e: any) => {
+        logger.logError(`${e}`);
     },
     onFinalFailed: async () => {
         logger.logError("An error occurred, please open an issue");
