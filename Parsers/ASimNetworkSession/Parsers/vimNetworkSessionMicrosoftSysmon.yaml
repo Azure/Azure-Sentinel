@@ -120,7 +120,6 @@ ParserQuery: |
     T 
     | parse-kv EventData as 
           (
-          ProcessGuid:string,
           ProcessId:string,
           Image:string,
           User:string,
@@ -135,6 +134,7 @@ ParserQuery: |
           UtcTime:datetime
           ) 
           with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')
+    | parse EventData with * '<Data Name="ProcessGuid">{' ProcessGuid "}" *
     | project-away EventData
     | project-rename
          SrcPortNumber = SourcePort,
@@ -142,7 +142,6 @@ ParserQuery: |
          EventStartTime = UtcTime
     | extend
          NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6), "IPv6", "IPv4"),
-         ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]),
          NetworkDirection = iff(Initiated, "Outbound", "Inbound")
     | project-away
          SourceIsIpv6, DestinationIsIpv6
@@ -196,7 +195,6 @@ ParserQuery: |
     let WindowsEventParser = (T: (EventData: dynamic)) {
       T       
     | extend 
-            ProcessGuid = tostring(EventData.ProcessGuid),
             ProcessId = tostring(EventData.ProcessId),
             Image = tostring(EventData.Image),
             User = tostring(EventData.User),
@@ -208,9 +206,9 @@ ParserQuery: |
             DstPortNumber = toint(EventData.DestinationPort),
             EventStartTime = todatetime(EventData.UtcTime),
             RuleName = tostring(EventData.RuleName)
+    | parse EventData.ProcessGuid with * "{" ProcessGuid "}" *  
     | project-away EventData
     | extend
-         ProcessGuid = tostring(split(split(ProcessGuid, "{")[-1], "}")[0]),
          NetworkProtocolVersion = iff((SourceIsIpv6 or DestinationIsIpv6), "IPv6", "IPv4"),
          NetworkDirection = iff(Initiated, "Outbound", "Inbound")
     | project-away
