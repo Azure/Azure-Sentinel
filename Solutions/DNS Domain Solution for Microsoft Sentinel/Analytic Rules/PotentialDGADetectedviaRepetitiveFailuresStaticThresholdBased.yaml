@@ -48,8 +48,8 @@ tactics:
 relevantTechniques:
 query: |
   let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
-  | where wl_RuleName == 'Potential DGA(Domain Generation Algorithm) detected' and wl_Type == 'Detection'
-  | project toint(wl_Threshold));
+    | where wl_RuleName == 'Potential DGA(Domain Generation Algorithm) detected' and wl_Type == 'Detection'
+    | project toint(wl_Threshold));
   let lookback = 10d;
   let referenceendtime = 1d;
   //let threshold = 100;
@@ -60,12 +60,16 @@ query: |
     | where DnsQuery !contains "/" and DnsQuery contains "."
   };
   nxDomainDnsEvents (stime=ago(referenceendtime), etime=now())
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(DnsQuery) by SrcIpAddr
-  | where dcount_DnsQuery > toscalar(threshold)
+  | summarize
+    StartTimeUtc = min(TimeGenerated),
+    EndTimeUtc = max(TimeGenerated),
+    DNSQueryCount=dcount(DnsQuery)
+    by SrcIpAddr
+  | where DNSQueryCount > toscalar(threshold)
   // Filter out previously seen IPs
   | join kind=leftanti (nxDomainDnsEvents (stime=ago(lookback), etime=ago(referenceendtime))
-    | summarize dcount(DnsQuery) by SrcIpAddr
-    | where dcount_DnsQuery> toscalar(threshold))
+    | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr
+    | where DNSQueryCount > toscalar(threshold))
     on SrcIpAddr
   // Pull out sample NXDomain responses for those remaining potentially infected IPs
   | join kind = inner (nxDomainDnsEvents (stime=ago(lookback), etime=now())
@@ -74,8 +78,9 @@ query: |
   | summarize
     StartTimeUtc = min(StartTimeUtc),
     EndTimeUtc = max(EndTimeUtc),
-    sampleNXDomainList=make_list(DnsQuery, 100)
-    by SrcIpAddr, dcount_DnsQuery
+    DNSQueries=make_list(DnsQuery, 100)
+    by SrcIpAddr, DNSQueryCount
+  | extend DNSQueryCountthreshold=toint(toscalar(threshold))
 
 eventGroupingSettings:
   aggregationKind: AlertPerResult
@@ -83,6 +88,6 @@ customDetails:
 
 alertDetailsOverride:
   alertDisplayNameFormat: "[Static threshold] Potential DGA (Domain Generation Algorithm) originating from ClientIP: '{{SrcIpAddr}}' has been detected."
-  alertDescriptionFormat: "Identified clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period).\n\nDNSQueries requested by this client inlcude: '{{sampleNXDomainList}}'"
+  alertDescriptionFormat: "Identified clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period).\n\nDGA DNSQuery count baseline is: '{{DNSQueryCountthreshold}}'\n\nCurrent Domain or DnsQuery count from this client: '{{DNSQueryCount}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'"
 version: 1.0.0
 kind: Scheduled
