@@ -1,10 +1,12 @@
 # Cohesity Restore From Last Snapshot Playbook
 ## Summary
-This playbook restores the latest good Helios snapshot. It’s recommended for running by Backup Admins _only_ after they make sure that the existing data is compromised, and rollback to the previous snapshot, even at the expense of data loss, is _really required_.
+This playbook restores the latest good Data Hawk (Helios) snapshot. It’s recommended for running by Backup Admins _only_ after they make sure that the existing data is compromised, and rollback to the previous snapshot, even at the expense of data loss, is _really required_. __Please beware__: It's operable only if you have installed the [Function Apps](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) and received some incidents that need an action on affected data.
 
 ## Prerequisites
-1. Install [this](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) Azure function configuration.
-**Note:** If you already did it for another playbook (see [example](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Playbooks/Cohesity_Close_Helios_Incident/readme.md)), then proceed to the deployment steps.
+1. Deploy the Cohesity configuration [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FData%2520Connectors%2FHelios2Sentinel%2Fazuredeploy.json)
+2. Deploy the [Cohesty Function Apps](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) to Azure.
+
+**Note:** If you've already done the steps above for another playbook, please proceed straight to the deployment steps.
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
@@ -26,7 +28,7 @@ This playbook restores the latest good Helios snapshot. It’s recommended for r
 * Select _Done_.
 
 ## Troubleshooting
-1. If you'd like to use this playbook without installing the [Azure functions configuration](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md), then you need to do a few manual steps _before_ deployment.
+1. If your API key expired, then you need to replace it with a new one.
 * Create the _DataHawk API_ key:
   * Go to the Cohesity Helios [login](https://helios.cohesity.com/#/login) page.
   * Enter your credentials and select _Log In_. The _Summary_ page is displayed.
@@ -34,10 +36,9 @@ This playbook restores the latest good Helios snapshot. It’s recommended for r
   * Select _Add API Key_. The API Key Details is displayed.
   * Enter a name for the API key.
   * Select _Save_.
-* Create your Azure KeyVault (see [instructions](https://learn.microsoft.com/en-us/azure/key-vault/general/quick-create-portal)).
-  * Create the _ApiKey_ secret and assign the _API Key_ value from the previous step to it. Now your API key is securely saved in the Azure KeyVault.
-* Create your Azure Blob Storage container (see [instructions](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal#create-a-container)) with the name _cohesity-extra-parameters_.
-2. If you see the _Forbidden_ error message in the Keyvault block when you run the playbook, you can always authorize it manualy
+* Go to _[Key vaults](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults)_ and choose your keyvault, which starts from _cohesitypro_ and is followed by a sequence of letters and numbers, e.g. _cohesityprofnxj32cucakwk_.
+  * Assign the _ApiKey_ secret to the _API Key_ value from the previous step. Now your API key is securely saved in the Azure KeyVault.
+2. If you see the _Forbidden_ error message in the Keyvault block when you run the playbook, you can always authorize it manually.
 * Choose your app in the [Logic Apps](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.Logic%2Fworkflows)
 * Authorize your KeyVault connection by selecting it and clicking on _General\Edit API Connection_
 * Press the _Authorize_ button and select the appropriate account. Enter your key vault name if prompted. You can find your key vault name [here](https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.KeyVault%2Fvaults).
