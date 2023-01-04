@@ -1,7 +1,7 @@
 id: 5b8344eb-fa28-4ac3-bcff-bc19d5d63089
 name: Detect DNSQueries reporting multiple errors from different client sources - Static threshold based (ASIM Domain Solution)
 description: |
-  'This rule creates an incident in the event where multiple clients are reporting errors for the same DNSQuery.\n\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema'
+  'This rule creates an alert when multiple client sources reports errors for the same DNSQuery.\n\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema'
 severity: Medium
 status: Available 
 tags:
@@ -49,20 +49,22 @@ relevantTechniques:
   - T1205
 query: |
   let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
-  | where wl_RuleName=='Multiple errors reported for same DNSQuery' and wl_Type == 'Detection'
-  | project toint(wl_Threshold));
+    | where wl_RuleName == 'Multiple errors reported for same DNSQuery' and wl_Type == 'Detection'
+    | project toint(wl_Threshold));
   //let threshold = 2;
   let errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
   _Im_Dns
-  | where EventResultDetails has_any (errors)
-  | summarize SrcIPs = make_set(SrcIpAddr, 100) by DnsQuery, bin(TimeGenerated, 10min)
-  | where array_length(SrcIPs) >= toscalar(threshold)
+    | where EventResultDetails has_any (errors)
+    | summarize SrcIPs = make_set(SrcIpAddr, 100) by DnsQuery, bin(TimeGenerated, 10min)
+    | where array_length(SrcIPs) >= toscalar(threshold)
+    | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = toscalar(threshold)
+
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 customDetails:
 
 alertDetailsOverride:
   alertDisplayNameFormat: "[Static threshold] Multiple errors for the same DNSQuery has been detected - '{{DnsQuery}}'"
-  alertDescriptionFormat: "Multiple errors were detected for the same DNSQuery. \n\nClients requesting this DNSQuery include:\n\n'{{SrcIPs}}'"
+  alertDescriptionFormat: "Multiple errors were detected for the same DNSQuery.\n\nThreshold for total client sources reporting errors for this DNSQuery: '{{IPCountthreshold}}'\n\nCurrent count of client sources reporting errors for this DNSQuery: '{{TotalIPs}}'\n\nClient sources requesting this DNSQuery include:\n\n'{{SrcIPs}}'"
 version: 1.0.0
 kind: Scheduled
