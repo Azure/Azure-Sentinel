@@ -10,13 +10,6 @@ $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
 $MainTemplatePath = './dist/Package'
 
-ls ./
-Write-Host "AA"
-ls ./dist/
-Write-Host "BB"
-ls ./dist/Playbooks
-Write-Host "CC"
-
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 {

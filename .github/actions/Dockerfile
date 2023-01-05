@@ -2,8 +2,6 @@
 FROM mcr.microsoft.com/powershell:latest
 
 ARG SolutionName
-# ARG SolutionName1
-# ENV snamea ${SolutionName1}
 
 ARG mainTemplateOrCreateUiDefinitionTemplateChanged
 ENV mainTemplateOrCreateUiDefinitionTemplateChanged ${mainTemplateOrCreateUiDefinitionTemplateChanged}
@@ -56,7 +54,6 @@ RUN apt-get update && \
 RUN git clone https://github.com/Azure/arm-ttk.git /dist/armttk
 RUN ls /dist/armttk/
 RUN ls /dist
-
 
 SHELL ["pwsh"]
 RUN .\dist\entrypoint.ps1
