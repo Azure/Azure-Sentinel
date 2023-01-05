@@ -21,24 +21,6 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let ICMPlookup = datatable (NetworkIcmpCode: int, NetworkIcmpType:string)
-      [
-      0,"Echo Reply",
-      1,"Unassigned",
-      2,"Unassigned",
-      3,"Destination Unreachable",
-      5,"Redirect",
-      8,"Echo",
-      9,"Router Advertisement",
-      10,"Router Solicitation",
-      11,"Time Exceeded",
-      12,"Parameter Problem",
-      13,"Timestamp",
-      14,"Timestamp Reply",
-      40,"Photuris",
-      42,"Extended Echo Request",
-      43,"Extended Echo Reply"
-      ];
   let parser = (disabled:bool=false) {
       let AzureFirewallNetworkRuleLogs = 
           AzureDiagnostics
@@ -58,9 +40,9 @@ ParserQuery: |
               ". Action: "         DvcAction:string
               "."                  *
           | project-away msg_s
-          | extend NetworkIcmpCode = iff(NetworkProtocol startswith "ICMP", toint(extract ("type=(\\d+)",1,NetworkProtocol)), toint(0))
+          | extend NetworkIcmpCode = iff(NetworkProtocol startswith "ICMP", toint(extract ("type=(\\d+)",1,NetworkProtocol)), int(null))
+          | extend NetworkIcmpType = iff(isnotnull(NetworkIcmpCode), _ASIM_LookupICMPType(NetworkIcmpCode), "")
           | extend NetworkProtocol = iff(NetworkProtocol startswith "ICMP", "ICMP", NetworkProtocol)
-          | lookup ICMPlookup on NetworkIcmpCode
           | extend EventSeverity = case (
               OperationName  == "AzureFirewallThreatIntelLog", "Medium",
               DvcAction == "Deny", "Low",
