@@ -12,6 +12,14 @@ function log_register() {
 	echo "$DATE" "$@" | sudo tee -a /var/log/sapcon-sentinel-register-autoupdate.log > /dev/null 
 }
 
+function check_package() {
+	if ! which "$1" >/dev/null 2>&1; then
+		echo "Binary $1 not found"
+		echo "Please install $1 and run the upgrade script again"
+		exit 1
+	fi
+}
+
 function register_auto_update() {
 	if [ ! -f "/etc/logrotate.d/sapcon-sentinel-auto-update" ]; then
 		log_register 'Create logrotate configuration: /etc/logrotate.d/sapcon-sentinel-auto-update'
@@ -164,6 +172,8 @@ function update_agents() {
 		/opt/sapcon/sapcon-instance-update.sh --confirm-all-prompts $containernames
 	fi
 }
+
+check_package "jq"
 
 CONTAINERNAMES=()
 

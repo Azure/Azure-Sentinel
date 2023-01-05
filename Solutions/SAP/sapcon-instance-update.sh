@@ -134,16 +134,24 @@ while IFS= read -r contname; do
 	fi
 
 	log "Checking if upgrade is necessary for agent $contname"
-	
-	CLOUD=$(docker inspect "$contname" --format '{{.Config.Labels.Cloud}}')
+	if [[ -z $(docker inspect "$contname" --format '{{ .Config.Labels }}' | grep "Cloud") ]]; then
+		CLOUD='public'
+	else
+		CLOUD=$(docker inspect "$contname" --format '{{.Config.Labels.Cloud}}')
+		if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'mooncake' ]; then
+			CLOUD='public'
+		fi
+	fi
 	labelstring="--label Cloud=$CLOUD"
 	if [ ! $DEVMODE ]; then
 		if [ "$CLOUD" == 'public' ]; then
 			tag=':latest'
 		elif [ "$CLOUD" == 'fairfax' ]; then
 			tag=':ffx-latest'
+			az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
 		elif [ "$CLOUD" == 'mooncake' ]; then
 			tag=':mc-latest'
+			az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 		fi
 		if [ $PREVIEW ]; then
 			tagver="$tag-preview"
@@ -320,7 +328,7 @@ while IFS= read -r contname; do
 		fi
 		if [ $dryrunsuccess == 1 ]; then
 			log "Creating updated agent $contname"
-			labelstring="--label Cloud=$CLOUD"
+			labelstring="--label Cloud=$CLOUD "
 			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring $labelstring $restartpolicystring $ContainerNetworkSetting --name "$contname" $dockerimage$tagver >/dev/null
 			docker cp "$sdkfilename" "$contname":"$sdkfileloc"
 		fi
