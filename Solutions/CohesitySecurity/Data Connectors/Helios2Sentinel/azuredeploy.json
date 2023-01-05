@@ -39,15 +39,29 @@
         }
     },
     "variables": {
+        "hostingPlanName": "windows-host",
         "ProducerFunctionName": "[concat('cohesitypro', uniqueString(resourceGroup().id))]",
         "ConsumerFunctionName": "[concat('cohesitycon', uniqueString(resourceGroup().id))]",
         "ApiKeyName": "ApiKey",
         "StorageSuffix": "[environment().suffixes.storage]",
         "QueueName": "cohesity-incidents",
-        "AzureWebJobsStorage": " [concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ProducerFunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ProducerFunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
         "BlobName": "cohesity-extra-parameters"
     },
     "resources": [{
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic",
+                "size": "Y1",
+                "family": "Y"
+            },
+            "properties": {
+                "computeMode": "Dynamic"
+            }
+        }, {
             "type": "Microsoft.KeyVault/vaults",
             "apiVersion": "2016-10-01",
             "name": "[variables('ProducerFunctionName')]",
@@ -222,6 +236,7 @@
             "name": "[variables('ProducerFunctionName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('ProducerFunctionName')))]"
             ],
             "kind": "functionapp",
@@ -229,6 +244,7 @@
                 "type": "SystemAssigned"
             },
             "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "name": "[variables('ProducerFunctionName')]",
                 "httpsOnly": true,
                 "clientAffinityEnabled": true,
@@ -246,6 +262,7 @@
                     "CohesityQueueName": "[variables('QueueName')]",
                     "keyVaultName": "[variables('ProducerFunctionName')]",
                     "Workspace": "[parameters('Workspace')]",
+                    "AzureWebJobsStorage": " [concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ProducerFunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ProducerFunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                     "startDaysAgo": "-30"
                 }
             }]
