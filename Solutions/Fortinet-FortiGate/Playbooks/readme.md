@@ -28,7 +28,7 @@ FortiGate, a next-generation firewall from IT Cyber Security leaders Fortinet, p
 This package includes:
 * [Custom connector](./CustomConnector) 
 * [Function App]((../FunctionApp)) 
-* Three playbook templates leverage fortinet custom connector and Function App:
+* Three playbook templates leverage Fortinet custom connector and Function App:
   * [Block IP](./Playbooks/FortinetFortiGate-ResponseOnIP)
   * [Block URL](./Playbooks/FortinetFortiGate-ResponseOnURL)
   * [Enrich incident](./Playbooks/FortinetFortiGate-Enrichment)
@@ -36,7 +36,7 @@ This package includes:
 *The Azure Function handles the Get calls on FortiOS API in the playbook templates. These calls are not part of the custom connector due to platform limitations.*
 
 
-You can choose to deploy the whole package: connector + Function App + all three playbook templates, or each one seperately from it's specific folder.
+You can choose to deploy the whole package: connector + Function App + all three playbook templates, or each one separately from it's specific folder.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json)
 
@@ -46,14 +46,14 @@ You can choose to deploy the whole package: connector + Function App + all three
 This package includes:
 * [Custom connector](./CustomConnectorOnPrem)
 * [Function App](../FunctionApp)
-* Three playbook templates leverage fortinet custom connector and Function App:
+* Three playbook templates leverage Fortinet custom connector and Function App:
   * [Block IP](./Playbooks/PlaybooksOnPrem/Fortinet_ResponseOnIP)
   * [Block URL](./Playbooks/PlaybooksOnPrem/Fortinet_ResponseOnURL)
 
 
 *The Azure Function handles the Get calls on FortiOS API in the playbook templates. These calls are not part of the custom connector due to platform limitations.*
 
-You can choose to deploy the whole package: connector + Function App + all three playbook templates, or each one seperately from it's specific folder.
+You can choose to deploy the whole package: connector + Function App + all three playbook templates, or each one separately from it's specific folder.
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json)
@@ -70,7 +70,7 @@ Authentication methods this connector supports- [API Key authentication](https:/
 
 ### Prerequisites for using and deploying Custom Connector
 
-- Function app must deploy before deploying consloidated template 
+- Function app must deploy before deploying consolidated template 
 - Fortinet end point should be known. [Fortinet Console](https://{https://fndn.fortinet.net/index.php?/category/1-fortianswers/})
 - Generate an API key ([learn how](https://www.insoftservices.uk/fortigate-rest-api-token-authentication)).
 - Create the key vaults and capture secret identifier
@@ -105,7 +105,7 @@ Once deployment is complete, you will need to authorize each connection.
 - Click Authorize
 - Sign in
 - Click Save
-- Repeat steps for other connections such as Teams connection and Fortinet connector API Connection (For authorizing the fortinet connector API connection, API Key needs to be provided.) and API virustotal connection (URL:https://www.virustotal.com/gui/)
+- Repeat steps for other connections such as Teams connection and Fortinet connector API Connection (For authorizing the Fortinet connector API connection, API Key needs to be provided.) and API virustotal connection (URL:https://www.virustotal.com/gui/)
 - Open each playbook go to logic app designer-->click on each function call action in the logic app and go to "Managed identity" dropdown and select user identity and save playbook.
 - Go to sentinel hook playbook to Microsoft Sentinel rules.
 #### b. Configurations in Sentinel

@@ -1,6 +1,6 @@
 #  Fortinet Custom connector
 
-This custom connector connects to Fortinet service end point and perform automated actions on the malicous IP and URL
+This custom connector connects to Fortinet service end point and perform automated actions on the malicious IP and URL
 
 ![Fortinet](./Fortinetlogo.png)<br>
 

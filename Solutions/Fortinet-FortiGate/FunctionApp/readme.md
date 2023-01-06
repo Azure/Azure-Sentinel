@@ -1,6 +1,6 @@
 #  Fortinet Function APP connector
 
-This function app connects to Fortinet service end point and fetch the details of the entities of the fortinet firewall.
+This function app connects to Fortinet service end point and fetch the details of the entities of the Fortinet firewall.
 
 ![Fortinet](./Fortinetlogo.png)<br>
 
@@ -22,7 +22,7 @@ This function app connects to Fortinet service end point and fetch the details o
 ### Deployment instructions 
 - Deploy the Function app by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill the required parameters:
-    * Function App Name :- Enter the function name which globaly Unique and it should not contain any special Symbol  [Function app naming convention](https://docs.microsoft.com/azure/azure-functions/functions-create-function-app-portal)
+    * Function App Name :- Enter the function name which globally Unique and it should not contain any special Symbol  [Function app naming convention](https://docs.microsoft.com/azure/azure-functions/functions-create-function-app-portal)
     * Key Vault Secret identifier:- Capture from key vault secret identifier of the your secret (ex: https://{keyvaultname}.vault.azure.net/secrets/{secretidentifiername})
     * Service Endpoint:-            Enter the Fortinet service end point (ex: https://{YourVMIPorTrafficmanagement})
     * Managed Identities Name: Enter the managed identity name (ex: managed identities name)[Create user assigned manage identity](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal)
