@@ -23,9 +23,8 @@ shared_key = os.environ['WorkspaceKey']
 logging.info(shared_key)
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
-
-Authurl = "https://alnepal-ms.alpha.flexilis.com/apigw/v1/authenticate"
 baseurl =  os.environ['Baseurl'] 
+Authurl = baseurl+"/apigw/v1/authenticate"
 table_name = "Lookoutlogs"
 chunksize = 500
 token = ""
