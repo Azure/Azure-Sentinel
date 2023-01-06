@@ -5,16 +5,16 @@
 This playbook allows the SOC users to automatically response to Azure Sentinel incidents which includes IPs, by adding/removing the IPs to the Sentinel IP blocked group.
  [Learn more about Threat Intelligence in Fortinet policy](https://www.fortinet.com/fortiguard/threat-intelligence/threat-research)
 
-![Fortinet](./DesginerIPResponse.png)<br>
+![Fortinet](./images/DesginerIPResponse.png)<br>
 
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore:**<br><br>
-![Fortinet](./ResponseOnIPAdaptiveCard.PNG)<br>
+![Fortinet](./images/ResponseOnIPAdaptiveCard.PNG)<br>
 
 **This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration:**<br><br>
-![Consolidated Adaptive Card example](./FortinetSummaryAdaptivecard.PNG)<br>
+![Consolidated Adaptive Card example](./images/FortinetSummaryAdaptivecard.PNG)<br>
 
-![Fortinet](./CommentOnIPIncident.PNG)<br>
+![Fortinet](./images/CommentOnIPIncident.PNG)<br>
 
 ### Prerequisites 
 - Sentinel IP block group should create in the VM
@@ -79,9 +79,9 @@ Once deployment is complete, you will need to authorize each connection.
 
 #### c. Configuration of Azure Key Vault
 1. Navigate to created Azure Key Vault.
-   ![Key Vault configuration](./KeyVault.png)
+   ![Key Vault configuration](./images/KeyVault.png)
 2. Create new Access Police with secret Get permission
-   ![Secret permission creation](./CreatePolice.png)
+   ![Secret permission creation](./images/CreatePolice.png)
 3. Find principal by playbook name and select it
 4. Click Create
 
@@ -128,7 +128,7 @@ Gets access_token from created Azure Key Vault
 
 ## Incident will comment as follows
 
-![Fortinet](./CommentOnIPIncident.PNG)<br>
+![Fortinet](./images/CommentOnIPIncident.PNG)<br>
 
 ## Known Issues and Limitations
 

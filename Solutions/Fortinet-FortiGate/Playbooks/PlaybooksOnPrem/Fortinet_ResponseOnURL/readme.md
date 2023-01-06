@@ -5,14 +5,14 @@
 This playbook allows the SOC users to automatically response to Azure Sentinel incidents which includes URL's, by adding the URLs to the Sentinel URL blocked group.
  [Learn more about Threat Intelligence in Fortinet policy](https://www.fortinet.com/fortiguard/threat-intelligence/threat-research)
 
-![Fortinet](./DesginerResposeOnURL.png)<br>
+![Fortinet](./images/DesginerResposeOnURL.png)<br>
 
 
 **This is the adaptive card SOC will receive when playbook is triggered for each risky IP for taking actions like block/unblock/ignore ::**<br><br>
-![Fortinet](./ResponseOnURLAdaptiveCard.PNG)<br>
+![Fortinet](./images/ResponseOnURLAdaptiveCard.PNG)<br>
 
 **This is the consolidate adaptive card about the summary of actions taken on IP and the incident configuration ::**<br><br>
-![Consolidated Adaptive Card example](./FortinetSummaryAdaptivecardURL.PNG)<br>
+![Consolidated Adaptive Card example](./images/FortinetSummaryAdaptivecardURL.PNG)<br>
 
 
 ### Prerequisites 
@@ -76,9 +76,9 @@ Once deployment is complete, you will need to authorize each connection.
 
 #### c. Configuration of Azure Key Vault
 1. Navigate to created Azure Key Vault.
-   ![Key Vault configuration](./KeyVault.png)
+   ![Key Vault configuration](./images/KeyVault.png)
 2. Create new Access Police with secret Get permission
-   ![Secret permission creation](./CreatePolice.png)
+   ![Secret permission creation](./images/CreatePolice.png)
 3. Find principal by playbook name and select it
 4. Click Create
 
@@ -125,7 +125,7 @@ Gets access_token from created Azure Key Vault
 
 ## Incident will comment as follows
 
-![Fortinet](./CommentOnURLIncident.PNG)<br>
+![Fortinet](./images/CommentOnURLIncident.PNG)<br>
 
 ## Known Issues and Limitations
 
