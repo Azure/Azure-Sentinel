@@ -7,7 +7,7 @@ Run [this](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.inte
 **Note:** You don't need to do it if you've already run the script for deploying another Cohesity function app. 
 
 ## Testing
-Check that the function successfully runs at  _<Your Function Name that starts from cohesitypro> | Functions | Monitor_ - each function run precedes the corresponding info message. If not, please see the troubleshooting section for tips.
+Check that the function successfully runs at  _``Your function name that starts from cohesitypro`` | Functions | Monitor_. Each successfull run should have the corresponding log-message. If not, please see the Troubleshooting section for tips.
 
 ## Troubleshooting
 1. If the function fails because your DataHawk (Helios) API key expired, get your new key by following these steps
