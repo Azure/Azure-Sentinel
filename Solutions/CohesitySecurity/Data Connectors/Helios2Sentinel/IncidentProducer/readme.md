@@ -2,10 +2,12 @@
 This function retrieves ransomware alerts from Cohesity DataHawk and lands them in the queue for further processing and storing in the Sentinel Incident table.
 
 ## Publish Azure Function
-* Run ``az login`` followed by ``func azure functionapp publish IncidentProducer --csharp --force``
+Run [this](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/azuredeploy.json.sh) script to create configuration and deploy the function apps to Azure.
+
+**Note:** You don't need to do it if you've already run the script for deploying another Cohesity function app. 
 
 ## Testing
-* Check that the function successfully runs at  _IncidentProducer | Functions | Monitor_ - each function run precedes the corresponding info message. If not, please see the troubleshooting section for tips.
+Check that the function successfully runs at  _<Your Function Name that starts from cohesitypro> | Functions | Monitor_ - each function run precedes the corresponding info message. If not, please see the troubleshooting section for tips.
 
 ## Troubleshooting
 1. If the function fails because your DataHawk (Helios) API key expired, get your new key by following these steps
