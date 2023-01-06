@@ -27,7 +27,7 @@ FortiGate, a next-generation firewall from IT Cyber Security leaders Fortinet, p
 ## Deploy Custom Connector+ Function App + 3 Playbook templates
 This package includes:
 * [Custom connector](./CustomConnector) 
-* [Function App]((../FunctionApp)) 
+* [Function App](../FunctionApp) 
 * Three playbook templates leverage Fortinet custom connector and Function App:
   * [Block IP](./Playbooks/FortinetFortiGate-ResponseOnIP)
   * [Block URL](./Playbooks/FortinetFortiGate-ResponseOnURL)
@@ -40,15 +40,15 @@ You can choose to deploy the whole package: connector + Function App + all three
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2Fazuredeploy.json)
 
-## Deploy Custom Connector + 2 Playbook templates
+## Deploy OnPrem Custom Connector + 2 OnPrem Playbook templates
 <a name="onprem">
 
 This package includes:
 * [Custom connector](./CustomConnectorOnPrem)
 * [Function App](../FunctionApp)
 * Three playbook templates leverage Fortinet custom connector and Function App:
-  * [Block IP](./Playbooks/PlaybooksOnPrem/Fortinet_ResponseOnIP)
-  * [Block URL](./Playbooks/PlaybooksOnPrem/Fortinet_ResponseOnURL)
+  * [Block IP](./PlaybooksOnPrem/Fortinet_ResponseOnIP)
+  * [Block URL](./PlaybooksOnPrem/Fortinet_ResponseOnURL)
 
 
 *The Azure Function handles the Get calls on FortiOS API in the playbook templates. These calls are not part of the custom connector due to platform limitations.*
