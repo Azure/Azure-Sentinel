@@ -9,6 +9,4 @@ Before deployment, please make sure that all prerequisites and pre-deployment st
 * Install [azure-functions-core-tools](https://docs.microsoft.com/azure/azure-functions/functions-run-local).
 
 ## Deployment
-* Deploy configurations [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FData%2520Connectors%2FHelios2Sentinel%2Fazuredeploy.json)
-* Deploy [IncidentProducer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentProducer#readme) function.
-* Deploy [IncidentConsumer](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/IncidentConsumer#readme) function.
+* Run this [script](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/azuredeploy.json.sh) to create/deploy everything for function apps.
