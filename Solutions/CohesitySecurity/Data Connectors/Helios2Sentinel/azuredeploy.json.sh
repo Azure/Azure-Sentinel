@@ -7,7 +7,7 @@ resourcegroup="ying-test-resource-group"
 workspacename="auto-deploy-workspace"
 producer_fun_prefix="cohesitypro"
 producer_context="IncidentProducer"
-consumer_fun_prefix="cohesitypro"
+consumer_fun_prefix="cohesitycon"
 consumer_context="IncidentConsumer"
 
 ./remove.py "$producer_fun_prefix" "$resourcegroup"
