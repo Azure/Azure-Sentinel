@@ -13,7 +13,7 @@ $MainTemplatePath = './dist/Package'
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 {
-    Write-Host "Running ARM-TTK on MainTemplate.json and/or CreateUiDefinition.json file, as change is identified those files."
+    Write-Host "Running ARM-TTK on MainTemplate.json file!"
     $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
     $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
     Write-Output $MainTemplateTestPassed
@@ -21,18 +21,37 @@ if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
     $MainTemplateTestFailures =  $MainTemplateTestResults | Where-Object { -not $_.Passed }
 
     if ($MainTemplateTestFailures) {
-        Write-Host "CreateUiDefinition.json and/or MainTemplate.json templates did not pass the arm-ttk tests"
+        Write-Host "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!"
         exit 1
     } 
     else {
-        Write-Host "All tests passed for the given files of CreateUiDefinition.json and/or MainTemplate.json!"
+        Write-Host "All tests passed for the 'MainTemplate.json' file!"
+    }
+}
+
+# RUN FOR CREATEUIDEFINITION.JSON FILE
+if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
+{
+    Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
+    $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
+    $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
+    Write-Output $MainTemplateTestPassed
+
+    $MainTemplateTestFailures =  $MainTemplateTestResults | Where-Object { -not $_.Passed }
+
+    if ($MainTemplateTestFailures) {
+        Write-Host "Please review and rectify the 'CreateUiDefinition.json' file as some of the ARM-TTK tests did not pass!"
+        exit 1
+    }
+    else {
+        Write-Host "All tests passed for the 'CreateUiDefinition.json' file!"
     }
 }
 
 # Data Connector file change
 if ($hasDataConnectorFileChanged -eq $true)
 {
-    Write-Host "Running ARM-TTK on Data Connectors Folder, '$dataConnectorFileNames' files, as change is identified those file"
+    Write-Host "Running ARM-TTK on Data Connectors Folder, '$dataConnectorFileNames' files!"
     $dataConnectorFolderName = "Data Connectors"
     if($isDataConnectorFolderNameWithSpace -ne $true)
     {
@@ -51,7 +70,7 @@ if ($hasDataConnectorFileChanged -eq $true)
         $dataConnectorFailures =  $dataConnectorTestResults | Where-Object { -not $_.Passed }
 
         if ($dataConnectorFailures) {
-            Write-Host "Data Connectors Folder, '$dataConnectorFileItem' file did not pass the arm-ttk tests!"
+            Write-Host "Please review and rectify the Data Connectors Folder, '$dataConnectorFileItem' file as some of the ARM-TTK tests did not pass!"
             exit 1
         } 
         else {
@@ -64,7 +83,7 @@ if ($hasDataConnectorFileChanged -eq $true)
 if ($playbooksChanged -eq $true)
 {
     $playbookFilesListObj = $playbookFilesList.Split(" ")
-    Write-Host "Running ARM-TTK on Playbooks Folder, '$playbookFilesListObj' files as change is identified this file"
+    Write-Host "Running ARM-TTK on Playbooks Folder, '$playbookFilesListObj' files!"
     foreach($playbookFile in $playbookFilesListObj)
     {
         if($playbookFile.Contains(".json"))
@@ -80,12 +99,11 @@ if ($playbooksChanged -eq $true)
             $playbooksTestFailures =  $playbooksTestResults | Where-Object { -not $_.Passed }
 
             if ($playbooksTestFailures) {
-                Write-Host "Playbooks Folder '$folderPath' json file did not pass the arm-ttk tests!"
+                Write-Host "Please review and rectify Playbooks Folder '$folderPath' json file as some of the ARM-TTK tests did not pass!"
                 exit 1
             } 
             else {
                 Write-Host "All files passed for Playbooks Folder!"
-                #exit 0
             }
         }
     }
