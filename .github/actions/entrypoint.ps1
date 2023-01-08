@@ -83,6 +83,8 @@ if ($hasDataConnectorFileChanged -eq $true)
 if ($playbooksChanged -eq $true)
 {
     $playbookFilesListObj = $playbookFilesList.Split(" ")
+    $sss = $playbookFilesListObj.replace(' ', '%20')
+    Write-Host "sss is $sss"
     Write-Host "Running ARM-TTK on Playbooks Folder, '$playbookFilesListObj' files!"
     foreach($playbookFile in $playbookFilesListObj)
     {
@@ -98,7 +100,7 @@ if ($playbooksChanged -eq $true)
             {
                 $folderPath = $playbookFile
             }
-
+            Write-Host "folderPath is $folderPath"
             $playbooksTestResults = Test-AzTemplate -TemplatePath "./Playbooks/$folderPath"
             $playbooksTestPassed =  $playbooksTestResults | Where-Object { -not $_.Failed }
             Write-Output $playbooksTestPassed
