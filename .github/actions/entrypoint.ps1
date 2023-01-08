@@ -9,7 +9,7 @@ $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
 
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
 $MainTemplatePath = './dist/Package'
-
+Write-Host "MainTemplatePath $MainTemplatePath"
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 {
@@ -99,7 +99,7 @@ if ($playbooksChanged -eq $true)
                 $folderPath = $playbookFile
             }
 
-            $playbooksTestResults = Test-AzTemplate -TemplatePath "./dist/Playbooks/$folderPath"
+            $playbooksTestResults = Test-AzTemplate -TemplatePath "./Playbooks/$folderPath"
             $playbooksTestPassed =  $playbooksTestResults | Where-Object { -not $_.Failed }
             Write-Output $playbooksTestPassed
 
