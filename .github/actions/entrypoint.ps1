@@ -10,13 +10,7 @@ $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
 $BasePath = './dist'
 $MainTemplatePath = './dist/Package'
-Write-Host "MainTemplatePath $MainTemplatePath"
 
-Write-Host "AAAAAAAAAAAAAAAA"
-ls ./
-Write-Host "BBBBBBBBBBBBBBBB"
-ls /dist
-Write-Host "CCCCCCCCCCCCCCCC"
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 {
@@ -40,13 +34,13 @@ if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
-    $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
-    $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
-    Write-Output $MainTemplateTestPassed
+    $CreateUiTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
+    $CreateUiTestPassed =  $CreateUiTestResults | Where-Object { -not $_.Failed }
+    Write-Output $CreateUiTestPassed
 
-    $MainTemplateTestFailures =  $MainTemplateTestResults | Where-Object { -not $_.Passed }
+    $CreateUiTestFailures =  $CreateUiTestResults | Where-Object { -not $_.Passed }
 
-    if ($MainTemplateTestFailures) {
+    if ($CreateUiTestFailures) {
         Write-Host "Please review and rectify the 'CreateUiDefinition.json' file as some of the ARM-TTK tests did not pass!"
         exit 1
     }
@@ -90,8 +84,6 @@ if ($hasDataConnectorFileChanged -eq $true)
 if ($playbooksChanged -eq $true)
 {
     $playbookFilesListObj = $playbookFilesList.Split(" ")
-    $sss = $playbookFilesListObj.replace(' ', '%20')
-    Write-Host "sss is $sss"
     Write-Host "Running ARM-TTK on Playbooks Folder, '$playbookFilesListObj' files!"
     foreach($playbookFile in $playbookFilesListObj)
     {
@@ -108,10 +100,7 @@ if ($playbooksChanged -eq $true)
                 $folderPath = $playbookFile
             }
             
-            Write-Host "folderPath is $folderPath"
             $folderFilePath = "$BasePath/Playbooks/$folderPath"
-            Write-Host "folderFilePath $folderFilePath"
-
             $playbooksTestResults = Test-AzTemplate -TemplatePath $folderFilePath
             
             $playbooksTestPassed =  $playbooksTestResults | Where-Object { -not $_.Failed }
