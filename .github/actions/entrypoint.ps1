@@ -90,9 +90,16 @@ if ($playbooksChanged -eq $true)
         {
             Write-Host "Running ARM-TTK on file '$playbookFile'"
             $folderEndIndex = $playbookFile.LastIndexOf('/')
-            $folderPath = $playbookFile.substring(0, $folderEndIndex)
-            $playbooksTestResults = Test-AzTemplate -TemplatePath "./dist/Playbooks/$folderPath"
+            if ($folderEndIndex -eq 0)
+            {
+                $folderPath = $playbookFile.substring(0)
+            }
+            else 
+            {
+                $folderPath = $playbookFile
+            }
 
+            $playbooksTestResults = Test-AzTemplate -TemplatePath "./dist/Playbooks/$folderPath"
             $playbooksTestPassed =  $playbooksTestResults | Where-Object { -not $_.Failed }
             Write-Output $playbooksTestPassed
 
