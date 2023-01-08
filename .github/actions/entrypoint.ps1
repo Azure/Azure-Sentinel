@@ -8,8 +8,15 @@ $dataConnectorFileNames = (Get-Item env:dataConnectorFileNames).value
 $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
 
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
+$BasePath = './dist'
 $MainTemplatePath = './dist/Package'
 Write-Host "MainTemplatePath $MainTemplatePath"
+
+Write-Host "AAAAAAAAAAAAAAAA"
+ls ./
+Write-Host "BBBBBBBBBBBBBBBB"
+ls /dist
+Write-Host "CCCCCCCCCCCCCCCC"
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 {
@@ -62,7 +69,7 @@ if ($hasDataConnectorFileChanged -eq $true)
     foreach($dataConnectorFileItem in $dataConnectorFilesList)
     {
         Write-Host "Running ARM-TTK on file '$dataConnectorFileItem'"
-        $dataConnectorTestResults = Test-AzTemplate -TemplatePath "./dist/$dataConnectorFolderName/$dataConnectorFileItem"
+        $dataConnectorTestResults = Test-AzTemplate -TemplatePath "$BasePath/$dataConnectorFolderName/$dataConnectorFileItem"
 
         $dataConnectorTestPassed =  $dataConnectorTestResults | Where-Object { -not $_.Failed }
         Write-Output $dataConnectorTestPassed
@@ -100,8 +107,13 @@ if ($playbooksChanged -eq $true)
             {
                 $folderPath = $playbookFile
             }
+            
             Write-Host "folderPath is $folderPath"
-            $playbooksTestResults = Test-AzTemplate -TemplatePath "./Playbooks/$folderPath"
+            $folderFilePath = "$BasePath/Playbooks/$folderPath"
+            Write-Host "folderFilePath $folderFilePath"
+
+            $playbooksTestResults = Test-AzTemplate -TemplatePath $folderFilePath
+            
             $playbooksTestPassed =  $playbooksTestResults | Where-Object { -not $_.Failed }
             Write-Output $playbooksTestPassed
 
