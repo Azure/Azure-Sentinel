@@ -54,7 +54,7 @@
     }
   },
   "variables": {
-    "solutionId": "azuresentinel.azure-sentinel-solution-DNS",
+    "solutionId": "azuresentinel.azure-sentinel-solution-dns-domain-preview",
     "_solutionId": "[variables('solutionId')]",
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
@@ -116,7 +116,6 @@
     "_playbookContentId1": "[variables('playbookContentId1')]",
     "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1')))]",
-    "blanks": "[replace('b', 'b', '')]",
     "huntingQueryVersion1": "1.0.0",
     "huntingQuerycontentId1": "50f0cdfb-8b01-4eca-823d-2bbe6b8a5b95",
     "_huntingQuerycontentId1": "[variables('huntingQuerycontentId1')]",
@@ -352,7 +351,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 1 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -385,7 +384,7 @@
                 "description": "This rule identifies known Domain IOCs (present in watchlist) in the DNS query logs. An alert will be created if DNSQuery matches with any value present in the Watchlist - 'DNS_Solution_Domain_IOCs'.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Detect DNS request to malicious Domain (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\n_Im_Dns\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n",
+                "query": "let lookback = 1h;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n| summarize count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -475,10 +474,10 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "alertDetailsOverride": {
-                  "alertSeverityColumnName\"": "Severity",
+                  "alertDescriptionFormat": "Alert details:\n\nName: '{{Name}}'\n\nDescription: '{{Description}}'\n\nTimeGenerated: '{{TimeGenerated}}'",
                   "alertTacticsColumnName": "Tactic",
-                  "alertDisplayNameFormat": "Reqest to malicious Domain '{{DnsQuery}}' by ClientIP: '{{SrcIpAddr}}' has been detected.",
-                  "alertDescriptionFormat": "Alert details:\n\nName: '{{Name}}'\n\nDescription: '{{Description}}'\n\nTimeGenerated: '{{TimeGenerated}}'"
+                  "alertDisplayNameFormat": "Request to malicious Domain '{{DnsQuery}}' by ClientIP: '{{SrcIpAddr}}' has been detected.",
+                  "alertSeverityColumnName\"": "Severity"
                 }
               }
             },
@@ -524,7 +523,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 2 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -694,7 +693,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 3 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -864,7 +863,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 4 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -895,7 +894,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "This rule uses anomaly based dynamic thresholding method to generate an alert when multiple client sources report errors for the same DNSQuery.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
-                "displayName": "Detect DNSQueries reporting multiple errors from different client sources - Anomaly Based (ASIM Domain Solution)",
+                "displayName": "Detect DNSQueries reporting multiple errors from different client sources - Anomaly Based (ASIM DNS Solution)",
                 "enabled": false,
                 "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Multiple errors reported for same DNSQuery'\n      and wl_Type == 'Detection'\n  | project toint(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n          DNS_Summarized_Logs_ip_CL \n              | where EventTime_t >= min_t\n              | summarize max_TimeGenerated=max(EventTime_t)\n              | extend max_TimeGenerated = datetime_add('hour',1,max_TimeGenerated)\n      ),\n      (\n          print(min_t)\n          | project max_TimeGenerated = print_0\n      )\n    | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\n  let summarizationexist = materialize(\n            union isfuzzy=true \n              (\n                  DNS_Summarized_Logs_ip_CL\n                  | where EventTime_t > ago(1d) \n                  | project v = int(2)\n              ),\n              (\n                  print int(1) \n                  | project v = print_0\n              )\n              | summarize maxv = max(v)\n              | extend sumexist = (maxv > 1)\n            );\nlet allData = union isfuzzy=true\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) > 1000 | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) <= 500 | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s in (Errors)\n      | project-rename SrcIpAddr=SrcIpAddr_s, DnsQuery=DnsQuery_s, Count=count__d, EventTime=EventTime_t\n      | extend Count = toint(Count) \n);\nallData\n| make-series TotalIPCount=dcount(SrcIpAddr) on EventTime from min_t to max_t step dt by DnsQuery\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, TotalIPCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  TotalIPs = tolong(TotalIPCount)\n| where EventTime >= ago(dt)\n| where score >= toscalar(threshold)\n| join kind=inner(allData | where TimeGenerated>ago(dt) | summarize SrcIps = make_set(SrcIpAddr,1000) by DnsQuery) on DnsQuery\n",
                 "queryFrequency": "P1D",
@@ -1034,7 +1033,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 5 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -1065,7 +1064,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "This rule creates an alert when multiple client sources reports errors for the same DNSQuery.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
-                "displayName": "Detect DNSQueries reporting multiple errors from different client sources - Static threshold based (ASIM Domain Solution)",
+                "displayName": "Detect DNSQueries reporting multiple errors from different client sources - Static threshold based (ASIM DNS Solution)",
                 "enabled": false,
                 "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Multiple errors reported for same DNSQuery' and wl_Type == 'Detection'\n  | project toint(wl_Threshold));\n//let threshold = 2;\nlet errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n_Im_Dns\n  | where EventResultDetails has_any (errors)\n  | summarize SrcIPs = make_set(SrcIpAddr, 100) by DnsQuery, bin(TimeGenerated, 10min)\n  | where array_length(SrcIPs) >= toscalar(threshold)\n  | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = toscalar(threshold)\n",
                 "queryFrequency": "PT1H",
@@ -1204,7 +1203,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 6 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -1374,7 +1373,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 7 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -1544,7 +1543,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 8 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -1714,7 +1713,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Analytics Rule 9 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Analytics Rule"
       }
     },
     {
@@ -2398,15 +2397,22 @@
           "metadata": {
             "title": "Summarize Data for DNS Domain Solution",
             "description": "This playbook summarizes data for DNS Domain Solution and ingests into custom tables.",
+            "prerequisites": [],
             "postDeployment": [
               "1. Authorize 'Azure Monitor Logs' and 'Azure Log Analytics Data Collector' API connections."
             ],
             "tags": [
-              "Security – DNS"
+              "Networking"
             ],
+            "support": {
+              "tier": "microsoft"
+            },
+            "author": {
+              "name": "Microsoft"
+            },
             "releaseNotes": {
               "version": "1.0",
-              "title": "[variables('blanks')]",
+              "title": "SummarizeDNSData",
               "notes": [
                 "Initial version"
               ]
@@ -2426,7 +2432,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 1 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -2458,7 +2464,7 @@
                 "eTag": "*",
                 "displayName": "[Anomaly] Anomalous Increase in DNS activity by Clients (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Anomalous Increase in DNS activity by Clients'\n     and wl_Type == 'Hunting'\n  | project toint(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and isnotempty(SrcIpAddr_s)\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series TotalEventCountPerDay= sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalEventCountPerDay, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, TotalEventCountPerDay\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  TotalEvents = tolong(TotalEventCountPerDay)\n| where EventTime >= ago(dt)\n| where score >= toscalar(threshold)\n| order by score\n",
+                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Anomalous Increase in DNS activity by Clients'\n     and wl_Type == 'Hunting'\n  | project toint(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and isnotempty(SrcIpAddr_s)\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series TotalEventCountPerDay= sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalEventCountPerDay, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, TotalEventCountPerDay\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  TotalEvents = tolong(TotalEventCountPerDay)\n| where EventTime >= ago(dt)\n| where score >= toscalar(threshold)\n| order by score\n| extend IP_0_Address = SrcIpAddr\n",
                 "version": 2,
                 "tags": [
                   {
@@ -2514,7 +2520,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 2 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -2546,7 +2552,7 @@
                 "eTag": "*",
                 "displayName": "Connection to Unpopular Website Detected (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\n  let allData =materialize( union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(2d)), endtime=ago(dt))\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by DnsQuery\n          | top 1000000 by Count\n          | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n          | extend exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(3d)), endtime=ago(dt))\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by DnsQuery\n          | top 1000000 by Count\n          | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n          | extend exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(4d)), endtime=ago(dt))\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by DnsQuery\n          | top 1000000 by Count\n          | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n          | extend exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t between (min_t .. ago(dt)) and isnotempty(DnsQuery_s)\n      | project-rename\n          DnsQuery=DnsQuery_s,\n          Count=count__d\n      | extend Count = toint(Count)\n      | summarize TotalCount=toint(sum(Count)) by DnsQuery\n      | top 1000000 by TotalCount\n      | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n      )\n      );\n_Im_Dns(starttime=ago(dt),endtime=now())\n| summarize Count=count() by DnsQuery\n| where isnotempty(DnsQuery) and DnsQuery !in (allData)\n",
+                "query": "let min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\n  let allData =materialize( union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(2d)), endtime=ago(dt))\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by DnsQuery\n          | top 1000000 by Count\n          | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n          | extend exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(3d)), endtime=ago(dt))\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by DnsQuery\n          | top 1000000 by Count\n          | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n          | extend exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(4d)), endtime=ago(dt))\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by DnsQuery\n          | top 1000000 by Count\n          | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n          | extend exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t between (min_t .. ago(dt)) and isnotempty(DnsQuery_s)\n      | project-rename\n          DnsQuery=DnsQuery_s,\n          Count=count__d\n      | extend Count = toint(Count)\n      | summarize TotalCount=toint(sum(Count)) by DnsQuery\n      | top 1000000 by TotalCount\n      | summarize TopOneMillionDNSQuery=make_list(DnsQuery,1000000)\n      )\n      );\n_Im_Dns(starttime=ago(dt),endtime=now())\n| summarize Count=count() by DnsQuery\n| where isnotempty(DnsQuery) and DnsQuery !in (allData)\n| extend DNS_0_DomainName = DnsQuery\n",
                 "version": 2,
                 "tags": [
                   {
@@ -2602,7 +2608,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 3 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -2634,12 +2640,12 @@
                 "eTag": "*",
                 "displayName": "CVE-2020-1350 (SIGRED) exploitation pattern (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let threshold = 15;\n_Im_Dns(starttime=ago(1d),endtime=now())\n| where DnsQueryTypeName in~ ('SIG', 'RRSIG')\n| where NetworkProtocol =~ 'TCP'\n| summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1m)\n| where Count > threshold\n",
+                "query": "let threshold = 15;\n_Im_Dns(starttime=ago(1d),endtime=now())\n| where DnsQueryTypeName in~ ('SIG', 'RRSIG')\n| where NetworkProtocol =~ 'TCP'\n| summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1m)\n| where Count > threshold\n| extend IP_0_Address = SrcIpAddr\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "This query detects the exploitation pattern of CVE-2020-1350 (SIGRED) vulnerability. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM Network Session schema."
+                    "value": "This query detects the exploitation pattern of CVE-2020-1350 (SIGRED) vulnerability. This query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema."
                   },
                   {
                     "name": "tactics",
@@ -2690,7 +2696,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 4 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -2722,12 +2728,12 @@
                 "eTag": "*",
                 "displayName": "Top 25 DNS queries with most failures in last 24 hours (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let timeframe = 1d;\n_Im_Dns(starttime=ago(timeframe), endtime=now())\n| where EventSubType == 'response' and ResponseCodeName != 'NOERROR'\n| summarize Count=count() by DnsQuery, ResponseCodeName\n| order by Count\n| take 25\n",
+                "query": "let timeframe = 1d;\n_Im_Dns(starttime=ago(timeframe), endtime=now())\n| where EventSubType == 'response' and ResponseCodeName != 'NOERROR'\n| summarize Count=count() by DnsQuery, ResponseCodeName\n| order by Count\n| take 25\n| extend DNS_0_DomainName = DnsQuery\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "This query searches for DNS queries that resulted in errors. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM Network Session schema."
+                    "value": "This query searches for DNS queries that resulted in errors. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema."
                   },
                   {
                     "name": "tactics",
@@ -2778,7 +2784,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 5 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -2810,7 +2816,7 @@
                 "eTag": "*",
                 "displayName": "DNS request to Risky Domains (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let lookback=1d;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Hunting' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\n_Im_Dns(starttime=ago(lookback),endtime=now())\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n",
+                "query": "let lookback=1d;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Hunting' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),endtime=now(),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n  | summarize count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n  | extend IP_0_Address = SrcIpAddr\n  | extend DNS_0_DomainName = DnsQuery\n",
                 "version": 2,
                 "tags": [
                   {
@@ -2866,7 +2872,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 6 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -2898,7 +2904,7 @@
                 "eTag": "*",
                 "displayName": "Top 25 Domains with large number of Subdomains (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let lookback=1d;\n_Im_Dns(starttime=ago(lookback),endtime=now())\n| distinct DnsQuery\n| extend DomainParts = split(DnsQuery,'.')\n| extend DomainName = strcat(DomainParts[toint(array_length(DomainParts)-2)],'.',DomainParts[toint(array_length(DomainParts)-1)])\n| summarize SubDomainCount=dcount(DnsQuery),make_list(DnsQuery) by DomainName\n| order by SubDomainCount\n| take 25\n",
+                "query": "let lookback=1d;\n_Im_Dns(starttime=ago(lookback),endtime=now())\n| distinct DnsQuery\n| extend DomainParts = split(DnsQuery,'.')\n| extend DomainName = strcat(DomainParts[toint(array_length(DomainParts)-2)],'.',DomainParts[toint(array_length(DomainParts)-1)])\n| summarize SubDomainCount=dcount(DnsQuery),make_list(DnsQuery) by DomainName\n| order by SubDomainCount\n| take 25\n| extend DNS_0_DomainName = DomainName\n",
                 "version": 2,
                 "tags": [
                   {
@@ -2954,7 +2960,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 7 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -2986,7 +2992,7 @@
                 "eTag": "*",
                 "displayName": "Increase in DNS Requests by Client than the daily average count (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let starttime = now();\nlet endtime = now();\nlet lookback = ago(7d);\n//example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change\nlet excludedDays = dynamic([\"Saturday\", \"Sunday\"]);\n// average is across 5 days as we are dropping weekends, change as needed\nlet numDays = 5;\n// limit to over 1000 lookups somewhat random but helps focus in on higher lookups, change as needed\nlet avglookupThreshold = 3;\nlet lookupThreshold = 1000;\n//Setting to startofday so we get 7 days prior to today\n_Im_Dns(starttime=startofday(lookback),endtime=startofday(starttime))\n//getting the associated number of the day of the week so we can map to a given day for later parsing if needed\n| extend DayNumberofWeek = tostring(dayofweek(TimeGenerated))\n//Setting the Day of the week value so that certain days could be excluded if needed\n| extend DayofWeek = iff(DayNumberofWeek == \"00:00:00\", \"Sunday\",\n(iff(DayNumberofWeek == \"1.00:00:00\", \"Monday\",\n(iff(DayNumberofWeek == \"2.00:00:00\", \"Tuesday\",\n(iff(DayNumberofWeek == \"3.00:00:00\", \"Wednesday\",\n(iff(DayNumberofWeek == \"4.00:00:00\", \"Thursday\",\n(iff(DayNumberofWeek == \"5.00:00:00\", \"Friday\",\n(iff(DayNumberofWeek == \"6.00:00:00\", \"Saturday\", DayNumberofWeek)))))))))))))\n| where DayofWeek !in~ (excludedDays)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by SrcIpAddr, DnsQuery\n| project StartTime, EndTime, SrcIpAddr, FullNameLookup = DnsQuery, DailyAvgLookupCountOverLastWeek = count_/numDays\n| join ( _Im_Dns\n| where TimeGenerated between(startofday(starttime)..endofday(endtime))\n| summarize count() by SrcIpAddr, FullNameLookup = DnsQuery\n| project SrcIpAddr, LookupCountToday = count_, FullNameLookup\n)\non SrcIpAddr, FullNameLookup\n| where LookupCountToday > (DailyAvgLookupCountOverLastWeek * avglookupThreshold) and LookupCountToday >= lookupThreshold\n| project StartTime, EndTime, SrcIpAddr, LookupCountToday, DailyAvgLookupCountOverLastWeek, FullNameLookup\n| order by LookupCountToday desc nulls last\n| extend timestamp = StartTime, IPCustomEntity = SrcIpAddr, DomainCustomEntity = FullNameLookup\n",
+                "query": "let starttime = now();\nlet endtime = now();\nlet lookback = ago(7d);\n//example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change\nlet excludedDays = dynamic([\"Saturday\", \"Sunday\"]);\n// average is across 5 days as we are dropping weekends, change as needed\nlet numDays = 5;\n// limit to over 1000 lookups somewhat random but helps focus in on higher lookups, change as needed\nlet avglookupThreshold = 3;\nlet lookupThreshold = 1000;\n//Setting to startofday so we get 7 days prior to today\n_Im_Dns(starttime=startofday(lookback),endtime=startofday(starttime))\n//getting the associated number of the day of the week so we can map to a given day for later parsing if needed\n| extend DayNumberofWeek = tostring(dayofweek(TimeGenerated))\n//Setting the Day of the week value so that certain days could be excluded if needed\n| extend DayofWeek = iff(DayNumberofWeek == \"00:00:00\", \"Sunday\",\n(iff(DayNumberofWeek == \"1.00:00:00\", \"Monday\",\n(iff(DayNumberofWeek == \"2.00:00:00\", \"Tuesday\",\n(iff(DayNumberofWeek == \"3.00:00:00\", \"Wednesday\",\n(iff(DayNumberofWeek == \"4.00:00:00\", \"Thursday\",\n(iff(DayNumberofWeek == \"5.00:00:00\", \"Friday\",\n(iff(DayNumberofWeek == \"6.00:00:00\", \"Saturday\", DayNumberofWeek)))))))))))))\n| where DayofWeek !in~ (excludedDays)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by SrcIpAddr, DnsQuery\n| project StartTime, EndTime, SrcIpAddr, FullNameLookup = DnsQuery, DailyAvgLookupCountOverLastWeek = count_/numDays\n| join ( _Im_Dns\n| where TimeGenerated between(startofday(starttime)..endofday(endtime))\n| summarize count() by SrcIpAddr, FullNameLookup = DnsQuery\n| project SrcIpAddr, LookupCountToday = count_, FullNameLookup\n)\non SrcIpAddr, FullNameLookup\n| where LookupCountToday > (DailyAvgLookupCountOverLastWeek * avglookupThreshold) and LookupCountToday >= lookupThreshold\n| project StartTime, EndTime, SrcIpAddr, LookupCountToday, DailyAvgLookupCountOverLastWeek, FullNameLookup\n| order by LookupCountToday desc nulls last\n| extend timestamp = StartTime, IPCustomEntity = SrcIpAddr, DomainCustomEntity = FullNameLookup\n| extend IP_0_Address = SrcIpAddr\n| extend IP_0_Address = SrcIpAddr\n| extend DNS_0_DomainName = FullNameLookup\n",
                 "version": 2,
                 "tags": [
                   {
@@ -3042,7 +3048,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 8 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -3074,7 +3080,7 @@
                 "eTag": "*",
                 "displayName": "Possible DNS Tunneling or Data Exfilteration Activity (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "// Setting URI length threshold count, shorter URI's may cause noise, change as needed\nlet lookback=1day;\nlet uriThreshold = 150;\nlet minersDomains=dynamic([\"cnr.io\", \"kr0.io\", \"arcticwolf.net\", \"webcfs00.com\", \"barracudabrts.com\", \"trendmicro.com\", \"sophosxl.net\", \n\"spotify.com\", \"e5.sk\", \"mcafee.com\", \"opendns.com\", \"spameatingmonkey.net\", \"_ldap\", \"_kerberos\", \"modsecurity.org\", \n\"fdmarc.net\", \"ipass.com\", \"wpad\"]);\n_Im_Dns(starttime=ago(lookback),endtime=now())\n| summarize count() by SrcIpAddr, DnsQuery\n| where not(DnsQuery has_any (minersDomains))\n| extend Urilength = strlen(DnsQuery)\n| where Urilength >= uriThreshold\n| order by Urilength\n",
+                "query": "// Setting URI length threshold count, shorter URI's may cause noise, change as needed\nlet lookback=1day;\nlet uriThreshold = 150;\nlet minersDomains=dynamic([\"cnr.io\", \"kr0.io\", \"arcticwolf.net\", \"webcfs00.com\", \"barracudabrts.com\", \"trendmicro.com\", \"sophosxl.net\", \n\"spotify.com\", \"e5.sk\", \"mcafee.com\", \"opendns.com\", \"spameatingmonkey.net\", \"_ldap\", \"_kerberos\", \"modsecurity.org\", \n\"fdmarc.net\", \"ipass.com\", \"wpad\"]);\n_Im_Dns(starttime=ago(lookback),endtime=now())\n| summarize count() by SrcIpAddr, DnsQuery\n| where not(DnsQuery has_any (minersDomains))\n| extend Urilength = strlen(DnsQuery)\n| where Urilength >= uriThreshold\n| order by Urilength\n| extend IP_0_Address = SrcIpAddr\n| extend DNS_0_DomainName = DnsQuery\n",
                 "version": 2,
                 "tags": [
                   {
@@ -3130,7 +3136,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 9 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -3162,12 +3168,12 @@
                 "eTag": "*",
                 "displayName": "Potential beaconing activity (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let querystarttime = 2d;\nlet queryendtime = 1d;\nlet TimeDeltaThreshold = 10;\nlet TotalEventsThreshold = 15;\nlet PercentBeaconThreshold = 80;\n_Im_Dns(starttime=ago(querystarttime), endtime=ago(queryendtime))\n| where isnotempty(SrcIpAddr)\n| project TimeGenerated, SrcIpAddr, DnsQuery\n| sort by SrcIpAddr asc,TimeGenerated asc\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSrcIpAddr = next(SrcIpAddr, 1)\n| extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)\n| where SrcIpAddr == nextSrcIpAddr\n//Whitelisting criteria/ threshold criteria\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| project TimeGenerated, TimeDeltainSeconds, SrcIpAddr, DnsQuery\n| summarize count(), make_list(TimeDeltainSeconds) by TimeDeltainSeconds, bin(TimeGenerated, 1h), SrcIpAddr, DnsQuery\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)\nby bin(TimeGenerated, 1h), SrcIpAddr, DnsQuery\n| where TotalEvents > TotalEventsThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| order by BeaconPercent\n| take 50\n",
+                "query": "let querystarttime = 2d;\nlet queryendtime = 1d;\nlet TimeDeltaThreshold = 10;\nlet TotalEventsThreshold = 15;\nlet PercentBeaconThreshold = 80;\n_Im_Dns(starttime=ago(querystarttime), endtime=ago(queryendtime))\n| where isnotempty(SrcIpAddr)\n| project TimeGenerated, SrcIpAddr, DnsQuery\n| sort by SrcIpAddr asc,TimeGenerated asc\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSrcIpAddr = next(SrcIpAddr, 1)\n| extend TimeDeltainSeconds = datetime_diff('second',nextTimeGenerated,TimeGenerated)\n| where SrcIpAddr == nextSrcIpAddr\n//Whitelisting criteria/ threshold criteria\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| project TimeGenerated, TimeDeltainSeconds, SrcIpAddr, DnsQuery\n| summarize count(), make_list(TimeDeltainSeconds) by TimeDeltainSeconds, bin(TimeGenerated, 1h), SrcIpAddr, DnsQuery\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)\nby bin(TimeGenerated, 1h), SrcIpAddr, DnsQuery\n| where TotalEvents > TotalEventsThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| order by BeaconPercent\n| take 50\n| extend IP_0_Address = SrcIpAddr\n| extend DNS_0_DomainName = DnsQuery\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "This query identifies beaconing patterns from DNS logs based on recurrent frequency patterns. Such potential outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM Network Session schema."
+                    "value": "This query identifies beaconing patterns from DNS logs based on recurrent frequency patterns. Such potential outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema."
                   },
                   {
                     "name": "tactics",
@@ -3218,7 +3224,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 10 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -3250,12 +3256,12 @@
                 "eTag": "*",
                 "displayName": "Top 25 Sources(Clients) with high number of errors in last 24hours (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let timeframe = 1d;\n_Im_Dns(starttime=ago(timeframe), endtime=now())\n| where EventSubType == 'response' and DnsResponseCodeName != 'NOERROR'\n| where isnotempty(SrcIpAddr)\n| summarize Count=count() by SrcIpAddr, DnsResponseCodeName\n| order by Count\n| take 25\n",
+                "query": "let timeframe = 1d;\n_Im_Dns(starttime=ago(timeframe), endtime=now())\n| where EventSubType == 'response' and DnsResponseCodeName != 'NOERROR'\n| where isnotempty(SrcIpAddr)\n| summarize Count=count() by SrcIpAddr, DnsResponseCodeName\n| order by Count\n| take 25\n| extend IP_0_Address = SrcIpAddr\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "This query searches for top 25 Clients with most number of errors. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM Network Session schema."
+                    "value": "This query searches for top 25 Clients with most number of errors. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema."
                   },
                   {
                     "name": "tactics",
@@ -3306,7 +3312,7 @@
       },
       "properties": {
         "description": "DNS Domain Solution for Microsoft Sentinel Hunting Query 11 with template",
-        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query template"
+        "displayName": "DNS Domain Solution for Microsoft Sentinel Hunting Query"
       }
     },
     {
@@ -3338,12 +3344,12 @@
                 "eTag": "*",
                 "displayName": "Unexpected top level domains (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "// Check in last 24hours\nlet looback=1d;\n_Im_Dns(starttime=ago(looback),endtime=now())\n| summarize Count=count() by SrcIpAddr, DnsQuery\n| extend TopLevelDomain = tostring(split(DnsQuery, \".\")[-1])\n| where strlen(TopLevelDomain) > 4\n| order by Count\n| take 25\n",
+                "query": "// Check in last 24hours\nlet looback=1d;\n_Im_Dns(starttime=ago(looback),endtime=now())\n| summarize Count=count() by SrcIpAddr, DnsQuery\n| extend TopLevelDomain = tostring(split(DnsQuery, \".\")[-1])\n| where strlen(TopLevelDomain) > 4\n| order by Count\n| take 25\n| extend IP_0_Address = SrcIpAddr\n| extend DNS_0_DomainName = DnsQuery\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "This query looks for Top Level Domains with length greater than 4. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM Network Session schema."
+                    "value": "This query looks for Top Level Domains with length greater than 4. The query utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema."
                   },
                   {
                     "name": "tactics",
