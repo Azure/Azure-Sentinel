@@ -24,7 +24,7 @@ ENV hasDataConnectorFileChanged ${hasDataConnectorFileChanged}
 ENV sname ${SolutionName}
 ENV sname1 $SolutionName
 RUN echo "playbooksChanged ${playbooksChanged}"
-RUN echo "mainCreateUIExist ${mainTemplateOrCreateUiDefinitionTemplateChanged}"
+RUN echo "mainTemplateOrCreateUiDefinitionTemplateChanged ${mainTemplateOrCreateUiDefinitionTemplateChanged}"
 
 RUN echo "isDataConnectorFolderNameWithSpace ${isDataConnectorFolderNameWithSpace}"
 RUN echo "dataConnectorFileNames ${dataConnectorFileNames}"
