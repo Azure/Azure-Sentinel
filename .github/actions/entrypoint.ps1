@@ -16,7 +16,7 @@ $MainTemplatePath = './dist/Package'
 if ($mainTemplateChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on MainTemplate.json file!"
-    $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
+    $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath/mainTemplate.json
     $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
     Write-Output $MainTemplateTestPassed
 
@@ -35,7 +35,7 @@ if ($mainTemplateChanged -eq $true)
 if ($createUiChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
-    $CreateUiTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
+    $CreateUiTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath/CreateUiDefinition.json
     $CreateUiTestPassed =  $CreateUiTestResults | Where-Object { -not $_.Failed }
     Write-Output $CreateUiTestPassed
 
