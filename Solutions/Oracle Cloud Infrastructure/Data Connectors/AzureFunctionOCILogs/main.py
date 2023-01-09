@@ -120,7 +120,8 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                 if "additionalDetails" in event["data"]:
                     event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])
                 if "stateChange" in event["data"]:
-                    if "current" in event["data"]["stateChange"]:
+                    logging.info("In data.stateChange : {}".format(event["data"]["stateChange"]))
+                    if "current" in event["data"]["stateChange"] and event["data"]["stateChange"] is not None :
                         event["data"]["stateChange"]["current"] = json.dumps(
                             event["data"]["stateChange"]["current"])
 
