@@ -1,7 +1,8 @@
 
 $playbooksChanged = (Get-Item env:playbooksChanged).value
 $playbookFilesList = (Get-Item env:playbookFilesList).value
-$mainTemplateOrCreateUiDefinitionTemplateChanged = (Get-Item env:mainTemplateOrCreateUiDefinitionTemplateChanged).value
+$mainTemplateChanged = (Get-Item env:mainTemplateChanged).value
+$createUiChanged = (Get-Item env:createUiChanged).value
 
 $isDataConnectorFolderNameWithSpace = (Get-Item env:isDataConnectorFolderNameWithSpace).value
 $dataConnectorFileNames = (Get-Item env:dataConnectorFileNames).value
@@ -12,7 +13,7 @@ $BasePath = './dist'
 $MainTemplatePath = './dist/Package'
 
 # RUN FOR MAINTEMPLATE.JSON FILE
-if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
+if ($mainTemplateChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on MainTemplate.json file!"
     $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
@@ -31,7 +32,7 @@ if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
 }
 
 # RUN FOR CREATEUIDEFINITION.JSON FILE
-if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
+if ($createUiChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
     $CreateUiTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath

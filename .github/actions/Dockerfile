@@ -3,8 +3,11 @@ FROM mcr.microsoft.com/powershell:latest
 
 ARG SolutionName
 
-ARG mainTemplateOrCreateUiDefinitionTemplateChanged
-ENV mainTemplateOrCreateUiDefinitionTemplateChanged ${mainTemplateOrCreateUiDefinitionTemplateChanged}
+ARG mainTemplateChanged
+ENV mainTemplateChanged ${mainTemplateChanged}
+
+ARG createUiChanged
+ENV createUiChanged ${createUiChanged}
 
 ARG hasPlaybooksChanged
 ENV playbooksChanged ${hasPlaybooksChanged}
@@ -24,7 +27,8 @@ ENV hasDataConnectorFileChanged ${hasDataConnectorFileChanged}
 ENV sname ${SolutionName}
 ENV sname1 $SolutionName
 RUN echo "playbooksChanged ${playbooksChanged}"
-RUN echo "mainTemplateOrCreateUiDefinitionTemplateChanged ${mainTemplateOrCreateUiDefinitionTemplateChanged}"
+RUN echo "mainTemplateChanged ${mainTemplateChanged}"
+RUN echo "createUiChanged ${createUiChanged}"
 
 RUN echo "isDataConnectorFolderNameWithSpace ${isDataConnectorFolderNameWithSpace}"
 RUN echo "dataConnectorFileNames ${dataConnectorFileNames}"
@@ -43,7 +47,7 @@ LABEL "com.github.actions.name"="ARM TTK"
 LABEL "com.github.actions.description"="Checks template with the ARM TTK"
 
 LABEL version="0.0.1"
-LABEL maintainer="Amol" 
+LABEL maintainer="Microsoft" 
 
 # Install Git
 RUN apt-get update && \
