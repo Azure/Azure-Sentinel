@@ -1,38 +1,59 @@
 
 $playbooksChanged = (Get-Item env:playbooksChanged).value
 $playbookFilesList = (Get-Item env:playbookFilesList).value
-$mainTemplateOrCreateUiDefinitionTemplateChanged = (Get-Item env:mainTemplateOrCreateUiDefinitionTemplateChanged).value
+$mainTemplateChanged = (Get-Item env:mainTemplateChanged).value
+$createUiChanged = (Get-Item env:createUiChanged).value
 
 $isDataConnectorFolderNameWithSpace = (Get-Item env:isDataConnectorFolderNameWithSpace).value
 $dataConnectorFileNames = (Get-Item env:dataConnectorFileNames).value
 $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
 
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
-$MainTemplatePath = './dist/Package'
+$BasePath = './dist'
+$PackageFolderPath = './dist/Package'
 
 # RUN FOR MAINTEMPLATE.JSON FILE
-if ($mainTemplateOrCreateUiDefinitionTemplateChanged -eq $true)
+if ($mainTemplateChanged -eq $true)
 {
-    Write-Host "Running ARM-TTK on MainTemplate.json and/or CreateUiDefinition.json file, as change is identified those files."
-    $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath
+    Write-Host "Running ARM-TTK on MainTemplate.json file!"
+    $MainTemplateTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File mainTemplate.json
     $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
     Write-Output $MainTemplateTestPassed
 
     $MainTemplateTestFailures =  $MainTemplateTestResults | Where-Object { -not $_.Passed }
 
     if ($MainTemplateTestFailures) {
-        Write-Host "CreateUiDefinition.json and/or MainTemplate.json templates did not pass the arm-ttk tests"
+        Write-Host "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!"
         exit 1
     } 
     else {
-        Write-Host "All tests passed for the given files of CreateUiDefinition.json and/or MainTemplate.json!"
+        Write-Host "All tests passed for the 'MainTemplate.json' file!"
+    }
+}
+
+# RUN FOR CREATEUIDEFINITION.JSON FILE
+if ($createUiChanged -eq $true)
+{
+    Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
+    $CreateUiTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File CreateUiDefinition.json
+    $CreateUiTestPassed =  $CreateUiTestResults | Where-Object { -not $_.Failed }
+    Write-Output $CreateUiTestPassed
+
+    $CreateUiTestFailures =  $CreateUiTestResults | Where-Object { -not $_.Passed }
+
+    if ($CreateUiTestFailures) {
+        Write-Host "Please review and rectify the 'CreateUiDefinition.json' file as some of the ARM-TTK tests did not pass!"
+        exit 1
+    }
+    else {
+        Write-Host "All tests passed for the 'CreateUiDefinition.json' file!"
     }
 }
 
 # Data Connector file change
 if ($hasDataConnectorFileChanged -eq $true)
 {
-    Write-Host "Running ARM-TTK on Data Connectors Folder, '$dataConnectorFileNames' files, as change is identified those file"
+    Write-Host "Running ARM-TTK on Data Connectors Folder, '$dataConnectorFileNames' files!"
     $dataConnectorFolderName = "Data Connectors"
     if($isDataConnectorFolderNameWithSpace -ne $true)
     {
@@ -43,7 +64,7 @@ if ($hasDataConnectorFileChanged -eq $true)
     foreach($dataConnectorFileItem in $dataConnectorFilesList)
     {
         Write-Host "Running ARM-TTK on file '$dataConnectorFileItem'"
-        $dataConnectorTestResults = Test-AzTemplate -TemplatePath "./dist/$dataConnectorFolderName/$dataConnectorFileItem"
+        $dataConnectorTestResults = Test-AzTemplate -TemplatePath "$BasePath/$dataConnectorFolderName/$dataConnectorFileItem"
 
         $dataConnectorTestPassed =  $dataConnectorTestResults | Where-Object { -not $_.Failed }
         Write-Output $dataConnectorTestPassed
@@ -51,7 +72,7 @@ if ($hasDataConnectorFileChanged -eq $true)
         $dataConnectorFailures =  $dataConnectorTestResults | Where-Object { -not $_.Passed }
 
         if ($dataConnectorFailures) {
-            Write-Host "Data Connectors Folder, '$dataConnectorFileItem' file did not pass the arm-ttk tests!"
+            Write-Host "Please review and rectify the Data Connectors Folder, '$dataConnectorFileItem' file as some of the ARM-TTK tests did not pass!"
             exit 1
         } 
         else {
@@ -64,28 +85,36 @@ if ($hasDataConnectorFileChanged -eq $true)
 if ($playbooksChanged -eq $true)
 {
     $playbookFilesListObj = $playbookFilesList.Split(" ")
-    Write-Host "Running ARM-TTK on Playbooks Folder, '$playbookFilesListObj' files as change is identified this file"
+    Write-Host "Running ARM-TTK on Playbooks Folder, '$playbookFilesListObj' files!"
     foreach($playbookFile in $playbookFilesListObj)
     {
         if($playbookFile.Contains(".json"))
         {
             Write-Host "Running ARM-TTK on file '$playbookFile'"
             $folderEndIndex = $playbookFile.LastIndexOf('/')
-            $folderPath = $playbookFile.substring(0, $folderEndIndex)
-            $playbooksTestResults = Test-AzTemplate -TemplatePath "./dist/Playbooks/$folderPath"
-
+            if ($folderEndIndex -eq 0)
+            {
+                $folderPath = $playbookFile.substring(0)
+            }
+            else 
+            {
+                $folderPath = $playbookFile
+            }
+            
+            $folderFilePath = "$BasePath/Playbooks/$folderPath"
+            $playbooksTestResults = Test-AzTemplate -TemplatePath $folderFilePath
+            
             $playbooksTestPassed =  $playbooksTestResults | Where-Object { -not $_.Failed }
             Write-Output $playbooksTestPassed
 
             $playbooksTestFailures =  $playbooksTestResults | Where-Object { -not $_.Passed }
 
             if ($playbooksTestFailures) {
-                Write-Host "Playbooks Folder '$folderPath' json file did not pass the arm-ttk tests!"
+                Write-Host "Please review and rectify Playbooks Folder '$folderPath' json file as some of the ARM-TTK tests did not pass!"
                 exit 1
             } 
             else {
                 Write-Host "All files passed for Playbooks Folder!"
-                #exit 0
             }
         }
     }
