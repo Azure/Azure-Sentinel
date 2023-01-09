@@ -117,7 +117,7 @@ ParserQuery: |
             DstIpAddr = tostring(EventData.DestinationIp),
             DstHostname = tostring(EventData.DestinationHostname),
             SrcHostname = tostring(EventData.SrcHostname),
-            Initiated = tobool(EventData.Initiated)
+            Initiated = iff(tobool(EventData.Initiated) == true, true, false)
       | project-away
                        Provider,
                        Channel,
@@ -132,6 +132,7 @@ ParserQuery: |
           (
           ProcessId:string,
           Image:string,
+          Initiated:bool,
           User:string,
           Protocol:string,
           RuleName:string,
@@ -203,6 +204,7 @@ ParserQuery: |
       T       
     | extend 
             ProcessId = tostring(EventData.ProcessId),
+            Initiated = iff(tobool(EventData.Initiated) == true, true, false),
             Image = tostring(EventData.Image),
             User = tostring(EventData.User),
             Protocol = tostring(EventData.Protocol),
@@ -267,7 +269,6 @@ ParserQuery: |
           union isfuzzy=true NetworkEvents, WindowsEvents
           | project-rename 
                 Dvc = Computer,
-                IpAddr = SrcIpAddr,
                 NetworkRuleName = RuleName
           | extend
                 EventEndTime = EventStartTime,
@@ -287,9 +288,13 @@ ParserQuery: |
                 Protocol = toupper(Protocol),
                 EventOriginalType = '3', // Set with a constant value to avoid parsing
                 SrcIpAddr = IpAddr,
-                Src = IpAddr,
-                DvcIpAddr  = iff(Initiated, IpAddr, Dst),
+                IpAddr = SrcIpAddr,
+                DvcIpAddr  = iff(Initiated, IpAddr, Dst)
+        | extend
+                Src = SrcIpAddr,
                 Dst = DstIpAddr
+        | extend
+                DvcIpAddr = iff(Initiated, Src, Dst)
         | extend
                 DvcHostname = Dvc
         | invoke 
