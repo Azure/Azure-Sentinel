@@ -12,7 +12,11 @@ Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1'
 $BasePath = './dist'
 $PackageFolderPath = './dist/Package'
 $createUiDefinitionFilePath = "$PackageFolderPath/CreateUiDefinition.json"
+$createUiDefinitionFilePath1 = $PackageFolderPath + '/CreateUiDefinition.json'
 $mainTemplateFilePath = "$PackageFolderPath/mainTemplate.json"
+
+Write-Host "createUiDefinitionFilePath $createUiDefinitionFilePath"
+Write-Host "createUiDefinitionFilePath1 $createUiDefinitionFilePath1"
 
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateChanged -eq $true)
