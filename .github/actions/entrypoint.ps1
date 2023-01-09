@@ -11,12 +11,17 @@ $hasDataConnectorFileChanged = (Get-Item env:hasDataConnectorFileChanged).value
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
 $BasePath = './dist'
 $MainTemplatePath = './dist/Package'
+Write-Host "MainTemplatePath $MainTemplatePath"
+$ss1 = "$MainTemplatePath/CreateUiDefinition.json"
+Write-Host "ss1 is $ss1"
+$ss2 = './dist/Package/CreateUiDefinition.json'
+Write-Host "ss2 $ss2"
 
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on MainTemplate.json file!"
-    $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath/mainTemplate.json
+    $MainTemplateTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath + '/mainTemplate.json'
     $MainTemplateTestPassed =  $MainTemplateTestResults | Where-Object { -not $_.Failed }
     Write-Output $MainTemplateTestPassed
 
@@ -35,7 +40,7 @@ if ($mainTemplateChanged -eq $true)
 if ($createUiChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
-    $CreateUiTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath/CreateUiDefinition.json
+    $CreateUiTestResults = Test-AzTemplate -TemplatePath $MainTemplatePath + '/CreateUiDefinition.json'
     $CreateUiTestPassed =  $CreateUiTestResults | Where-Object { -not $_.Failed }
     Write-Output $CreateUiTestPassed
 
