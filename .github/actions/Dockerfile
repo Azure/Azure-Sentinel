@@ -35,13 +35,11 @@ RUN echo "dataConnectorFileNames ${dataConnectorFileNames}"
 RUN echo "hasDataConnectorFileChanged ${hasDataConnectorFileChanged}"
 
 LABEL version="v1.0"
-RUN ls ./
 
 WORKDIR ./Solutions/$SolutionName
 
 COPY ./Solutions/$SolutionName dist
 COPY ./.github/actions/entrypoint.ps1 dist
-RUN ls dist/*
 
 LABEL "com.github.actions.name"="ARM TTK"
 LABEL "com.github.actions.description"="Checks template with the ARM TTK"
@@ -56,8 +54,6 @@ RUN apt-get update && \
 
 # Clone ARM-TTK Repo
 RUN git clone https://github.com/Azure/arm-ttk.git /dist/armttk
-RUN ls /dist/armttk/
-RUN ls /dist
 
 SHELL ["pwsh"]
 RUN .\dist\entrypoint.ps1
