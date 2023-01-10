@@ -20,7 +20,7 @@ SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
-PARTITIONS = os.getenv('Partition',"1")
+PARTITIONS = os.getenv('Partition',"0")
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
