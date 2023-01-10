@@ -197,5 +197,5 @@ export enum ConnectorCategory {
   AzureDiagnostics="AzureDiagnostics",
   AzureDevOpsAuditing="AzureDevOpsAuditing",
   ThreatIntelligenceIndicator="ThreatIntelligenceIndicator",
-  MicrosoftPurviewInformationProtection="MicrosoftPurviewInformationProtection_ConnectorSchema.json"
+  MicrosoftPurviewInformationProtection="MicrosoftPurviewInformationProtection"
 }
