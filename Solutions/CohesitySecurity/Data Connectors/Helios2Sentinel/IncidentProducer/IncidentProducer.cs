@@ -29,17 +29,17 @@ namespace Helios2Sentinel
 {
     public class IncidentProducer
     {
-        private const string keyVaultName = "Cohesity-Vault";
+        private static string keyVaultName = Environment.GetEnvironmentVariable("keyVaultName");
+        private static string blobStorageConnectionString = Environment.GetEnvironmentVariable("BlobStorageConnectionString");
         private static readonly object queueLock = new object();
-        private static Lazy<ConnectionMultiplexer> lazyConnection = CreateConnection();
-        private static string containerName = "extra-parameters";
-        private static string blobStorageConnectionString = GetSecret("BlobStorageConnectionString");
+        private static string containerName = "cohesity-extra-parameters";
+
         public static long GetPreviousUnixTime(ILogger log)
         {
             DateTime previousDateTime = DateTime.Now;
             try
             {
-                previousDateTime = previousDateTime.AddDays(long.Parse(GetSecret("startDaysAgo")));
+                previousDateTime = previousDateTime.AddDays(long.Parse(Environment.GetEnvironmentVariable("startDaysAgo")));
             }
             catch  (Exception ex)
             {
@@ -52,22 +52,6 @@ namespace Helios2Sentinel
         public static long GetCurrentUnixTime()
         {
             return ((DateTimeOffset)DateTime.Now).ToUnixTimeMilliseconds() * 1000;
-        }
-
-        public static ConnectionMultiplexer Connection
-        {
-            get
-            {
-                return lazyConnection.Value;
-            }
-        }
-
-        private static Lazy<ConnectionMultiplexer> CreateConnection()
-        {
-            return new Lazy<ConnectionMultiplexer>(() =>
-            {
-                return ConnectionMultiplexer.Connect(GetSecret("connectStr"));
-            });
         }
 
         public static async Task ParseAlertToQueue(
@@ -124,9 +108,9 @@ namespace Helios2Sentinel
             }
         }
 
-        private static string GetData(string path)
+        private static string GetData(string path, ILogger log)
         {
-            if (CloudStorageAccount.TryParse(blobStorageConnectionString, out var storageAccount))
+            if (CloudStorageAccount.TryParse(IncidentProducer.blobStorageConnectionString, out var storageAccount))
             {
                 // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
                 var cloudBlobClient = storageAccount.CreateCloudBlobClient();
@@ -152,7 +136,7 @@ namespace Helios2Sentinel
         {
             try
             {
-                if (CloudStorageAccount.TryParse(blobStorageConnectionString, out var storageAccount))
+                if (CloudStorageAccount.TryParse(IncidentProducer.blobStorageConnectionString, out var storageAccount))
                 {
                     var cloudBlobClient = storageAccount.CreateCloudBlobClient();
                     var container = cloudBlobClient.GetContainerReference(containerName);
@@ -167,7 +151,7 @@ namespace Helios2Sentinel
             }
             catch (Exception ex)
             {
-                log.LogError("Exception --> " + ex.Message);
+                log.LogError("Exception --> 4 " + ex.Message);
             }
         }
 
@@ -191,15 +175,14 @@ namespace Helios2Sentinel
 
             try
             {
-                var db = Connection.GetDatabase();
-                string apiKey = GetSecret("ApiKey");
-                string blobKey = GetSecret("workspace") + "\\" + apiKey;
+                string apiKey = GetSecret("ApiKey", log);
+                string blobKey = Environment.GetEnvironmentVariable("Workspace") + "\\" + apiKey;
 
                 try
                 {
-                    startDateUsecs = long.Parse(GetData(blobKey));
+                    startDateUsecs = long.Parse(GetData(blobKey, log));
                 }
-                catch  (Exception ex)
+                catch (Exception ex)
                 {
                     startDateUsecs = GetPreviousUnixTime(log);
                     log.LogError("Exception --> 2 " + ex.Message);
@@ -210,16 +193,16 @@ namespace Helios2Sentinel
                     startDateUsecs = GetPreviousUnixTime(log);
                 }
 
-                log.LogInformation ("startDateUsecs --> " + startDateUsecs);
+                log.LogInformation("startDateUsecs --> " + startDateUsecs);
 
                 long endDateUsecs = GetCurrentUnixTime();
-                log.LogInformation ("endDateUsecs --> " + endDateUsecs.ToString());
+                log.LogInformation("endDateUsecs --> " + endDateUsecs.ToString());
 
                 string requestUriString = $"https://helios.cohesity.com/mcm/alerts?alertCategoryList=kSecurity&alertStateList=kOpen&startDateUsecs={startDateUsecs}&endDateUsecs={endDateUsecs}";
                 log.LogInformation("requestUriString --> " + requestUriString);
                 using HttpClient client = new ();
                 client.DefaultRequestHeaders.Accept.Clear();
-                client.DefaultRequestHeaders.Add("apiKey", GetSecret("apiKey"));
+                client.DefaultRequestHeaders.Add("apiKey", GetSecret("ApiKey", log));
                 await using Stream stream = await client.GetStreamAsync(requestUriString);
                 StreamReader reader = new StreamReader(stream);
                 dynamic alerts = JsonConvert.DeserializeObject(reader.ReadToEnd());
@@ -228,7 +211,7 @@ namespace Helios2Sentinel
 
                 foreach (var alert in alerts)
                 {
-                    tasks.Add(Task.Run( () =>
+                    tasks.Add(Task.Run(() =>
                     {
                         ParseAlertToQueue(outputQueueItem, alert, log);
                     }));
@@ -238,7 +221,7 @@ namespace Helios2Sentinel
                 {
                     t.Wait();
                 }
-                catch {}
+                catch { }
 
                 if (t.Status == TaskStatus.RanToCompletion)
                 {
@@ -252,12 +235,21 @@ namespace Helios2Sentinel
             }
         }
 
-        private static string GetSecret(string secretName)
+        private static string GetSecret(string secretName, ILogger log)
         {
             var kvUri = $"https://{IncidentProducer.keyVaultName}.vault.azure.net";
-            var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-            var secret = secretClient.GetSecret(secretName);
-            return  secret.Value.Value;
+            try
+            {
+                var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+                var secret = secretClient.GetSecret(secretName);
+                return  secret.Value.Value;
+            }
+            catch  (Exception ex)
+            {
+                log.LogInformation("GetSecret ex --> " + ex.Message);
+            }
+            throw new Exception();
+            return  null;
         }
     }
 }

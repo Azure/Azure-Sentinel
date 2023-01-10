@@ -28,8 +28,8 @@ namespace IncidentConsumer
 {
     public class IncidentConsumer
     {
-        private const string keyVaultName = "Cohesity-Vault";
-        string TenantId = GetSecret("TenantId");
+        private static string keyVaultName = Environment.GetEnvironmentVariable("keyVaultName");
+        string TenantId = Environment.GetEnvironmentVariable("TenantId");
         string ClientId = GetSecret("ClientId");
         string ClientKey = GetSecret("ClientKey");
         const string ARM_ENDPOINT = "https://management.azure.com/";
@@ -46,12 +46,22 @@ namespace IncidentConsumer
          * need to rewrite GetAccessTokenAsync function
          * as it uses obsolete technology to get the bearer token.
          */
-        internal async Task<string> GetAccessTokenAsync(string uri)
+        internal async Task<string> GetAccessTokenAsync(string uri, ILogger log)
         {
-            var credential = new ClientCredential(ClientId, ClientKey);
-            var authenticationContext = new AuthenticationContext($"https://login.microsoftonline.com/{TenantId}");
-            var result = await authenticationContext.AcquireTokenAsync(uri, credential);
-            return result.AccessToken;
+            try
+            {
+                var credential = new ClientCredential(ClientId, ClientKey);
+                var authenticationContext = new AuthenticationContext($"https://login.microsoftonline.com/{TenantId}");
+                var result = await authenticationContext.AcquireTokenAsync(uri, credential);
+                return result.AccessToken;
+            }
+            catch (Exception ex)
+            {
+                log.LogError("GetAccessTokenAsync uri --> " + uri);
+                log.LogError("GetAccessTokenAsync ex --> " + ex.Message);
+            }
+            throw new Exception();
+            return null;
         }
 
         private string doPUT(string URI, string body, String token, ILogger log)
@@ -59,7 +69,6 @@ namespace IncidentConsumer
             try
             {
                 Uri uri = new Uri(String.Format(URI));
-
                 // Create the request
                 var httpWebRequest = (HttpWebRequest) WebRequest.Create(uri);
                 httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
@@ -86,9 +95,9 @@ namespace IncidentConsumer
             }
             catch (Exception ex)
             {
-                log.LogError("URI --> " + URI);
-                log.LogError("body --> " + body);
-                log.LogError("ex --> " + ex.Message);
+                log.LogError("doPUT URI --> " + URI);
+                log.LogError("doPUT body --> " + body);
+                log.LogError("doPUT ex --> " + ex.Message);
             }
             throw new Exception();
             return null;
@@ -98,11 +107,11 @@ namespace IncidentConsumer
         public void Run([QueueTrigger("cohesity-incidents", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
         {
             log.LogInformation("queueItem --> " + queueItem);
-            string token = GetAccessTokenAsync(ARM_ENDPOINT).Result;
+            string token = GetAccessTokenAsync(ARM_ENDPOINT, log).Result;
             log.LogInformation("token --> " + token);
-            string subscription = GetSecret("subscription");
-            string resourceGroup = GetSecret("resourceGroup");
-            string workspace = GetSecret("workspace");
+            string subscription = Environment.GetEnvironmentVariable("subscription");
+            string resourceGroup = Environment.GetEnvironmentVariable("resourceGroup");
+            string workspace = Environment.GetEnvironmentVariable("Workspace");
             dynamic body = JsonConvert.DeserializeObject(queueItem);
             string incidentID = Guid.NewGuid().ToString();
             string URI = $"{ARM_ENDPOINT}subscriptions/{subscription}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{workspace}/providers/Microsoft.SecurityInsights/incidents/{incidentID}?api-version=2021-10-01";
