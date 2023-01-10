@@ -30,7 +30,7 @@ namespace Helios2Sentinel
     public class IncidentProducer
     {
         private static string keyVaultName = Environment.GetEnvironmentVariable("keyVaultName");
-        private static string blobStorageConnectionString = Environment.GetEnvironmentVariable("BlobStorageConnectionString");
+        private static string azureWebJobsStorage = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
         private static readonly object queueLock = new object();
         private static string containerName = "cohesity-extra-parameters";
 
@@ -77,11 +77,11 @@ namespace Helios2Sentinel
                 case 7:
                 case 10:
                 case 11:
-                    TextWriter(id, (string)prop.key, (string)prop.value, log);
+                    WriteData(id + "\\" + (string)prop.key, (string)prop.value, log);
                     break;
                 case 1:
                     output.properties.title += ". Object: " + prop.value;
-                    TextWriter(id, (string)prop.key, (string)prop.value, log);
+                    WriteData(id + "\\" + (string)prop.key, (string)prop.value, log);
                     break;
                 case 3:
                     output.properties.title += ". Source: " + prop.value;
@@ -110,7 +110,7 @@ namespace Helios2Sentinel
 
         private static string GetData(string path, ILogger log)
         {
-            if (CloudStorageAccount.TryParse(IncidentProducer.blobStorageConnectionString, out var storageAccount))
+            if (CloudStorageAccount.TryParse(IncidentProducer.azureWebJobsStorage, out var storageAccount))
             {
                 // Create the CloudBlobClient that represents the Blob storage endpoint for the storage account.
                 var cloudBlobClient = storageAccount.CreateCloudBlobClient();
@@ -134,30 +134,18 @@ namespace Helios2Sentinel
 
         private static void WriteData(string path, string data, ILogger log)
         {
-            try
+            if (CloudStorageAccount.TryParse(IncidentProducer.azureWebJobsStorage, out var storageAccount))
             {
-                if (CloudStorageAccount.TryParse(IncidentProducer.blobStorageConnectionString, out var storageAccount))
-                {
-                    var cloudBlobClient = storageAccount.CreateCloudBlobClient();
-                    var container = cloudBlobClient.GetContainerReference(containerName);
-                    var blobRef = container.GetBlockBlobReference(path);
-                    var dataAsBytes = Encoding.UTF8.GetBytes(data);
-                    blobRef.UploadFromByteArrayAsync(dataAsBytes, 0, dataAsBytes.Length).Wait();
-                }
-                else
-                {
-                    throw new InvalidProgramException("Invalid format string");
-                }
+                var cloudBlobClient = storageAccount.CreateCloudBlobClient();
+                var container = cloudBlobClient.GetContainerReference(containerName);
+                var blobRef = container.GetBlockBlobReference(path);
+                var dataAsBytes = Encoding.UTF8.GetBytes(data);
+                blobRef.UploadFromByteArrayAsync(dataAsBytes, 0, dataAsBytes.Length).Wait();
             }
-            catch (Exception ex)
+            else
             {
-                log.LogError("Exception --> 4 " + ex.Message);
+                throw new InvalidProgramException("Invalid format string");
             }
-        }
-
-        private static void TextWriter(string incidentID, string param, string value, ILogger log)
-        {
-            WriteData(incidentID + "\\" + param, value, log);
         }
 
         [FunctionName("IncidentProducer")]
