@@ -3,8 +3,18 @@ SCRIPT=$(realpath "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 cd "$SCRIPTPATH"
 
-workspacename="$1"
-resourcegroup="$2"
+if [ -z "$1" ]
+then
+    workspacename="auto-deploy-workspace"
+else
+    workspacename="$1"
+fi
+
+if [ -z "$2" ]
+then
+    resourcegroup="ying-test-resource-group"
+else
+    resourcegroup="$2"
 fi
 
 az monitor log-analytics workspace delete \
