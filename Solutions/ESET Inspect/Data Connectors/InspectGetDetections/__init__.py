@@ -77,7 +77,7 @@ def main(
             username=username,
             password=password,
             domain=domain,
-            client_id=client_id,
+            client_id=None,
             verify=verify,
         )
 
