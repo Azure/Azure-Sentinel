@@ -1,9 +1,9 @@
 <!-- Taken from https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Templates/Doc_Template_REST_API_Connector.md -->
 
-# Connect your Darktrace Enterprise Immune System to Microsoft Sentinel 
+# Connect your Darktrace to Microsoft Sentinel 
 
 
-The Darktrace Data Connector allows you to easily connect your AI detections from within Darktrace's Product Suite with your Microsoft Sentinel workspace, to view dashboards, create custom alerts, and improve investigation. The connector allows Darktrace to send AI Analyst Incidents, Model Breaches and System Health Alerts to Sentinel. Integration between the Enterprise Immune System and Microsoft Sentinel makes use of REST API: data is sent from Darktrace to Sentinel using HTTPs.
+The Darktrace Data Connector allows you to easily connect your AI detections from within Darktrace's Product Suite with your Microsoft Sentinel workspace, to view dashboards, create custom alerts, and improve investigation. The connector allows Darktrace to send AI Analyst Incidents, Model Breaches and System Health Alerts to Sentinel. Integration between Darktrace and Microsoft Sentinel makes use of REST API: data is sent from Darktrace to Sentinel using HTTPs.
 
 
 > [!NOTE]
