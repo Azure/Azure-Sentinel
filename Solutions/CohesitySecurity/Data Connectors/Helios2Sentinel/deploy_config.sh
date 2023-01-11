@@ -1,7 +1,11 @@
 #!/bin/zsh
+SCRIPT=$(realpath "$0")
+SCRIPTPATH=$(dirname "$SCRIPT")
+cd "$SCRIPTPATH"
 
 workspacename="$1"
 resourcegroup="$2"
+fi
 
 az monitor log-analytics workspace delete \
     --force \
