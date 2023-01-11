@@ -54,17 +54,19 @@ relevantTechniques:
   - T1568
   - T1008
 query: |
+  let lookback = 1h;
   let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')
     | where wl_RuleName == 'Excessive NXDOMAIN DNS Queries'
         and wl_Type == 'Detection'
     | project threshold=toint(wl_Threshold));
-  _Im_Dns(responsecodename='NXDOMAIN')
+  _Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')
   | summarize NXDOMAINCount=count() by SrcIpAddr, bin(TimeGenerated, 15m)
   | where NXDOMAINCount > toscalar(threshold)
-  | join kind=inner (_Im_Dns(responsecodename='NXDOMAIN')
+  | join kind=inner (_Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')
     | summarize DNSQueries = makeset(DnsQuery) by SrcIpAddr)
     on SrcIpAddr
   | extend NXDOMAINthreshold=toint(toscalar(threshold))
+  | project-away SrcIpAddr1
 entityMappings:
   - entityType: IP
     fieldMappings:
