@@ -381,8 +381,8 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "This rule identifies known Domain IOCs (present in watchlist) in the DNS query logs. An alert will be created if DNSQuery matches with any value present in the Watchlist - 'DNS_Solution_Domain_IOCs'.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
-                "displayName": "Detect DNS request to malicious Domain (ASIM DNS Solution)",
+                "description": "This rule identifies known Domain IOCs (present in watchlist) in the DNS query logs. An alert will be created if DNSQuery matches with any value present in the Watchlist. To tune the query to your environment configure it using the 'DNS_Solution_Domain_IOCs' Watchlist.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
+                "displayName": "Detect DNS request to known Domain IOCs (ASIM DNS Solution)",
                 "enabled": false,
                 "query": "let lookback = 1h;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n| summarize count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n",
                 "queryFrequency": "PT1H",
@@ -472,32 +472,32 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "DNS",
                     "fieldMappings": [
                       {
-                        "columnName": "DnsQuery",
-                        "identifier": "DomainName"
+                        "identifier": "DomainName",
+                        "columnName": "DnsQuery"
                       }
-                    ],
-                    "entityType": "DNS"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "'{{Name}}' was detected. From client source: '{{SrcIpAddr}}'",
-                  "alertSeverityColumnName\"": "Severity",
                   "alertTacticsColumnName": "Tactic",
-                  "alertDescriptionFormat": "Alert Description: '{{Description}}'\n\nRequested DNSQuery: '{{DnsQuery}}'"
+                  "alertDescriptionFormat": "Alert Description: '{{Description}}'\n\nRequested DNSQuery: '{{DnsQuery}}'",
+                  "alertDisplayNameFormat": "'{{Name}}' was detected. From client source: '{{SrcIpAddr}}'",
+                  "alertSeverityColumnName\"": "Severity"
                 }
               }
             },
@@ -576,7 +576,7 @@
                 "description": "This rule makes use of anomaly based dynamic thresholding method to generate an alert when client generates excessive amount of DNS queries to non-existent domains.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Excessive NXDOMAIN DNS Queries'\n      and wl_Type == 'Detection'\n  | project toint(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, EventCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(EventCount)\n| where EventTime >= ago(dt)\n| where score >= (toscalar(threshold) * 2)\n| join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)\n  | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n",
+                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Excessive NXDOMAIN DNS Queries'\n      and wl_Type == 'Detection'\n  | project todouble(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, EventCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(EventCount)\n| where EventTime >= ago(dt)\n| where score >= (toscalar(threshold) * 2)\n| join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)\n  | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -664,25 +664,25 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "DNSQueries": "DNSQueries",
-                  "AnomalyScore": "score"
+                  "AnomalyScore": "score",
+                  "DNSQueries": "DNSQueries"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Client source is generating excessive amount of DNS queries for non-existent domains.\n\nBaseline for 'NXDOMAIN' error count for this client: '{{baseline}}'\n\nCurrent 'NXDOMAIN' error count for this client: '{{Total}}'\n\nDnsQueries requested by the client include:\n\n'{{DNSQueries}}'",
-                  "alertDisplayNameFormat": "[Anomaly] Excessive NXDOMAIN DNS Queries has been detected from ClientIP: '{{SrcIpAddr}}'"
+                  "alertDisplayNameFormat": "[Anomaly] Excessive NXDOMAIN DNS Queries has been detected from ClientIP: '{{SrcIpAddr}}'",
+                  "alertDescriptionFormat": "Client source is generating excessive amount of DNS queries for non-existent domains.\n\nBaseline for 'NXDOMAIN' error count for this client: '{{baseline}}'\n\nCurrent 'NXDOMAIN' error count for this client: '{{Total}}'\n\nDnsQueries requested by the client include:\n\n'{{DNSQueries}}'"
                 }
               }
             },
@@ -761,7 +761,7 @@
                 "description": "This rule generates an alert when the configured threshold for DNS queries to non-existent domains is breached.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Detect excessive NXDOMAIN DNS queries - Static threshold based (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Excessive NXDOMAIN DNS Queries'\n      and wl_Type == 'Detection'\n  | project threshold=toint(wl_Threshold));\n_Im_Dns(responsecodename='NXDOMAIN')\n| summarize NXDOMAINCount=count() by SrcIpAddr, bin(TimeGenerated, 15m)\n| where NXDOMAINCount > toscalar(threshold)\n| join kind=inner (_Im_Dns(responsecodename='NXDOMAIN')\n  | summarize DNSQueries = makeset(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n| extend NXDOMAINthreshold=toint(toscalar(threshold))\n",
+                "query": "let lookback = 1h;\nlet threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Excessive NXDOMAIN DNS Queries'\n      and wl_Type == 'Detection'\n  | project threshold=toint(wl_Threshold));\n_Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')\n| summarize NXDOMAINCount=count() by SrcIpAddr, bin(TimeGenerated, 15m)\n| where NXDOMAINCount > toscalar(threshold)\n| join kind=inner (_Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')\n  | summarize DNSQueries = makeset(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n| extend NXDOMAINthreshold=toint(toscalar(threshold))\n| project-away SrcIpAddr1\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -849,13 +849,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -865,8 +865,8 @@
                   "DNSQueries": "DNSQueries"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Client source is generating excessive amount of DNS queries for non-existent domains.\n\n'NXDOMAIN' error count threshold: '{{NXDOMAINthreshold}}'\n\nCurrent 'NXDOMAIN' error count from this client: '{{NXDOMAINCount}}'\n\nDnsQueries requested by the client include:\n\n'{{DNSQueries}}'",
-                  "alertDisplayNameFormat": "[Static threshold] Excessive NXDOMAIN DNS Queries has been detected from ClientIP: '{{SrcIpAddr}}'"
+                  "alertDisplayNameFormat": "[Static threshold] Excessive NXDOMAIN DNS Queries has been detected from ClientIP: '{{SrcIpAddr}}'",
+                  "alertDescriptionFormat": "Client source is generating excessive amount of DNS queries for non-existent domains.\n\n'NXDOMAIN' error count threshold: '{{NXDOMAINthreshold}}'\n\nCurrent 'NXDOMAIN' error count from this client: '{{NXDOMAINCount}}'\n\nDnsQueries requested by the client include:\n\n'{{DNSQueries}}'"
                 }
               }
             },
@@ -945,7 +945,7 @@
                 "description": "This rule uses anomaly based dynamic thresholding method to generate an alert when multiple client sources report errors for the same DNSQuery.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Detect DNSQueries reporting multiple errors from different client sources - Anomaly Based (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Multiple errors reported for same DNSQuery'\n      and wl_Type == 'Detection'\n  | project toint(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n          DNS_Summarized_Logs_ip_CL \n              | where EventTime_t >= min_t\n              | summarize max_TimeGenerated=max(EventTime_t)\n              | extend max_TimeGenerated = datetime_add('hour',1,max_TimeGenerated)\n      ),\n      (\n          print(min_t)\n          | project max_TimeGenerated = print_0\n      )\n    | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\n  let summarizationexist = materialize(\n            union isfuzzy=true \n              (\n                  DNS_Summarized_Logs_ip_CL\n                  | where EventTime_t > ago(1d) \n                  | project v = int(2)\n              ),\n              (\n                  print int(1) \n                  | project v = print_0\n              )\n              | summarize maxv = max(v)\n              | extend sumexist = (maxv > 1)\n            );\nlet allData = union isfuzzy=true\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) > 1000 | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) <= 500 | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s in (Errors)\n      | project-rename SrcIpAddr=SrcIpAddr_s, DnsQuery=DnsQuery_s, Count=count__d, EventTime=EventTime_t\n      | extend Count = toint(Count) \n);\nallData\n| make-series TotalIPCount=dcount(SrcIpAddr) on EventTime from min_t to max_t step dt by DnsQuery\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, TotalIPCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  TotalIPs = tolong(TotalIPCount)\n| where EventTime >= ago(dt)\n| where score >= (toscalar(threshold) * 2)\n| join kind=inner(allData | where TimeGenerated>ago(dt) | summarize SrcIps = make_set(SrcIpAddr,1000) by DnsQuery) on DnsQuery\n",
+                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Multiple errors reported for same DNSQuery'\n      and wl_Type == 'Detection'\n  | project todouble(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n          DNS_Summarized_Logs_ip_CL \n              | where EventTime_t >= min_t\n              | summarize max_TimeGenerated=max(EventTime_t)\n              | extend max_TimeGenerated = datetime_add('hour',1,max_TimeGenerated)\n      ),\n      (\n          print(min_t)\n          | project max_TimeGenerated = print_0\n      )\n    | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\n  let summarizationexist = materialize(\n            union isfuzzy=true \n              (\n                  DNS_Summarized_Logs_ip_CL\n                  | where EventTime_t > ago(1d) \n                  | project v = int(2)\n              ),\n              (\n                  print int(1) \n                  | project v = print_0\n              )\n              | summarize maxv = max(v)\n              | extend sumexist = (maxv > 1)\n            );\nlet allData = union isfuzzy=true\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) > 1000 | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n  (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) <= 500 | join (summarizationexist) on sumexist) | join (\n  _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())\n  | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)\n  | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)\n  | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n  ) on exists\n  | project-away exists, maxv, sum*\n),\n(\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s in (Errors)\n      | project-rename SrcIpAddr=SrcIpAddr_s, DnsQuery=DnsQuery_s, Count=count__d, EventTime=EventTime_t\n      | extend Count = toint(Count) \n);\nallData\n| make-series TotalIPCount=dcount(SrcIpAddr) on EventTime from min_t to max_t step dt by DnsQuery\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, TotalIPCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  TotalIPs = tolong(TotalIPCount)\n| where EventTime >= ago(dt)\n| where score >= (toscalar(threshold) * 2)\n| join kind=inner(allData | where TimeGenerated>ago(dt) | summarize SrcIps = make_set(SrcIpAddr,1000) by DnsQuery) on DnsQuery\n| project-away DnsQuery1\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -1033,13 +1033,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "DNS",
                     "fieldMappings": [
                       {
-                        "columnName": "DnsQuery",
-                        "identifier": "DomainName"
+                        "identifier": "DomainName",
+                        "columnName": "DnsQuery"
                       }
-                    ],
-                    "entityType": "DNS"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -1050,8 +1050,8 @@
                   "AnomalyScore": "score"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Multiple errors were detected for the same DNSQuery. \n\nBaseline for total client sources reporting errors for this DNSQuery: '{{baseline}}'\n\nCurrent count of client sources reporting errors for this DNSQuery: '{{TotalIPs}}'\n\nClient sources requesting this DNSQuery include:\n'{{SrcIps}}'",
-                  "alertDisplayNameFormat": "[Anomaly] Multiple errors for the same DNSQuery has been detected - '{{DnsQuery}}'"
+                  "alertDisplayNameFormat": "[Anomaly] Multiple errors for the same DNSQuery has been detected - '{{DnsQuery}}'",
+                  "alertDescriptionFormat": "Multiple errors were detected for the same DNSQuery. \n\nBaseline for total client sources reporting errors for this DNSQuery: '{{baseline}}'\n\nCurrent count of client sources reporting errors for this DNSQuery: '{{TotalIPs}}'\n\nClient sources requesting this DNSQuery include:\n'{{SrcIps}}'"
                 }
               }
             },
@@ -1130,7 +1130,7 @@
                 "description": "This rule creates an alert when multiple client sources reports errors for the same DNSQuery.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Detect DNSQueries reporting multiple errors from different client sources - Static threshold based (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Multiple errors reported for same DNSQuery' and wl_Type == 'Detection'\n  | project toint(wl_Threshold));\nlet errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n_Im_Dns\n  | where EventResultDetails has_any (errors)\n  | summarize SrcIPs = make_set(SrcIpAddr, 100) by DnsQuery, bin(TimeGenerated, 10min)\n  | where array_length(SrcIPs) >= toscalar(threshold)\n  | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = toscalar(threshold)\n",
+                "query": "let lookback=1h;\nlet threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Multiple errors reported for same DNSQuery' and wl_Type == 'Detection'\n  | project toint(wl_Threshold));\nlet errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n_Im_Dns(starttime=ago(lookback))\n  | where EventResultDetails has_any (errors)\n  | summarize SrcIPs = make_set(SrcIpAddr, 100) by DnsQuery, bin(TimeGenerated, 10min)\n  | where array_length(SrcIPs) >= toscalar(threshold)\n  | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = toscalar(threshold)\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -1218,13 +1218,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "DNS",
                     "fieldMappings": [
                       {
-                        "columnName": "DnsQuery",
-                        "identifier": "DomainName"
+                        "identifier": "DomainName",
+                        "columnName": "DnsQuery"
                       }
-                    ],
-                    "entityType": "DNS"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -1234,8 +1234,8 @@
                   "SrcIps": "SrcIps"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Multiple errors were detected for the same DNSQuery.\n\nThreshold for total client sources reporting errors for this DNSQuery: '{{IPCountthreshold}}'\n\nCurrent count of client sources reporting errors for this DNSQuery: '{{TotalIPs}}'\n\nClient sources requesting this DNSQuery include:\n\n'{{SrcIPs}}'",
-                  "alertDisplayNameFormat": "[Static threshold] Multiple errors for the same DNSQuery has been detected - '{{DnsQuery}}'"
+                  "alertDisplayNameFormat": "[Static threshold] Multiple errors for the same DNSQuery has been detected - '{{DnsQuery}}'",
+                  "alertDescriptionFormat": "Multiple errors were detected for the same DNSQuery.\n\nThreshold for total client sources reporting errors for this DNSQuery: '{{IPCountthreshold}}'\n\nCurrent count of client sources reporting errors for this DNSQuery: '{{TotalIPs}}'\n\nClient sources requesting this DNSQuery include:\n\n'{{SrcIPs}}'"
                 }
               }
             },
@@ -1314,7 +1314,7 @@
                 "description": "This rule uses anomaly based dynamic threshold to detect clients with a high NXDomain response count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address DNS activity is seen as an outlier after comparing with the baseline which represents repetitive pattern.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Anomaly based (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Potential DGA(Domain Generation Algorithm) detected'\n      and wl_Type == 'Detection'\n  | project toint(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet timeframe = 1d;\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(2d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(3d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(4d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | project-rename\n          SrcIpAddr=SrcIpAddr_s,\n          DnsQuery=DnsQuery_s,\n          Count=count__d,\n          EventTime=EventTime_t\n      | extend Count = toint(Count)\n      );\nallData\n| make-series QueryCount=dcount(DnsQuery) on EventTime from min_t to max_t step timeframe by SrcIpAddr\n// include calculated Anomalies, Score and Baseline\n| extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, QueryCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(QueryCount)\n| where EventTime >= ago(timeframe)\n| where score >= (toscalar(threshold) * 2)\n// Join the allData to include DnsQuery details\n| join kind=inner(allData\n  | where TimeGenerated >= ago(timeframe)\n  | summarize DNSQueries = make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n",
+                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Potential DGA(Domain Generation Algorithm) detected'\n      and wl_Type == 'Detection'\n  | project todouble(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet timeframe = 1d;\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(2d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(3d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(ago(4d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime\n          | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | project-rename\n          SrcIpAddr=SrcIpAddr_s,\n          DnsQuery=DnsQuery_s,\n          Count=count__d,\n          EventTime=EventTime_t\n      | extend Count = toint(Count)\n      );\nallData\n| make-series QueryCount=dcount(DnsQuery) on EventTime from min_t to max_t step timeframe by SrcIpAddr\n// include calculated Anomalies, Score and Baseline\n| extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, QueryCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(QueryCount)\n| where EventTime >= ago(timeframe)\n| where score >= (toscalar(threshold) * 2)\n// Join the allData to include DnsQuery details\n| join kind=inner(allData\n  | where TimeGenerated >= ago(timeframe)\n  | summarize DNSQueries = make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -1402,25 +1402,25 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "DNSQueries": "DNSQueries",
-                  "AnomalyScore": "score"
+                  "AnomalyScore": "score",
+                  "DNSQueries": "DNSQueries"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Client identified with high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). This Client is found to be communicating with multiple Domains which do not exist.\n\nBaseline Domain or DnsQuery count from this client: '{{baseline}}'\n\nCurrent Domain or DnsQuery count from this client: '{{Total}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'",
-                  "alertDisplayNameFormat": "[Anomaly] Potential DGA (Domain Generation Algorithm) originating from ClientIP: '{{SrcIpAddr}}' has been detected."
+                  "alertDisplayNameFormat": "[Anomaly] Potential DGA (Domain Generation Algorithm) originating from ClientIP: '{{SrcIpAddr}}' has been detected.",
+                  "alertDescriptionFormat": "Client identified with high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). This Client is found to be communicating with multiple Domains which do not exist.\n\nBaseline Domain or DnsQuery count from this client: '{{baseline}}'\n\nCurrent Domain or DnsQuery count from this client: '{{Total}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'"
                 }
               }
             },
@@ -1587,13 +1587,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -1603,8 +1603,8 @@
                   "DNSQueries": "DNSQueries"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Identified clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period).\n\nDGA DNSQuery count baseline is: '{{DNSQueryCountthreshold}}'\n\nCurrent Domain or DnsQuery count from this client: '{{DNSQueryCount}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'",
-                  "alertDisplayNameFormat": "[Static threshold] Potential DGA (Domain Generation Algorithm) originating from ClientIP: '{{SrcIpAddr}}' has been detected."
+                  "alertDisplayNameFormat": "[Static threshold] Potential DGA (Domain Generation Algorithm) originating from ClientIP: '{{SrcIpAddr}}' has been detected.",
+                  "alertDescriptionFormat": "Identified clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period).\n\nDGA DNSQuery count baseline is: '{{DNSQueryCountthreshold}}'\n\nCurrent Domain or DnsQuery count from this client: '{{DNSQueryCount}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'"
                 }
               }
             },
@@ -1683,7 +1683,7 @@
                 "description": "This rule makes used of the anomaly based dynamic thresholding method  to Identify clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\\n\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Rare client observed with high reverse DNS lookup count - Anomaly based (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Rare client observed with high reverse DNS lookup'\n      and wl_Type == 'Detection'\n  | project toint(wl_AnomalyThreshold));\nlet SearchDomain = dynamic([\"in-addr.arpa\"]);\nlet min_t = ago(14d);\nlet max_t = now();\nlet timeframe = 1d;\nlet DNSEvents=(stime: datetime, etime: datetime) {\n  _Im_Dns(starttime=stime, endtime=etime, domain_has_any=SearchDomain)\n};\nDNSEvents(stime=min_t, etime=max_t)\n| make-series QueryCount=dcount(DnsQuery) on TimeGenerated from min_t to max_t step timeframe by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, TimeGenerated, QueryCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(TimeGenerated),\n  Total = tolong(QueryCount)\n| where EventTime >= ago(timeframe)\n| where score >= (toscalar(threshold) * 2)\n| join kind = inner (DNSEvents(stime=ago(timeframe), etime=max_t)\n  | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n",
+                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Rare client observed with high reverse DNS lookup'\n      and wl_Type == 'Detection'\n  | project todouble(wl_AnomalyThreshold));\nlet SearchDomain = dynamic([\"in-addr.arpa\"]);\nlet min_t = ago(14d);\nlet max_t = now();\nlet timeframe = 1d;\nlet DNSEvents=(stime: datetime, etime: datetime) {\n  _Im_Dns(starttime=stime, endtime=etime, domain_has_any=SearchDomain)\n};\nDNSEvents(stime=min_t, etime=max_t)\n| make-series QueryCount=dcount(DnsQuery) on TimeGenerated from min_t to max_t step timeframe by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, TimeGenerated, QueryCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(TimeGenerated),\n  Total = tolong(QueryCount)\n| where EventTime >= ago(timeframe)\n| where score >= (toscalar(threshold) * 2)\n| join kind = inner (DNSEvents(stime=ago(timeframe), etime=max_t)\n  | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -1771,25 +1771,25 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "DNSQueries": "DNSQueries",
-                  "AnomalyScore": "score"
+                  "AnomalyScore": "score",
+                  "DNSQueries": "DNSQueries"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Client identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse DNS lookup count baseline for this client: '{{baseline}}'\n\nCurrent reverse DNS lookup count by this client showing as: '{{Total}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'",
-                  "alertDisplayNameFormat": "[Anomaly] Rare client has been observed as making high reverse DNS lookup count  - ClientIP: '{{SrcIpAddr}}'"
+                  "alertDisplayNameFormat": "[Anomaly] Rare client has been observed as making high reverse DNS lookup count  - ClientIP: '{{SrcIpAddr}}'",
+                  "alertDescriptionFormat": "Client identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse DNS lookup count baseline for this client: '{{baseline}}'\n\nCurrent reverse DNS lookup count by this client showing as: '{{Total}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'"
                 }
               }
             },
@@ -1868,7 +1868,7 @@
                 "description": "Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\\n\\nThe rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM DNS schema",
                 "displayName": "Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)",
                 "enabled": false,
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Rare client observed with high reverse DNS lookup'\n      and wl_Type == 'Detection'\n  | project toint(wl_Threshold));\nlet stime = 10d;\nlet etime = 1d;\nlet SearchDomain = dynamic([\"in-addr.arpa\"]);\n_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)\n| summarize\n  StartTimeUtc = min(TimeGenerated),\n  EndTimeUtc = max(TimeGenerated),\n  DNSQueryCount=dcount(DnsQuery)\n  by SrcIpAddr\n| where DNSQueryCount > toscalar(threshold)\n| project StartTimeUtc, EndTimeUtc, SrcIpAddr, DNSQueryCount \n| join kind=leftanti (_Im_Dns(starttime=ago(stime), endtime=ago(etime), domain_has_any=SearchDomain)\n  | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated, 1d)\n  | where DNSQueryCount > toscalar(threshold)\n  | project SrcIpAddr, DNSQueryCount\n  )\n  on SrcIpAddr\n| join kind=inner (_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)\n  | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n| extend DNSQueryCountthreshold = toint(toscalar(threshold))\n",
+                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Rare client observed with high reverse DNS lookup'\n      and wl_Type == 'Detection'\n  | project toint(wl_Threshold));\nlet stime = 10d;\nlet etime = 1d;\nlet SearchDomain = dynamic([\"in-addr.arpa\"]);\n_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)\n| summarize\n  StartTimeUtc = min(TimeGenerated),\n  EndTimeUtc = max(TimeGenerated),\n  DNSQueryCount=dcount(DnsQuery)\n  by SrcIpAddr\n| where DNSQueryCount > toscalar(threshold)\n| project StartTimeUtc, EndTimeUtc, SrcIpAddr, DNSQueryCount \n| join kind=leftanti (_Im_Dns(starttime=ago(stime), endtime=ago(etime), domain_has_any=SearchDomain)\n  | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated, 1d)\n  | where DNSQueryCount > toscalar(threshold)\n  | project SrcIpAddr, DNSQueryCount\n  )\n  on SrcIpAddr\n| join kind=inner (_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)\n  | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n| extend DNSQueryCountthreshold = toint(toscalar(threshold))\n| project-away SrcIpAddr1\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P10D",
                 "severity": "Medium",
@@ -1956,13 +1956,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "SrcIpAddr",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -1972,8 +1972,8 @@
                   "DNSQueries": "DNSQueries"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Client identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse DNS lookup threshold is: '{{DNSQueryCountthreshold}}'\n\nCurrent reverse DNS lookup count from this client is : '{{DNSQueryCount}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'",
-                  "alertDisplayNameFormat": "[Static threshold] Rare client has been observed as making high reverse DNS lookup count  - ClientIP: '{{SrcIpAddr}}'"
+                  "alertDisplayNameFormat": "[Static threshold] Rare client has been observed as making high reverse DNS lookup count  - ClientIP: '{{SrcIpAddr}}'",
+                  "alertDescriptionFormat": "Client identified as making high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\n\nReverse DNS lookup threshold is: '{{DNSQueryCountthreshold}}'\n\nCurrent reverse DNS lookup count from this client is : '{{DNSQueryCount}}'\n\nDNSQueries requested by this client inlcude: '{{DNSQueries}}'"
                 }
               }
             },
@@ -2546,7 +2546,7 @@
                 "Initial version"
               ]
             },
-            "lastUpdateTime": "2023-01-10T16:36:05.020Z"
+            "lastUpdateTime": "2023-01-11T14:09:50.217Z"
           }
         }
       }
@@ -2594,7 +2594,7 @@
                 "eTag": "*",
                 "displayName": "[Anomaly] Anomalous Increase in DNS activity by Clients (ASIM DNS Solution)",
                 "category": "Hunting Queries",
-                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Anomalous Increase in DNS activity by Clients'\n     and wl_Type == 'Hunting'\n  | project toint(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and isnotempty(SrcIpAddr_s)\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series TotalEventCountPerDay= sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalEventCountPerDay, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, TotalEventCountPerDay\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  TotalEvents = tolong(TotalEventCountPerDay)\n| where EventTime >= ago(dt)\n| where score >= (toscalar(threshold) * 2)\n| order by score\n| extend IP_0_Address = SrcIpAddr\n",
+                "query": "let threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Anomaly - Anomalous Increase in DNS activity by Clients'\n     and wl_Type == 'Hunting'\n  | project todouble(wl_AnomalyThreshold));\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);\n// calculate avg. eps(events per second)\nlet eps = materialize (_Im_Dns\n  | project TimeGenerated\n  | where TimeGenerated > ago(5m)\n  | count\n  | extend Count = Count / 300);\nlet maxSummarizedTime = toscalar (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL \n      | where EventTime_t >= min_t\n      | summarize max_TimeGenerated=max(EventTime_t)\n      | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)\n      ),\n      (\n      print(min_t)\n      | project max_TimeGenerated = print_0\n      )\n  | summarize maxTimeGenerated = max(max_TimeGenerated) \n  );\nlet summarizationexist = materialize(\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) > 1000\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) between (501 .. 1000)\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | where toscalar(eps) <= 500\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())\n          | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and isnotempty(SrcIpAddr_s)\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series TotalEventCountPerDay= sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalEventCountPerDay, toscalar(threshold), -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, TotalEventCountPerDay\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  TotalEvents = tolong(TotalEventCountPerDay)\n| where EventTime >= ago(dt)\n| where score >= (toscalar(threshold) * 2)\n| order by score\n| extend IP_0_Address = SrcIpAddr\n",
                 "version": 2,
                 "tags": [
                   {
@@ -2960,14 +2960,14 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "DNS request to Risky Domains (ASIM DNS Solution)",
+                "displayName": "Detect DNS request to known Domain IOCs (ASIM DNS Solution)",
                 "category": "Hunting Queries",
                 "query": "let lookback=1d;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Hunting' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),endtime=now(),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n  | summarize count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n  | extend IP_0_Address = SrcIpAddr\n  | extend DNS_0_DomainName = DnsQuery\n",
                 "version": 2,
                 "tags": [
                   {
                     "name": "description",
-                    "value": "This query searches for requests to risky Domains. To tune the query to your environment configure it using the 'DNS_Solution_Domain_IOCs' watchlist."
+                    "value": "This rule identifies known Domain IOCs (present in watchlist) in the DNS query logs. To tune the query to your environment configure it using the 'DNS_Solution_Domain_IOCs' watchlist."
                   },
                   {
                     "name": "tactics",
