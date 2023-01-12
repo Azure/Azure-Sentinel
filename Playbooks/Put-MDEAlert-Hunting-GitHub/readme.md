@@ -17,7 +17,10 @@ You will need [Defender for Endpoint alerts Syncronized to Sentinel](https://lea
 
 You will need to generate a [Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) for your Github Repository associated with Sentinel with the Repo, and Workflow permissions.
 
-You will need your Personal Access Token from GitHub stored in Keyvault and have the URL of the secret handy.
+You will need your Personal Access Token from GitHub stored in Keyvault and have the Secret Identifier (URL) of the secret handy.
+
+You can retrieve your Secret Identifier (URL) by opening the secret and copying the displayed Secret Identifier value as shown in the example below.
+![Secret](./Media/secret-identifier.png)
 
 This Logic App retrieves the GitHub Personal Access Token from Key Vault using the System Managed Identity and as such you should review and complete the steps in the article [Secure authentication for Conditional Access automation](https://github.com/Azure-Samples/azure-ad-conditional-access-apis/blob/main/00-prereq/readme.md) to create a Key Vault and connect it to a Managed Identity.
 
@@ -42,7 +45,7 @@ Select the following image to sign in with your Azure account and open the logic
    | **Playbook Name** | <*Put-MDEAlert-Hunting-GitHub*> | The name of the playbook to deploy.|
    | **GitHub Repo Name** | <*GitHubRepoName*> | The GitHub Repository Name that's connected to Sentinel.|
    | **GitHub Repo Owner Name** | <*GitHubRepoOwnerName*> | The GitHub Owner Name associated with the GitHub repo connected to Sentinel. |
-   | **Key Vault GitHub Credentials URL** | <*KeyVaultGitHubCredentialsURL*> | The URL for your GitHub Personal Access token from Azure Key Vault|
+   | **Key Vault GitHub Secret URL** | <*KeyVaultGitHubCredentialsURL*> | The URL for your GitHub Personal Access token from Azure Key Vault|
 
 1. When you're done, select **Review + Create** and finally **Create**.
 
