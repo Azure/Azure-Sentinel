@@ -22,9 +22,6 @@ You will need your Personal Access Token from GitHub stored in Keyvault and have
 You can retrieve your Secret Identifier (URL) by opening the secret and copying the displayed Secret Identifier value as shown in the example below.
 ![Secret](./Media/secret-identifier.png)
 
-This Logic App retrieves the GitHub Personal Access Token from Key Vault using the System Managed Identity and as such you should review and complete the steps in the article [Secure authentication for Conditional Access automation](https://github.com/Azure-Samples/azure-ad-conditional-access-apis/blob/main/00-prereq/readme.md) to create a Key Vault and connect it to a Managed Identity.
-
-
 ## Step 1: Deploy this logic app to your organization
 
 If your Azure environment meets the prerequisites, and you're familiar with using Azure Resource Manager templates, these steps help you sign in directly to Azure and open the Azure Resource Manager template in the Azure portal. For more information, see the article, [Deploy resources with Azure Resource Manager templates and Azure portal](https://docs.microsoft.com/azure/azure-resource-manager/templates/overview).
