@@ -27,5 +27,5 @@ Once deployment is complete, authorize each connection.
 5.	Click Save
 6.	Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.
 #### b. Configurations in Sentinel
-1. In Azure sentinel, analytical rules should be configured to trigger an incident. An incident should have *campaignId* custom entity (obtained from *campaignId_s* field in ProofpointTAP logs). Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents. 
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have *campaignId* custom entity (obtained from *campaignId_s* field in ProofpointTAP logs). Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents. 
 2. Configure the automation rules to trigger the playbook.
