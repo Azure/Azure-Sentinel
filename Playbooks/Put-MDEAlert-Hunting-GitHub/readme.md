@@ -51,7 +51,7 @@ Select the following image to sign in with your Azure account and open the logic
 This logic app uses a System Managed Identity to access secrets from Key Vault. As a prerequisite you must have a Key Vault created with your GitHub API Key stored and give this Logic App's System Managed Identity the ability to Read the associated Secret at the Key Vault Git Hub Credentials URL. To learn more about how to use managed identities within Logic Apps, see the article [**Logic Apps and Managed Identities**](https://docs.microsoft.com/azure/logic-apps/create-managed-service-identity).
 
 > [!WARNING]
-> Ensure you follow best practices regarding managing secrets within Logic apps by using secure inputs and outputs as documented in the article, [Secure access and data in Azure Logic Apps]](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app)].
+> Ensure you follow best practices regarding managing secrets within Logic apps by using secure inputs and outputs as documented in the article, [Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app).
 
 ## Step 3: Modify the Logic App Activity "Grab MDE Alerts with Mitre Techniques"
 
