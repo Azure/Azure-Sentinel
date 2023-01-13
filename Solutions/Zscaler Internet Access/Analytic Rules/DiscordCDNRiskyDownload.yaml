@@ -1,0 +1,52 @@
+id: 010bd98c-a6be-498c-bdcd-502308c0fdae
+name: Discord CDN Risky File Download
+description: |
+  'Identifies callouts to Discord CDN addresses for risky file extensions. This detection will trigger when a callout for a risky file
+  is made to a discord server that has only been seen once in your environment. Unique discord servers are identified using the server ID
+  that is included in the request URL (DiscordServerId in query). Discord CDN has been used in multiple campaigns to download additional payloads'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071.001
+tags:
+  - Discord
+query: |
+  let connectionThreshold = 1;
+  let riskyExtensions = dynamic([".bin",".exe",".dll",".bin",".msi"]);
+  CommonSecurityLog
+  | where DeviceVendor =~ "ZScaler"
+  | where RequestURL has_any("media.discordapp.net", "cdn.discordapp.com")
+  | where RequestURL has "attachments"
+  | where DeviceAction !~ "blocked"
+  | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, RequestURL)
+  | summarize dcount(RequestURL), make_set(SourceUserName), make_set(SourceIP), make_set(RequestURL), min(TimeGenerated), max(TimeGenerated), make_set(DeviceAction) by DiscordServerId, DeviceProduct
+  | where dcount_RequestURL <= connectionThreshold
+  | mv-expand set_SourceUserName to typeof(string), set_RequestURL to typeof(string), set_DeviceAction to typeof(string), set_SourceIP to typeof(string)
+  | summarize by DiscordServerId, DeviceProduct, dcount_RequestURL, set_SourceUserName, min_TimeGenerated, max_TimeGenerated, set_DeviceAction, set_SourceIP, set_RequestURL
+  | project StartTime=min_TimeGenerated, EndTime=max_TimeGenerated, DeviceActionTaken=set_DeviceAction, DeviceProduct, SourceUser=set_SourceUserName, SourceIP=set_SourceIP, RequestURL=set_RequestURL
+  | where RequestURL has_any (riskyExtensions)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SourceUser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+version: 1.0.0
+kind: Scheduled

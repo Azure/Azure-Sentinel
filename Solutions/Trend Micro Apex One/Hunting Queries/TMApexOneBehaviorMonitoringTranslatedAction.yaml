@@ -1,0 +1,45 @@
+id: 96451e96-67b5-11ec-90d6-0242ac120003
+name: ApexOne - Behavior monitoring actions by files
+description: |
+  'Shows behavior monitoring actions taken for files.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: TrendMicroApexOne
+    dataTypes:
+      - TMApexOneEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  TMApexOneEvent
+  | where TimeGenerated > ago(24h)
+  | where EventMessage has "Behavior Monitoring"
+  | where isnotempty(DvcAction)
+  | extend TranslatedAction = case(
+  DvcAction == "0", "Allow", 
+  DvcAction == "1", "Ask",
+  DvcAction == "2", "Deny",
+  DvcAction == "3", "Terminate", 
+  DvcAction == "4", "Read Only",
+  DvcAction == "5", "Read/Write Only",
+  DvcAction == "6", "Read/Execute Only", 
+  DvcAction == "7", "Feedback",
+  DvcAction == "8", "Clean",
+  DvcAction == "1002", "Unknown", 
+  DvcAction == "1003", "Assess",
+  DvcAction == "1004", "Terminated. Files were recovered.",
+  DvcAction == "1005", "Terminated. Some files were not recovered.", 
+  DvcAction == "1006", "Terminated. Files were not recovered.",
+  DvcAction == "1007", "Terminated. Restart result: Files were recovered.",
+  DvcAction == "1008", "Terminated: Restart result: Some files were not recovered.", 
+  DvcAction == "1009", "Terminated: Restart result: Riles were not recovered.",
+  "unknown")
+  | summarize ActionByFiles = count() by TranslatedAction, FileName
+  | top 20 by ActionByFiles asc
+  | extend FileCustomEntity = FileName
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileCustomEntity

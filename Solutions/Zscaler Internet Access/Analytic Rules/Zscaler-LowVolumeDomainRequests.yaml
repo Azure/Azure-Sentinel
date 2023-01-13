@@ -1,0 +1,54 @@
+id: 4d500e6d-c984-43a3-9f39-7edec8dcc04d
+name: Request for single resource on domain
+description: |
+  'This will look for connections to a domain where only a single file is requested, this is unusual as most modern web applications require additional recources. This type of activity is often assocaited with malware beaconing or tracking URL's delivered in emails. Developed for Zscaler but applicable to any outbound web logging.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1102
+  - T1071
+query: |
+  let scriptExtensions = dynamic([".php", ".aspx", ".asp", ".cfml"]);
+  //The number of URI's seen to be suspicious, higher = less likely to be suspicious
+  let uriThreshold = 1;
+  CommonSecurityLog
+  // Only look at connections that were allowed through the web proxy
+  | where DeviceVendor =~ "Zscaler" and DeviceAction =~ "Allowed"
+  // Only look where some data was exchanged.
+  | where SentBytes > 0 and ReceivedBytes > 0
+  // Extract the Domain
+  | extend Domain = iff(countof(DestinationHostName,'.') >= 2, strcat(split(DestinationHostName,'.')[-2], '.',split(DestinationHostName,'.')[-1]), DestinationHostName)
+  | extend GetData=iff(RequestURL == "?", 1, 0)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), makelist(RequestURL), makelist(DestinationIP), makelist(SourceIP), numOfConnections = count(), make_set(RequestMethod), max(GetData), max(RequestContext) by Domain
+  // Determine the number of URIs that have been visited for the domain
+  | extend destinationURI = arraylength(list_RequestURL)
+  | where destinationURI <= uriThreshold
+  | where tostring(list_RequestURL) has_any(scriptExtensions)
+  //Remove matches with referer
+  | where max_RequestContext == ""
+  //Keep requests where data was trasferred either in a GET with parameters or a POST
+  | where set_RequestMethod in~ ("POST") or max_GetData == 1
+  //Defeat email click tracking, may increase FN's while decreasing FP's
+  | where list_RequestURL !has "click" and set_RequestMethod !has "GET"
+  | mvexpand list_RequestURL, list_DestinationIP
+  | extend RequestURL = tostring(list_RequestURL), DestinationIP = tostring(list_DestinationIP), ClientIP = tostring(list_SourceIP)
+  //Extend custom entitites for incidents
+  | extend timestamp = StartTimeUtc, IPCustomEntity = DestinationIP
+  | project-away list_RequestURL, list_DestinationIP, list_SourceIP, destinationURI, Domain, StartTimeUtc, EndTimeUtc, max_GetData, max_RequestContext
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

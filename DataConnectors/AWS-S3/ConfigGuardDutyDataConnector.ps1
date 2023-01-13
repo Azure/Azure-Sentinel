@@ -1,106 +1,39 @@
+function Get-RoleAndGuardDutyS3Policy
+{
+	<#
+    .SYNOPSIS 
+        Creates a S3 Policy for GuardDuty based on specified bucket name, role ARN, and Kms ARN
 
-# ***********       Helper Functions       ***********
-function Get-RoleArnPolicy{
-   $arnRolePolicy = "{
-            'Version': '2012-10-17',
-            'Statement': [
-                {
-                    'Effect': 'Allow',
-                    'Principal': {
-                        'AWS': 'arn:aws:iam::197857026523:root'
-                    },
-                    'Action': 'sts:AssumeRole',
-                    'Condition': {
-                        'StringEquals': {
-                            'sts:ExternalId': '${workspaceId}'
-                        }
-                    }
-                }
-            ]
-        }"
-	return $arnRolePolicy.Replace("'",'\"')
-}
-
-function Get-SQSPoliciesForS3AndRule {
-	$sqsPolicyForS3 = "
-    {
-	  'Version': '2008-10-17',
-	  'Id':'__default_policy_ID',
-      'Statement': [
-		  {
-			  'Sid': 'allow s3 to send notification messages to SQS queue',
-			  'Effect': 'Allow',
-			  'Principal': {
-				'Service': 's3.amazonaws.com'
-			  },
-			  'Action': 'SQS:SendMessage',
-			  'Resource': '${sqsArn}',
-			  'Condition': {
-				'ArnLike': {
-				  'aws:SourceArn': 'arn:aws:s3:*:*:${bucketName}'
-				}
-			  }
-		  },
-		  {
-		  'Sid': 'allow specific role to read/delete/change visibility of SQS messages and get queue url',
-		  'Effect': 'Allow',
-		  'Principal': {
-			'AWS': '${roleArn}'
-		  },
-		  'Action': [
-			'SQS:ChangeMessageVisibility',
-			'SQS:DeleteMessage',
-			'SQS:ReceiveMessage',
-            'SQS:GetQueueUrl'
-		  ],
-		  'Resource': '${sqsArn}'
-		}
-	  ]
-	}"
-
-	return $sqsPolicyForS3.Replace("'",'"')
-}
-
-function Get-SqsEventNotificationConfig {
-   $sqsEventConfig = "
-   {
-	   'QueueConfigurations': [
-			{
-			  'Id':'${eventNotificationName}',
-			  'QueueArn': '${sqsArn}',
-			  'Events': ['s3:ObjectCreated:*'],
-			  'Filter': {
-				'Key': {
-				  'FilterRules': [
-					{
-					  'Name': 'prefix',
-					  'Value': '${eventNotificationPrefix}'
-					},
-					{
-					  'Name': 'suffix',
-					  'Value': '.gz'
-					}
-				  ]
-				}
-			  }
-			}
-		]
-	}"
-
-	return $sqsEventConfig.Replace("'",'"')
-}
-
-function Get-S3PolicyForRoleAndGuardDuty{
-	 $s3PolicyForRoleAndGuardDuty = "{
+    .PARAMETER RoleArn
+		Specifies the Role ARN
+	.PARAMETER BucketName
+		Specifies the S3 Bucket
+    .PARAMETER KmsArn
+        Specifies the KMS ARN
+    #>
+    [OutputType([string])]
+    [CmdletBinding()]
+    param (
+        [Parameter(position=0)]
+        [ValidateNotNullOrEmpty()][string]
+        $RoleArn,
+        [Parameter(position=1)]
+        [ValidateNotNullOrEmpty()][string]
+        $BucketName,
+        [Parameter(position=2)]
+        [ValidateNotNullOrEmpty()][string]
+        $KmsArn
+    )  
+    $s3PolicyForRoleAndGuardDuty = "{
 	 'Statement': [
 		{
             'Sid': 'Allow Arn read access S3 bucket',
             'Effect': 'Allow',
             'Principal': {
-                'AWS': '${roleArn}'
+                'AWS': '$RoleArn'
             },
-            'Action': ['s3:Get*','s3:List*'],
-            'Resource': 'arn:aws:s3:::${bucketName}/*'
+            'Action': ['s3:GetObject'],
+            'Resource': 'arn:aws:s3:::$BucketName/*'
         },
 		{
             'Sid': 'Allow GuardDuty to use the getBucketLocation operation',
@@ -109,7 +42,7 @@ function Get-S3PolicyForRoleAndGuardDuty{
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:GetBucketLocation',
-            'Resource': 'arn:aws:s3:::${bucketName}'
+            'Resource': 'arn:aws:s3:::$BucketName'
         },
         {
             'Sid': 'Allow GuardDuty to upload objects to the bucket',
@@ -118,7 +51,7 @@ function Get-S3PolicyForRoleAndGuardDuty{
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*'
+            'Resource': 'arn:aws:s3:::$BucketName/*'
         },
         {
             'Sid': 'Deny unencrypted object uploads. This is optional',
@@ -127,7 +60,7 @@ function Get-S3PolicyForRoleAndGuardDuty{
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': 'arn:aws:s3:::$BucketName/*',
             'Condition': {
                 'StringNotEquals': {
                     's3:x-amz-server-side-encryption': 'aws:kms'
@@ -141,10 +74,10 @@ function Get-S3PolicyForRoleAndGuardDuty{
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': 'arn:aws:s3:::$BucketName/*',
             'Condition': {
                 'StringNotEquals': {
-                    's3:x-amz-server-side-encryption-aws-kms-key-id': '${kmsArn}'
+                    's3:x-amz-server-side-encryption-aws-kms-key-id': '$KmsArn'
                 }
             }
         },
@@ -153,7 +86,7 @@ function Get-S3PolicyForRoleAndGuardDuty{
             'Effect': 'Deny',
             'Principal': '*',
             'Action': 's3:*',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': 'arn:aws:s3:::$BucketName/*',
             'Condition': {
                 'Bool': {
                     'aws:SecureTransport': 'false'
@@ -163,8 +96,23 @@ function Get-S3PolicyForRoleAndGuardDuty{
 	return $s3PolicyForRoleAndGuardDuty.Replace("'",'"')
 }
 
-function Get-KmsPolicyForGuardDutyAndRole{
-	$kmsPolicy = "{
+function Get-GuardDutyAndRoleKmsPolicy
+{
+	<#
+    .SYNOPSIS 
+        Creates a customized KMS Policy for GuardDuty based on specified role ARN
+    .PARAMETER RoleArn
+		Specifies the Role ARN
+    #>
+    [OutputType([string])]
+    [CmdletBinding()]
+    param (
+        [Parameter(position=0)]
+        [ValidateNotNullOrEmpty()][string]
+        $RoleArn
+    )
+
+    $kmsPolicy = "{
 		'Statement': [
         {
             'Sid': 'Allow GuardDuty to use the key',
@@ -179,14 +127,10 @@ function Get-KmsPolicyForGuardDutyAndRole{
             'Sid': 'Allow use of the key',
             'Effect': 'Allow',
             'Principal': {
-                'AWS': ['${roleArn}']
+                'AWS': ['$RoleArn']
             },
             'Action': [
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey'
+                'kms:Decrypt'
             ],
             'Resource': '*'
         }
@@ -195,275 +139,179 @@ function Get-KmsPolicyForGuardDutyAndRole{
 	return $kmsPolicy.Replace("'",'"')
 }
 
-function Retry-Action {
-	Param([Parameter(Mandatory=$true)][Action]$action)
-    $retryCount = 0
-	$numberOfRetries = 3
-    do {
-            $retryCount++
-            $action.Invoke();
+function Enable-GuardDuty-ForRegion
+{
+    <#
+    .SYNOPSIS 
+        Enables GuardDuty based on specified configuration
+    .PARAMETER Region
+		Specifies the region
+    #>
 
-            if($lastexitcode -ne 0)
-            {
-                Write-Host $Error[0] -ForegroundColor red
-				if($retryCount -lt $numberOfRetries)
-				{
-					Write-Host `n"please try again"
-				}
-            }
+    param (
+        [Parameter()]
+        [ValidateNotNullOrEmpty()][string]
+        $Region
+    )
 
-       } while (($retryCount -lt $numberOfRetries) -and ($lastexitcode -ne 0) )
+    Write-Log -Message "Enabling GuardDuty for region $region" -LogFileName $LogFileName -LinePadding 1
+    Set-RetryAction({
+        Write-Log -Message "Executing: aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $newGuarduty = aws --region $region guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1
+        
+        $isGuardutyEnabled = $lastexitcode -ne 0
+        if ($isGuardutyEnabled)
+        {
+            Write-Output `n
+            Write-Log -Message 'A detector already exists for the current account.' -LogFileName $LogFileName
+            Write-Log -Message "Executing: aws guardduty list-detectors" -LogFileName $LogFileName -Severity Verbose
 
-    if($lastexitcode -ne 0)
+            $script:detectorId = (aws --region $region guardduty list-detectors | ConvertFrom-Json)."DetectorIds"  -join ', '
+            Write-Log -Message "Detector Id: $detectorId" -LogFileName $LogFileName
+        }
+        else
+        {
+            $script:detectorId = ($newGuarduty | ConvertFrom-Json).DetectorId
+        }
+        
+        Write-Log -Message "Executing: aws guardduty list-publishing-destinations --detector-id $detectorId 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $script:currentDestinations = aws --region $region guardduty list-publishing-destinations --detector-id $detectorId 2>&1
+        Write-Log $currentDestinations -LogFileName $LogFileName -Severity Verbose
+    })
+}
+
+function Set-GuardDutyPublishDestinationBucket
+{
+    <#
+    .SYNOPSIS 
+        Configures GuardDuty to publish logs to destination bucket
+    .PARAMETER Region
+		Specifies the region
+    #>
+
+    param (
+        [Parameter()]
+        [ValidateNotNullOrEmpty()][string]
+        $Region
+    )
+
+    $currentDestinationsObject = $currentDestinations | ConvertFrom-Json
+    $currentS3Destinations = $currentDestinationsObject.Destinations | Where-Object DestinationType -eq S3
+    if ($null -eq $currentS3Destinations)
     {
-       Write-Host `n`n"The maximum number of retries reached. Please try to execute the script again" -ForegroundColor red
-       exit
+        Write-Log -Message "Executing: aws guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
+        aws --region $Region guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
+    }
+    else
+    {
+        Write-Log "Executing: aws guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json" -LogFileName $LogFileName -Severity Verbose
+        $destinationDescriptionObject = aws --region $Region guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json
+        $destinationArn = $destinationDescriptionObject.DestinationProperties.DestinationArn
+
+        Write-Log -Message "GuardDuty is already configured for bucket arn '$destinationArn'" -LogFileName $LogFileName -LinePadding 2
+        $guardDutyBucketConfirmation = Read-ValidatedHost -Prompt "Are you sure that you want to override the existing bucket destination? [y/n]"
+        if ($guardDutyBucketConfirmation -eq 'y')
+        {
+            Write-Log -Message "Executing: aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
+            aws --region $Region guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
+        }
+        else
+        {
+            Write-Log -Message 'GuardDuty setup was not completed. You must manually update the GuardDuty destination bucket' -LogFileName $LogFileName -Severity Error -LinePadding 2
+        }
+    } 
+}
+
+function Enable-GuardDuty
+{
+    <#
+    .SYNOPSIS 
+        Enables GuardDuty based on specified configuration
+    #>
+
+    [String[]]$allRegionsArray =  (aws ec2 describe-regions | ConvertFrom-Json)."Regions".RegionName
+    $regionConfirmation = Read-ValidatedHost 'Do you want enable guardduty for all regions? [y/n]' -ValidationType Confirm
+    if ($regionConfirmation -eq 'y')
+    {     
+        for($i = 0; $i -lt $allRegionsArray.length; $i++)
+        { 
+            Enable-GuardDuty-ForRegion -Region $allRegionsArray[$i]
+            Set-GuardDutyPublishDestinationBucket -Region $allRegionsArray[$i]
+        }
+    }
+    else
+    {
+        [String[]]$selectedRegionsArray = Read-ValidatedHost -Prompt "Please enter list of regions seperated by space"
+        $selectedRegionsArray = $selectedRegionsArray.Split(' ') | Select-Object -Unique
+
+        for($i = 0; $i -lt $selectedRegionsArray.length; $i++)
+        { 
+            if (-not($allRegionsArray -contains $selectedRegionsArray[$i]))
+            {
+                $notValidRegion = $selectedRegionsArray[$i]
+                $selectedRegionsArray = $selectedRegionsArray | ? {$_ -ne $notValidRegion}
+                Write-Log -Message "Region $notValidRegion doesn't exist" -LogFileName $LogFileName -LinePadding 2
+            }
+        }
+        for($i = 0; $i -lt $selectedRegionsArray.length; $i++)
+        { 
+            Enable-GuardDuty-ForRegion -Region $selectedRegionsArray[$i]
+            Set-GuardDutyPublishDestinationBucket -Region $selectedRegionsArray[$i]
+        }
     }
 }
 
+
+
+
 # ***********       Main Flow       ***********
 
-Write-Output `n`n'Setting up your AWS environment'
-Write-Output `n'The script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable'
-Write-Output 'GuardDuty logs, Kms, S3 bucket, SQS Queue, and S3 notifications.'
-Write-Output `n`n'Please insert AWS configuration:'
-aws configure
+# Validate AWS configuration
+Test-AwsConfiguration
 
+Write-Log -Message "Starting GuardDuty data connector configuration script" -LogFileName $LogFileName -Severity Verbose
+Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable GuardDuty Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
+Write-ScriptNotes
 
-Write-Output `n`n'Arn Role Defenition'
- Retry-Action({
-	$script:roleName = Read-Host 'Please insert Role Name. If you have already configured an Assume Role for Azure Sentinel in the past, please type the name'
-	aws iam get-role --role-name $roleName 2>&1| Out-Null
-	$isRuleNotExist = $lastexitcode -ne 0
-	if($isRuleNotExist)
-	{
-		$workspaceId = Read-Host 'Please insert Workspae Id (External Id)'
-		$rolePolicy = Get-RoleArnPolicy
-		$tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy 2>&1
-		if($lastexitcode -eq 0)
-		{
-			Write-Host  "${roleName} Role was successful created"
-		}
-	}
-})
- 
+New-ArnRole
+Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
 $roleArnObject = aws iam get-role --role-name $roleName
 $roleArn = ($roleArnObject | ConvertFrom-Json ).Role.Arn
+Write-Log -Message $roleArn -LogFileName $LogFileName -Severity Verbose
 
+# Create S3 bucket for storing logs
+New-S3Bucket
 
-Write-Output `n`n'S3 Bucket Definition.'
- Retry-Action({
-	$script:bucketName = Read-Host 'Please insert S3 Bucket Name'
-	$headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
-	$isBucketNotExist = $headBucketOutput -ne $null
-	if($isBucketNotExist)
-	{
-		$bucketRegion = Read-Host 'Please insert Bucket Region'
-		if($bucketRegion -eq "us-east-1") # see aws doc https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html
-		{
-			$tempForOutput = aws s3api create-bucket --bucket $bucketName 2>&1
-		}
-		else
-		{
-			$tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$bucketRegion 2>&1
-		}
-		
-		if($lastexitcode -eq 0)
-		{
-			Write-Host  "${bucketName} Bucket was successful created"
-		}
-	}
-})
+Write-Log -Message "Executing: (aws sts get-caller-identity | ConvertFrom-Json).Account" -LogFileName $LogFileName -Severity Verbose
 $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
+Write-Log -Message $callerAccount -LogFileName $LogFileName -Severity Verbose
 
-
-
-Write-Output `n`n'Kms Definition.'
-Retry-Action({
-	$script:kmaAliasName = Read-Host 'Please insert KMS alias Name'
-	$script:kmsKeyDescription = aws kms describe-key --key-id alias/$kmaAliasName 2>&1
-	$isKmsNotExist = $lastexitcode -ne 0
-	if($isKmsNotExist)
-	{
-		$script:kmsKeyDescription = aws kms create-key
-		$kmsKeyId = ($script:kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
-		$tempForOutput = aws kms create-alias --alias-name alias/$kmaAliasName --target-key-id $kmsKeyId 2>&1
-		if($lastexitcode -eq 0)
-		{
-			Write-Host  "${kmaAliasName} Kms was successful created"
-		}
-	}
-})
+New-KMS
 $kmsArn = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.Arn 
 $kmsKeyId = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
+Write-Log -Message "kmsArn: $kmsArn kmsKeyId: $kmsKeyId" -LogFileName $LogFileName -Severity Verbose
 
-
-Write-Output `n'Creating SQS queue'
- Retry-Action({
-	$script:sqsName = Read-Host 'Please insert Sqs Name'
-	$tempForOutput = aws sqs create-queue --queue-name $sqsName 2>&1
- })
+New-SQSQueue
+Write-Log -Message "Executing: ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl" -LogFileName $LogFileName -Severity Verbose
 $sqsUrl = ((aws sqs get-queue-url --queue-name $sqsName) | ConvertFrom-Json).QueueUrl
+Write-Log -Message "Executing: ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn" -LogFileName $LogFileName -Severity Verbose
 $sqsArn =  ((aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names QueueArn )| ConvertFrom-Json).Attributes.QueueArn
+Write-Log -Message "sqsUrl: $sqsUrl sqsArn: $sqsArn" -LogFileName $LogFileName -Severity Verbose
 
+$customMessage = "Changes GuardDuty: Kms GenerateDataKey to GuardDuty"
+$kmsRequiredPolicies = Get-GuardDutyAndRoleKmsPolicy -RoleArn $roleArn
+Update-KmsPolicy -RequiredPolicy $kmsRequiredPolicies -CustomMessage $customMessage
 
-Write-Output `n"Updating the KMS policy to allow Sentinel read the date."
-Write-Output "Changes Role: Kms Encrypt, Decrypt, ReEncrypt*, GenerateDataKey* and DescribeKey  permissions to '${roleName}' rule"
-Write-Output "Changes GuardDuty: Kms GenerateDataKey to GuardDuty"
-$kmsRequiredPolicies = Get-KmsPolicyForGuardDutyAndRole
-$currentKmsPolicy = aws kms get-key-policy --policy-name default --key-id $kmsKeyId
-if($currentKmsPolicy -ne $null)
-{
-	$kmsRequiredPoliciesObject = $kmsRequiredPolicies | ConvertFrom-Json 
-	$currentKmsPolicyObject = $currentKmsPolicy | ConvertFrom-Json 	
-	$currentKmsPolicies = ($currentKmsPolicyObject.Policy) | ConvertFrom-Json
-	
-	$kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
-	if($kmsRequiredPoliciesThatNotExistInCurrentPolicy -ne $null)
-	{
-		$currentKmsPolicies.Statement += $kmsRequiredPoliciesThatNotExistInCurrentPolicy
+Update-SQSPolicy
 
-		$UpdatedKmsPolicyObject = ($currentKmsPolicies | ConvertTo-Json -Depth 16).Replace('"','\"')
-		aws kms put-key-policy --policy-name default --key-id $kmsKeyId --policy $UpdatedKmsPolicyObject | Out-Null
-	}
-}
-else
-{
-	$newKmsPolicyObject = ($kmsRequiredPolicies | ConvertFrom-Json |  ConvertTo-Json -Depth 16).Replace('"','\"')
-	aws kms put-key-policy --policy-name default --key-id $kmsKeyId --policy $newKmsPolicyObject | Out-Null
-}
+$customMessage = "Changes S3: Get GuardDuty notifications"
+$s3RequiredPolicy = Get-RoleAndGuardDutyS3Policy -RoleArn $roleArn -BucketName $bucketName -KmsArn $kmsArn
+Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
+Enable-S3EventNotification -DefaultEventNotificationPrefix "AWSLogs/${callerAccount}/GuardDuty/"
 
+Enable-GuardDuty
 
-Write-Output `n"Updating the SQS policy to allow S3 notifications, and arn to read/delete/change visibility of SQS messages and get queue url"
-Write-Output "Changes S3: SQS SendMessage permission to '${bucketName}' s3 bucket"
-Write-Output "Changes ARN: SQS ChangeMessageVisibility, DeleteMessage, ReceiveMessage and GetQueueUrl permissions to '${roleName}' rule"
-$sqsRequiredPolicies = Get-SQSPoliciesForS3AndRule
-$currentSqsPolicy = aws sqs get-queue-attributes --queue-url $sqsUrl --attribute-names Policy
-if($currentSqsPolicy -ne $null)
-{
-	$sqsRequiredPoliciesObject = $sqsRequiredPolicies | ConvertFrom-Json 
-	$currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json 	
-	$currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json 
-	
-	$sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
-	if($sqsRequiredPoliciesThatNotExistInCurrentPolicy -ne $null)
-	{
-		$currentSqsPolicies.Statement += $sqsRequiredPoliciesThatNotExistInCurrentPolicy
-
-		$UpdatedPolicyValue = ($currentSqsPolicies | ConvertTo-Json -Depth 16  -Compress).Replace('"','\\\"')
-		$UpdatedSqsPolicy = ("{'Policy':'${UpdatedPolicyValue}'}").Replace("'",'\"')
-		aws sqs set-queue-attributes --queue-url $sqsUrl  --attributes $UpdatedSqsPolicy | Out-Null
-	}
-}
-else
-{
-	$newSqsPolicyValue = ($sqsRequiredPolicies | ConvertFrom-Json |  ConvertTo-Json -Depth 16  -Compress).Replace('"','\\\"')
-	$newSqsPolicyObject = ("{'Policy':'${newSqsPolicyValue}'}").Replace("'",'\"')
-	aws sqs set-queue-attributes --queue-url $sqsUrl  --attributes $newSqsPolicyObject | Out-Null
-}
-
-
-Write-Output `n"Updating the S3 policy to allow Sentinel read the date."
-Write-Output "Changes: S3 Get and List permissions to '${roleName}' rule"
-Write-Output "Changes: S3 Get GuardDuty notifications"
-$s3RequiredPolicy = Get-S3PolicyForRoleAndGuardDuty
-$currentBucketPolicy = aws s3api get-bucket-policy --bucket $bucketName 2>&1
-$isBucketPolicyExist = $lastexitcode -eq 0
-if($isBucketPolicyExist)
-{	
-	$s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json 
-	$currentBucketPolicyObject = $currentBucketPolicy | ConvertFrom-Json 	
-	$currentBucketPolicies = ($currentBucketPolicyObject.Policy) | ConvertFrom-Json 
-	 
-    $sqsRequiredPolicyThatNotExistInCurrentPolicy = $s3RequiredPolicyObject.Statement | Where-Object { ($_ | ConvertTo-Json) -notin ($currentBucketPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json}  )}
-	if($sqsRequiredPolicyThatNotExistInCurrentPolicy -ne $null)
-	{
-		$currentBucketPolicies.Statement += $sqsRequiredPolicyThatNotExistInCurrentPolicy
-		$UpdatedS3Policy = (@{Statement = $currentBucketPolicies.Statement} | ConvertTo-Json -Depth 16).Replace('"','\"')
-		aws s3api put-bucket-policy --bucket $bucketName --policy $UpdatedS3Policy | Out-Null
-	}
-}
-else
-{
-	$s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json
-	$newS3Policy = ($s3RequiredPolicyObject | ConvertTo-Json -Depth 16).Replace('"','\"')
-	aws s3api put-bucket-policy --bucket $bucketName --policy $newS3Policy | Out-Null
-}
-
-
-
-Write-Output `n'Enabling S3 Event Notifications (for *.gz file)'
-Retry-Action({
-	$eventNotificationName = Read-Host 'Please insert GaurdDuty Event Notifications Name'
-	$eventNotificationPrefix =  "AWSLogs/${callerAccount}/GuardDuty/"
-	$prefixOverrideConfirmation = Read-Host "The Default prefix is '${eventNotificationPrefix}'. `nDo you want to override the event notification prefix? [y/n](n by default)"
-	if($prefixOverrideConfirmation -eq 'y')
-	{
-		$eventNotificationPrefix = Read-Host 'Please insert GaurdDuty Event Notifications Prefix'
-	}
-	$newEventConfig = Get-SqsEventNotificationConfig
-	$existingEventConfig = aws s3api get-bucket-notification-configuration --bucket $bucketName
-	if($existingEventConfig -ne $null)
-	{
-		$newEventConfigObject = $newEventConfig | ConvertFrom-Json
-		$existingEventConfigObject = $existingEventConfig | ConvertFrom-Json 
-		
-		$newEventConfigObject.QueueConfigurations += $existingEventConfigObject.QueueConfigurations
-		$updatedEventConfigs = ($newEventConfigObject | ConvertTo-Json -Depth 6 ).Replace('"','\"')
-	}
-	else
-	{
-		$updatedEventConfigs = $newEventConfig.Replace('"','\"')
-	}
-	$tempForOutput = aws s3api put-bucket-notification-configuration --bucket $bucketName --notification-configuration $updatedEventConfigs 2>&1
-})
-
-
-Write-Output `n'Enabling GuardDuty'
- Retry-Action({
-	$newGuarduty = aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1
-	$isGuardutyEnabled = $lastexitcode -ne 0
-	if($isGuardutyEnabled)
-	{
-		Write-Output `n'A detector already exists for the current account.'
-		Write-Output 'List of existing detectors:'
-		aws guardduty list-detectors
-		$script:detectorId = Read-Host 'Please insert Detector Id'
-	}
-	else
-	{
-		$script:detectorId = ($newGuarduty | ConvertFrom-Json).DetectorId
-	}
-	$script:currentDestinations = aws guardduty list-publishing-destinations --detector-id $detectorId 2>&1
- })
  
-$currentDestinationsObject = $currentDestinations | ConvertFrom-Json
-$currentS3Destinations = $currentDestinationsObject.Destinations | Where DestinationType -eq S3
-if($currentS3Destinations -eq $null)
-{
-	aws guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
-}
-else
-{
-	$destinatioDescriptionObject = aws guardduty describe-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId | ConvertFrom-Json
-	$destinationArn = $destinatioDescriptionObject.DestinationProperties.DestinationArn
-	Write-Output `n"GaurdDuty is already config for bucket arn '${destinationArn}'"
-	$guardDutyBucketConfirmation = Read-Host 'Are you sure that you want to override the bucket destination? [y/n]'
-	if($guardDutyBucketConfirmation -eq 'y')
-	{
-		aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
-	}
-	else
-	{
-		Write-Output `n'GuardDuty setup is not completed. Please update manually GuardDuty destination bucket'
-	}
-} 
- 
- 
-Write-Output `n`n'Please use the below values to setup the Amazon Web Service S3 Connector in the Data Connectors portal.'
-Write-Output "Role arn: ${roleArn}"
-Write-Output "Sqs Url: ${sqsUrl}"
-
-Write-Host -NoNewLine `n`n'Press any key to continue...';
-$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
+# Output information needed to configure Sentinel data connector
+Write-RequiredConnectorDefinitionInfo -DestinationTable AWSGuardDuty

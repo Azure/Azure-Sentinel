@@ -1,0 +1,256 @@
+Parser:
+  Title: DNS activity ASIM filtering parser for Corelight Zeek 
+  Version: '0.5'
+  LastUpdated: Dec 11 2022
+Product:
+  Name: Corelight Zeek
+Normalization:
+  Schema: Dns
+  Version: '0.1.4'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Corelight Zeek DNS logs to the ASIM Dns normalized schema.
+ParserName: vimDnsCorelightZeek
+EquivalentBuiltInParser: _Im_Dns_CorelightZeek
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let query_type_lookup=datatable(DnsQueryType:int,DnsQueryTypeName:string)[
+    0, "Reserved",
+    1, "A",
+    2, "NS",
+    3, "MD",
+    4, "MF",
+    5, "CNAME",
+    6, "SOA",
+    7, "MB",
+    8, "MG",
+    9, "MR",
+    10, "NULL",
+    11, "WKS",
+    12, "PTR",
+    13, "HINFO",
+    14, "MINFO",
+    15, "MX",
+    16, "TXT",
+    17, "RP",
+    18, "AFSDB",
+    19, "X25",
+    20, "ISDN",
+    21, "RT",
+    22, "NSAP",
+    23, "NSAP-PTR",
+    24, "SIG",
+    25, "KEY",
+    26, "PX",
+    27, "GPOS",
+    28, "AAAA",
+    29, "LOC",
+    30, "NXT",
+    31, "EID",
+    32, "NIMLOC",
+    33, "SRV",
+    34, "ATMA",
+    35, "NAPTR",
+    36, "KX",
+    37, "CERT",
+    38, "A6",
+    39, "DNAME",
+    40, "SINK",
+    41, "OPT",
+    42, "APL",
+    43, "DS",
+    44, "SSHFP",
+    45, "IPSECKEY",
+    46, "RRSIG",
+    47, "NSEC",
+    48, "DNSKEY",
+    49, "DHCID",
+    50, "NSEC3",
+    51, "NSEC3PARAM",
+    52, "TLSA",
+    53, "SMIMEA",
+    54, "Unassigned",
+    55, "HIP",
+    56, "NINFO",
+    57, "RKEY",
+    58, "TALINK",
+    59, "CDS",
+    60, "CDNSKEY",
+    61, "OPENPGPKEY",
+    62, "CSYNC",
+    99, "SPF",
+    100, "UINFO",
+    101, "UID",
+    102, "GID",
+    103, "UNSPEC",
+    104, "NID",
+    105, "L32",
+    106, "L64",
+    107, "LP",
+    108, "EUI48",
+    109, "EUI64",
+    249, "TKEY",
+    250, "TSIG",
+    251, "IXFR",
+    252, "AXFR",
+    253, "MAILB",
+    254, "MAILA",
+    255, "ANY",
+    256, "URI",
+    257, "CAA",
+    258, "AVC",
+    259, "DOA",
+    32768, "TA",
+    32769, "DLV"];
+  let class_lookup = datatable(DnsQueryClass:int, DnsQueryClassName: string)[
+      0, 'Reserved',
+      1, 'IN',
+      2, 'Unassigned',
+      3, 'CH',
+      4, 'HS',
+      254, 'None',
+      255, 'Any'];
+  let parser=(
+    starttime:datetime=datetime(null)
+    , endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*'
+    , response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([])
+    , eventtype:string='Query'
+    , disabled:bool=false
+    ){
+    Corelight_CL | where not(disabled)
+    //  -- Pre-parsing filtering:
+    | where
+      (eventtype in~ ('lookup', 'Query'))
+      and (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+      and (Message has '"_path":"dns"' or Message has '"_path":"dns_red"')
+      and (srcipaddr=='*' or has_ipv4(Message, srcipaddr))
+      and (array_length(domain_has_any) ==0 or Message has_any (domain_has_any))
+      and (responsecodename=='*' or Message has responsecodename)
+      and (response_has_ipv4=='*' or has_ipv4(Message,response_has_ipv4) )
+      and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(Message, response_has_any_prefix))
+    // --
+    | project Message, TimeGenerated
+    | parse-kv Message as (
+        ['"_system_name"']:string,
+        ['"_write_ts"']:datetime,
+        ['"ts"']:datetime,
+        ['"uid"']:string,
+        ['"id.orig_h"']:string,
+        ['"id.orig_p"']:int,
+        ['"id.resp_h"']:string,
+        ['"id.resp_p"']:int,
+        ['"proto"']:string,
+        ['"trans_id"']:int,
+        ['"query"']:string,
+        ['"qclass"']:int,
+        ['"qtype"']:int,
+        ['"AA"']:bool,
+        ['"TC"']:bool,
+        ['"CD"']:bool,
+        ['"RD"']:bool,
+        ['"RA"']:bool,
+        ['"Z"']:int,
+        ['"rejected"']:bool,
+        ['"rcode"']:int,
+        ['"rcode_name"']:string,
+        ['"rtt"']:real,
+    ) 
+    with (quote = '"')
+    | parse Message with * '"answers":' answers:string ',"TTLs":' TTLs:string ',"rejected"' *
+    // -- Post-filtering accurately now that message is parsed
+    | where
+         (srcipaddr=="*" or srcipaddr==['"id.orig_h"'])
+          and (array_length(domain_has_any) ==0 or ['"query"'] has_any (domain_has_any))
+          and (responsecodename=="*" or ['"rcode_name"'] has responsecodename)
+          and (response_has_ipv4=='*' or has_ipv4(answers,response_has_ipv4) )
+          and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(answers, response_has_any_prefix))
+    | extend 
+        EventCount=int(1),
+        EventProduct="Zeek",
+        EventVendor="Corelight",
+        EventSchema = "Dns",
+        EventSchemaVersion="0.1.4",
+        EventType="Query"
+    | project-rename
+        EventStartTime= ['"ts"'],
+        EventEndTime = ['"_write_ts"'],
+        EventOriginalUid = ['"uid"'],
+        SrcIpAddr = ['"id.orig_h"'],
+        SrcPortNumber = ['"id.orig_p"'],
+        DstIpAddr = ['"id.resp_h"'],
+        DstPortNumber = ['"id.resp_p"'],
+        NetworkProtocol = ['"proto"'],
+        DnsQuery = ['"query"'],
+        DnsResponseCode = ['"rcode"'],
+        EventResultDetails = ['"rcode_name"'],
+        DnsFlagsAuthoritative = ['"AA"'],
+        DnsFlagsTruncated = ['"TC"'],
+        DnsFlagsRecursionDesired = ['"RD"'],
+        DnsFlagsCheckingDisabled = ['"CD"'],
+        DnsFlagsRecursionAvailable = ['"RA"'],
+        DnsQueryClass = ['"qclass"'],
+        DnsQueryType = ['"qtype"'],
+        rtt = ['"rtt"'],
+        Z = ['"Z"'],
+        trans_id = ['"trans_id"'],
+        rejected = ['"rejected"'],
+        Dvc = ['"_system_name"']
+    | lookup query_type_lookup on DnsQueryType
+    | lookup class_lookup on DnsQueryClass
+    | extend
+        EventSubType=iff(isnull(DnsResponseCode),'request','response'),
+        DnsNetworkDuration = toint(rtt*1000),
+        EventResult = iff (EventResultDetails!~'NOERROR' or rejected,'Failure','Success'),
+        DnsQueryTypeName = case (DnsQueryTypeName == "" and not(isnull(DnsQueryType)), strcat("TYPE", DnsQueryType), DnsQueryTypeName),
+        DnsQueryClassName = case (DnsQueryClassName == "" and not(isnull(DnsQueryClass)), strcat("CLASS", DnsQueryClass), DnsQueryClassName),
+        TransactionIdHex = tohex(toint(trans_id)),
+        DnsFlagsZ = (Z != 0),
+        DnsResponseName = tostring(pack ('answers', answers, 'ttls', TTLs)) // support of auth & addl to be added.
+    | project-away rtt
+    // Aliases
+    | extend 
+        DnsResponseCodeName=EventResultDetails, 
+        Domain=DnsQuery,
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr,
+        Duration=DnsNetworkDuration,
+        Dst=DstIpAddr
+    | project-away Message, Z, TTLs, answers, trans_id, rejected
+  };
+  parser (starttime=starttime, endtime=endtime, srcipaddr=srcipaddr, domain_has_any=domain_has_any, responsecodename=responsecodename, response_has_ipv4=response_has_ipv4, response_has_any_prefix=response_has_any_prefix, disabled=disabled)

@@ -49,11 +49,29 @@
         }
     },
     "variables": {
-        "_artifactsLocation": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/"
+        "_artifactsLocation": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/",
+        "sourceId": "azuresentinel.azure-sentinel-solution-azuretraininglab",
+        "_sourceId": "[variables('sourceId')]",
+        "workbookContentId": "ATLInvestigationInsights",
+        "_workbookContentId": "[variables('workbookContentId')]",
+        "alertRuleContentId1": "ATLSolorigateNetworkBeacon",
+        "_alertRuleContentId1": "[variables('alertRuleContentId1')]",
+        "alertRuleContentId2": "ATLSign-insfromIPsthatattemptsign-instodisabledaccounts",
+        "_alertRuleContentId2": "[variables('alertRuleContentId2')]",
+        "alertRuleContentId3": "ATLMaliciousInboxRule",
+        "_alertRuleContentId3": "[variables('alertRuleContentId3')]",
+        "playbookContentId1": "ATLGet-GeoFromIpAndTagIncident",
+        "_playbookContentId1": "[variables('playbookContentId1')]",
+        "watchlistContentId1": "ATLHighRiskApps",
+        "_watchlistContentId1": "[variables('watchlistContentId1')]",
+        "huntingQueryContentId1": "ATLOAuthApplications",
+        "_huntingQueryContentId1": "[variables('huntingQueryContentId1')]",
+        "huntingQueryContentId2": "ATLsolorigateInventoryCheck",
+        "_huntingQueryContentId2": "[variables('huntingQueryContentId2')]"
     },
     "resources": [
-        { 
-            "apiVersion": "2020-06-01",
+        {
+            "apiVersion": "2021-04-01",
             "name": "pid-176a034f-b9bf-4a4a-b1e3-059033b9b394-partnercenter",
             "type": "Microsoft.Resources/deployments",
             "properties": {
@@ -68,7 +86,7 @@
         {
             "name": "workspaceCreation",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2020-06-01",
+            "apiVersion": "2021-04-01",
             "properties": {
                 "mode": "Incremental",
                 "templateLink": {
@@ -94,7 +112,7 @@
         {
             "name": "ingestEvents",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2020-06-01",
+            "apiVersion": "2021-04-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Resources/deployments', 'workspaceCreation')]"
             ],
@@ -117,7 +135,7 @@
         {
             "name": "alertRules",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2020-06-01",
+            "apiVersion": "2021-04-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Resources/deployments','workbook')]"
             ],
@@ -137,7 +155,7 @@
         {
             "name": "playbook",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2020-06-01",
+            "apiVersion": "2021-04-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
             ],
@@ -157,7 +175,7 @@
         {
             "name": "workbook",
             "type": "Microsoft.Resources/deployments",
-            "apiVersion": "2020-06-01",
+            "apiVersion": "2021-04-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
             ],
@@ -178,28 +196,101 @@
             }
         },
         {
-            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-            "apiVersion": "2020-08-01",
-            "name": "[concat(parameters('workspace'), '/',uniqueString('solorigate'))]",
+            "name": "watchlist",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
             "dependsOn": [
-                "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+                "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
             ],
             "properties": {
-                "etag": "*",
-                "Category": "Hunting Queries",
-                "DisplayName": "Solorigate Inventory check",
-                "Query": "let timeframe = 7d;\r\n(union isfuzzy=true\r\n(Event\r\n| where TimeGenerated >= ago(timeframe)\r\n| where Source == \"Microsoft-Windows-Sysmon\"\r\n| where EventID in (17,18)\r\n| extend EvData = parse_xml(EventData)\r\n| extend EventDetail = EvData.DataItem.EventData.Data\r\n| extend NamedPipe = EventDetail.[5].[\"#text\"]\r\n| extend ProcessDetail = EventDetail.[6].[\"#text\"]\r\n| where NamedPipe contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n| extend Account = UserName\r\n| project-away EventDetail, EvData\r\n),\r\n(\r\nSecurityEvent_CL\r\n| where TimeGenerated >= ago(timeframe)\r\n| where EventID_s == '5145'\r\n| where AccessList_s has '%%4418' // presence of CreatePipeInstance value\r\n| where RelativeTargetName_g contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n)\r\n)\r\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account_s, HostCustomEntity = Computer",
-                "Tags": [
-                    {
-                        "Name": "description",
-                        "Value": "On systems where the malicious SolarWinds DLL is running, it is known that the attacker used a hardcoded named pipe '583da945-62af-10e8-4902-a8f205c72b2e'. This activity can be detected if you are collecting Sysmon Event Id 17/18 or Security Event Id 5145"
-                    },
-                    {
-                        "Name": "tactics",
-                        "Value": "Execution"
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/watchlist.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                       "value": "[parameters('workspace')]"
                     }
-                ]
+                }
             }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "apiVersion": "2021-03-01-preview",
+            "properties": {
+                "version": "1.0.5",
+                "kind": "Solution",
+                "contentId": "[variables('_sourceId')]",
+                "parentId": "[variables('_sourceId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "Microsoft Sentinel Training Lab",
+                    "sourceId": "[variables('_sourceId')]"
+                },
+                "author": {
+                    "name": "Eli Forbes",
+                    "email": "v-eliforbes@microsoft.com"
+                },
+                "support": {
+                    "tier": "Microsoft",
+                    "email": "support@microsoft.com",
+                    "name": "Microsoft Sentinel, Microsoft Corporation",
+                    "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "Workbook",
+                            "contentId": "[variables('_workbookContentId')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "AnalyticsRule",
+                            "contentId": "[variables('_alertRuleContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "AnalyticsRule",
+                            "contentId": "[variables('_alertRuleContentId2')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "AnalyticsRule",
+                            "contentId": "[variables('_alertRuleContentId3')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "Playbook",
+                            "contentId": "[variables('_playbookContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "Watchlist",
+                            "contentId": "[variables('_watchlistContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "HuntingQuery",
+                            "contentId": "[variables('_huntingQueryContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "HuntingQuery",
+                            "contentId": "[variables('_huntingQueryContentId2')]",
+                            "version": "1.0.5"
+                        }
+                    ]
+                },
+                "providers": [
+                    "Microsoft"
+                ],
+                "categories": {
+                    "domains": [ "Training and Tutorials" ]
+                }
+            },
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
         }
     ],
     "outputs": {

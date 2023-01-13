@@ -11,6 +11,12 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -22,7 +28,8 @@ relevantTechniques:
 query: |
   let lookback = 14d;
   let timeframe = 1d;
-  SecurityEvent
+  (union isfuzzy=true
+  (SecurityEvent
   | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
   | where EventID == 4688
   | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
@@ -32,6 +39,26 @@ query: |
   | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
   | where EventID == 4688) on NewProcessName
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  ),
+  (WindowsEvent
+  | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+  | where EventID == 4688 and EventData has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | join kind=rightanti (
+  WindowsEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4688  and EventData has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where ParentProcessName has_any ("umworkerprocess.exe", "UMService.exe")
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Account = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend IpAddress = tostring(EventData.IpAddress)) on NewProcessName
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
+  ))  
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -45,5 +72,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.1.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Intelligence" ]

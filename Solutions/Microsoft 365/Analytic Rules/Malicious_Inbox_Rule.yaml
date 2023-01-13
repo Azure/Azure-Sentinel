@@ -1,0 +1,54 @@
+id: 7b907bf7-77d4-41d0-a208-5643ff75bf9a
+name: Malicious Inbox Rule
+description: |
+  'Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.
+   This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.
+  Reference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+ let Keywords = dynamic(["helpdesk", " alert", " suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
+ OfficeActivity
+ | where Operation =~ "New-InboxRule"
+ | where Parameters has "Deleted Items" or Parameters has "Junk Email"  or Parameters has "DeleteMessage"
+ | extend Events=todynamic(Parameters)
+ | parse Events  with * "SubjectContainsWords" SubjectContainsWords '}'*
+ | parse Events  with * "BodyContainsWords" BodyContainsWords '}'*
+ | parse Events  with * "SubjectOrBodyContainsWords" SubjectOrBodyContainsWords '}'*
+ | where SubjectContainsWords has_any (Keywords)
+  or BodyContainsWords has_any (Keywords)
+  or SubjectOrBodyContainsWords has_any (Keywords)
+ | extend ClientIPAddress = case( ClientIP has ".", tostring(split(ClientIP,":")[0]), ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))), ClientIP )
+ | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))
+ | extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\')[-1]))
+ | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail
+ | extend timestamp = StartTimeUtc,  IPCustomEntity = ClientIPAddress, AccountCustomEntity = UserId , HostCustomEntity =  OriginatingServer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.1
+kind: Scheduled

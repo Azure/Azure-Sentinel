@@ -33,9 +33,26 @@ query: |
   | extend file_name = tostring(split(csUriStem, "/")[-1])
   | where file_name != ""
   | where cIP !in~ (excludeIps)
+  //Exclude local addresses, using the ipv4_is_private operator
+  | where ipv4_is_private(cIP) == false and  cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
   | project file_ext, csUriStem, file_name, Computer, cIP, sIP, TenantId, TimeGenerated
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), dcount(cIP), AccessingIPs=make_set(cIP), AccessTimes=make_set(TimeGenerated), Access=count() by TenantId, file_name, Computer, csUriStem
   //Collection of the exfiltration will occur only once, lets check for 2 accesses in case they mess up
   //Tailor this for hunting
   | where Access <= 2 and dcount_cIP == 1
-  | extend timestamp = StartTime
+  | extend timestamp = StartTime, HostCustomEntity = Computer
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

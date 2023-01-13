@@ -5,7 +5,7 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-1. [Custom Connectors + 3 Playbook templates deployment](#deployall)
+1. [Custom Connectors + 4 Playbook templates deployment](#deployall)
 1. [Authentication](#importantnotes)
 1. [Prerequisites](#prerequisites)
 1. [Deployment](#deployment)
@@ -21,7 +21,7 @@ Cisco Umbrella is a Cloud driven Secure Internet Gateway that provides protectio
 
 <a name="deployall">
 
-## Custom Connectors + 3 Playbook templates deployment
+## Custom Connectors + 4 Playbook templates deployment
 
 This package includes:
 
@@ -34,6 +34,7 @@ This package includes:
   * [Response – assign policy to identity](./Playbooks/CiscoUmbrella-AssignPolicyToIdentity) - assigns a new DNS or a web policy (provided on the playbook deplyment step) to an identity.
   * [Response - block domain](./Playbooks/CiscoUmbrella-BlockDomain) - add domains to a customer's domain lists.
   * [Enrichment - add security info about domain to incident](./Playbooks/CiscoUmbrella-GetDomainInfo) - collects security information about domains and post it as an incident comment.
+  * [Response - add IP to destination list](./Playbooks/CiscoUmbrella-AddIpToDestinationList) - sends an adaptive card to the Teams channel where the analyst can select the destionation list to add IP to.
 
 You can choose to deploy the whole package: connectors + all three playbook templates, or each one seperately from its specific folder.
 
@@ -66,7 +67,11 @@ Each Logic Apps Custom Connector requires different type of credentials. Check d
 |**CiscoUmbrella-AssignPolicyToIdentity Playbook Name** | Enter the playbook name here (e.g. CiscoUmbrella-AssignPolicyToIdentity)|
 |**CiscoUmbrella-BlockDomain Playbook Name** | Enter the playbook name here (e.g. CiscoUmbrella-BlockDomain)|
 |**CiscoUmbrella-GetDomainInfo Playbook Name** | Enter the playbook name here (e.g. CiscoUmbrella-GetDomainInfo)|
+|**CiscoUmbrella-AddIpToDestinationList_Playbook_Name** | Enter the playbook name here (e.g. CiscoUmbrella-AddIpToDestinationList)|
 |**PolicyId** | ID of the DNS or web policy to use in CiscoUmbrella-AssignPolicyToIdentity playbook|
+|**CiscoUmbrellaOrganizationId** | Organization id in Cisco Umbrella for CiscoUmbrella-AddIpToDestinationList playbook|
+|**TeamsGroupId** | Id of the Teams Group where the adaptive card will be posted for CiscoUmbrella-AddIpToDestinationList playbook|
+|**TeamsChannelId** | Id of the Teams Channel where the adaptive card will be posted for CiscoUmbrella-AddIpToDestinationList playbook|
 
 <br>
 <a name="postdeployment">
@@ -77,7 +82,7 @@ Each Logic Apps Custom Connector requires different type of credentials. Check d
 
 Once deployment is complete, authorize each connection.
 
-1. Click the Azure Sentinel connection resource
+1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection
 3. Click Authorize
 4. Sign in

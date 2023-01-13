@@ -10,7 +10,7 @@ from collections import deque
 
 
 class AzureSentinelConnectorAsync:
-    def __init__(self, log_analytics_uri, workspace_id, shared_key, log_type, queue_size=1000, queue_size_bytes=25 * (2**20)):
+    def __init__(self, session: aiohttp.ClientSession, log_analytics_uri, workspace_id, shared_key, log_type, queue_size=1000, queue_size_bytes=25 * (2**20)):
         self.log_analytics_uri = log_analytics_uri
         self.workspace_id = workspace_id
         self.shared_key = shared_key
@@ -20,6 +20,7 @@ class AzureSentinelConnectorAsync:
         self._queue = deque()
         self.successfull_sent_events_number = 0
         self.lock = asyncio.Lock()
+        self.session = session
 
     async def send(self, event):
         events = None
@@ -37,9 +38,8 @@ class AzureSentinelConnectorAsync:
     async def _flush(self, data: list):
         if data:
             data = self._split_big_request(data)
-            async with aiohttp.ClientSession() as session:
-                tasks = [self._post_data(session, self.workspace_id, self.shared_key, d, self.log_type) for d in data]
-                await asyncio.gather(*tasks)
+            tasks = [self._post_data(self.session, self.workspace_id, self.shared_key, d, self.log_type) for d in data]
+            await asyncio.gather(*tasks)
 
     def _build_signature(self, workspace_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
@@ -90,17 +90,18 @@ class AzureSentinelConnectorAsync:
 
 
 class AzureSentinelMultiConnectorAsync:
-    def __init__(self, log_analytics_uri, workspace_id, shared_key, queue_size=1000, queue_size_bytes=25 * (2**20)):
+    def __init__(self, session: aiohttp.ClientSession, log_analytics_uri, workspace_id, shared_key, queue_size=1000, queue_size_bytes=25 * (2**20)):
         self.log_analytics_uri = log_analytics_uri
         self.workspace_id = workspace_id
         self.shared_key = shared_key
         self.queue_size = queue_size
         self.queue_size_bytes = queue_size_bytes
         self.connectors = dict()
+        self.session = session
 
     async def send(self, event, log_type):
         if log_type not in self.connectors:
-            self.connectors[log_type] = AzureSentinelConnectorAsync(self.log_analytics_uri, self.workspace_id, self.shared_key, log_type, self.queue_size, self.queue_size_bytes)
+            self.connectors[log_type] = AzureSentinelConnectorAsync(self.session, self.log_analytics_uri, self.workspace_id, self.shared_key, log_type, self.queue_size, self.queue_size_bytes)
         conn = self.connectors[log_type]
         await conn.send(event)
 

@@ -1,0 +1,66 @@
+id: 3b443f22-9be9-4c35-ac70-a94757748439
+name: Dev-0228 File Path Hashes November 2021
+description: |
+   'This hunting query looks for file paths/hashes related to observed activity by Dev-0228. The actor is known to use custom version of popular tool like PsExec, Procdump etc. to carry its activity.
+    The risk score associated with each result is based on a number of factors, hosts with higher risk events should be investigated first.'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Execution
+relevantTechniques:
+  - T1569
+  - T1003
+query: | 
+    let files1 = dynamic(["C:\\Windows\\TAPI\\lsa.exe", "C:\\Windows\\TAPI\\pa.exe", "C:\\Windows\\TAPI\\pc.exe", "C:\\Windows\\TAPI\\Rar.exe"]);
+    let files2 = dynamic(["svchost.exe","wdmsvc.exe"]);
+    let FileHash1 = dynamic(["43109fbe8b752f7a9076eaafa417d9ae5c6e827cd5374b866672263fdebd5ec3", "ab50d8d707b97712178a92bbac74ccc2a5699eb41c17aa77f713ff3e568dcedb", "010e32be0f86545e116a8bc3381a8428933eb8789f32c261c81fd5e7857d4a77",         "56cd102b9fc7f3523dad01d632525ff673259dbc9a091be0feff333c931574f7"]);
+    let FileHash2 = dynamic(["2a1044e9e6e87a032f80c6d9ea6ae61bbbb053c0a21b186ecb3b812b49eb03b7", "9ab7e99ed84f94a7b6409b87e56dc6e1143b05034a5e4455e8c555dbbcd0d2dd", "18a072ccfab239e140d8f682e2874e8ff19d94311fc8bb9564043d3e0deda54b"]);
+    DeviceProcessEvents
+    | where ( FolderPath has_any (files1) and SHA256 has_any (FileHash1)) or (FolderPath has_any (files2) and SHA256 has_any (FileHash2))
+    | extend DvcId = DeviceId
+    | join kind=leftouter (SecurityAlert
+    | where ProviderName =~ "MDATP"
+    | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+    | mv-expand todynamic(Entities)
+    | extend DvcId = tostring(parse_json(Entities).MdatpDeviceId)
+    | where isnotempty(DvcId)
+    // Higher risk score are for Defender alerts related to threat actor
+    | extend AlertRiskScore = iif(ThreatName has_any ("Backdoor:MSIL/ShellClient.A", "Backdoor:MSIL/ShellClient.A!dll", "Trojan:MSIL/Mimikatz.BA!MTB"), 1.0, 0.5)
+    | project DvcId, AlertRiskScore) on DvcId
+    | extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0, AlertRiskScore)
+    | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName, AccountCustomEntity = AccountName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ajeet Prakash
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - 0-day Vulnerability" ]

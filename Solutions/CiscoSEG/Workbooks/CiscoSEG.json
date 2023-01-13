@@ -1,0 +1,316 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "**NOTE**: This data connector depends on a parser based on Kusto Function **CiscoSEGEvent** to work as expected. [Follow steps to get this Kusto Function](https://aka.ms/sentinel-ciscoseg-parser)"
+      },
+      "name": "text - 8"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "cd8447d9-b096-4673-92d8-2a1e8291a125",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "description": "Sets the time name for analysis",
+            "value": {
+              "durationMs": 7776000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
+        "size": 0,
+        "title": "Events Over Time",
+        "color": "orange",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart",
+        "graphSettings": {
+          "type": 0
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 12",
+      "styleSettings": {
+        "maxWidth": "55"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let tot_m = CiscoSEGEvent\r\n| summarize e_count=count()\r\n| extend Title='Total Mails';\r\nlet rec = CiscoSEGEvent\r\n| where NetworkDirection =~ 'Incoming'\r\n| where SimplifiedDeviceAction =~ 'DELIVERED'\r\n| summarize e_count=count()\r\n| extend Title='Mails Delivered';\r\nlet q_m = CiscoSEGEvent\r\n| where NetworkDirection =~ 'Incoming'\r\n| where SimplifiedDeviceAction =~ 'QUARANTINED'\r\n| summarize e_count=count()\r\n| extend Title='Quarantined Mails';\r\nlet mal_m = CiscoSEGEvent\r\n| where NetworkDirection =~ 'Incoming'\r\n| where tostring(AdditionalFields) has 'ESAAMPVerdict'\r\n| extend amp_verdict = extract(@'ESAAMPVerdict\":\"(NOT_EVALUATED|CLEAN|FA_PENDING|UNKNOWN|SKIPPED|UNSCANNABLE|LOW_RISK|MALICIOUS)\"', 1, tostring(AdditionalFields))\r\n| where amp_verdict =~ 'MALICIOUS'\r\n| summarize e_count=count()\r\n| extend Title='Malicious Mails';\r\nunion isfuzzy=true tot_m, rec, q_m, mal_m\r\n| order by e_count",
+        "size": 3,
+        "title": "Mail Summary",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Title",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "e_count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "palette": "purple"
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "20",
+      "name": "query - 0",
+      "styleSettings": {
+        "maxWidth": "30"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\n| where NetworkDirection =~ 'Incoming'\n| summarize tot_m = count() by DstUserName\n| join kind = inner (CiscoSEGEvent\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DstUserName)\n on DstUserName\n| project-away DstUserName1, TimeGenerated\n| project User = DstUserName, TotalMailsReceived=tot_m, Trend\n| order by TotalMailsReceived\n| take 6",
+        "size": 0,
+        "title": "Users' mail volume",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "User",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "TotalMailsReceived",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 10,
+            "formatOptions": {
+              "palette": "magenta"
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "30",
+      "name": "query - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\r\n| where NetworkDirection =~ 'Outgoing'\r\n| where isnotempty(SrcUserName)\r\n| summarize count() by SrcUserName\r\n| top 10 by count_",
+        "size": 3,
+        "title": "Top Senders",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "query - 3",
+      "styleSettings": {
+        "margin": "10",
+        "padding": "10"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\r\n| where NetworkDirection =~ 'Incoming'\r\n| where isnotempty(DstUserName)\r\n| summarize count() by DstUserName\r\n| top 10 by count_",
+        "size": 3,
+        "title": "Top Recipients",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "TotalEvents",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "TotalEvents",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "customWidth": "33",
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\r\n| where NetworkDirection =~ 'Incoming'\r\n| where SimplifiedDeviceAction =~ 'DELIVERED'\r\n| where tostring(AdditionalFields) has 'ESAAMPVerdict'\r\n| extend amp_verdict = extract(@'ESAAMPVerdict\":\"(NOT_EVALUATED|CLEAN|FA_PENDING|UNKNOWN|SKIPPED|UNSCANNABLE|LOW_RISK|MALICIOUS)\"', 1, tostring(AdditionalFields))\r\n| where amp_verdict =~ 'UNSCANNABLE'\r\n| extend Filename = replace_string(tostring(extract(@'\"ESAAttachmentDetails\":\"{(.*?):', 1, tostring(AdditionalFields))), \"'\", \"\")\r\n| order by TimeGenerated\r\n| project TimeGenerated, DstUserName, Filename\r\n",
+        "size": 3,
+        "title": "Unscannable Files",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "customWidth": "34",
+      "name": "query - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\r\n| where NetworkDirection =~ 'Incoming'\r\n| where SimplifiedDeviceAction =~ 'DELIVERED'\r\n| where tostring(AdditionalFields) has 'ESAAMPVerdict'\r\n| extend amp_verdict = extract(@'ESAAMPVerdict\":\"(NOT_EVALUATED|CLEAN|FA_PENDING|UNKNOWN|SKIPPED|UNSCANNABLE|LOW_RISK|MALICIOUS)\"', 1, tostring(AdditionalFields))\r\n| where amp_verdict =~ 'MALICIOUS'\r\n| extend Filename = replace_string(tostring(extract(@'\"ESAAttachmentDetails\":\"{(.*?):', 1, tostring(AdditionalFields))), \"'\", \"\")\r\n| summarize count() by Filename\r\n",
+        "size": 3,
+        "title": "Top Malicious Attachments",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "gridSettings": {
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "customWidth": "30",
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\r\n  | where NetworkDirection =~ 'Outgoing'\r\n  | where tostring(AdditionalFields) has 'ESADLPVerdict'\r\n  | extend dlp_verdict = extract(@'ESADLPVerdict\":\"(NOT_EVALUATED|NO TRIGGER|VIOLATION|NO VIOLATION)\"', 1, tostring(AdditionalFields))\r\n  | where dlp_verdict =~ 'VIOLATION'\r\n  | extend File = replace_string(tostring(extract(@'\"ESAAttachmentDetails\":\"{(.*?):', 1, tostring(AdditionalFields))), \"'\", \"\")\r\n  | project TimeGenerated, SrcUserName, DstUserName, File",
+        "size": 0,
+        "title": "Users with DLP Violation",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 50
+        }
+      },
+      "customWidth": "40",
+      "name": "query - 12",
+      "styleSettings": {
+        "maxWidth": "33"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CiscoSEGEvent\n  | where TimeGenerated > ago(24h)\n  | where NetworkDirection =~ 'Incoming'\n  | extend act_det = extract(@'ESAFinalActionDetails\":\"(.*?)\"', 1, tostring(AdditionalFields))\n  | where act_det has 'To SPAM'\n  | summarize count() by SrcUserName\n  | top 10 by count_\n",
+        "size": 3,
+        "title": "SPAM Sources",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query - 10"
+    }
+  ],
+  "fromTemplateId": "sentinel-CiscoSEGWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

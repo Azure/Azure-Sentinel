@@ -1,0 +1,79 @@
+Parser:
+  Title: Web Session ASIM parser for Squid Proxy
+  Version: '0.3.1'
+  LastUpdated: Dec 29 2022
+Product:
+  Name: Squid Proxy
+Normalization:
+  Schema: WebSession
+  Version: '0.2.3'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Squid Proxy Connector
+  Link: https://docs.microsoft.com/azure/sentinel/data-connectors-reference#squid-proxy-preview
+- Title: Squid native access log format
+  Link: https://wiki.squid-cache.org/Features/LogFormat 
+Description: |
+  This ASIM parser supports normalizing Squid Proxy logs produced by the Microsoft Sentinel Squid Connector to the ASIM Web Session normalized schema. The parser supports squid native log format.
+ParserName: ASimWebSessionSquidProxy
+EquivalentBuiltInParser: _ASim_WebSession_SquidProxy
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false){
+  SquidProxy_CL | where not(disabled)
+    | extend AccessRawLog = extract_all(@"^(\d+\.\d+)\s+(\d+)\s(\S+)\s([A-Z_]+)\/(\d+)\s(\d+)\s([A-Z]+)\s(\S+)\s(\S+)\s([A-Z_]+)\/(\S+)\s(\S+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12]),RawData)[0]
+    | project-rename
+      Dvc = Computer
+    | extend
+      EventEndTime = unixtime_milliseconds_todatetime(todouble(tostring(AccessRawLog[0]))*1000), 
+      NetworkDuration = toint(AccessRawLog[1]), 
+      SrcIpAddr = tostring(AccessRawLog[2]), 
+      EventOriginalResultDetails = strcat (tostring(AccessRawLog[3]), ";", PeerStatus = tostring(AccessRawLog[9])), 
+      EventResultDetails = tostring(AccessRawLog[4]), 
+      DstBytes = tolong(AccessRawLog[5]), 
+      HttpRequestMethod = tostring(AccessRawLog[6]), 
+      // -- Squid URL might be shortened by including ellipsis (...) instead of a section in the middle. This may impact the hostname part as well.
+      Url = tostring(AccessRawLog[7]), 
+      SrcUsername = tostring(AccessRawLog[8]), 
+      DstIpAddr = tostring(AccessRawLog[10]), 
+      HttpContentType = tostring(AccessRawLog[11]) 
+    // -- Constant fields
+    | extend 
+      EventCount = int(1), 
+      EventProduct = 'Squid Proxy', 
+      EventVendor = 'Squid', 
+      EventSchema = 'WebSession', 
+      EventSchemaVersion = '0.2.3', 
+      EventType = 'HTTPsession' 
+    // -- Value normalization
+    | extend
+      SrcUsernameType = "Unknown",
+      SrcUsername = iff (SrcUsername == "-", "", SrcUsername), 
+      HttpContentType = iff (HttpContentType in (":", "-"), "", HttpContentType), 
+      EventResult = iff (EventOriginalResultDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or toint(EventResultDetails) >= 400, "Failure", "Success"),
+      DstIpAddrIsHost = DstIpAddr matches regex @"^[^\:]*[a-zA-Z]$"
+    | extend 
+      FQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
+      DstIpAddr = iif (DstIpAddr == "-" or DstIpAddrIsHost, "", DstIpAddr)
+    | extend 
+      EventSeverity = iff(EventResult == "Success", "Informational", "Low")
+    | invoke _ASIM_ResolveDstFQDN ('FQDN')
+   // -- aliases
+    | extend 
+      EventStartTime = EventEndTime,
+      Duration = NetworkDuration,
+      HttpStatusCode = EventResultDetails,
+      User = SrcUsername,
+      IpAddr = SrcIpAddr,
+      Src = SrcIpAddr,
+      Dst = DstHostname,
+      Hostname = DstHostname
+    | project-away AccessRawLog, RawData, *_s, MG, ManagementGroupName, SourceSystem, TenantId, DstIpAddrIsHost
+  };
+  parser (disabled=disabled)

@@ -24,12 +24,10 @@ relevantTechniques:
   - T1071
   - T1571
 query: |
-
     let starttime = 1d;
-    let TimeDeltaThresholdInSeconds = 60; // we ignore beacons diffs that fall below this threshold 
+    let TimeDeltaThresholdInSeconds = 60; // we ignore beacons diffs that fall below this threshold
     let TotalBeaconsThreshold = 4; // minimum number of beacons required in a session to surface a row
     let JitterTolerance = 0.2; // tolerance to jitter, e.g. - 0.2 = 20% jitter is tolerated either side of the periodicity
-    let PrivateIPregex = @"^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\."; // exclude destinations that fall into this category
     CommonSecurityLog
     | where DeviceVendor == "Fortinet"
     | where TimeGenerated > ago(starttime)
@@ -38,10 +36,9 @@ query: |
     // filter out deny, close, rst and SNMP to reduce data volume
     | where DeviceAction !in ("close", "client-rst", "server-rst", "deny") and DestinationPort != 161
     // map input fields
-    | project TimeGenerated , SourceIP, DestinationIP, DestinationPort, ReceivedBytes, SentBytes, DeviceAction 
+    | project TimeGenerated , SourceIP, DestinationIP, DestinationPort, ReceivedBytes, SentBytes, DeviceAction
     // where destination IPs are public
-    | extend DestinationIPType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
-    | where DestinationIPType == "public"
+    | where ipv4_is_private(DestinationIP) == false
     // sort into source->destination 'sessions'
     | sort by SourceIP asc, DestinationIP asc, DestinationPort asc, TimeGenerated asc
     | serialize
@@ -51,7 +48,6 @@ query: |
     | where SourceIP == nextSourceIP and DestinationIP == nextDestIP and DestinationPort == nextDestPort
     // remove small time deltas below the set threshold
     | where TimeDeltainSeconds > TimeDeltaThresholdInSeconds
-    | project TimeGenerated, TimeDeltainSeconds, SourceIP, DestinationIP, DestinationPort, ReceivedBytes, SentBytes, DeviceAction 
     // summarize the deltas by source->destination
     | summarize count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), sum(ReceivedBytes), sum(SentBytes), makelist(TimeDeltainSeconds), makeset(DeviceAction) by SourceIP, DestinationIP, DestinationPort
     // get some statistical properties of the delta distribution and smooth any outliers (e.g. laptop shut overnight, working hours)
@@ -79,5 +75,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.0.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: robMSFT
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Network" ]

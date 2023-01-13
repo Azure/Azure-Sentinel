@@ -11,6 +11,9 @@ requiredDataConnectors:
   - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1d
 queryPeriod: 14d
 triggerOperator: gt
@@ -18,24 +21,49 @@ triggerThreshold: 0
 tactics:
   - LateralMovement
 relevantTechniques:
-  - T1076
+  - T1021
 query: |
-
   let starttime = 14d;
   let endtime = 1d;
-  SecurityEvent
-  | where TimeGenerated >= ago(endtime) 
+  (union isfuzzy=true
+  (SecurityEvent
+  | where TimeGenerated >= ago(endtime)
   | where EventID == 4624 and LogonType == 10
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count() 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()
   by Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName
   // use left anti to exclude anything from the previous 14 days that is not rare
+  ),
+  (WindowsEvent
+  | where TimeGenerated >= ago(endtime)
+  | where EventID == 4624 and EventData has ("10")
+  | extend LogonType = tostring(EventData.LogonType)
+  | where  LogonType == 10
+  | extend Account = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
+  | extend ProcessName = tostring(EventData.ProcessName)
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+  | extend AccountType=case(Account endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+  | extend Activity="4624 - An account was successfully logged on."
+  | extend LogonTypeName="10 - RemoteInteractive"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()
+  by Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName
+  ))
   | join kind=leftanti (
-  SecurityEvent
+  (union isfuzzy=true
+  (SecurityEvent
   | where TimeGenerated between (ago(starttime) .. ago(endtime))
   | where EventID == 4624
   | summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)
+  ),
+  ( WindowsEvent
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | where EventID == 4624
+  | extend IpAddress = tostring(EventData.IpAddress)
+  | extend Account = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
+  | summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)
+  ))
   ) on Account, Computer
-  | summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)  
+  | summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)
   by Account, Computer, IpAddress, AccountType, Activity, LogonTypeName, ProcessName
   | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
 entityMappings:
@@ -51,5 +79,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.2.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

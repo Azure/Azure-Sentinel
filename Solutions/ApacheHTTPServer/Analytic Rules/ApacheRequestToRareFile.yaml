@@ -1,0 +1,42 @@
+id: 14d7e15e-3afb-11ec-8d3d-0242ac130003
+name: Apache - Requests to rare files
+description: |
+  'Shows requests to rare files'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ApacheHTTPServer
+    dataTypes:
+      - ApacheHTTPServer
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let lb_period_start = 14d;
+  let lb_period_end = 1d;
+  let known_files = ApacheHTTPServer
+  | where TimeGenerated between (ago(lb_period_start) .. ago(lb_period_end))
+  | extend File = extract(@"(.*\/)?(.*)", 2, tostring(UrlOriginal))
+  | summarize makeset(File);
+  ApacheHTTPServer
+  | where TimeGenerated > ago(24h)
+  | extend File = extract(@"(.*\/)?(.*)", 2, tostring(UrlOriginal))
+  | where File in~ (known_files)
+  | extend FileCustomEntity = File, UrlCustomEntity = UrlOriginal
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: UrlCustomEntity
+version: 1.0.0
+kind: Scheduled

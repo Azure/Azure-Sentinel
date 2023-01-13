@@ -1,0 +1,46 @@
+Parser:
+  Title: Network Session ASIM parser for Cisco Meraki
+  Version: '1.0'
+  LastUpdated: May 20, 2022
+Product:
+  Name: Cisco Meraki
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Organization Application Security Events 
+    Link: https://developer.cisco.com/meraki/api-latest/#!get-organization-appliance-security-events
+Description: |
+  This ASIM parser supports normalizing Cisco Meraki IDS Events produced by the Microsoft Sentinel Cisco Meraki Security Events connector to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionCiscoMeraki
+EquivalentBuiltInParser: _ASim_NetworkSession_CiscoMeraki
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let NWParser=(disabled:bool=false){
+      CiscoMerakiNativePoller_CL
+      | where not(disabled)
+      | where EventOriginalType == "IDS Alert"
+      | extend  
+          EventResult = iff(DvcAction == "Deny", "Failure", "Success"),
+          EventResultDetails = "",
+          NetworkDuration = toint(NetworkDuration)
+      | extend 
+          InnerVlanId = SrcVlanId,
+          OuterVlanId = DstVlanId,
+          SessionId = NetworkSessionId,
+          Hostname = DstHostname,
+          IpAddr = SrcIpAddr,
+          Duration = NetworkDuration, 
+          Dst = DstIpAddr,
+          Src = SrcIpAddr,
+          User = DstUsername
+      | project-away Url*, Http*, File*, Rule*, UserAgent, Hash
+    };
+    NWParser (disabled)

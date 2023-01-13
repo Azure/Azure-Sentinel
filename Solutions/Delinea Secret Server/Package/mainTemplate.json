@@ -1,0 +1,547 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Delinea",
+    "comments": "Solution template for Delinea Secret Server"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Delinea Secret Server Workbook",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "delineainc1653506022260.delinea_secret_server_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "DelineaSecretServer_CEF",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "DelineaSecretServer_CEF",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "DelineaWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Delinea Secret Server data connector with template",
+        "displayName": "Delinea Secret Server template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Delinea Secret Server data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Delinea Secret Server",
+                  "publisher": "Delinea, Inc",
+                  "descriptionMarkdown": "Common Event Format (CEF) from Delinea Secret Server ",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "CommonSecurityLog(DelineaSecretServer)",
+                      "baseQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get records create new secret",
+                      "query": "CommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n| where Activity has \"SECRET - CREATE\""
+                    },
+                    {
+                      "description": "Get records where view secret",
+                      "query": "CommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n| where Activity has \"SECRET - VIEW\""
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CommonSecurityLog(DelineaSecretServer)",
+                      "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "\nCommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Delinea Secret Server",
+                        "description": "must be configured to export logs via Syslog \n\n   [Learn more about configure Secret Server](https://thy.center/ss/link/syslog)"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+                      "innerSteps": [
+                        {
+                          "title": "1.1 Select or create a Linux machine",
+                          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                        },
+                        {
+                          "title": "1.2 Install the CEF collector on the Linux machine",
+                          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                          "instructions": [
+                            {
+                              "parameters": {
+                                "fillWith": [
+                                  "WorkspaceId",
+                                  "PrimaryKey"
+                                ],
+                                "label": "Run the following command to install and apply the CEF collector:",
+                                "value": "sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                              },
+                              "type": "CopyableLabel"
+                            }
+                          ]
+                        }
+                      ],
+                      "title": "1. Linux Syslog agent configuration"
+                    },
+                    {
+                      "description": "Set your security solution to send Syslog messages in CEF format to the proxy machine. Make sure you to send the logs to port 514 TCP on the machine's IP address.",
+                      "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+                    },
+                    {
+                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Run the following command to validate your connectivity:",
+                            "value": "sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "3. Validate connection"
+                    },
+                    {
+                      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+                      "title": "4. Secure your machine "
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Delinea Secret Server",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Delinea"
+                },
+                "support": {
+                  "name": "Delinea",
+                  "tier": "Partner",
+                  "link": "https://delinea.com/support/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Delinea Secret Server",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Delinea"
+        },
+        "support": {
+          "name": "Delinea",
+          "tier": "Partner",
+          "link": "https://delinea.com/support/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Delinea Secret Server",
+          "publisher": "Delinea, Inc",
+          "descriptionMarkdown": "Common Event Format (CEF) from Delinea Secret Server ",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "CommonSecurityLog(DelineaSecretServer)",
+              "baseQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CommonSecurityLog(DelineaSecretServer)",
+              "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "\nCommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get records create new secret",
+              "query": "CommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n| where Activity has \"SECRET - CREATE\""
+            },
+            {
+              "description": "Get records where view secret",
+              "query": "CommonSecurityLog\n| where DeviceVendor == \"Delinea Software\" or DeviceVendor == \"Thycotic Software\"\n| where DeviceProduct == \"Secret Server\"\n| where Activity has \"SECRET - VIEW\""
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Delinea Secret Server",
+                "description": "must be configured to export logs via Syslog \n\n   [Learn more about configure Secret Server](https://thy.center/ss/link/syslog)"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+              "innerSteps": [
+                {
+                  "title": "1.1 Select or create a Linux machine",
+                  "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                },
+                {
+                  "title": "1.2 Install the CEF collector on the Linux machine",
+                  "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                  "instructions": [
+                    {
+                      "parameters": {
+                        "fillWith": [
+                          "WorkspaceId",
+                          "PrimaryKey"
+                        ],
+                        "label": "Run the following command to install and apply the CEF collector:",
+                        "value": "sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                      },
+                      "type": "CopyableLabel"
+                    }
+                  ]
+                }
+              ],
+              "title": "1. Linux Syslog agent configuration"
+            },
+            {
+              "description": "Set your security solution to send Syslog messages in CEF format to the proxy machine. Make sure you to send the logs to port 514 TCP on the machine's IP address.",
+              "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+            },
+            {
+              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python -version\n\n>2. You must have elevated permissions (sudo) on your machine",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Run the following command to validate your connectivity:",
+                    "value": "sudo wget https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "3. Validate connection"
+            },
+            {
+              "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+              "title": "4. Secure your machine "
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Delinea Secret Server Workbook with template",
+        "displayName": "Delinea Secret Server workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "DelineaWorkbookWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "The Delinea Secret Server Syslog connector"
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"### Delinea Workbook\\n\"},\"name\":\"text - 2\",\"styleSettings\":{\"margin\":\"1\",\"padding\":\"1\"}},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"d273a798-8340-441a-9289-d1a79c87ed0c\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Timespan\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":43200000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true},\"timeContext\":{\"durationMs\":86400000}}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 1\"},{\"type\":1,\"content\":{\"json\":\"Most usage operations for SecretServer\"},\"name\":\"text - 9\"},{\"type\":11,\"content\":{\"version\":\"LinkItem/1.0\",\"style\":\"tabs\",\"links\":[{\"cellValue\":\"page\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Overview\",\"subTarget\":\"FileType != \\\"test event\\\"\",\"style\":\"primary\"},{\"cellValue\":\"page\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Secret\",\"subTarget\":\"FileType == \\\"Secret\\\"\",\"style\":\"primary\"},{\"cellValue\":\"page\",\"linkTarget\":\"parameter\",\"linkLabel\":\"User\",\"subTarget\":\"FileType == \\\"User\\\"\",\"style\":\"primary\"},{\"cellValue\":\"page\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Folder\",\"subTarget\":\"FileType == \\\"Folder\\\"\",\"style\":\"secondary\"}]},\"name\":\"links - 3\",\"styleSettings\":{\"margin\":\"0px\",\"padding\":\"0px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\n| where DeviceVendor == \\\"Delinea Software\\\" | where DeviceProduct == \\\"Secret Server\\\" | where LogSeverity == 2 \\n| where {page:query}\\n| where TimeGenerated {Timespan:query}\\n| summarize countRecord = count(), lastDate = arg_max(TimeGenerated, *) by FileName\\n| order by countRecord\\n| take 10\\n| project FileType, Activity, SecretName=FileName, countRecord, lastDate \",\"size\":2,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"FileType\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"countRecord\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"FileType\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"countRecord\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}},\"nodeIdField\":\"countRecord\",\"sourceIdField\":\"Activity\",\"targetIdField\":\"FileType\",\"graphOrientation\":3,\"showOrientationToggles\":false,\"staticNodeSize\":100,\"hivesMargin\":5}},\"name\":\"query - 3\"},{\"type\":1,\"content\":{\"json\":\"## Expiring Secrets\"},\"name\":\"text - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"Delinea Software\\\" \\r\\n| where DeviceProduct == \\\"Secret Server\\\" \\r\\n| where LogSeverity == 2 \\r\\n| where TimeGenerated > ago(1d)\\r\\n| summarize count() by Activity\\r\\n| where extract(\\\"EXPIRE[S|D](\\\\\\\\d+)DAY\\\\\\\\w?\\\", 1, Activity) != \\\"\\\"\\r\\n| project extract(\\\"EXPIRE[S|D](\\\\\\\\d+)DAY\\\\\\\\w?\\\", 1, Activity), count_\\r\\n| order by count_ asc \",\"size\":0,\"noDataMessage\":\"Secrets that will soon expire are not found\",\"noDataMessageStyle\":3,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"03\",\"label\":\"Expiring in 3 days\",\"comment\":\"Expire to 3 days\"},{\"seriesName\":\"07\",\"label\":\"Expiring in 7 days\",\"comment\":\"Expire to 7 days\"},{\"seriesName\":\"15\",\"label\":\"Expiring in 15 days\",\"comment\":\"Expire to 15 days\"},{\"seriesName\":\"30\",\"label\":\"Expiring in 30 days\"},{\"seriesName\":\"01\",\"label\":\"Expiring in 1 day\"}],\"ySettings\":{\"numberFormatSettings\":{\"unit\":17,\"options\":{\"style\":\"decimal\",\"useGrouping\":true}}}}},\"name\":\"query - 4\"},{\"type\":1,\"content\":{\"json\":\"### Expiring Today\"},\"name\":\"text - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"Delinea Software\\\"\\n| where DeviceProduct == \\\"Secret Server\\\"\\n| where LogSeverity == 2 \\r\\n| where TimeGenerated > ago(1d)\\r\\n| summarize count() by Activity\\r\\n| where Activity == \\\"SECRET - EXPIREDTODAY\\\"\\r\\n| project count_\\r\\n| order by count_ asc \",\"size\":0,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"FileName\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"Delinea Software\\\"\\n| where DeviceProduct == \\\"Secret Server\\\"\\n| where LogSeverity == 2 \\r\\n| where TimeGenerated > ago(1d)\\r\\n| summarize count() by Activity, FileName\\r\\n| where Activity == \\\"SECRET - EXPIREDTODAY\\\"\\r\\n| project FileName\",\"size\":0,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"FileName\",\"formatter\":1,\"formatOptions\":{\"customColumnWidthSetting\":\"150px\"}}],\"labelSettings\":[{\"columnId\":\"FileName\",\"label\":\"Secret Name\"}]}},\"name\":\"query - 8\"}],\"fallbackResourceIds\":[\"\"],\"fromTemplateId\":\"sentinel-Delinea\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=DelineaWorkbook; logoFileName=DelineaLogo.svg; description=The Delinea Secret Server Syslog connector; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Delinea Secret Server Workbook; templateRelativePath=DelineaWorkbook.json; subtitle=; provider=Delinea}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Delinea Secret Server",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Delinea"
+                },
+                "support": {
+                  "name": "Delinea",
+                  "tier": "Partner",
+                  "link": "https://delinea.com/support/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Delinea Secret Server",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Delinea"
+        },
+        "support": {
+          "name": "Delinea",
+          "tier": "Partner",
+          "link": "https://delinea.com/support/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-06",
+        "providers": [
+          "Delinea"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

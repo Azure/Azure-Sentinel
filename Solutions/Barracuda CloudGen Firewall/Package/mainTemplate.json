@@ -1,0 +1,607 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Barracuda",
+    "comments": "Solution template for Barracuda CloudGen Firewall"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "barracudanetworks.Barracuda_CloudGen_Firewall_MSS",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "BarracudaCloudFirewall",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "BarracudaCloudFirewall",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "CGFWFirewallActivity-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "CGFWFirewallActivity",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Barracuda CloudGen Firewall data connector with template",
+        "displayName": "Barracuda CloudGen Firewall template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Barracuda CloudGen Firewall data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Barracuda CloudGen Firewall",
+                  "publisher": "Barracuda",
+                  "descriptionMarkdown": "The Barracuda CloudGen Firewall (CGFW) connector allows you to easily connect your Barracuda CGFW logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.",
+                  "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on Kusto to work as expected. ​Follow the steps to use this Kusto functions alias CGFWFirewallActivity in queries and workbooks [Follow steps to get this Kusto functions>](https://aka.ms/sentinel-barracudacloudfirewall-parser) ",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Syslog (Barracuda)",
+                      "baseQuery": "CGFWFirewallActivity"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All logs",
+                      "query": "CGFWFirewallActivity\n            | sort by TimeGenerated"
+                    },
+                    {
+                      "description": "Top 10 Active Users (Last 24 Hours)",
+                      "query": "CGFWFirewallActivity\n            | extend User = coalesce(User, \"Unauthenticated\") \n                    | summarize count() by User\n                    | take 10"
+                    },
+                    {
+                      "description": "Top 10 Applications (Last 24 Hours)",
+                      "query": "CGFWFirewallActivity\n            | where isnotempty(Application)\n                    | summarize count() by Application\n                    | take 10"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "CGFWFirewallActivity\n   |where TimeGenerated > ago(3d)\n    |take 1\n   | project IsConnected = true"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Syslog (Barracuda)",
+                      "lastDataReceivedQuery": "CGFWFirewallActivity\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "write permission is required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Barracuda CloudGen Firewall",
+                        "description": "must be configured to export logs via Syslog"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://aka.ms/sentinel-barracudacloudfirewall-parser) to create the Kusto functions alias, **CGFWFirewallActivity**"
+                    },
+                    {
+                      "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux"
+                    },
+                    {
+                      "description": "Configure the facilities you want to collect and their severities.\n\n1.  Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n2.  Select **Apply below configuration to my machines** and select the facilities and severities.\n3.  Click **Save**.",
+                      "title": "2. Configure the logs to be collected"
+                    },
+                    {
+                      "description": "[Follow instructions](https://aka.ms/sentinel-barracudacloudfirewall-connector) to configure syslog streaming. Use the IP address or hostname for the Linux machine with the Azure\n    Sentinel agent installed for the Destination IP address.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenSyslogSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "Configure and connect the Barracuda CloudGen Firewall"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "afbf6c4a-7190-442a-a649-5c18a907ceb3",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Barracuda Networks"
+                    },
+                    "support": {
+                      "name": "Barracuda Networks",
+                      "link": "https://www.barracuda.com/support",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Barracuda CloudGen Firewall",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Barracuda"
+                },
+                "support": {
+                  "name": "Barracuda",
+                  "tier": "Partner",
+                  "link": "https://www.barracuda.com/support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Barracuda CloudGen Firewall",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Barracuda"
+        },
+        "support": {
+          "name": "Barracuda",
+          "tier": "Partner",
+          "link": "https://www.barracuda.com/support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Barracuda CloudGen Firewall",
+          "publisher": "Barracuda",
+          "descriptionMarkdown": "The Barracuda CloudGen Firewall (CGFW) connector allows you to easily connect your Barracuda CGFW logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Syslog (Barracuda)",
+              "baseQuery": "CGFWFirewallActivity"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (Barracuda)",
+              "lastDataReceivedQuery": "CGFWFirewallActivity\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "CGFWFirewallActivity\n   |where TimeGenerated > ago(3d)\n    |take 1\n   | project IsConnected = true"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All logs",
+              "query": "CGFWFirewallActivity\n            | sort by TimeGenerated"
+            },
+            {
+              "description": "Top 10 Active Users (Last 24 Hours)",
+              "query": "CGFWFirewallActivity\n            | extend User = coalesce(User, \"Unauthenticated\") \n                    | summarize count() by User\n                    | take 10"
+            },
+            {
+              "description": "Top 10 Applications (Last 24 Hours)",
+              "query": "CGFWFirewallActivity\n            | where isnotempty(Application)\n                    | summarize count() by Application\n                    | take 10"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Barracuda CloudGen Firewall",
+                "description": "must be configured to export logs via Syslog"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://aka.ms/sentinel-barracudacloudfirewall-parser) to create the Kusto functions alias, **CGFWFirewallActivity**"
+            },
+            {
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux"
+            },
+            {
+              "description": "Configure the facilities you want to collect and their severities.\n\n1.  Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n2.  Select **Apply below configuration to my machines** and select the facilities and severities.\n3.  Click **Save**.",
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "[Follow instructions](https://aka.ms/sentinel-barracudacloudfirewall-connector) to configure syslog streaming. Use the IP address or hostname for the Linux machine with the Azure\n    Sentinel agent installed for the Destination IP address.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "Configure and connect the Barracuda CloudGen Firewall"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on Kusto to work as expected. ​Follow the steps to use this Kusto functions alias CGFWFirewallActivity in queries and workbooks [Follow steps to get this Kusto functions>](https://aka.ms/sentinel-barracudacloudfirewall-parser) "
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "CGFWFirewallActivity Data Parser with template",
+        "displayName": "CGFWFirewallActivity Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CGFWFirewallActivity Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "CGFWFirewallActivity",
+                "category": "Samples",
+                "functionAlias": "CGFWFirewallActivity",
+                "query": "\n\r\nSyslog\r\n| where ProcessName == \"box_Firewall_Activity\"\r\n| extend Type = extract(\"type=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, L4Protocol = extract(\"proto=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, SourceInterface = extract(\"srcIF=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, SourceIP = extract(\"srcIP=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, SourcePort = extract(\"srcPort=([\\\\d\\\\s]+)\",1,SyslogMessage)\r\n, SourceMAC = extract(\"srcMAC=([\\\\w\\\\d:]+)\",1,SyslogMessage)\r\n, DestinationIP = extract(\"dstIP=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, DestinationPort = extract(\"dstPort=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, DestinationService = extract(\"dstService=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, DestinationInterface = extract(\"dstIF=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, FirewallRule = extract(\"rule=([\\\\w\\\\s\\\\-]+)\",1,SyslogMessage)\r\n, Info = extract(\"info=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, SourceNAT = extract(\"srcNAT=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, DestinationNAT = extract(\"dstNAT=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, Duration = extract(\"duration=([\\\\d]+)\",1,SyslogMessage)\r\n, Count = extract(\"count=([\\\\d]+)\",1,SyslogMessage)\r\n, ReceivedBytes = extract(\"receivedBytes=([\\\\d]+)\",1,SyslogMessage)\r\n, SentBytes = extract(\"sentBytes=([\\\\d]+)\",1,SyslogMessage)\r\n, ReceivedPackets = extract(\"receivedPackets=([\\\\d]+)\",1,SyslogMessage)\r\n, SentPackets = extract(\"sentPackets=([\\\\d]+)\",1,SyslogMessage)\r\n, User = extract(\"user=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, L7Protocol = extract(\"protocol=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, Application = extract(\"application=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, Target = extract(\"target=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, Content = extract(\"content=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, URLCategory = extract(\"urlcat=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "CGFWFirewallActivity"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Barracuda CloudGen Firewall",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Barracuda"
+                },
+                "support": {
+                  "name": "Barracuda",
+                  "tier": "Partner",
+                  "link": "https://www.barracuda.com/support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "CGFWFirewallActivity",
+        "category": "Samples",
+        "functionAlias": "CGFWFirewallActivity",
+        "query": "\n\r\nSyslog\r\n| where ProcessName == \"box_Firewall_Activity\"\r\n| extend Type = extract(\"type=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, L4Protocol = extract(\"proto=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, SourceInterface = extract(\"srcIF=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, SourceIP = extract(\"srcIP=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, SourcePort = extract(\"srcPort=([\\\\d\\\\s]+)\",1,SyslogMessage)\r\n, SourceMAC = extract(\"srcMAC=([\\\\w\\\\d:]+)\",1,SyslogMessage)\r\n, DestinationIP = extract(\"dstIP=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, DestinationPort = extract(\"dstPort=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, DestinationService = extract(\"dstService=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, DestinationInterface = extract(\"dstIF=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, FirewallRule = extract(\"rule=([\\\\w\\\\s\\\\-]+)\",1,SyslogMessage)\r\n, Info = extract(\"info=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, SourceNAT = extract(\"srcNAT=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, DestinationNAT = extract(\"dstNAT=([\\\\d\\\\.]+)\",1,SyslogMessage)\r\n, Duration = extract(\"duration=([\\\\d]+)\",1,SyslogMessage)\r\n, Count = extract(\"count=([\\\\d]+)\",1,SyslogMessage)\r\n, ReceivedBytes = extract(\"receivedBytes=([\\\\d]+)\",1,SyslogMessage)\r\n, SentBytes = extract(\"sentBytes=([\\\\d]+)\",1,SyslogMessage)\r\n, ReceivedPackets = extract(\"receivedPackets=([\\\\d]+)\",1,SyslogMessage)\r\n, SentPackets = extract(\"sentPackets=([\\\\d]+)\",1,SyslogMessage)\r\n, User = extract(\"user=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, L7Protocol = extract(\"protocol=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, Application = extract(\"application=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, Target = extract(\"target=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, Content = extract(\"content=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n, URLCategory = extract(\"urlcat=([\\\\w\\\\s]+)\",1,SyslogMessage)\r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Barracuda CloudGen Firewall",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Barracuda"
+        },
+        "support": {
+          "name": "Barracuda",
+          "tier": "Partner",
+          "link": "https://www.barracuda.com/support"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Barracuda CloudGen Firewall",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Barracuda"
+        },
+        "support": {
+          "name": "Barracuda",
+          "tier": "Partner",
+          "link": "https://www.barracuda.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-05-02",
+        "providers": [
+          "Barracuda"
+        ],
+        "categories": {
+          "domains": [
+            "Security – Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -1,0 +1,130 @@
+{
+    "id": "SnowflakeDataConnector",
+    "title": "Snowflake (using Azure Function)",
+    "publisher": "Snowflake",
+    "descriptionMarkdown": "The Snowflake data connector provides the capability to ingest Snowflake [login logs](https://docs.snowflake.com/en/sql-reference/account-usage/login_history.html) and [query logs](https://docs.snowflake.com/en/sql-reference/account-usage/query_history.html) into Microsoft Sentinel using the Snowflake Python Connector. Refer to [Snowflake  documentation](https://docs.snowflake.com/en/user-guide/python-connector.html) for more information.",
+    "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**Snowflake**](https://aka.ms/sentinel-SnowflakeDataConnector-parser) which is deployed with the Microsoft Sentinel Solution.",
+    "graphQueries": [
+        {
+            "metricName": "Snowflake Events",
+            "legend": "Snowflake_CL",
+            "baseQuery": "Snowflake_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description" : "All Snowflake Events",
+            "query": "Snowflake_CL\n| sort by TimeGenerated desc"
+        }
+     ],
+    "dataTypes": [
+        {
+            "name": "Snowflake_CL",
+            "lastDataReceivedQuery": "Snowflake_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "Snowflake_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(1d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },
+            {
+                "name": "Snowflake Credentials",
+                "description": "**Snowflake Account Identifier**, **Snowflake User** and **Snowflake Password** are required for connection. See the documentation to learn more about [Snowflake Account Identifier](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html#). Instructions on how to create user for this connector you can find below."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses Azure Functions to connect to the Azure Blob Storage API to pull logs into Microsoft Sentinel. This might result in additional costs for data ingestion and for storing data in Azure Blob Storage costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) and [Azure Blob Storage pricing page](https://azure.microsoft.com/pricing/details/storage/blobs/) for details."
+        },
+        {
+            "title": "",
+            "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+        },
+        {
+            "title": "",
+            "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**Snowflake**](https://aka.ms/sentinel-SnowflakeDataConnector-parser) which is deployed with the Microsoft Sentinel Solution."
+        },
+        {
+            "title": "",
+            "description": "**STEP 1 - Creating user in Snowflake**\n\nTo query data from Snowflake you need a user that is assigned to a role with sufficient privileges and a virtual warehouse cluster. The initial size of this cluster will be set to small but if it is insufficient, the cluster size can be increased as necessary.\n\n1. Enter the Snowflake console.\n2. Switch role to SECURITYADMIN and [create a new role](https://docs.snowflake.com/en/sql-reference/sql/create-role.html):\n```\nUSE ROLE SECURITYADMIN;\nCREATE OR REPLACE ROLE EXAMPLE_ROLE_NAME;```\n3. Switch role to SYSADMIN and [create warehouse](https://docs.snowflake.com/en/sql-reference/sql/create-warehouse.html) and [grand access](https://docs.snowflake.com/en/sql-reference/sql/grant-privilege.html) to it:\n```\nUSE ROLE SYSADMIN;\nCREATE OR REPLACE WAREHOUSE EXAMPLE_WAREHOUSE_NAME\n  WAREHOUSE_SIZE = 'SMALL' \n  AUTO_SUSPEND = 5\n  AUTO_RESUME = true\n  INITIALLY_SUSPENDED = true;\nGRANT USAGE, OPERATE ON WAREHOUSE EXAMPLE_WAREHOUSE_NAME TO ROLE EXAMPLE_ROLE_NAME;```\n4. Switch role to SECURITYADMIN and [create a new user](https://docs.snowflake.com/en/sql-reference/sql/create-user.html):\n```\nUSE ROLE SECURITYADMIN;\nCREATE OR REPLACE USER EXAMPLE_USER_NAME\n   PASSWORD = 'example_password'\n   DEFAULT_ROLE = EXAMPLE_ROLE_NAME\n   DEFAULT_WAREHOUSE = EXAMPLE_WAREHOUSE_NAME\n;```\n5. Switch role to ACCOUNTADMIN and [grant access to snowflake database](https://docs.snowflake.com/en/sql-reference/account-usage.html#enabling-account-usage-for-other-roles) for role.\n```\nUSE ROLE ACCOUNTADMIN;\nGRANT IMPORTED PRIVILEGES ON DATABASE SNOWFLAKE TO ROLE EXAMPLE_ROLE_NAME;```\n6. Switch role to SECURITYADMIN and [assign role](https://docs.snowflake.com/en/sql-reference/sql/grant-role.html) to user:\n```\nUSE ROLE SECURITYADMIN;\nGRANT ROLE EXAMPLE_ROLE_NAME TO USER EXAMPLE_USER_NAME;```\n\n>**IMPORTANT:** Save user and API password created during this step as they will be used during deployment step."
+        },
+        {
+            "title": "",
+            "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as Snowflake credentials, readily available.",
+            "instructions":[
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "PrimaryKey"
+                        ],
+                        "label": "Primary Key"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "Option 1 - Azure Resource Manager (ARM) Template",
+            "description": "Use this method for automated deployment of the data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-SnowflakeDataConnector-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Snowflake Account Identifier**, **Snowflake User**, **Snowflake Password**, **Microsoft Sentinel Workspace Id**, **Microsoft Sentinel Shared Key**\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n5. Click **Purchase** to deploy."
+        },
+        {
+            "title": "Option 2 - Manual Deployment of Azure Functions",
+            "description": "Use the following step-by-step instructions to deploy the data connector manually with Azure Functions (Deployment via Visual Studio Code)."
+        },
+        {
+            "title": "",
+            "description": "**1. Deploy a Function App**\n\n> **NOTE:** You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/create-first-function-vs-code-python) for Azure function development.\n\n1. Download the [Azure Function App](https://aka.ms/sentinel-SnowflakeDataConnector-functionapp) file. Extract archive to your local development computer.\n2. Start VS Code. Choose File in the main menu and select Open Folder.\n3. Select the top level folder from extracted files.\n4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.\nIf you aren't already signed in, choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose **Sign in to Azure**\nIf you're already signed in, go to the next step.\n5. Provide the following information at the prompts:\n\n\ta. **Select folder:** Choose a folder from your workspace or browse to one that contains your function app.\n\n\tb. **Select Subscription:** Choose the subscription to use.\n\n\tc. Select **Create new Function App in Azure** (Don't choose the Advanced option)\n\n\td. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. Snowflake12).\n\n\te. **Select a runtime:** Choose Python 3.8.\n\n\tf. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.\n\n6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.\n7. Go to Azure Portal for the Function App configuration."
+        },
+        {
+            "title": "",
+            "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tSNOWFLAKE_ACCOUNT\n\t\tSNOWFLAKE_USER\n\t\tSNOWFLAKE_PASSWORD\n\t\tWORKSPACE_ID\n\t\tSHARED_KEY\n\t\tlogAnalyticsUri (optional)\n - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://WORKSPACE_ID.ods.opinsights.azure.us`. \n4. Once all application settings have been entered, click **Save**."
+        }
+    ]
+}

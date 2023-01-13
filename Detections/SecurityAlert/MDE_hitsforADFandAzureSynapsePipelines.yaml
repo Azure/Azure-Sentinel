@@ -1,0 +1,55 @@
+id: a333d8bf-22a3-4c55-a1e9-5f0a135c0253
+name: Microsoft Defender for Endpoint (MDE) signatures for Azure Synapse pipelines and Azure Data Factory
+description: |
+  'This query looks for Microsoft Defender for Endpoint detections related to the remote command execution attempts on Azure IR with Managed VNet or SHIR. 
+  In Microsoft Sentinel, the SecurityAlerts table includes the name of the impacted device. Additionally, this query joins the DeviceInfo table to connect other information such as device group, 
+  IP address, signed in users, and others allowing analysts using Microsoft Sentinel to have more context related to the alert. 
+  Reference: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2022-29972 , 
+  https://msrc-blog.microsoft.com/2022/05/09/vulnerability-mitigated-in-the-third-party-data-connector-used-in-azure-synapse-pipelines-and-azure-data-factory-cve-2022-29972'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - CVE-2022-29972
+query: |
+  let mde_threats = dynamic(["Behavior:Win32/SuspAzureRequest.A", "Behavior:Win32/SuspAzureRequest.B", "Behavior:Win32/SuspAzureRequest.C", "Behavior:Win32/LaunchingSuspCMD.B"]);
+  DeviceInfo
+  | extend DeviceName = tolower(DeviceName)
+  | join kind=inner ( SecurityAlert
+  | where ProviderName == "MDATP"
+  | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+  | extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)
+  | where ThreatName in~ (mde_threats) or ThreatFamilyName in~ (mde_threats)
+  | extend CompromisedEntity = tolower(CompromisedEntity)
+  ) on $left.DeviceName == $right.CompromisedEntity
+  | summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: CompromisedEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+version: 1.0.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ashwin Patil
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

@@ -14,6 +14,12 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
@@ -30,8 +36,8 @@ query: |
   // Adjust for a longer timeframe for identifying ADFS Servers
   let lookback = 6d;
   // Identify ADFS Servers
-  let ADFS_Servers = (
-  Event
+  let ADFS_Servers = ( union isfuzzy=true
+  ( Event
   | where TimeGenerated > ago(timeframe+lookback)
   | where Source == "Microsoft-Windows-Sysmon"
   | where EventID == 1
@@ -43,10 +49,19 @@ query: |
   | extend process = split(Image, '\\', -1)[-1]
   | where process =~ "Microsoft.IdentityServer.ServiceHost.exe"
   | distinct Computer
-  | union isfuzzy=true (
-  SecurityEvent
+  ),
+  ( SecurityEvent
   | where TimeGenerated > ago(timeframe+lookback)
   | where EventID == 4688 and SubjectLogonId != "0x3e4"
+  | where ProcessName has "Microsoft.IdentityServer.ServiceHost.exe"
+  | distinct Computer
+  ),
+  (WindowsEvent
+  | where TimeGenerated > ago(timeframe+lookback)
+  | where EventID == 4688 and EventData has "0x3e4" and EventData has "Microsoft.IdentityServer.ServiceHost.exe"
+  | extend SubjectLogonId  = tostring(EventData.SubjectLogonId)
+  | where SubjectLogonId != "0x3e4"
+  | extend ProcessName  = tostring(EventData.ProcessName)
   | where ProcessName has "Microsoft.IdentityServer.ServiceHost.exe"
   | distinct Computer
   )
@@ -54,6 +69,7 @@ query: |
   (union isfuzzy=true
   (
   SecurityEvent
+  | where EventID == 4688
   | where TimeGenerated > ago(timeframe)
   | where Computer in~ (ADFS_Servers)
   | where ParentProcessName has 'wmiprvse.exe'
@@ -68,6 +84,36 @@ query: |
   | where TimeGenerated > ago(timeframe)
   | where EventID == 4624 and LogonType == 3
   | where Account !endswith "$"
+  | project TargetLogonId
+  ) on TargetLogonId
+  ),
+  (
+  WindowsEvent
+  | where EventID == 4688
+  | where TimeGenerated > ago(timeframe)
+  | where Computer in~ (ADFS_Servers)
+  | where EventData has 'wmiprvse.exe' and EventData has_any ('rundll32') 
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | where ParentProcessName has 'wmiprvse.exe'
+  // Looking for rundll32.exe is based on intel from the blog linked in the description
+  // This can be commented out or altered to filter out known internal uses
+  | extend CommandLine = tostring(EventData.CommandLine)
+  | where CommandLine has_any ('rundll32') 
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend Account = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend TargetLogonId = tostring(EventData.TargetLogonId)
+  | project TimeGenerated, TargetAccount, CommandLine, Computer, Account, TargetLogonId
+  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  // Search for recent logons to identify lateral movement
+  | join kind= inner
+  (WindowsEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4624 
+  | extend  LogonType = tostring(EventData.LogonType)
+  | where LogonType == 3
+  | extend Account = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | where Account !endswith "$"
+  | extend TargetLogonId = tostring(EventData.TargetLogonId)
   | project TargetLogonId
   ) on TargetLogonId
   ),
@@ -95,5 +141,14 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.1.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: jannieli
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

@@ -1,0 +1,52 @@
+id: eb09da09-6f6c-4502-bf74-f7b9f1343539
+name: Linux scheduled task Aggregation
+description: |
+  'This query aggregates information about all of the scheduled tasks (Cron jobs) and presents the data in a chart.
+  The aggregation is done based on unique user-commandline pairs. It returns how many times a command line has
+  been run from a particular user, how many computers that pair has run on, and what percentage that is of the
+  total number of computers in the tenant.'
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes: 
+      - Syslog
+tactics:
+  - Persistence
+  - Execution
+relevantTechniques:
+  - T1059
+  - T1053
+  - T1037
+query: |
+
+  // Pull messages from Syslog-cron where the process name is "CRON" or "CROND", the severity level is info, and the SyslogMessage contains "CMD".
+  // It also parses out the user and commandline from the message.
+  let RawCommands = Syslog 
+  | where Facility =~ "cron" 
+  | where SeverityLevel =~ "info" 
+  | where ProcessName =~ "CRON" or ProcessName =~ "CROND"  
+  | where SyslogMessage contains "CMD " 
+  | project TenantId, TimeGenerated, Computer, SeverityLevel, ProcessName, SyslogMessage
+  | extend TrimmedSyslogMsg = trim_end(@"\)", SyslogMessage)
+  | parse TrimmedSyslogMsg with * "(" user  ") CMD (" cmdline 
+  | project TenantId, TimeGenerated, Computer, user, cmdline; 
+  // Count how many times a particular commandline has been seen based on unique Computer, User, and cmdline sets
+  let CommandCount = RawCommands
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), CmdlineCount = count() by Computer, user, cmdline; 
+  // Count how many computers have run a particular user and cmdline pair
+  let DistComputerCount = RawCommands
+  | summarize ComputerCount = dcount(Computer) by TenantId, user, cmdline; 
+  // Join above counts based on user and commandline pair
+  let CommandSummary = CommandCount | join (DistComputerCount) on user, cmdline
+  | project StartTime, EndTime, TenantId, user, CmdlineCount, ComputerCount, cmdline;
+  // Count the total number of computers reporting cron messages in the tenant
+  let TotalComputers = Syslog
+  | where Facility =~ "cron"
+  | summarize dcount(Computer) by TenantId ;
+  // Join the previous counts with the total computers count. Calculate the percentage of total computers value.
+  let FinalSummary = CommandSummary | join kind= leftouter (TotalComputers) on TenantId
+  | project StartTime, EndTime, user, TimesCmdlineSeen = CmdlineCount, CompsThatHaveRunCmdline = ComputerCount, 
+  AsPercentOfTotalComps = round(100 * (toreal(ComputerCount)/toreal(dcount_Computer)),2), cmdline
+  | order by user asc, TimesCmdlineSeen desc;
+  FinalSummary 
+  | extend timestamp = StartTime, AccountCustomEntity = user
+  

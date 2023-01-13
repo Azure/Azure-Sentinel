@@ -1,53 +1,63 @@
-# Contribution guidelines for Azure Sentinel playbooks gallery
+# Contribution guidelines
 
-This document guides how to contirubte a playbook template to Playbooks Gallery.
+This document guides how to contirubte a playbook template to a **Microsoft Sentinel Solution** or to the **playbook templates tab**.
 [See example.](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/IdentityProtection-TeamsBotResponse)
 
-## Main steps
+# Main steps
 
 Once you have created a playbook that you want to export to share, please follow the following guidelines:
 
-1. [Playbook conventions and guidlines](#Playbook-conventions-and-guidlines)
-1. [Create Screenshots](#Create-screenshots)
-1. [Create ARM Template](#Create-ARM-Template)
-1. [Add metadata to the ARM Template](#Add-Metadata)
-1. [Create Readme file](#Create-Readme-file)
-1. [Create a Pull Request](#Create-a-pull-request)
+1. [Playbook conventions and guidlines](#playbook-conventions-and-guidlines)
+2. [Create ARM Template](#create-arm-template)
+3. [Add metadata to the ARM Template](#add-metadata)
+4. [Create Screenshots](#create-screenshots)
+5. [Create Readme file](#create-readme-file) (For GitHub/Playbook templates tab contribution)<br>
+6. [Create a Pull Request](#create-a-pull-request) (For GitHub/Playbook templates tab contribution)
 
 
 ## Playbook conventions and guidlines
 
-* **Use parameters and store them in "Initialize Variable" steps**<br> For example, if playbook sends an email to the SOC shared inbox, this field should be supplied as a parameter to the playbook. Pre-configured parameters that user should enter during deployment should be stored in [Initialize Variable](https://docs.microsoft.com/azure/logic-apps/logic-apps-create-variables-store-values#initialize-variable) actions, located in the beginning of the playbook. When [templatizing](#Create-ARM-Template) the playbook, you can add the parameters to the deployment steps.
-* **Trigger choice:** please use Incident trigger, unless there is a strong use case for the alert trigger.
-* **Azure Sentinel connector:** Use [most updated actions](https://docs.microsoft.com/connectors/azuresentinel/#azure-sentinel-actions-summary) in Azure Sentinel connector.
+* **Trigger choice:** please use **Microsoft Sentinel Incident** trigger, unless there is a strong use case for the alert trigger. [Learn more](https://docs.microsoft.com/azure/sentinel/playbook-triggers-actions#microsoft-sentinel-triggers-summary)
+* **Use parameters**<br> For example, if playbook sends an email to the SOC shared inbox, this field should be supplied as a parameter to the playbook.To do so:
+    * When you develop your playbook, [create a parameter](https://docs.microsoft.com/azure/logic-apps/create-parameters-workflows?tabs=consumption#define-use-and-edit-parameters) for such value.
+    * Playbooks steps should use the parameters values. 
+    * When [templatizing](#Create-ARM-Template) the playbook, create an ARM template parameter which gets, in deployment time, the user input, and refer the workflow parameter to get it.
+* **Use connector best practices:** Use [this doc to see common best practices](https://docs.microsoft.com/azure/sentinel/playbook-triggers-actions).
 * **Testing** Please test your playbook end to end with variety of scenarios.
-
-
-## Create screenshots
-Meant to help the user understand the playbook functionality and value. 
-The* playbook folder should contain an "images" folder with screenshots of:
-* **Logic Apps designer** (main steps, expand only interesting steps). <br>
-Please take screenshots of dark and light Azure theme (can be configured from settings button in the top right Azure toolbar).
-    <br>Example:<br>![screenshotexample1](./ImageDark1.png)![screenshotexample1](./ImageLight1.png)
-* **Comments** this playbook posts on Azure Sentinel incident (optional)
-    <br>Example:<br>![](./commentDark.png)<br>![](./commentLight.png)
-* **Changes on the other product** (optional)
-* **Artifacts collected** (optional)
-
 
 ## Create ARM Template
 
-The core of part of the ARM template is generated from the Logic Apps resource. After generating it, additional updates are required, explained in this section.
-1. To generate the core part of the ARM template, please go to the Logic Apps resource in Azure. Click **Export Template** from the resource menu in Azure Portal.
-1. Copy the contents of the template.
-1. Using VS code, create a JSON file with the name "azuredeploy.json".
-1. Paste the code into the new file.
-1. **Parameters**<br>
-In the parameters section, remove all and add the following minimum fields. Users can edit the parameters when deploying your template. You can add more parameters based on your playbook requirements.
+ARM template allow you to specify the resources to deploy and the properties for those resources. For Playbooks, ARM template will include to following resources:
+* **Logic Apps workflow** - This is where the playbook logic is described. 
+* **API connections** - For each connector in this playbook, there should be an API connection resource.
+<br><br>
+
+1. **Generate the initial ARM template** which you will adapt in the following steps.<br>
+Start with copy this [reference template](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/.template/incident-trigger/azuredeploy.json) to a new empty file under your JSON editor (such VS code or Notepad ++).
+    <br>Make the following editing, using **Logic Apps code view** of your playbook:
+    * Replace **actions**  section with **actions** section of your doc.
+    * Add to **$connections** the connections which are not *azuresentinel*.
+
+    <br>
+    Other ways to generate a template (but note this guide refers to the initial ARM template mentioned above):
+
+    * Generate a template using [this script](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator).
+    * In the left menu, click on **Export Template** of the Logic Apps resource.
+
+<br>
+
+2. **Parameters section**<br>
+This part should include:
+    * Playbook name: Name of the Logic Apps resource to be created
+    * User input parameters which adapt this playbook to the unique customer environment and populate in the workflow.<br>
+     These parameters should appear twice: In the parameters section and in the workflow resources.<br>
+     Under the "resources" list, find an element with "type": "Microsoft.Logic/workflows" -> definition -> parameters.
+<br>
+Example for ARM template parameters:
 
 ```json
     "parameters": {
-        "PlaybookName": { // Mandatory
+        "PlaybookName": { // Mandatory. This will be the resource name for the playbook when created from wizard. (If there are nested playbooks, this should be the parent)
             "defaultValue": "IdentityProtectionResponseFromTeams",
             "type": "String",
             "metadata": {
@@ -64,139 +74,163 @@ In the parameters section, remove all and add the following minimum fields. User
         ... // more parameters required to this playbook
     },
 ```
-<br>
-To locate the parameters given in deployment in your playbook, go to Workflow resource section, and find the relevant Initiazile Variable action:
-
+Example for workflow level parameters *Note that the "defaultValue" refer the parameter's name defined above*
 ```json
-    "Initialize_variable_-_SOC_email_address": {
-        "type": "InitializeVariable",
-        "inputs": {
-            "variables": [
-                {
-                    "name": "SocEmailAddress",
-                    "type": "string",
-                    "value": "[parameters('SocEmailAddress')]"
-                }
-            ]
+        "SocEmailAddress": {
+            "defaultValue": "[parameters('SocEmailAddress')]",
+            "type": "String"
         }
-    }
+    },
 ```
 
 
+3. **Variables and DependsOn sections**<br>Create a variable for each connection the playbook is using.<br>
+    The template already contains Microsoft Sentinel variable:
+    ```json
+        "variables": {
+            "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        },
+        
+    ```
 
-6. **Variables**<br>Create 2 variables for each connection the playbook is using: connection name, and display name (to be presented as a choice in future playbooks that uses this connector). 
-To construct a string variable, use this following snippet. Make sure to replace the `connectorname` with actual name of the connector.
-For example, if you are using Azure Active Directory and Azure Sentinel connections in the playbook, then create a variable for each with actual connection name. Here we are creating a connection name using the connection (AzureAD) and "-" and the playbook name.
+    To construct a string variable for the other connectors, use the following snippet. Make sure to replace the `uniqueName` with the actual name of the connector.
+
     For example:
 
-```json
-    "variables": {
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]",
-        ... // other connections
-    },
-    
-```
+    ```json
+        "variables": {
+            "{uniqueName}ConnectionName": "[concat('{uniqueName}', parameters('PlaybookName'))]"
+            ... // other connections
+        },
+        
+    ```
+    In addition, for each variable, you need to add an entry in the "dependsOn" parameter under: "Microsoft.Logic/workflows" resource.
+    You can use the below snippet and replace "{variableName}" with the variable name you've chosen above:
+    ```
+        "dependsOn": [
+            "[resourceId('Microsoft.Web/connections', variables({variableName}))]",
+        ]
+    ```
+    Please note the template already contains an entry for Microsoft Sentinel, so you only need to append the rest (if such exists).
 
-7. **Resource for each connection**<br>
-Next, you will need to add resources to be created for each connection.
-```json
-   "resources": [
+    You can find a list of the connections under: 
+    1. Go to the playbook you are creating this template for -> click on "Logic add code view"
+    2. Under "parameters" -> "$connections" -> "value" <br>
+    For example:
+
+    ```json
+    "parameters": {
+        "$connections": {
+            "value": {
+                "azuresentinel": {
+                    "connectionId": "/subscriptions/{subsriptionId}/resourceGroups/{resourceGroups}/providers/Microsoft.Web/connections/azuresentinel",
+                    "connectionName": "azuresentinel",
+                    "id": "/subscriptions/{subsriptionId}/providers/Microsoft.Web/locations/{locations}/managedApis/azuresentinel"
+                }
+            }
+        }
+    }
+    ```
+    Note: if there are duplicates, create only one variable for each connection.
+
+4. **Create a resource for each connection**<br>
+Note: Microsoft Sentinel connection should include:  
+
+```
+"parameterValueType": "Alternative",
+```
+All ARM template needs to contain the following resource, so please copy and paste it into your file:
+
+```Json
+        "resources": [
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
             "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
+            "kind": "V1",
             "properties": {
-                "displayName": "[variables('AzureSentinelConnectionDisplayName')]",
+                "displayName": "[variables('AzureSentinelConnectionName')]",
                 "customParameterValues": {},
+                "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
             }
         },
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('AzureADConnectionName')]",
-            "location": "[resourceGroup().location]",
-            "properties": {
-                "displayName": "[variables('AzureADConnectionDisplayName')]",
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]"
-                }
-            }
-        },
-
-                ... // other connections - replace {unique name} with the api connection name
-        {
-            "type": "Microsoft.Web/connections",
-            "apiVersion": "2016-06-01",
-            "name": "[variables('{unique name}ConnectionName')]", // using the variable we created.  
-            "location": "[resourceGroup().location]", // using the resource group that was selected as part of the deployment.    
-            "properties": {
-                "displayName": "[variables('{unique name}ConnectionDisplayName')]", // using the connection display name variable.
-                "customParameterValues": {},
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/{unique name}')]"
-                }
-            }
-        },
-
 ```
+Copy the snippet below and modify **{variableName}** with the variable name given in step 2. In addition, you need to replace **{uniqueConnectionName}** with the connection name.
+You can find the connection name in the same way you can find the connections list in step 3.<br>
+The connection name appears at the end of each connection's **id** value.
 
-8. **Microsoft.Logic/workflows resource (playbook content)**<br>
-This section stores the logic you created.<br>
-    * **Please remove any personal data** (most of it should have been moved to parameters). For example, erase Teams channel Id or Excel files path.
-    * Please include the hiddent tags for versioning:<br>
 ```Json
-            "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2017-07-01",
-            "name": "[parameters('PlaybookName')]",
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('{variableName}')]",
             "location": "[resourceGroup().location]",
-            "tags": {
-                "hidden-SentinelTemplateName": "IdentityProtectionResponseFromTeams",
-                "hidden-SentinelTemplateVersion": "1.0"
-            },
-```
-9. **Microsoft.Logic/workflows resource / parameters / $connections**<br>
-In the `Microsoft.Logic/workflows` resource under `parameters / $connections`, there will be a `value` for each connection.  You will need to update each like the following.
-```json
-"parameters": {
-                    "$connections": {
-                        "value": {
-                            "azuread": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",  //using the variable we created 
-                                "connectionName": "[variables('AzureADConnectionName')]",  //using the variable we created 
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]" // same string we used to create the resource
-                            },
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]", //using the variable we created 
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",  //using the variable we created 
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]" // same string we used to create the resource
-                            }
-                        }
-                    }
+            "properties": {
+                "displayName": "[variables('{variableName}')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/{uniqueConnectionName}')]"
                 }
-
+            }
+        }
 ```
+<br>
 
-10. **Microsoft.Logic/workflows resource / dependsOn**<br>
-In the `Microsoft.Logic/workflows` resource, you will also need the `dependsOn` field, which is a list of `resourceId`. The string for each `resourceId` is constructed using this snippet, followed by an example which contains Azure AD and Azure Sentinel connections.
+Example references:
+* [AAD](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Block-AADUser/incident-trigger/azuredeploy.json#L31)
+* [Office 365](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Block-AADUser/incident-trigger/azuredeploy.json#L60)
+* [Microsoft Teams](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Post-Message-Teams/azuredeploy.json#L37)
+<br>
 
-```
-    [resourceId('Microsoft.Web/connections', <ConnectionVariableName>)]
-``` 
+    
+### Following adaption required under **Microsoft.Logic/workflows**  resource
+<br>
 
-```
-    "dependsOn": [
-        "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
-        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
-    ]
-```
 
-11. **Test deployment of your template** following [Instructions for deploying a custom template](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks#instructions-for-deploying-a-custom-template). <br>
+5. **Hidden tags** (Only for playbook templates tab)
+<br>Please include the following hidden tags with a unique, no-space playbook identifier name, and first version number: <br>
+    ```Json
+                "type": "Microsoft.Logic/workflows",
+                "apiVersion": "2017-07-01",
+                "name": "[parameters('PlaybookName')]",
+                "location": "[resourceGroup().location]",
+                "tags": {
+                    "hidden-SentinelTemplateName": "IdentityProtectionResponseFromTeams",
+                    "hidden-SentinelTemplateVersion": "1.0"
+                },
+    ```
+
+6. **$connections**<br>
+Under **$connections**, copy from your template any connection which is not azuresentinel. Make sure it is not hardcoded. Example:
+
+    ```json
+    "parameters": {
+                        "$connections": {
+                            "value": {
+                                "azuread": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",  //using the variable we created 
+                                    "connectionName": "[variables('AzureADConnectionName')]",  //using the variable we created 
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuread')]" // same string we used to create the resource
+                                },
+
+                                "azuresentinel": {
+                                    "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                    "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                    "connectionProperties": {
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity"
+                                        }
+                                    }
+                                }
+                    }
+    ```
+
+8. **Test deployment of your template** following [Instructions for deploying a custom template](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks#instructions-for-deploying-a-custom-template). <br>
 **Make sure the deployment succeeds.**
 
 
@@ -205,29 +239,47 @@ In the `Microsoft.Logic/workflows` resource, you will also need the `dependsOn` 
 Please add to the ARM Template the following metadata.
 Fields marked with * are mandatory. Others can be left empty.
 
+```
+  title: string; // 
+  description: string;
+  prerequisites?: string | string[];
+  prerequisitesDeployTemplateFile?: string;
+  lastUpdateTime: string;
+  entities?: string[];
+  tags?: string[],
+  support: { tier: string; link?: string };
+  author: { name: string };
+  ```
+
 * ***title** (string)<br>
     Indicates the main goal of this playbook. Identical to PlaybookName parameter, spaces allowed. 
 * ***description:** (string, Markdown can be used for providing links)<br> 
     Few sentences that describe the playbook main steps and value.
-* **prerequisites:** (string, Markdown can be used for providing links)<br> 
+* **prerequisites:** (array of strings, Markdown can be used for providing links)<br> 
     list of steps required to be taken before deploying this playbook or running it for the first time, such: configurations in other products or in Azure, permissions required for included connectors, deployments required as dependencies.
-* **prerequisitesDeployTemplateFile:** (string, relative path)<br>
-    If playbook has a deployment prerequisite in form of an ARM template located in GitHub, this path will provide a link to it. Ths link should be relative to the folder of this playbook in GitHub.    
+* **postDeploymentSteps:** (array of strings, Markdown can be used for providing links)<br>  
+list of steps required to be taken after deploying this playbook and before running it for the first time, such: changes in Logic Apps designer, managed identities configuration, configurations in other products or in Azure.
+* **entities:** (array of strings)<br> 
+    If relevant, list the entity types that the playbooks is working on explicitly with "Entities - Get IPs/URLs/FileHashes/Hosts/Accounts" action or specific parsing. <br>
+    Supported entities: "account",  "host",  "ip",  "url",  azureresource",  "cloudapplication",  "dnsresolution",  "file",  "filehash",  "hostlogonsession",  "iotdevice",  malware",  "networkconnection",  "process",  "registrykey",  "registryvalue",  "securitygroup",  "mailbox",  mailcluster",  "mailmessage",  "submissionmail"
+* ***tags**: (array of strings)<br> 
+    Use this field to relate the templates to a specific security scenario. <br>
+    Examples: "Enrichment", "Notification", "Remediation", "Response from teams", "Sync", "Triage", "Utilities", "Identity protection", "Incident management".
+     
+    
+Templates tab only:
 * ***lastUpdateTime**:  (string, UTC)<br>
     UTC time when author created/updated the template (version of the template is described in the Workflow resource)
-* **entities:** (array of strings)<br> 
-    If relevant, list the entity types that the playbooks is working on explicitly with "Entities - Get IPs/URLs/FileHashes/Hosts/Accounts" action or specific parsing. List of names: ["Account", "Host", "Ip", "Url", "FileHash", "IoTDevice", "AzureResource"]
-* **tags**: (array of strings)<br> 
-    Use this field to relate the templates to a specific security scenario. <br>
-    Examples: "Network security" for playbook which works on firewalls, "Sentinel utilities" for playbook which serves a simple popular use case such send an email.
-* ***support->tier**: (string) <br>
+* **prerequisitesDeployTemplateFile:** (string, relative path)<br>
+    If playbook has a deployment prerequisite in form of an ARM template located in GitHub, this path will provide a link to it. Ths link should be relative to the folder of this playbook in GitHub.    
+* ***support**
+    * **tier**: (string) <br>
     The support expectation for this playbook. "microsoft", "community" or "developer" (for ISV or vendor)
-* **support->link** (string)<br> 
+    * **link** (string)<br> 
     The playbooks gallery need this fiels only in case the support->tier is "developer". 
 * ***author**: (string) <br>
     Name of the person who contributed the playbook.
 
-**Note**: template id and version are part of the Logic Apps Workflow resource section (see number 8 in ARM template instructions).
 
 ```json
     "metadata":{
@@ -246,7 +298,22 @@ Fields marked with * are mandatory. Others can be left empty.
     },
 ```
 
-## Create Readme file
+
+## Create screenshots
+Meant to help the user understand the playbook functionality and value. 
+The playbook folder should contain an "images" folder with screenshots of:
+* **Logic Apps designer** (main steps, expand only interesting steps). <br>
+Please take screenshots of dark and light Azure theme (can be configured from settings button in the top right Azure toolbar).
+    <br>Example:<br>![screenshotexample1](./ImageDark1.png)![screenshotexample1](./ImageLight1.png)
+* **Comments** this playbook posts on Azure Sentinel incident (optional)
+    <br>Example:<br>![](./commentDark.png)<br>![](./commentLight.png)
+* **Changes on the other product** (optional)
+* **Artifacts collected** (optional)
+
+
+
+## Create Readme file 
+(not required for Microsoft Sentinel Solution contribution) 
 Readme file is meant to be used by users who deploy templates from GitHub. Should contain the details from the ARM template metadata:
 * Title
 * Description
@@ -269,7 +336,7 @@ screenshots:
 ![screenshot1](./images/screenshot1.png)
 ![screenshot2](./images/screenshot1.png)
 
-## deploy to Azure
+## Deploy to Azure
 locate here the deployment buttons (replace PlaybookFolderName)
 ```
 ```html
@@ -285,7 +352,8 @@ locate here the deployment buttons (replace PlaybookFolderName)
 [Extended guidance for creating Azure Deploy button can be found here.](https://docs.microsoft.com/azure/azure-resource-manager/templates/deploy-to-azure-button)
 
 
-## Create a pull request
+## Create a pull request 
+(not required for Microsoft Sentinel Solution contribution) 
 Please locate the following files under a folder named by PlaybookName, which includes:
 * azuredeploy.json ([ARM Template](#Create-ARM-Template))
 * readme.md ([Readme file](#Create-Readme-file))

@@ -2,7 +2,7 @@
 
 **Author: Alexandre Verkinderen**
 
-As part of our Azure Enterprise Scale deployment <https://github.com/Azure/Enterprise-Scale/> we also provision Log Analytics and Sentinel and have a need to export this data for archviving purpose. The excellent script provided by Sreedhar Ande <https://github.com/Azure/Azure-Sentinel/blob/master/Tools/AzureDataExplorer/Migrate-LA-to-ADX.ps1> was the missing piece to be able automate the export of the Log Analtyics logs.
+As part of our Azure Enterprise Scale deployment <https://github.com/Azure/Enterprise-Scale/> we also provision Log Analytics and Sentinel and have a need to export this data for archviving purpose. The excellent script provided by **Sreedhar Ande** <https://github.com/Azure/Azure-Sentinel/blob/master/Tools/AzureDataExplorer/Migrate-LA-to-ADX.ps1> was the missing piece to be able automate the export of the Log Analtyics logs.
 
 Our Enterprise Scale deployment is fully automated and repeatable accross different environments using Azure DevOps Pipelines. This script is slightly modified from the original one and is intented to be executed from within an Azure DevOps Pipeline to configure Log Analtyics workspace to an Eventhubs and setup ADX connectors for ingestion. The provided yaml pipeline is just an example and can be modified to your requirements.
 

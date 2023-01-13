@@ -5,53 +5,53 @@
 
 ## Objectives
 
-This module guides you through the deployment of the Azure Sentinel Training Lab solution that will be used in all subsequent modules.
+This module guides you through the deployment of the Microsoft Sentinel Training Lab solution that will be used in all subsequent modules.
 
 #### Prerequisites
 
-To get started with Azure Sentinel, you must have a Microsoft Azure subscription. If you do not have a subscription, you can sign up for a free account [here](https://azure.microsoft.com/en/free).
+To get started with Microsoft Sentinel, you must have a Microsoft Azure subscription. If you do not have a subscription, you can sign up for a free account [here](https://azure.microsoft.com/en/free).
 
 Permissions to create a resource group in your Azure subscription. 
 
-### Exercise 1: The Azure Sentinel workspace
+### Exercise 1: The Microsoft Sentinel workspace
 
-In this exercise we will show you how to create a brand new Azure Sentinel workspace. If you already have a pre-existing one that you would like to use, you can skip to [Exercise 2](Module-1-Setting-up-the-environment.md#exercise-2-deploy-azure-sentinel-training-lab-arm-template).
+In this exercise we will show you how to create a brand new Microsoft Sentinel workspace. If you already have a pre-existing one that you would like to use, you can skip to [Exercise 2](Module-1-Setting-up-the-environment.md#exercise-2-deploy-the-microsoft-sentinel-training-lab-solution).
 
 1. Navigate to the [Azure Portal](http://portal.azure.com) and log in with your account.
 
-2. In the top search bar, type *azure sentinel* and click on **Azure Sentinel**.
+2. In the top search bar, type *Microsoft Sentinel* and click on **Microsoft Sentinel**.
 
 ![deployment](../Images/deployment1.png)
 
-3. In the Azure Sentinel screen, click **Create** at the top left.
+3. In the Microsoft Sentinel screen, click **Create** at the top left.
 
-4. You can choose to add Azure Sentinel to an existing Log Analytics workspace or build a new one. We will create a new one, so click on **Create a new workspace**.
+4. You can choose to add Microsoft Sentinel to an existing Log Analytics workspace or build a new one. We will create a new one, so click on **Create a new workspace**.
 
 ![deployment](../Images/deployment2.png)
 
 5. In the Create Log Analytics workspace page, fill out the form as follows:
 
-    - **Subscription**: choose the Azure subscription where you would like to deploy the Azure Sentinel workspace
+    - **Subscription**: choose the Azure subscription where you would like to deploy the Microsoft Sentinel workspace
     - **Resource Group**: select an existing resource group or create a new resource group (recommended) that will host the lab resources
     - **Region**: from the drop down, select the Azure region where the lab will be located
-    - **Workspace Name**: provide a name for the Azure Sentinel workspace. Please note that the workspace name should include 4-63 letters, digits or '-'. The '-' shouldn't be the first or the last symbol
+    - **Workspace Name**: provide a name for the Microsoft Sentinel workspace. Please note that the workspace name should include 4-63 letters, digits or '-'. The '-' shouldn't be the first or the last symbol
 
 ![deployment](../Images/deployment3.png)
 
 Click **Review + create** and then **Create** after the validation completes. The creation takes a few seconds.
 
-7.  You will be redirected back to the *Add Azure Sentinel to a workspace*. Type the name of your new workspace in the search box, select your workspace and click **Add** at the bottom.
+7.  You will be redirected back to the *Add Microsoft Sentinel to a workspace*. Type the name of your new workspace in the search box, select your workspace and click **Add** at the bottom.
 
 ![deployment](../Images/deployment4.png)
 
-7. Your Azure Sentinel workspace is now ready to use!
+7. Your Microsoft Sentinel workspace is now ready to use!
 
 
-### Exercise 2: Deploy the Azure Sentinel Training Lab Solution
+### Exercise 2: Deploy the Microsoft Sentinel Training Lab Solution
 
-In this exercise you will deploy the Trainig Lab solution into your existing workspace. This will ingest pre-recorded data (~20 MBs) and create several other artifacts that will be used during the exercises.
+In this exercise you will deploy the Training Lab solution into your existing workspace. This will ingest pre-recorded data (~20 MBs) and create several other artifacts that will be used during the exercises.
 
-1. In the Azure Portal, go to the top search bar and type *Azure Sentinel Training*. Select the **Azure Sentinel Training Lab Solution (Preview)** marketplace item on the right.
+1. In the Azure Portal, go to the top search bar and type *Microsoft Sentinel Training*. Select the **Microsoft Sentinel Training Lab Solution (Preview)** marketplace item on the right.
 
 ![deployment](../Images/deployment5.png)
 
@@ -66,12 +66,12 @@ In this exercise you will deploy the Trainig Lab solution into your existing wor
 
 4. Once validation is ok, click on **Create**. The deployment process takes **about 15 minutes**, this is because we want to make sure that all the ingested data is ready for you to use once finished.
 
-5. Once the deployment finishes, you can go back to Azure Sentinel and select your workspace. In the home page you should see some ingested data and several recent incidents. Don't worry if you don't see 3 incidents like in the screenshot below, they might take a few minutes to be raised.
+5. Once the deployment finishes, you can go back to Microsoft Sentinel and select your workspace. In the home page you should see some ingested data and several recent incidents. Don't worry if you don't see 3 incidents like in the screenshot below, they might take a few minutes to be raised.
 
 ![deployment](../Images/deployment8.png)
 
 
-### Exercise 3: Configure Azure Sentinel Playbook
+### Exercise 3: Configure Microsoft Sentinel Playbook
 
 In this exercise, we will configure a Playbook that will be later used in the lab. This will allow the playbook to access Sentinel.
 
@@ -81,7 +81,7 @@ In this exercise, we will configure a Playbook that will be later used in the la
 
 ![playbook1](../Images/playbook1.png)
 
-3. Click on Edi **API connection** under **General**.
+3. Click on Edit **API connection** under **General**.
 
 ![playbook2](../Images/playbook2.png)
 

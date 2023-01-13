@@ -1,0 +1,34 @@
+id: 18793540-3b93-4a7f-8e30-871291a1c6cf
+name: Multiple AAD Admins Removed
+description: |
+  'Looks for multiple users that had their admin role removed by a single user within a certain period.
+  The default threshold is 5 removals, this can be edited in the query.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Impact
+relevantTechniques:
+  - T1531
+query: |
+  let removedAccountsThreshold = 5;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName in~ ("Remove member from role", "Remove eligible member from role")
+  | where Identity !has "MS-PIM"
+  | extend roleName = trim('"' , tostring(TargetResources[0].modifiedProperties[1].oldValue))
+  | where roleName in~ ("Company Administrator", "Global Administrator") // Add more roles you found interesting here
+  | where TargetResources[0].type =~ "User"
+  | extend Actor = tostring(TargetResources[0].id), removedUserUpn = tostring(TargetResources[0].userPrincipalName)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), removedAccounts = dcount(removedUserUpn), removedUserUPN=make_set(removedUserUpn) by Actor
+  | where removedAccounts > removedAccountsThreshold
+  | extend timestamp = StartTime, AccountCustomEntity = Actor
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: Actor
+version: 1.0.0

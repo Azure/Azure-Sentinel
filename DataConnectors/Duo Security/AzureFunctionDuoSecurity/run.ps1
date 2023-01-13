@@ -37,9 +37,9 @@ $iKey = $env:iKey
 $sKey = $env:sKey
 $apiServer = $env:apiServer
 $time = $env:timeInterval
-$minTime = ((Get-Date -AsUTC).AddMinutes(-$time) | Get-Date -UFormat %s).ToString() + "000"
-$maxTime = (Get-Date -AsUTC -UFormat %s).ToString() + "000"
-$minTimeSeconds = ((Get-Date -AsUTC).AddMinutes(-$time) | Get-Date -UFormat %s).ToString()
+$minTime = (((Get-Date).ToUniversalTime()).AddMinutes(-$time) | Get-Date -UFormat %s).ToString() + "000"
+$maxTime = (Get-Date -UFormat %s).ToString() + "000"
+$minTimeSeconds = (((Get-Date).ToUniversalTime()).AddMinutes(-$time) | Get-Date -UFormat %s).ToString()
 $userAgent = "PowerShell"+$PSVersionTable.PSEdition+"/"+$PSVersionTable.PSVersion.ToString()+" ("+$PSVersionTable.OS+"; "+$PSVersionTable.Platform+"; "+"en-US) AzureSentinelDataConnector/1.0"
 
 

@@ -1,0 +1,39 @@
+id: 395c5560-ddc2-45b2-aafe-2e3f64528d3d
+name: VMware ESXi - Unexpected disk image
+description: |
+  'Detects unexpected disk image for VM.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  let img_ =
+  VMwareESXi
+  | where SyslogMessage has ('Matched discovered VM')
+  | extend DstHostname = extract(@'vim.VirtualMachine\S+,(.*?)\]', 1, SyslogMessage)
+  | extend kImageName = extract(@'ds:///vmfs/volumes/(.*)/(.*?),', 2, SyslogMessage)
+  | summarize img_lst = makeset(kImageName) by DstHostname;
+  VMwareESXi
+  | where SyslogMessage has ('Matched discovered VM')
+  | extend DstHostname = extract(@'vim.VirtualMachine\S+,(.*?)\]', 1, SyslogMessage)
+  | extend ImageName = extract(@'ds:///vmfs/volumes/(.*)/(.*?),', 2, SyslogMessage)
+  | join (img_) on DstHostname
+  | where img_lst !has ImageName
+  | extend HostCustomEntity = DstHostname
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.0
+kind: Scheduled

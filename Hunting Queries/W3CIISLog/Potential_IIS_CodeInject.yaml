@@ -18,16 +18,15 @@ query: |
   // set cIP and csMethod count limit to indicate potentially noisy events, this will be listed at the top of the results 
   // for any returns that are gt or equal to the default of 50
   let cIP_MethodCountLimit = 50;
-  // Exclude private ip ranges from cIP list
-  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
   // Exclude common csMethods, add/modify this list as needed for your environment
   let csMethodExclude = dynamic(['GET', 'DEBUG', 'DELETE', 'LOCK', 'MKCOL', 'MOVE', 'PATCH', 'POST', 'PROPPATCH', 
   'PUT', 'SEARCH', 'TRACE', 'TRACK', 'UNLOCK', 'OPTIONS', 'HEAD', 'RPC_IN_DATA', 'RPC_OUT_DATA', 'PROPFIND','BITS_POST','CCM_POST']);
   // Include in the list expected IPs where remote methods such as vuln scanning may be expected for your environment
   let expectedIPs = dynamic(['X.X.X.X', 'Y.Y.Y.Y']);
   let codeInjectionAttempts = W3CIISLog
-  | extend cIPType = iff(cIP matches regex PrivateIPregex,"private" ,"public" )
-  | where cIPType =="public"
+  // Exclude private ip ranges from cIP list
+  | where ipv4_is_private(cIP) == false
+  | where cIP != "::1"
   | where cIP !in (expectedIPs)
   | project TimeGenerated, cIP, csUserName, csMethod, csCookie, csHost, sIP, scStatus, csUriStem, csUriQuery, csUserAgent, csReferer 
   // Throwing entire record into a single string column for attributable string matching
@@ -65,4 +64,30 @@ query: |
   cIP_MethodHighCount, codeInjectAtt
   | sort by cIP_MethodCount desc, cIP desc, StartTime desc)
   | extend timestamp = StartTime, IPCustomEntity = cIP, HostCustomEntity = csHost, AccountCustomEntity = csUserName, URLCustomEntity = csUriQuery
-  
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: UrlCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Microsoft
+    categories:
+        domains: [ "Security - Threat Protection" ]

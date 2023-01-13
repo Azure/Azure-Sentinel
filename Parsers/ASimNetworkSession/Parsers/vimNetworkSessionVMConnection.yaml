@@ -1,0 +1,258 @@
+Parser:
+  Title: Network Session ASIM filtering parser for VM connection information collected using the Log Analytics agent
+  Version: '0.2.1'
+  LastUpdated: Dec 29 2022
+Product:
+  Name: VMConnection
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: VM connection schema reference
+  Link: https://docs.microsoft.com/azure/azure-monitor/reference/tables/vmconnection
+- Title: Analysis of network connection data with Azure Monitor for virtual machines
+  Link: https://azure.microsoft.com/blog/analysis-of-network-connection-data-with-azure-monitor-for-virtual-machines/
+Description: |
+  This ASIM parser supports filtering and normalizing VM connection logs collected using the Log Analytics agent to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionVMConnection
+EquivalentBuiltInParser: _Im_NetworkSession_VMConnection
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
+    '', 'Informational', 
+    '0', 'Informational',
+    '1', 'Low',
+    '2', 'Medium',
+    '3', 'High'
+  ];
+  let VMConnectionProjected = VMConnection | project-away AdditionalInformation, AgentId, TenantId, TLPLevel, SourceSystem, IsActive, *ReportedDateTime, LinksFailed, LinksLive, LinksTerminated, Description, Responses, ResponseTimeMin, ResponseTimeMax, RemoteClassification, RemoteDnsQuestions;
+  let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+    dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+    ipaddr_has_any_prefix:dynamic=dynamic([]), 
+    dstportnumber:int=int(null), 
+    hostname_has_any:dynamic=dynamic([]), 
+    dvcaction:dynamic=dynamic([]), 
+    eventresult:string='*', 
+    disabled:bool=false)
+  {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
+    let outbound = 
+        VMConnectionProjected
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+        | where not (disabled)
+        | where array_length(hostname_has_any)==0 
+        or (Computer has_any (hostname_has_any)) or ( RemoteDnsCanonicalNames has_any (hostname_has_any))
+        | where Direction == "outbound"
+        // -- Pre-filtering:
+        | where
+            eventresult in ("*", "Success") 
+            and array_length(dvcaction) == 0
+            and  (isnull(dstportnumber) or (DestinationPort == dstportnumber))
+        | extend temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any)
+           , temp_isDstMatch=has_any_ipv4_prefix(DestinationIp,dst_or_any)
+        | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+            )
+        | where ASimMatchingIpAddr != "No match"
+        // -- End pre-filtering
+        | invoke _ASIM_ResolveSrcFQDN ("Computer")
+        | extend FQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+        | invoke _ASIM_ResolveDstFQDN("FQDN")
+        | project-away RemoteDnsCanonicalNames, Computer
+        // -- post-filtering
+        | extend temp_isMatchSrcHostname= SrcHostname has_any (hostname_has_any)
+              ,  temp_isMatchDstHostname = DstHostname has_any (hostname_has_any)
+        | extend ASimMatchingHostname = case(
+            array_length(hostname_has_any) == 0 , "-"
+            , (temp_isMatchSrcHostname and temp_isMatchDstHostname), "Both" 
+            , temp_isMatchSrcHostname, "SrcHostname"
+            , temp_isMatchDstHostname, "DstHostname"
+            , "No match"
+            )
+        | where ASimMatchingHostname != "No match"
+        | project-away temp_*
+        | extend
+            SrcAppType = "Process",
+            SrcDvcIdType = "VMConnectionId",
+            SrcHostnameType = "Simple",
+            DstGeoCountry = RemoteCountry,
+            DstGeoLongitude = RemoteLongitude,
+            DstGeoLatitude = RemoteLatitude,
+            SrcAppId = Process,
+            SrcAppName = ProcessName,
+            SrcDvcId = Machine,
+            ThreatField = iff (MaliciousIp != "", "DstIpAddr", "")
+        | extend
+            RemoteFQDN = DstFQDN,
+            RemoteHostname = DstHostname,
+            RemoteDomain = DstDomain,
+            RemoteDomainType = DstDomainType,
+            LocalFQDN = SrcFQDN,
+            LocalHostname = SrcHostname,
+            LocalDomain = SrcDomain,
+            LocalDomainType = SrcDomainType,
+            LocalIpAddr = SourceIp
+    ;
+    let inbound =
+        VMConnectionProjected
+        | where (starttime == datetime(null) or TimeGenerated >= starttime)
+            and (endtime == datetime(null) or TimeGenerated <= endtime)
+        | where not (disabled)
+        | where Direction == "inbound"
+        // -- Pre-filtering:
+        | where
+            eventresult  in ("*", "Success") 
+            and array_length(dvcaction) == 0
+            and  (dstportnumber==int(null) or DestinationPort == dstportnumber)
+            and (array_length(hostname_has_any)==0 
+                 or Computer has_any (hostname_has_any) or RemoteDnsCanonicalNames has_any (hostname_has_any)
+                 )
+        | extend temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any)
+           , temp_isDstMatch=has_any_ipv4_prefix(DestinationIp,dst_or_any)
+        | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SrcIpAddr"
+            , temp_isDstMatch, "DstIpAddr"
+            , "No match"
+            )
+        | where ASimMatchingIpAddr != "No match"
+        // -- End pre-filtering
+        | invoke _ASIM_ResolveDstFQDN ("Computer")
+        | extend FQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+        | invoke _ASIM_ResolveSrcFQDN("FQDN")
+        | project-away Computer, RemoteDnsCanonicalNames
+        // -- post-filtering
+        | extend temp_isMatchSrcHostname= SrcHostname has_any (hostname_has_any)
+              ,  temp_isMatchDstHostname = DstHostname has_any (hostname_has_any)
+        | extend ASimMatchingHostname = case(
+            array_length(hostname_has_any) == 0 , "-"
+            , (temp_isMatchSrcHostname and temp_isMatchDstHostname), "Both" 
+            , temp_isMatchSrcHostname, "SrcHostname"
+            , temp_isMatchDstHostname, "DstHostname"
+            , "No match"
+            )
+        | where ASimMatchingHostname != "No match"
+        | project-away temp_*
+        | extend
+            DstAppType = "Process",
+            DstDvcIdType = "VMConnectionId",
+            SrcGeoCountry = RemoteCountry,
+            SrcGeoLongitude = RemoteLongitude,
+            SrcGeoLatitude = RemoteLatitude,
+            DstAppId = Process,
+            DstAppName = ProcessName,
+            DstDvcId = Machine,
+            ThreatField = iff (MaliciousIp != "", "SrcIpAddr", "")
+        | extend
+            RemoteFQDN = SrcFQDN,
+            RemoteHostname = SrcHostname,
+            RemoteDomain = SrcDomain,
+            RemoteDomainType = SrcDomainType,
+            LocalFQDN = DstFQDN,
+            LocalHostname = DstHostname,
+            LocalDomain = DstDomain,
+            LocalDomainType = DstDomainType,
+            LocalIpAddr = DestinationIp
+    ;
+    union outbound, inbound
+    // Event fields
+    | extend 
+      EventCount = toint(LinksEstablished), // -- prioritized over LinksLive and LinksTerminated
+      EventStartTime = TimeGenerated,
+      EventVendor = "Microsoft",
+      EventProduct = "VMConnection",
+      EventSchema = "NetworkSession",
+      EventSchemaVersion = "0.2.3",
+      EventType = "EndpointNetworkSession",
+      DvcIdType = "VMConnectionId",
+      NetworkDirection = iff(Direction=="inbound", "Inbound", "Outbound"),
+      EventEndTime = TimeGenerated
+    | project-rename
+      DstIpAddr = DestinationIp,
+      DstPortNumber = DestinationPort, 
+      SrcIpAddr = SourceIp, 
+      NetworkSessionId = ConnectionId,
+      ThreatName = IndicatorThreatType,
+      RemoteGeoCountry = RemoteCountry,
+      RemoteGeoLatitude = RemoteLatitude, 
+      RemoteGeoLongitude = RemoteLongitude,
+      LocalAppId = Process,
+      LocalAppName = ProcessName,
+      DvcId = Machine,
+      RemoteIpAddr = RemoteIp,
+      EventReportUrl = ReportReferenceLink,
+      ThreatIpAddr = MaliciousIp
+    // -- Calculated fields
+    | extend EventOriginalSeverity = tostring(Severity)
+    | lookup SeverityLookup on EventOriginalSeverity
+    | extend
+      EventResult = "Success",
+      LocalAppType = "Process",
+      NetworkDuration = toint(ResponseTimeSum/LinksEstablished),
+      ThreatRiskLevel = toint(Confidence),
+      NetworkProtocol = toupper(Protocol),
+      SrcBytes = tolong(BytesSent),
+      DstBytes = tolong(BytesReceived)
+    | project-away BytesSent, BytesReceived, Confidence, ResponseTimeSum, Protocol, Direction, Severity, LinksEstablished
+    // -- Aliases
+    | extend
+      IpAddr = RemoteIpAddr,
+      Src = SrcIpAddr,
+      Local = LocalIpAddr,
+      DvcIpAddr = LocalIpAddr,
+      Dst = DstIpAddr,
+      Remote = RemoteIpAddr,
+      Dvc = LocalHostname,
+      DvcHostname = LocalHostname,
+      DvcDomain = LocalDomain,
+      DvcDomainType = LocalDomainType,
+      DvcFQDN = LocalFQDN,
+      Hostname = RemoteHostname,
+      Duration = NetworkDuration,
+      SessionId = NetworkSessionId
+  };
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)

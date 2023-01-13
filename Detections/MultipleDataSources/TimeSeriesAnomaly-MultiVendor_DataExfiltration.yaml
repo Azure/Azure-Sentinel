@@ -26,21 +26,22 @@ tactics:
   - Exfiltration
 relevantTechniques:
   - T1030
+tags:
+  - DEV-0537
 query: |
-
   let starttime = 14d;
   let endtime = 1d;
   let timeframe = 1h;
   let scorethreshold = 5;
   let bytessentperhourthreshold = 10;
-  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
   let TimeSeriesData = (union isfuzzy=true
   (
   VMConnection
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
   | where isnotempty(DestinationIp) and isnotempty(SourceIp)
-  | extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,"private" ,"public" )
-  | where DestinationIpType == "public" | extend DeviceVendor = "VMConnection"
+  | extend SourceIP = SourceIp, DestinationIP = DestinationIp
+  | where ipv4_is_private(DestinationIP) == false
+  | extend DeviceVendor = "VMConnection"
   | project TimeGenerated, BytesSent, DeviceVendor
   | make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor
   ),
@@ -48,8 +49,7 @@ query: |
   CommonSecurityLog
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
   | where isnotempty(DestinationIP) and isnotempty(SourceIP)
-  | extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
-  | where DestinationIpType == "public"
+  | where ipv4_is_private(DestinationIP) == false
   | project TimeGenerated, SentBytes, DeviceVendor
   | make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor
   )
@@ -70,8 +70,7 @@ query: |
   | where TimeGenerated > ago(2d)
   | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
   | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
-  | extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
-  | where DestinationIpType == "public"
+  | where ipv4_is_private(DestinationIP) == false
   | extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024)
   | summarize HourlyCount = count(), TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort,100), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)
   | where TotalSentBytesinMB > bytessentperhourthreshold
@@ -87,8 +86,7 @@ query: |
   | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
   | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
   | extend SourceIP = SourceIp, DestinationIP = DestinationIp
-  | extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,"private" ,"public" )
-  | where DestinationIpType == "public" | extend DeviceVendor = "VMConnection"
+  | where ipv4_is_private(DestinationIP) == false | extend DeviceVendor = "VMConnection"
   | extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)
   | summarize HourlyCount = count(),TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort, 100), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)
   | where TotalSentBytesinMB > bytessentperhourthreshold
@@ -114,5 +112,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.0.4
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ashwin Patil
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

@@ -1,0 +1,35 @@
+id: 57e56fc9-417a-4f41-a579-5475aea7b8ce
+name: Potential DHCP Starvation Attack
+description: |
+  'This creates an incident in the event that an excessive amount of DHCPREQUEST have been recieved by a DHCP Server and could potentially be an indication of a DHCP Starvation Attack.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: InfobloxNIOS
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1200
+query: |
+  let threshold = 1000;
+  Infoblox
+  | where ProcessName =~ "dhcpd" and Log_Type =~ "DHCPREQUEST"
+  | summarize count() by SrcIpAddr, bin(TimeGenerated,5m)
+  | where count_ > threshold
+  | join kind=inner (Infoblox
+      | where ProcessName =~ "dhcpd" and Log_Type =~ "DHCPREQUEST"
+      ) on SrcIpAddr
+  | extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled

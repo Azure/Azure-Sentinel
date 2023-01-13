@@ -1,19 +1,19 @@
 # ASIM parsers for Microsoft Defender for IoT - Endpoint
 
-This template deploys all [Microsoft Defender for IoT - Endpoint](https://azure.microsoft.com/services/azure-defender-for-iot/) Azure Sentinel ASIM parsers. The template is part of the [Azure Sentinel Information Mode (ASIM)](https://aka.ms/AzSentinelNormalization).The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+This template deploys all [Microsoft Defender for IoT - Endpoint](https://azure.microsoft.com/services/azure-defender-for-iot/) Microsoft Sentinel ASIM parsers. The template is part of the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM).The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
-When deploying the parsers, you make sure that telemetry from MD4IoT is analyzed using the built-in Azure Sentinel Analytics. You also enable analysts easier access to the telemetry using a known, standard, schema.
+When deploying the parsers, you make sure that telemetry from MD4IoT is analyzed using the built-in Microsoft Sentinel Analytics. You also enable analysts easier access to the telemetry using a known, standard, schema.
 
-**Note: to get the best value from ASIM and make sure that Microsoft Defender for IoT - Endpoint telemetry is included in Azure Sentinel Analytics, deploy the [full ASIM parser suite](https://aka.ms/AzSentinelASim).**
+**Note: to get the best value from ASIM and make sure that Microsoft Defender for IoT - Endpoint telemetry is included in Microsoft Sentinel Analytics, deploy the [full ASIM parser suite](https://aka.ms/DeployASIM).**
 
 For more information, see:
 
 - [Microsoft Defender for IoT - Endpoint](https://azure.microsoft.com/services/azure-defender-for-iot/)
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AzSentinelMD4IoTARM)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimMD4IoTARM)
 
 <br>
 

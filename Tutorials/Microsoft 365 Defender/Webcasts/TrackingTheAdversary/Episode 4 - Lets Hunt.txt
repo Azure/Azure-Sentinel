@@ -1,0 +1,256 @@
+print Series = 'Tracking the Adversary with MTP Advanced Hunting', EpisodeNumber = 4, Topic = 'Lets Hunt! Applying KQL to Incident Tracking', Presenter = 'Michael Melone, Tali Ash', Company = 'Microsoft' 
+
+
+// Schema Reference (upper right corner) 
+
+
+// The ABC's of Security 
+// - Authentication 
+// - Backdoors 
+// - Communication 
+// - Data 
+// Authentication 
+// - How is the attacker establishing identity to the system? 
+// - What identities do we consider compromised? 
+// - What are our administrative identities? 
+// Backdoors 
+// - How is the attacker controlling the system? 
+// - Is the service used by the attacker legitimate or illegitimate? 
+// - Where is this capability or condition present? 
+// Communication 
+// - How is the attacker communicating with the system? 
+// Let's see what the malware fairy has brought us today... 
+
+AlertInfo 
+| take 10 
+
+// AlertInfo 
+// Table containing alerts identified by MTP. By itself does not have the entities and evidence 
+// associated with the alert. To get that we will need the AlertEvidence table. 
+
+AlertEvidence 
+| take 10 
+
+// AlertEvidence 
+// Details about alerts including associated entities 
+// Let's find out which of our accounts has the most alerts associated with them 
+
+AlertEvidence 
+| where Timestamp > ago(19d) and EntityType == "User" and isnotempty(AccountObjectId) // Look for user entities 
+| summarize Alerts = dcount(AlertId) by AccountObjectId, AccountName , AccountDomain 
+| project Alerts, AccountDomain, AccountName, AccountObjectId 
+| order by Alerts desc 
+
+// That's suspicious... Let's see what kinds of alerts these are... 
+
+AlertEvidence 
+| where Timestamp > ago(19d) and EntityType == "User" and AccountObjectId == 'ab653b2a-d23e-49df-9493-c26590f8f319' 
+| join kind=inner AlertInfo on AlertId 
+| summarize Alerts = count(), First = min(Timestamp), Last = max(Timestamp) by Title 
+| order by Alerts desc 
+
+// That doesn't look good. Let's find out when and where this happened... 
+
+AlertEvidence 
+| where Timestamp > ago(19d) and AccountObjectId == 'ab653b2a-d23e-49df-9493-c26590f8f319' // associated with the suspicious account 
+| join kind=rightsemi AlertEvidence on AlertId // rejoin with evidence... 
+| where EntityType == 'Machine' // and get the machines. 
+| join kind=leftouter ( 
+    DeviceInfo 
+    | summarize DeviceName = any(DeviceName) by DeviceId // Get the device name 
+) on DeviceId 
+| summarize dcount(AlertId) by DeviceName , bin(Timestamp, 1d) // Plot it in 30 minute intervals 
+| render timechart // Make a timechart 
+
+// OK! We have some boxes of interest and it looks like it started on barbaram-pc. 
+// We can also see an uptick in activity on July 19th
+// Let's timeline alerts on barbaram-pc. 
+
+AlertEvidence 
+| where Timestamp > ago(19d) and DeviceId == '87da11a9257988b2fc090c9f05c72f6453bc53de' 
+| join kind=inner AlertInfo on AlertId 
+| summarize min(Timestamp) by Title 
+| order by min_Timestamp asc 
+
+// Looks like we detected something malicious from Office 365... Let's see what it was 
+
+AlertInfo 
+| where Timestamp > ago(19d) and Title == 'Post-delivery detection of suspicious attachment' 
+| join kind=rightsemi AlertEvidence on AlertId 
+| where EntityType == 'File' 
+
+// OK, all of this JSON is great, but how about a table instead 
+
+AlertInfo 
+| where Timestamp > ago(19d) and Title == 'Post-delivery detection of suspicious attachment' 
+| join kind=rightsemi AlertEvidence on AlertId 
+| where EntityType == 'File' 
+| extend AFDynamic = parse_json(AdditionalFields) // Turn JSON into a dynamic column 
+| evaluate bag_unpack(AFDynamic) // ...and turn the JSON into columns 
+| project-reorder Name, Directory, Host, SHA256 
+
+// parse_json() - parses a JSON string and turns it into a dynamic 
+// bag_unpack() - takes the first-level properties from a dynamic and promotes them to columns 
+
+// Looks like the file was called Doodles_SOW_07102020.doc... 
+
+DeviceProcessEvents
+| where Timestamp > ago(19d) 
+and ProcessCommandLine contains 'UpdatedPolicy_SOW_07182020.doc'
+and AccountObjectId == 'ab653b2a-d23e-49df-9493-c26590f8f319'
+
+
+// ...and we can see that Barbara launched it. Process ID 13988
+
+
+// Looks like Barbara used Word to open it a couple times... 
+// Let's see what happened when she opened it... 
+
+search in (DeviceProcessEvents, DeviceNetworkEvents, DeviceFileEvents, DeviceRegistryEvents, DeviceEvents ) 
+Timestamp > ago(19d) 
+and DeviceId == '87da11a9257988b2fc090c9f05c72f6453bc53de' 
+and InitiatingProcessId == 13988 
+| where RegistryKey !contains @'\Software\Microsoft\Office\16.0\Common\Internet\Server Cache' // Filtering out cache registry key changes 
+| order by Timestamp asc 
+| project-reorder Timestamp, $table, ActionType, RemoteIP, RemoteUrl, FileName, SHA256, RegistryKey, RegistryValueData, ActionType, AdditionalFields
+
+// Interesting. Word is allocating writable and executable memory right after launch, but
+// nothing too interesting otherwise.
+// ref: https://docs.microsoft.com/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntallocatevirtualmemory
+
+// So that doc is on SharePoint. How did it get there? 
+AppFileEvents 
+| where Timestamp > ago(19d) and FileName =~ 'UpdatedPolicy_SOW_07182020.doc' 
+| project-reorder Timestamp, ActionType, Application, FolderPath, IPAddress, Location, ISP 
+| order by Timestamp asc 
+
+// Looks like we have a couple strange IPs interacting with the file: 178.32.124.142 and 51.83.139.56. 
+// It was uploaded using Barbara's account - that's the Authentication 
+// The "backdoor" is just a publicly available service (SharePoint) 
+// The Communication channel are those IPs. Let's see what else was involved with them... 
+
+search Timestamp > ago(19d) and ('178.32.124.142' or '51.83.139.56')
+| project-reorder $table, Timestamp, AccountName, AccountDomain, ActionType, FileName, FolderPath 
+
+// ...looks like there was another doc uploaded from that same user and IP (BYODRegistration (1).docm). 
+// Maybe we'll investigate that later. 
+
+// We also had a couple alerts.  Let's dig deeper.
+
+AlertEvidence
+| where RemoteIP in ('178.32.124.142', '51.83.139.56')
+| join kind=rightsemi AlertInfo on AlertId 
+
+// Aha!  Those are our Tor addresses.
+
+// So we know there was credential theft going on. Let's see what other accounts logged on 
+// to that compromised system... 
+
+DeviceLogonEvents 
+| where DeviceName == 'barbaram-pc.mtpdemos.net' and Timestamp > ago(19d) and ActionType == 'LogonSuccess' 
+| where AccountDomain !in ('font driver host', 'window manager') // Ignoring internal system identities at the moment 
+| extend Account = strcat(AccountDomain, '\\', AccountName ) 
+| summarize count() by Account, bin(Timestamp, 1h) 
+| render timechart 
+
+// Interesting. What does Eric Gubbels do? 
+
+IdentityInfo 
+| where GivenName =~ 'Eric' and Surname =~ "Gubbels" 
+| take 1 
+
+// OK, so he's the help desk supervisor. He probably has elevated permissions. 
+// Another account. Where else did he log on? 
+
+IdentityLogonEvents 
+| where Timestamp > todatetime('2020-07-17') and AccountObjectId == '993788dd-7c13-4db8-9b0a-6297fcb8d5b3' and isnotempty(DeviceName) 
+| summarize count() by DeviceName, bin(Timestamp, 1d) 
+| render timechart 
+
+// Ok, what alerts do we have with his account? 
+
+let EricGAlerts = ( 
+    AlertEvidence 
+    | where Timestamp > todatetime('2020-07-17') and AccountObjectId == '993788dd-7c13-4db8-9b0a-6297fcb8d5b3'
+); // Get all alerts for EricG's account 
+EricGAlerts 
+| join kind=rightsemi AlertInfo on AlertId // Get the alertinfo 
+| join AlertEvidence on AlertId // Join back on AlertEvidence to get other evidence 
+| join kind = leftouter ( 
+    DeviceInfo 
+    | summarize DeviceName = any(DeviceName) by DeviceId
+) on DeviceId // This creates a mapping table between DeviceId and DeviceName since we only have ID in AlertEvidence 
+| extend DomainAndAccount = strcat(AccountDomain, '\\', AccountName) 
+| summarize Timestamp = min(Timestamp) 
+, Device = make_set_if(DeviceName, isnotempty(DeviceName)) 
+, SHA1 = make_set_if(SHA1,isnotempty(SHA1)) 
+, SHA256 = make_set_if(SHA256, isnotempty(SHA256)) 
+, RemoteIP = make_set_if(RemoteIP, isnotempty(RemoteIP)) 
+, RemoteUrl = make_set_if(RemoteUrl, isnotempty(RemoteUrl)) 
+, Account = make_set_if(DomainAndAccount, DomainAndAccount != '\\') by AlertId, Title // Build a nice JSON report of each alert 
+| order by Timestamp asc 
+
+// make_set_if() - Creates a list of unique values from the specified column when they match the 
+// condition in the second parameter. 
+// makeset() - same thing without the conditional operator 
+// makelist() \ make_list_if() - same as makeset but without deduplication 
+
+// OK! We have some interesting things here 
+// - A new device of interest - robertot-pc 
+// - We've found out that the attacker may have created a malicious inbox forwarding rule (backdoor) set from 52.137.127.6 (communication) 
+// - We can see evidence of a possible skeleton key attack (Authentication) 
+// - A few logons using potentially stolen credentials [mtp-air-aadconnect01 and mtp-air-dc01] (Authentication) 
+// I wonder if that IP address is one of our devices... 
+
+DeviceInfo 
+| where PublicIP == "52.137.127.6" 
+| distinct DeviceName 
+
+// Bingo! Back to barbaram-pc. Yup, we'll have to queue that up for investigation. 
+// Let's look for that other Word doc... 
+
+DeviceFileEvents 
+| where Timestamp > ago(19d) and FileName =~ "BYODRegistration (1).docm" 
+| summarize count() by SHA1, SHA256, MD5 
+
+// Got our file hash - let's see what the world knows about it 
+// Backdoor: c18732c861641a5a91d1578efad6f1a2546dc4bd97c68a5f6a6ba5d4f5d76242 
+
+DeviceFileEvents 
+| where SHA256 == 'c18732c861641a5a91d1578efad6f1a2546dc4bd97c68a5f6a6ba5d4f5d76242' 
+| take 1 
+| invoke FileProfile() // Note you need the SHA1 for this to work 
+| project-reorder GlobalPrevalence, GlobalFirstSeen, GlobalLastSeen , Signer, Issuer, SignerHash, IsCertificateValid, IsRootSignerMicrosoft, IsExecutable, ThreatName, Publisher, SoftwareName 
+
+// Low prevalence, first seen April of 2020. Might be targeted, but it is a Word doc
+// so global prevalence might be misleading... 
+
+////////////////////////////////////////////////////////////////// 
+// As you can see, using the ABC method is a quick way to pivot 
+// through an incident. But Advanced Hunting doesn't stop there. 
+/////////////////////////////////////////////////////////////////// 
+
+// It is clear this file is malicious, we don’t want it in our env.
+// We would like to take action on the malicious file – quarantine it 
+
+DeviceFileEvents 
+| where SHA256 == 'c18732c861641a5a91d1578efad6f1a2546dc4bd97c68a5f6a6ba5d4f5d76242'
+
+
+// We found several IOCs during this investigation, like IPs and file hashes.
+// We would like to make sure we will get alerted next time we see one of the IOCs in 
+// our env, therefore we will create a custom detection rule. 
+
+// Custom detection rule to get alerted on every future activity involving IP: 
+// '178.32.124.142', '51.83.139.56'
+
+search in (DeviceNetworkEvents, DeviceEvents) 
+RemoteIP in ('178.32.124.142', '51.83.139.56') or FileOriginIP  in ('178.32.124.142', '51.83.139.56') or IPAddress in ('178.32.124.142', '51.83.139.56')
+
+// Detection name – Activity involving malicious IP ('178.32.124.142', '51.83.139.56') 
+// Alert title – Activity involving malicious IP 
+// Category – Suspicious activity 
+// MITRE techniques - 
+// Description – Activity with '178.32.124.142', '51.83.139.56' was observed 
+
+// Go Hunt

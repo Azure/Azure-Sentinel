@@ -1,0 +1,185 @@
+Parser:
+  Title: Process Create Event ASIM parser for Windows Security Events
+  Version: '0.2.0'
+  LastUpdated: Apr 26, 2022
+Product:
+  Name: Security Events
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+    This ASIM parser supports filtering and normalizing Windows process create events (event 4688) collected using the Security Events connectors, utilizing either the Log Analytics agent or the Azure Monitor Agent (AMA) and stored in the SecurityEvent table to the ASIM Process Event normalized schema.
+ParserName: vimProcessCreateMicrosoftSecurityEvents
+EquivalentBuiltInParser: _Im_ProcessCreate_MicrosoftSecurityEvents
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+
+ParserQuery: |
+   let MandatoryLabelLookup = datatable (MandatoryLabel:string,MandatoryLabelRid:string, MandatoryLabelText:string, MandatoryLabelMeaning:string)
+      [
+        'S-1-16-0', '0x00000000', 'SECURITY_MANDATORY_UNTRUSTED_RID', 'Untrusted',
+        'S-1-16-4096', '0x00001000', 'SECURITY_MANDATORY_LOW_RID', 'Low integrity',
+        'S-1-16-8192', '0x00002000', 'SECURITY_MANDATORY_MEDIUM_RID', 'Medium integrity',
+        'S-1-16-8448', '0x00002100', 'SECURITY_MANDATORY_MEDIUM_PLUS_RID', 'Medium high integrity',
+        'S-1-16-12288', '0X00003000', 'SECURITY_MANDATORY_HIGH_RID', 'High integrity',
+        'S-1-16-16384', '0x00004000', 'SECURITY_MANDATORY_SYSTEM_RID', 'System integrity',
+        'S-1-16-20480', '0x00005000', 'SECURITY_MANDATORY_PROTECTED_PROCESS_RID', 'Protected process'
+      ];
+    // Source: https://support.microsoft.com/topic/0fdcaf87-ee5e-8929-e54c-65e04235a634
+    let KnownSIDs = datatable (sid:string, username:string, type:string)
+      [
+        'S-1-5-18', 'Local System', 'Simple',
+        'S-1-0-0', 'Nobody', 'Simple'
+      ];
+    let UserTypeLookup = datatable (AccountType:string, ActorUserType:string)
+      [
+        'User', 'Regular',
+        'Machine', 'Machine'
+      ];
+    let parser=(
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      targetusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      disabled:bool=false
+    )
+    {    SecurityEvent
+      // --------------------------------------------------------------------------------------
+      | where
+        (isnull(starttime) or TimeGenerated >= starttime )
+        and (isnull(endtime) or TimeGenerated <= endtime )
+        and not(disabled)
+      | where EventID == 4688
+      | where
+        (eventtype=='*' or eventtype=='ProcessCreated')
+        and (array_length(commandline_has_all)==0 or CommandLine has_all (commandline_has_all))
+        and (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any))
+        and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix) )
+        and (array_length(actingprocess_has_any)==0 or ParentProcessName has_any (actingprocess_has_any))
+        and (array_length(targetprocess_has_any)==0 or NewProcessName has_any (targetprocess_has_any))
+        and (array_length(parentprocess_has_any)==0)
+        and (targetusername_has=='*' or TargetAccount has targetusername_has) // take into account mapping?
+        and (array_length(dvcipaddr_has_any_prefix)==0)
+        and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))
+      // --------------------------------------------------------------------------------------
+    | extend
+      // Event
+        EventCount = int(1),
+        EventVendor = 'Microsoft',
+        EventProduct = 'Security Events',
+        EventSchemaVersion = '0.1.3',
+        EventSchema = 'ProcessEvent',
+        EventResult = 'Success',
+        EventStartTime = todatetime(TimeGenerated),
+        EventEndTime = todatetime(TimeGenerated),
+        EventType = 'ProcessCreated',
+        EventOriginalType = tostring(EventID),
+        DvcOs = 'Windows'
+    | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
+    | extend
+        ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount),
+        ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
+    | lookup KnownSIDs on $left.TargetUserSid == $right.sid
+    | extend
+        TargetUsername = iff (TargetUserName == "-", username, TargetAccount),
+        TargetUsernameType = iff(TargetDomainName == '-',type, 'Windows')
+    | lookup UserTypeLookup on AccountType
+    | extend
+        ActorUserIdType = 'SID',
+        TargetUserIdType = 'SID',
+      // Processes
+        ActingProcessId = tostring(toint(ProcessId)),
+        TargetProcessId = tostring(toint(NewProcessId)),
+        TargetProcessCommandLine = CommandLine
+      | project-rename
+        DvcId = SourceComputerId,
+        DvcHostname = Computer,
+        ActingProcessName = ParentProcessName,
+        TargetProcessName = NewProcessName,
+        ActorDomainName = SubjectDomainName,
+        ActorUserId = SubjectUserSid,
+        ActorSessionId = SubjectLogonId,
+        TargetUserId =TargetUserSid,
+        TargetUserSessionId = TargetLogonId,
+        EventOriginalUid = EventOriginId,
+        TargetProcessTokenElevation = TokenElevationType
+     | lookup MandatoryLabelLookup on MandatoryLabel
+      // -- Aliases
+      | extend
+        User = TargetUsername,
+        Dvc = DvcHostname,
+        Process = TargetProcessName
+      // -- Remove potentially confusing
+      | project-keep Event*, Dvc*, Actor*, Target*, Acting*, User, Dvc, Process, CommandLine, TimeGenerated, Type, _ResourceId
+      | project-away
+          TargetDomainName,
+          TargetUserName,
+          TargetAccount,
+          EventID
+    };
+     parser (
+      starttime=starttime,
+      endtime=endtime,
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      targetusername_has=targetusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      disabled=disabled
+    )

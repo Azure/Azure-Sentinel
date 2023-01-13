@@ -1,0 +1,57 @@
+id: b79f6190-d104-4691-b7db-823e05980895
+name: NRT Malicious Inbox Rule
+description: |
+  'Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.
+   This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.
+  Reference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+ let Keywords = dynamic(["helpdesk", " alert", " suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
+ OfficeActivity
+ | where OfficeWorkload =~ "Exchange"
+ | where Parameters has "Deleted Items" or Parameters has "Junk Email"  or Parameters has "DeleteMessage"
+ | extend Events=todynamic(Parameters)
+ | parse Events  with * "SubjectContainsWords" SubjectContainsWords '}'*
+ | parse Events  with * "BodyContainsWords" BodyContainsWords '}'*
+ | parse Events  with * "SubjectOrBodyContainsWords" SubjectOrBodyContainsWords '}'*
+ | where SubjectContainsWords has_any (Keywords)
+  or BodyContainsWords has_any (Keywords)
+  or SubjectOrBodyContainsWords has_any (Keywords)
+ | extend ClientIPAddress = case( ClientIP has ".", tostring(split(ClientIP,":")[0]), ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))), ClientIP )
+ | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))
+ | extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\')[-1]))
+ | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: OriginatingServer
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIPAddress
+version: 1.0.2
+kind: NRT
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

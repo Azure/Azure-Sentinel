@@ -1,11 +1,13 @@
 # Send notifications on Azure Sentinel Analytical Rules - auto-disabled rules
-Author: Sreedhar Ande
+**Author: Sreedhar Ande**
 
 It's a rare occurrence that a scheduled query rule fails to run, but it can happen. As shown in the image below, several Scheduled Analytics Rules that had been Auto-disabled  
 
 ![Autodisabled_Rules](./images/Autodisabled_Rules.png)
 
 For more information, click [here](https://docs.microsoft.com/azure/sentinel/detect-threats-custom#issue-a-scheduled-rule-failed-to-execute-or-appears-with-auto-disabled-added-to-the-name)  
+
+Blog https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/monitoring-microsoft-sentinel-analytical-rules-push-health/ba-p/2793694  
 
 In the event of a predetermined number of consecutive permanent failures, of the same type and on the same rule, Azure Sentinel stops trying to execute the rule, and also takes the following steps:  
     - Disables the rule.  

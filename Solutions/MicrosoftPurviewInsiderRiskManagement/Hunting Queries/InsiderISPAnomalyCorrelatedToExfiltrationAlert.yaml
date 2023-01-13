@@ -1,0 +1,60 @@
+id: 12b6582f-b715-4f91-98e1-1582ebad348a
+name: Insider Risk_ISP Anomaly to Exfil
+description: |
+  'This query joins UEBA to Security Alerts from Microsoft products for a correlation of Internet Service Provider anomalies to data exfiltration (watchlist options). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert (IPC)
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert (ASC)
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (MCAS)
+  - connectorId: OfficeATP
+    dataTypes:
+      - SecurityAlert (Office 365)
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+query: |
+  let ExfiltrationAlerts = SecurityAlert
+  | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+  | mv-expand todynamic(Entities)
+  | where Entities["Type"] =~ "account"
+  | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]), 
+            Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+  | extend UserPrincipalName = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+  | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+  | where UserPrincipalName <> ""
+  | where Tactics contains "exfiltration"
+  | summarize PreviousSecurityAlertLinks=make_set(AlertLink) by UserPrincipalName, AlertName, TimeGenerated
+  | where PreviousSecurityAlertLinks contains "https";
+  BehaviorAnalytics
+  | where ActivityInsights contains "ISP"
+  | extend ISPAnomalies = strcat(ActivityInsights)
+  | join kind=innerunique(ExfiltrationAlerts) on UserPrincipalName
+  // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | project UserPrincipalName, AlertName, PreviousSecurityAlertLinks, ISPAnomalies, TimeGenerated
+  | sort by TimeGenerated desc
+  | limit 25
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountCustomEntity

@@ -1,0 +1,25 @@
+id: 52c9e90b-84f4-4e2d-ae3d-eef85e8aa069
+name: AV Detections with Source
+description: |
+  This query shows the source of the AV detections (e.g., the website the file was downloaded from etc.).
+  Get the list of AV detections.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - DeviceFileEvents
+query: |
+  let avDetections =
+  DeviceEvents
+  | where ActionType == "AntivirusDetection" and isnotempty(MD5)
+  | extend ParsedFields=parse_json(AdditionalFields)
+  | project Timestamp, DeviceName, ThreatName=tostring(ParsedFields.ThreatName), FileName, FolderPath, MD5;
+  //Get a list of file creations
+  let fileCreations =
+  DeviceFileEvents 
+  | where (isnotempty(FileOriginReferrerUrl) or isnotempty(FileOriginUrl)) and isnotempty(MD5)
+  | project MD5, FileOriginUrl, FileOriginReferrerUrl, InitiatingProcessFileName, InitiatingProcessParentFileName;
+  //Join the file creations and AV detections on the MD5 of the file
+  avDetections | join kind=inner (fileCreations) on MD5
+  | project-away MD51 //Remove the duplicated MD5 field
+  | sort by Timestamp desc 

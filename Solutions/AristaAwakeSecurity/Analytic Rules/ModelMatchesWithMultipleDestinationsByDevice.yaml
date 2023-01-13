@@ -1,0 +1,64 @@
+id: dfa3ec92-bdae-410f-b675-fe1814e4d43e
+name: Awake Security - Model With Multiple Destinations
+description: This query searches for devices with multiple possibly malicious destinations.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AristaAwakeSecurity
+    dataTypes:
+      - CommonSecurityLog (AwakeSecurity)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: []
+query: |
+  CommonSecurityLog | where DeviceVendor == "Arista Networks" and DeviceProduct == "Awake Security"
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), Models=make_set(Activity), ASPMatchURLs=make_set(DeviceCustomString2), SourceIPs=make_set(SourceIP),
+    DestinationIPs=make_set(DestinationIP), ModelMatchCount=sum(EventCount), MaxSeverity=max(toint(LogSeverity)) by SourceHostName
+  | where array_length(DestinationIPs) > 1
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: Awake Security - Model Matches With Multiple Destinations On Device {{SourceHostName}}
+  alertDescriptionFormat: |
+    Device {{SourceHostName}} communicated with multiple possibly malicious destinations.  The destination IPs were:
+
+    {{DestinationIPs}}
+
+    The associated with Awake model(s) were:
+
+    {{Models}}
+  alertTacticsColumnName: null
+  alertSeverityColumnName: null
+customDetails:
+  Matched_Models: Models
+  Matches_ASP_URLs: ASPMatchURLs
+  Device: SourceHostName
+  Matches_Count: ModelMatchCount
+  Matches_Max_Severity: MaxSeverity
+  Matches_Dest_IPs: DestinationIPs
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPs
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 3d
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - Device
+version: 1.0.0
+kind: Scheduled

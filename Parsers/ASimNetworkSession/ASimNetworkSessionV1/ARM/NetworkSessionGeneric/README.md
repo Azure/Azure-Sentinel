@@ -1,13 +1,13 @@
 # Multiple ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Multiple. The parser is a part of the Azure Sentinel Information Model.
+This template deploys the ASIM NetworkSession schema parser for Multiple. The parser is a part of the Advanced Security Information Model.
 
-The Azure Sentinel Information Mode (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Azure Sentinel workspace.
+The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
 For more information, see:
 
-- [Normalization and the Azure Sentinel Information Model (ASIM)](https://aka.ms/AzSentinelNormalization)
-- [Azure Sentinel NetworkSession normalization schema reference](https://aka.ms/AzSentinelNetworkSessionDoc)
+- [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
+- [Microsoft Sentinel NetworkSession normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
 
 <br>
  

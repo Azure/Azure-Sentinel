@@ -1,0 +1,1160 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+		"title": "CiscoUmbrella-AddIpToDestinationList",
+		"description": "This playbook showcases an example of triggering an incident within a targeted Teams channel and opening up a ticket within Service Now. Additionally The playbook will also list playbooks that can be initiated from teams using an adaptive card and callbacks that will take action upon certain entities identified in the incident.",
+		"prerequisites": [
+			"1. ServiceNow Instance URL, Username, and password.",
+			"2. Access and authorization to enable API connectors",
+			"3. Teams Group ID and Alert Channel ID where the messages are to be posted in."
+		],
+		"lastUpdateTime": "2021-06-29T10:00:00.000Z",
+		"entities": [
+			"Account",
+			"Url",
+			"Host"
+		],
+		"tags": [
+			"Sync",
+			"Notification",
+			"Teams Response"
+		],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "Jing Nghik"
+		}
+	},
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CiscoUmbrella-AddIpToDestinationList",
+            "type": "String"
+        },
+        "CiscoUmbrellaOrganizationId": {
+            "type": "Int",
+            "defaultValue": 0,
+            "metadata": {
+                "description": "Organization id in Cisco Umbrella."
+            }
+        },
+        "TeamsGroupId": {
+            "defaultValue": "TeamsGroupIds",
+            "type": "String",
+            "metadata": {
+                "description": "Id of the Teams Group where the adaptive card will be posted."
+            }
+        },
+        "TeamsChannelId": {
+            "defaultValue": "TeamsChannelId",
+            "type": "String",
+            "metadata": {
+                "description": "Id of the Teams Channel where the adaptive card will be posted."
+            }
+        },
+        "customApis_ciscoumbrellamanagement_name": {
+            "defaultValue": "CiscoUmbrellaManagementAPI",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]",
+        "CiscoUmbrellaManagementAPIConnectionName": "[concat('ciscoumbrellamanagement-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CiscoUmbrellaManagementAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('CiscoUmbrellaManagementAPIConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellamanagement_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaManagementAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Append_to_array_variable": {
+                            "inputs": {
+                                "name": "dest_lists_array",
+                                "value": {
+                                    "title": "Ignore",
+                                    "value": 0
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_dest_lists_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToArrayVariable"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            },
+                            "runAfter": {
+                                "Append_to_array_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "For_each_IP": {
+                            "actions": {
+                                "Add_IP_to_destination_list": {
+                                    "actions": {
+                                        "Add_list_of_destinations_to_destination_list": {
+                                            "inputs": {
+                                                "body": [
+                                                    {
+                                                        "destination": "@{outputs('Get_IP')}"
+                                                    }
+                                                ],
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['ciscoumbrellamanagement']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v1/organizations/@{encodeURIComponent(variables('organization_id'))}/destinationlists/@{encodeURIComponent(body('Post_adaptive_card_and_wait_for_a_response')['data']['action_choices'])}/destinations"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        },
+                                        "Compose": {
+                                            "inputs": "@body('Filter_array')[0]['title']",
+                                            "runAfter": {
+                                                "Filter_array": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "Filter_array": {
+                                            "inputs": {
+                                                "from": "@variables('dest_lists_array')",
+                                                "where": "@equals(string(item()['value']), body('Post_adaptive_card_and_wait_for_a_response')['data']['action_choices'])"
+                                            },
+                                            "runAfter": {
+                                                "Set_variable_3": [
+                                                    "Skipped"
+                                                ]
+                                            },
+                                            "type": "Query"
+                                        },
+                                        "Set_variable": {
+                                            "inputs": {
+                                                "name": "action_message",
+                                                "value": "IP @{outputs('Get_IP')} added to \"@{outputs('Compose')}\" destination list."
+                                            },
+                                            "runAfter": {
+                                                "Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        },
+                                        "Set_variable_3": {
+                                            "inputs": {
+                                                "name": "action_message",
+                                                "value": "IP @{outputs('Get_IP')} was not added to \"\" destination lists due to Csico Umbrella API error."
+                                            },
+                                            "runAfter": {
+                                                "Add_list_of_destinations_to_destination_list": [
+                                                    "TimedOut",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Post_adaptive_card_and_wait_for_a_response')?['data']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Post_adaptive_card_and_wait_for_a_response')?['data']?['action_choices']",
+                                                        "@'0'"
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@body('Post_adaptive_card_and_wait_for_a_response')?['data']",
+                                                    "action_choices"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Post_adaptive_card_and_wait_for_a_response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Get_Cisco_logo')}<strong>CiscoUmbrella-AddIpToDestinationList</strong><br>\nActions taken:<br>\n@{variables('action_message')}<br>\n@{variables('status_message')}<br>\n@{variables('severity_message')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Get_Cisco_logo": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Create_body_for_adaptive_card": {
+                                    "inputs": {
+                                        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                                        "actions": [
+                                            {
+                                                "id": "btnSubmit",
+                                                "title": "Submit",
+                                                "type": "Action.Submit"
+                                            },
+                                            {
+                                                "id": "btnIgnore",
+                                                "title": "Ignore",
+                                                "type": "Action.Submit"
+                                            }
+                                        ],
+                                        "body": [
+                                            {
+                                                "size": "large",
+                                                "text": "Suspicious IP - Microsoft Sentinel",
+                                                "type": "TextBlock",
+                                                "weight": "bolder",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "text": " Incident No : @{triggerBody()?['object']?['properties']?['incidentNumber']}  ",
+                                                "type": "TextBlock",
+                                                "weight": "Bolder",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "text": "@{triggerBody()?['object']?['properties']?['description']}",
+                                                "type": "TextBlock",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "text": "For more details check the incident:",
+                                                "type": "TextBlock",
+                                                "weight": "Bolder",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "text": "[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})",
+                                                "type": "TextBlock",
+                                                "wrap": true
+                                            },
+                                            {
+                                                "id": "PollQuestionAction",
+                                                "text": "Select the Cisco Umbrella destination list to add IP @{item()['address']} to.",
+                                                "type": "TextBlock"
+                                            },
+                                            {
+                                                "choices": "@variables('dest_lists_array')",
+                                                "id": "action_choices",
+                                                "placeholder": "Select from these choices",
+                                                "style": "compact",
+                                                "type": "Input.ChoiceSet"
+                                            },
+                                            {
+                                                "id": "PollQuestionSeverity",
+                                                "text": "Select incident severity",
+                                                "type": "TextBlock"
+                                            },
+                                            {
+                                                "choices": [
+                                                    {
+                                                        "title": "High",
+                                                        "value": "high"
+                                                    },
+                                                    {
+                                                        "title": "Medium",
+                                                        "value": "medium"
+                                                    },
+                                                    {
+                                                        "title": "Low",
+                                                        "value": "low"
+                                                    },
+                                                    {
+                                                        "title": "Informational",
+                                                        "value": "informational"
+                                                    }
+                                                ],
+                                                "id": "severity_choices",
+                                                "placeholder": "Select from these choices",
+                                                "style": "compact",
+                                                "type": "Input.ChoiceSet"
+                                            },
+                                            {
+                                                "id": "PollQuestionStatus",
+                                                "text": "Select incident status",
+                                                "type": "TextBlock"
+                                            },
+                                            {
+                                                "choices": [
+                                                    {
+                                                        "title": "New",
+                                                        "value": "new"
+                                                    },
+                                                    {
+                                                        "title": "Active",
+                                                        "value": "active"
+                                                    },
+                                                    {
+                                                        "title": "Closed: True Positive - suspicious activity",
+                                                        "value": "close_tp"
+                                                    },
+                                                    {
+                                                        "title": "Closed: Benign Positive - suspicious but expected",
+                                                        "value": "close_bp"
+                                                    },
+                                                    {
+                                                        "title": "Closed: False Positive - incorrect alert logic",
+                                                        "value": "close_fp_incorrect_logic"
+                                                    },
+                                                    {
+                                                        "title": "Closed: False Positive - inaccurate data",
+                                                        "value": "close_fp_inaccurate_data"
+                                                    },
+                                                    {
+                                                        "title": "Closed: Undetermined",
+                                                        "value": "close_undetermined"
+                                                    }
+                                                ],
+                                                "id": "status_choices",
+                                                "placeholder": "Select from these choices",
+                                                "style": "compact",
+                                                "type": "Input.ChoiceSet"
+                                            }
+                                        ],
+                                        "type": "AdaptiveCard",
+                                        "version": "1.0"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Compose"
+                                },
+                                "Get_Cisco_logo": {
+                                    "inputs": "<img src=\"https://github.com/socprime/Azure-Sentinel/raw/master/Solutions/CiscoUmbrella/Playbooks/cisco-logo.png\"  width=\"32\" height=\"32\">",
+                                    "runAfter": {
+                                        "Update_status": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                },
+                                "Get_IP": {
+                                    "inputs": "@item()['address']",
+                                    "runAfter": {
+                                        "Set_variable_16": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                },
+                                "Post_adaptive_card_and_wait_for_a_response": {
+                                    "inputs": {
+                                        "body": {
+                                            "body": {
+                                                "messageBody": "@{outputs('Create_body_for_adaptive_card')}",
+                                                "recipient": {
+                                                    "channelId": "@variables('TeamsChannelId')",
+                                                    "groupId": "@variables('TeamsGroupId')"
+                                                },
+                                                "updateMessage": "Thanks for your response!"
+                                            },
+                                            "notificationUrl": "@{listCallbackUrl()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                    },
+                                    "runAfter": {
+                                        "Get_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnectionWebhook"
+                                },
+                                "Set_variable_14": {
+                                    "inputs": {
+                                        "name": "action_message",
+                                        "value": "\"\""
+                                    },
+                                    "runAfter": {
+                                        "Create_body_for_adaptive_card": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "Set_variable_15": {
+                                    "inputs": {
+                                        "name": "severity_message",
+                                        "value": "\"\""
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_14": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "Set_variable_16": {
+                                    "inputs": {
+                                        "name": "status_message",
+                                        "value": "\"\""
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_15": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable"
+                                },
+                                "Update_severity": {
+                                    "actions": {
+                                        "Switch": {
+                                            "cases": {
+                                                "high_severity": {
+                                                    "actions": {
+                                                        "Set_variable_2": {
+                                                            "inputs": {
+                                                                "name": "severity_message",
+                                                                "value": "Incident severity was changed to \"High\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_high_severity": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_high_severity": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "severity": "High"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "high"
+                                                },
+                                                "informational_severity": {
+                                                    "actions": {
+                                                        "Set_variable_4": {
+                                                            "inputs": {
+                                                                "name": "severity_message",
+                                                                "value": "Incident severity was changed to \"Informational\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_informational_severity": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_informational_severity": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "severity": "Informational"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "informational"
+                                                },
+                                                "low_severity": {
+                                                    "actions": {
+                                                        "Set_variable_5": {
+                                                            "inputs": {
+                                                                "name": "severity_message",
+                                                                "value": "Incident severity was changed to \"Low\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_low_severity": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_low_severity": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "severity": "Low"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "low"
+                                                },
+                                                "medium_severity": {
+                                                    "actions": {
+                                                        "Set_variable_6": {
+                                                            "inputs": {
+                                                                "name": "severity_message",
+                                                                "value": "Incident severity was changed to \"Medium\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_medium_severity": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_medium_severity": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "severity": "Medium"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "medium"
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "expression": "@body('Post_adaptive_card_and_wait_for_a_response')['data']['severity_choices']",
+                                            "runAfter": {},
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Post_adaptive_card_and_wait_for_a_response')?['data']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@body('Post_adaptive_card_and_wait_for_a_response')?['data']",
+                                                    "severity_choices"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Add_IP_to_destination_list": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Update_status": {
+                                    "actions": {
+                                        "Switch_2": {
+                                            "cases": {
+                                                "Case": {
+                                                    "actions": {
+                                                        "Set_variable_7": {
+                                                            "inputs": {
+                                                                "name": "status_message",
+                                                                "value": "Incident status was changed to \"New\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "New"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "new"
+                                                },
+                                                "Case_2": {
+                                                    "actions": {
+                                                        "Set_variable_8": {
+                                                            "inputs": {
+                                                                "name": "status_message",
+                                                                "value": "Incident status was changed to \"Active\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_2": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_2": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "Active"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "active"
+                                                },
+                                                "Case_3": {
+                                                    "actions": {
+                                                        "Set_variable_9": {
+                                                            "inputs": {
+                                                                "name": "status_message",
+                                                                "value": "Incident status was changed to \"Closed: True Positive - suspicious activity\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_3": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_3": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "classification": {
+                                                                        "ClassificationAndReason": "TruePositive - SuspiciousActivity"
+                                                                    },
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "Closed"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "close_tp"
+                                                },
+                                                "Case_4": {
+                                                    "actions": {
+                                                        "Set_variable_10": {
+                                                            "inputs": {
+                                                                "name": "status_message",
+                                                                "value": "Incident status was changed to \"Closed: Benign Positive - suspicious but expected\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_4": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_4": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "classification": {
+                                                                        "ClassificationAndReason": "BenignPositive - SuspiciousButExpected"
+                                                                    },
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "Closed"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "close_bp"
+                                                },
+                                                "Case_5": {
+                                                    "actions": {
+                                                        "Set_variable_11": {
+                                                            "inputs": {
+                                                                "name": "status_message",
+                                                                "value": "Incident status was changed to \"Closed: False Positive - incorrect alert logic\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_5": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_5": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "classification": {
+                                                                        "ClassificationAndReason": "FalsePositive - IncorrectAlertLogic"
+                                                                    },
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "Closed"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "close_fp_incorrect_logic"
+                                                },
+                                                "Case_6": {
+                                                    "actions": {
+                                                        "Set_variable_12": {
+                                                            "inputs": {
+                                                                "name": "status_message",
+                                                                "value": "Incident status was changed to \"Closed: False Positive - inaccurate data\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_6": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_6": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "classification": {
+                                                                        "ClassificationAndReason": "FalsePositive - InaccurateData"
+                                                                    },
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "Closed"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "close_fp_inaccurate_data"
+                                                },
+                                                "Case_7": {
+                                                    "actions": {
+                                                        "Set_variable_13": {
+                                                            "inputs": {
+                                                                "name": "status_message",
+                                                                "value": "Incident status was changed to \"Closed: Undetermined\"."
+                                                            },
+                                                            "runAfter": {
+                                                                "Update_incident_7": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable"
+                                                        },
+                                                        "Update_incident_7": {
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "classification": {
+                                                                        "ClassificationAndReason": "Undetermined"
+                                                                    },
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "Closed"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "case": "close_undetermined"
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "expression": "@body('Post_adaptive_card_and_wait_for_a_response')['data']['status_choices']",
+                                            "runAfter": {},
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Post_adaptive_card_and_wait_for_a_response')?['data']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@body('Post_adaptive_card_and_wait_for_a_response')?['data']",
+                                                    "status_choices"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Update_severity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_list_of_destinations_lists_for_Teams_adaptive_card": {
+                            "inputs": {
+                                "from": "@body('Retrieve_all_destination_lists')?['data']",
+                                "select": {
+                                    "title": "@item()['name']",
+                                    "value": "@item()['id']"
+                                }
+                            },
+                            "runAfter": {
+                                "Retrieve_all_destination_lists": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Select"
+                        },
+                        "Initialize_variable_TeamsChannelId": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TeamsChannelId",
+                                        "type": "string",
+                                        "value": "[parameters('TeamsChannelId')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_TeamsGroupId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_TeamsGroupId": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TeamsGroupId",
+                                        "type": "string",
+                                        "value": "[parameters('TeamsGroupId')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_organization_id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_action_message": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "action_message",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_TeamsChannelId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_dest_lists_array": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dest_lists_array",
+                                        "type": "array",
+                                        "value": "@body('Get_list_of_destinations_lists_for_Teams_adaptive_card')"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Get_list_of_destinations_lists_for_Teams_adaptive_card": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_organization_id": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "organization_id",
+                                        "type": "integer",
+                                        "value": "[parameters('CiscoUmbrellaOrganizationId')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_severity_message": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "severity_message",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_action_message": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_status_message": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "status_message",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_severity_message": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Retrieve_all_destination_lists": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['ciscoumbrellamanagement']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v1/organizations/@{encodeURIComponent(variables('organization_id'))}/destinationlists"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_status_message": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "teams": {
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/teams')]"
+                            },
+                            "ciscoumbrellamanagement": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoUmbrellaManagementAPIConnectionName'))]",
+                                "connectionName": "[variables('CiscoUmbrellaManagementAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_ciscoumbrellamanagement_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

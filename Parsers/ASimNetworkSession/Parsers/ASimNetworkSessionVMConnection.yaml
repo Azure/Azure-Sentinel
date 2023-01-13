@@ -1,0 +1,153 @@
+Parser:
+  Title: Network Session ASIM parser for VM connection information collected using the Log Analytics agent
+  Version: '0.2.1'
+  LastUpdated: Dec 29 2022
+Product:
+  Name: VMConnection
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: VM connection schema reference
+  Link: https://docs.microsoft.com/azure/azure-monitor/reference/tables/vmconnection
+- Title: Analysis of network connection data with Azure Monitor for virtual machines
+  Link: https://azure.microsoft.com/blog/analysis-of-network-connection-data-with-azure-monitor-for-virtual-machines/
+Description: |
+  This ASIM parser supports normalizing VM connection logs collected using the Log Analytics agent to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionVMConnection
+EquivalentBuiltInParser: _ASim_NetworkSession_VMConnection
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [
+    '', 'Informational', 
+    '0', 'Informational',
+    '1', 'Low',
+    '2', 'Medium',
+    '3', 'High'
+  ];
+  let VMConnectionProjected = VMConnection | project-away AdditionalInformation, AgentId, TenantId, TLPLevel, SourceSystem, IsActive, *ReportedDateTime, LinksFailed, LinksLive, LinksTerminated, Description, Responses, ResponseTimeMin, ResponseTimeMax, RemoteClassification, RemoteDnsQuestions;
+  let outbound = (disabled:bool=false) {
+    VMConnectionProjected
+    | where not (disabled)
+    | where Direction == "outbound"
+    | extend
+        SrcAppType = "Process",
+        SrcDvcIdType = "VMConnectionId",
+        SrcHostnameType = "Simple",
+        DstGeoCountry = RemoteCountry,
+        DstGeoLongitude = RemoteLongitude,
+        DstGeoLatitude = RemoteLatitude,
+        SrcAppId = Process,
+        SrcAppName = ProcessName,
+        SrcDvcId = Machine,
+        ThreatField = iff (MaliciousIp != "", "DstIpAddr", "")
+    | invoke _ASIM_ResolveSrcFQDN ("Computer")
+    | extend FQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+    | invoke _ASIM_ResolveDstFQDN("FQDN")
+    | project-away Computer, RemoteDnsCanonicalNames
+    | extend
+        RemoteFQDN = DstFQDN,
+        RemoteHostname = DstHostname,
+        RemoteDomain = DstDomain,
+        RemoteDomainType = DstDomainType,
+        LocalFQDN = SrcFQDN,
+        LocalHostname = SrcHostname,
+        LocalDomain = SrcDomain,
+        LocalDomainType = SrcDomainType,
+        LocalIpAddr = SourceIp
+  };
+  let inbound = (disabled:bool=false) {
+    VMConnectionProjected
+    | where not (disabled)
+    | where Direction == "inbound"
+    | extend
+        DstAppType = "Process",
+        DstDvcIdType = "VMConnectionId",
+        SrcGeoCountry = RemoteCountry,
+        SrcGeoLongitude = RemoteLongitude,
+        SrcGeoLatitude = RemoteLatitude,
+        DstAppId = Process,
+        DstAppName = ProcessName,
+        DstDvcId = Machine,
+        ThreatField = iff (MaliciousIp != "", "SrcIpAddr", "")
+    | invoke _ASIM_ResolveDstFQDN ("Computer")
+    | extend FQDN = iff(RemoteDnsCanonicalNames == "", "", todynamic(RemoteDnsCanonicalNames)[0])
+    | invoke _ASIM_ResolveSrcFQDN("FQDN")
+    | project-away Computer, RemoteDnsCanonicalNames
+    | extend
+        RemoteFQDN = SrcFQDN,
+        RemoteHostname = SrcHostname,
+        RemoteDomain = SrcDomain,
+        RemoteDomainType = SrcDomainType,
+        LocalFQDN = DstFQDN,
+        LocalHostname = DstHostname,
+        LocalDomain = DstDomain,
+        LocalDomainType = DstDomainType,
+        LocalIpAddr = DestinationIp
+  };
+  let parser=(disabled:bool=false){
+    union outbound(disabled), inbound(disabled)
+    // Event fields
+    | extend 
+      EventCount = toint(LinksEstablished), // -- prioritized over LinksLive and LinksTerminated
+      EventStartTime = TimeGenerated,
+      EventVendor = "Microsoft",
+      EventProduct = "VMConnection",
+      EventSchema = "NetworkSession",
+      EventSchemaVersion = "0.2.2",
+      EventType = "EndpointNetworkSession",
+      DvcIdType = "VMConnectionId",
+      NetworkDirection = iff(Direction=="inbound", "Inbound", "Outbound"),
+      EventEndTime = TimeGenerated
+    | project-rename
+      DstIpAddr = DestinationIp,
+      DstPortNumber = DestinationPort, 
+      SrcIpAddr = SourceIp, 
+      NetworkSessionId = ConnectionId,
+      ThreatName = IndicatorThreatType,
+      RemoteGeoCountry = RemoteCountry,
+      RemoteGeoLatitude = RemoteLatitude, 
+      RemoteGeoLongitude = RemoteLongitude,
+      LocalAppId = Process,
+      LocalAppName = ProcessName,
+      DvcId = Machine,
+      RemoteIpAddr = RemoteIp,
+      EventReportUrl = ReportReferenceLink,
+      ThreatIpAddr = MaliciousIp
+    // -- Calculated fields
+    | extend EventOriginalSeverity = tostring(Severity)
+    | lookup SeverityLookup on EventOriginalSeverity
+    | extend
+      EventResult = "Success",
+      LocalAppType = "Process",
+      NetworkDuration = toint(ResponseTimeSum/LinksEstablished) ,
+      ThreatRiskLevel = toint(Confidence),
+      NetworkProtocol = toupper(Protocol),
+      SrcBytes = tolong(BytesSent),
+      DstBytes = tolong(BytesReceived)
+    | project-away BytesSent, BytesReceived, Confidence, ResponseTimeSum, Protocol, Direction, Severity, LinksEstablished
+    // -- Aliases
+    | extend
+      IpAddr = RemoteIpAddr,
+      Src = SrcIpAddr,
+      Local = LocalIpAddr,
+      DvcIpAddr = LocalIpAddr,
+      Dst = DstIpAddr,
+      Remote = RemoteIpAddr,
+      Dvc = LocalHostname,
+      DvcHostname = LocalHostname,
+      DvcDomain = LocalDomain,
+      DvcDomainType = LocalDomainType,
+      DvcFQDN = LocalFQDN,
+      Hostname = RemoteHostname,
+      Duration = NetworkDuration,
+      SessionId = NetworkSessionId
+  };
+  parser (disabled)

@@ -1,0 +1,31 @@
+id: 112311cc-6361-4c56-9520-1147371b01ac
+name: Snowflake - Rarely used privileged users
+description: |
+  'Query searches for rarely used privileged users.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Snowflake
+    dataTypes:
+      - Snowflake
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  Snowflake
+  | where TimeGenerated > ago(30d)
+  | where QUERY_TYPE_s =~ 'SELECT'
+  | summarize roles = makeset(ROLE_NAME_s) by TargetUsername
+  | join(Snowflake
+        | where TimeGenerated > ago(30d)
+        | where EventType =~ 'LOGIN'
+        | summarize last_login_t = max(TimeGenerated) by TargetUsername) on TargetUsername
+  | project-away TargetUsername1
+  | where roles has_any ('SECURITYADMIN', 'SYSADMIN', 'ACCOUNTADMIN')
+  | where last_login_t < ago(20d)
+  | extend AccountCustomEntity = TargetUsername
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity

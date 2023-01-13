@@ -1,0 +1,43 @@
+id: 818eddaa-3806-43a2-8930-3defc5a06803
+name: Infoblox - High Number of NXDOMAIN DNS Responses Detected
+description: |
+  'This creates an incident in the event a single host generates at least 200 DNS responses for non-existent domains in 1 hour. Query count threshold and scheduling is customizable. This rule depends on a parser based on a Kusto Function to work as expected called [**InfobloxCDC**](https://aka.ms/sentinel-InfobloxCloudDataConnector-parser).'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: InfobloxCloudDataConnector
+    dataTypes:
+      - CommonSecurityLog (InfobloxCDC)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1565
+query: |
+  let threshold = 200;
+  InfobloxCDC
+  | where DeviceEventClassID == "DNS Response"
+  | where InfobloxDNSRCode == "NXDOMAIN"
+  | summarize count() by SourceIP
+  | where count_ > threshold
+  | join kind=inner (InfobloxCDC
+      | where DeviceEventClassID == "DNS Response"
+      | where InfobloxDNSRCode == "NXDOMAIN"
+      ) on SourceIP
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.1
+kind: Scheduled
+

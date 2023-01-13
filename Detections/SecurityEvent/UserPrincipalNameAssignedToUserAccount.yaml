@@ -1,0 +1,48 @@
+id: 875d0eb1-883a-4191-bd0e-dbfdeb95a464
+name: Service Principal Name (SPN) Assigned to User Account
+description: |
+  'This query identifies whether a Active Directory user object was assigned a service principal name which could indicate that an adversary is preparing for performing Kerberoasting. 
+  This query checks for event id 5136 that the Object Class field is "user" and the LDAP Display Name is "servicePrincipalName".
+  Ref: https://thevivi.net/assets/docs/2019/theVIVI-AD-Security-Workshop_AfricaHackon2019.pdf'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1134
+query: |
+    SecurityEvent
+    | where EventID == 5136 
+    | parse EventData with * 'AttributeLDAPDisplayName">' AttributeLDAPDisplayName "<" *
+    | parse EventData with * 'ObjectClass">' ObjectClass "<" *
+    | where AttributeLDAPDisplayName == "servicePrincipalName" and  ObjectClass == "user"
+    | parse EventData with * 'ObjectDN">' ObjectDN "<" *
+    | parse EventData with * 'AttributeValue">' AttributeValue "<" *
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, ObjectDN, AttributeValue
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SubjectAccount
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Vasileios Paschalidis
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

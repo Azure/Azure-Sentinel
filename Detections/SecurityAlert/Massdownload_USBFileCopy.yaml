@@ -1,0 +1,117 @@
+id: 6267ce44-1e9d-471b-9f1e-ae76a6b7aa84
+name: Mass Download & copy to USB device by single user
+description: |
+  'This query looks for any mass download by a single user with possible file copy activity to a new USB drive. Malicious insiders may perform such activities that may cause harm to the organization. 
+  This query could also reveal unintentional insider that had no intention of malicious activity but their actions may impact an organizations security posture.
+  Reference:https://docs.microsoft.com/defender-cloud-apps/policy-template-reference'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+      - DeviceEvents
+      - DeviceFileEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1052
+query: |
+  let Alerts = SecurityAlert
+  | where AlertName =~ "mass download by a single user"
+  | where Status != 'Resolved'
+  | extend ipEnt = parse_json(Entities), accountEnt = parse_json(Entities)
+  | mv-apply tempParams = ipEnt on (
+  mv-expand ipEnt
+  | where ipEnt.Type == "ip" 
+  | extend IpAddress = tostring(ipEnt.Address)
+  )
+  | mv-apply tempParams = accountEnt on (
+  mv-expand accountEnt
+  | where accountEnt.Type == "account"
+  | extend AADUserId = tostring(accountEnt.AadUserId)
+  )
+  | extend Alert_TimeGenerated = TimeGenerated
+  | distinct Alert_TimeGenerated, IpAddress, AADUserId, DisplayName, Description, ProductName, ExtendedProperties, Entities, Status, CompromisedEntity
+  ;
+  let CA_Events = CloudAppEvents
+  | where ActionType == "FileDownloaded"
+  | extend parsed = parse_json(RawEventData)
+  | extend UserId = tostring(parsed.UserId)
+  | extend FileName = tostring(parsed.SourceFileName)
+  | extend FileExtension = tostring(parsed.SourceFileExtension)
+  | summarize CloudAppEvent_StartTime = min(TimeGenerated), CloudAppEvent_EndTime = max(TimeGenerated), CloudAppEvent_Files = make_set(FileName), FileCount = dcount(FileName) by Application, AccountObjectId, UserId, IPAddress, City, CountryCode
+  | extend CloudAppEvents_Details = pack_all();
+  let CA_Alerts_Events = Alerts | join kind=inner (CA_Events)
+  on $left.AADUserId == $right.AccountObjectId and $left.IpAddress == $right.IPAddress
+  // Cloud app event comes before Alert
+  | where CloudAppEvent_EndTime <= Alert_TimeGenerated
+  | project Alert_TimeGenerated, UserId, AADUserId, IPAddress, CloudAppEvents_Details, CloudAppEvent_Files
+  ;
+  // setup list to filter DeviceFileEvents for only files downloaded as indicated by CloudAppEvents
+  let CA_FileList = CA_Alerts_Events | project CloudAppEvent_Files;
+  CA_Alerts_Events
+  | join kind=inner ( DeviceFileEvents
+  | where ActionType in ("FileCreated", "FileRenamed")
+  | where FileName in~ (CA_FileList)
+  | summarize DeviceFileEvent_StartTime = min(TimeGenerated), DeviceFileEvent_EndTime = max(TimeGenerated), DeviceFileEvent_Files = make_set(FolderPath), DeviceFileEvent_FileCount = dcount(FolderPath) by InitiatingProcessAccountUpn, DeviceId, DeviceName, InitiatingProcessFolderPath, InitiatingProcessParentFileName//, InitiatingProcessCommandLine
+  | extend DeviceFileEvents_Details = pack_all()
+  ) on $left.UserId == $right.InitiatingProcessAccountUpn
+  | where DeviceFileEvent_StartTime >= Alert_TimeGenerated
+  | join kind=inner (
+  // get device events where a USB drive was mounted
+  DeviceEvents
+  | where ActionType == "UsbDriveMounted"
+  | extend parsed = parse_json(AdditionalFields)
+  | extend USB_DriveLetter = tostring(AdditionalFields.DriveLetter), USB_ProductName = tostring(AdditionalFields.ProductName), USB_Volume = tostring(AdditionalFields.Volume)
+  | where isnotempty(USB_DriveLetter)
+  | project USB_TimeGenerated = TimeGenerated, DeviceId, USB_DriveLetter, USB_ProductName, USB_Volume
+  | extend USB_Details = pack_all()
+  )  
+  on DeviceId
+  // USB event occurs after the Alert
+  | where USB_TimeGenerated >= Alert_TimeGenerated
+  | mv-expand DeviceFileEvent_Files
+  | extend DeviceFileEvent_Files = tostring(DeviceFileEvent_Files)
+  // make sure that we only pickup the files that have the USB drive letter
+  | where DeviceFileEvent_Files startswith USB_DriveLetter
+  | summarize USB_Drive_MatchedFiles = make_set_if(DeviceFileEvent_Files, DeviceFileEvent_Files startswith USB_DriveLetter) by Alert_TimeGenerated, USB_TimeGenerated, UserId, AADUserId, DeviceId, DeviceName, IPAddress, CloudAppEvents_Details = tostring(CloudAppEvents_Details), DeviceFileEvents_Details = tostring(DeviceFileEvents_Details), USB_Details = tostring(USB_Details)
+  | extend InitiatingProcessFileName = tostring(split(todynamic(DeviceFileEvents_Details).InitiatingProcessFolderPath, "\\")[-1]), InitiatingProcessFolderPath = tostring(todynamic(DeviceFileEvents_Details).InitiatingProcessFolderPath)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: AadUserId
+        columnName: AADUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingProcessFileName
+      - identifier: Directory
+        columnName: InitiatingProcessFolderPath
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Jessen
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

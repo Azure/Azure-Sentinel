@@ -1,0 +1,276 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+	"metadata": {
+        "title": "GCP-EnrichServiseAccountInfo", 
+        "description": "Once a new sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. [Gets service Account Information](https://cloud.google.com/iam/docs/reference/rest/v1/projects.serviceAccounts/get) by the gcp_project_id and gcp_service_account, provided in the alert custom entities. \n 2. Enriches the incident with the obtained info. \n <img src='https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/GoogleCloudPlatformIAM/Playbooks/GCP-EnrichServiseAccountInfo/playbook_screenshot.png'/>",
+        "prerequisites": [
+			"1. GoogleCloudPlatformIAM Custom Connector has to be deployed prior to the deployment of this playbook under the same subscription.",
+			"2. GCP credentials are required. Refer to the GoogleCloudPlatformIAM Custom Connector documentation."
+		],
+        "lastUpdateTime": "2022-09-29T00:00:00.000Z", 
+        "entities": [], 
+        "tags": [], 
+        "postDeployment": [
+            "**a. Authorize connections**",
+			"Once deployment is complete, authorize each connection.",
+			"1.Click the Microsoft Sentinel connection resource",
+			"2.Click edit API connection",
+			"3.Click Authorize",
+			"4.Sign in",
+			"5.Click Save",
+			"6.Repeat steps for GoogleCloudPlatformIAM connector API Connection.",
+			"**b. Configurations in Sentinel**",
+			"1.In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the gcp_project_id and gcp_service_account custom entities. Check the [documentation](https://learn.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.",
+			"2.Configure the automation rules to trigger the playbook."
+		],
+        "support": {
+            "tier": "microsoft" 
+        },
+        "author": {
+            "name": "Microsoft"
+        },
+        "releaseNotes": [
+        {
+          "version": "1.0.0",
+          "title": "GCP-EnrichServiseAccountInfo",
+          "notes": [
+            "Initial version"
+          ]
+        }
+        ]
+},
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "GCP-EnrichServiseAccountInfo",
+            "type": "String"
+        },
+		"customApis_gcpiam_name": {
+            "defaultValue": "GoogleCloudPlatformIAM",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "GCPIAMCustomAPIConnectionName": "[concat('gcpiam-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('GCPIAMCustomAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('GCPIAMCustomAPIConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_gcpiam_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('GCPIAMCustomAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>GCP service accounts additional info:<br>\n@{body('Create_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Create_HTML_table": {
+                            "inputs": {
+                                "format": "HTML",
+                                "from": "@variables('results')"
+                            },
+                            "runAfter": {
+                                "For_each_alert": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "For_each_alert": {
+                            "actions": {
+                                "For_each_project_id": {
+                                    "actions": {
+                                        "For_each_service_account": {
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "inputs": {
+                                                        "name": "results",
+                                                        "value": "@body('iam.projects.serviceAccounts.get')"
+                                                    },
+                                                    "runAfter": {
+                                                        "iam.projects.serviceAccounts.get": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable"
+                                                },
+                                                "iam.projects.serviceAccounts.get": {
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['gcpiamapi']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/v1/projects/@{encodeURIComponent(outputs('parse_project_id'))}/serviceAccounts/@{encodeURIComponent(items('For_each_service_account'))}"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection"
+                                                }
+                                            },
+                                            "foreach": "@body('Parse_JSON_-_get_project_id_and_service_account_from_alert')?['gcp_service_account']",
+                                            "runAfter": {
+                                                "parse_project_id": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "parse_project_id": {
+                                            "inputs": "@replace(item(), 'projects/', '')",
+                                            "runAfter": {},
+                                            "type": "Compose"
+                                        }
+                                    },
+                                    "foreach": "@body('Parse_JSON_-_get_project_id_and_service_account_from_alert')?['gcp_project_id']",
+                                    "runAfter": {
+                                        "Parse_JSON_-_get_project_id_and_service_account_from_alert": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_JSON_-_get_project_id_and_service_account_from_alert": {
+                                    "inputs": {
+                                        "content": "@items('For_each_alert')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "gcp_project_id": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "gcp_service_account": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "runAfter": {
+                                "Initialize_variable_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_results": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "results",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "gcpiamapi": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('GCPIAMCustomAPIConnectionName'))]",
+                                "connectionName": "[variables('GCPIAMCustomAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_gcpiam_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

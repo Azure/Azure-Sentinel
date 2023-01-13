@@ -1,0 +1,80 @@
+id: a3c7b8ed-56a9-47b7-98e5-2555c16e17c9
+name: Darktrace Model Breach
+description: |
+  'This rule creates Microsoft Sentinel Alerts based on Darktrace Model Breaches, fetched every 5 minutes.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DarktraceRESTConnector
+    dataTypes:
+      - darktrace_model_alerts_CL
+queryFrequency: 5m
+queryPeriod: 5m # this might need review
+triggerOperator: gt
+triggerThreshold: 0
+tactics: # tactics pulled dynamically
+relevantTechniques:
+query: |
+  darktrace_model_alerts_CL
+  | where dtProduct_s =="Policy Breach"
+  | extend EventCount = 1
+  | extend EventType = "NetworkSession"
+  | extend EventSchema = "NetworkSession"
+  | extend EventSchemaVersion = "0.2.2"
+  | extend EventResult = "Success"
+  | extend DvcAction = "Allow"
+  | project-rename EventSeverity=score_d
+  | extend EventVendor = "Darktrace"
+  | extend EventProduct = "Enterprise Immune System"
+  | project-rename  EventStartTime = breachTime_s
+  | extend EventEndTime = EventStartTime
+  | project-rename NetworkRuleName=modelName_s
+  | project-rename NetworkRuleNumber=pid_d
+  | extend Rule = "NetworkRuleNumber"
+  | project-rename ThreatId=threatID_d
+  | extend ThreatName = NetworkRuleName
+  | project-rename ThreatCategory=dtProduct_s
+  | extend ThreatRiskLevel=EventSeverity
+  | extend ThreatCategory=Category
+  | extend ThreatCategory=replace_regex(ThreatCategory, @'Informational', @'Low')
+  | extend ThreatCategory=replace_regex(ThreatCategory, @'Compliance', @'Informational')
+  | extend ThreatCategory=replace_regex(ThreatCategory, @'Suspicious', @'Medium')
+  | extend ThreatCategory=replace_regex(ThreatCategory, @'Critical', @'High')
+  | project-rename SrcIpAddr=SourceIP
+  | project-rename SrcHostname=sourceHost_s
+  | project-rename SrcMacAddr=sourceMac_s
+  | project-rename SrcPortNumber=sourcePort_s
+  | project-rename DstIpAddr=destIP_s
+  | project-rename DstPortNumber=destPort_s
+  | project-rename DstHostname=destHost_s
+  | project-rename DstMacAddr=destMac_s
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIPAddr
+customDetails:
+  DstHostname: DstHostname
+  DstIpAddr: DstIpAddr
+  SrcMacAddr: SrcMacAddr
+  EventSeverity: EventSeverity
+  EventStartTime: EventStartTime
+  EventTitle: NetworkRuleName
+  EventID: ThreatId
+  EventMessage: Message
+# These are described here - this is why we're leaving tactics and techniques above empty
+alertDetailsOverride:
+  # model breach name here
+  alertDisplayNameFormat: 'Darktrace: {{ThreatRiskLevel}} - {{NetworkRuleName}}' # Up to 256 chars and 3 placeholders
+  # model description here - TODO, not sure whether we've still got that field
+  alertDescriptionFormat: '{{description_s}}' # Up to 5000 chars and 3 placeholders
+  # MITRE tactic
+  alertTacticsColumnName: #we need to figure out whether this expect a numerical ID or word description of mitre technique
+  alertSeverityColumnName: ThreatCategory
+version: 1.0.0
+kind: NRT

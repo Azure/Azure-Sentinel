@@ -1,0 +1,665 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Forcepoint",
+    "comments": "Solution template for Forcepoint NGFW"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Forcepoint Next Generation Firewall (NGFW)",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    },
+    "workbook2-name": {
+      "type": "string",
+      "defaultValue": "Forcepoint Next Generation Firewall (NGFW) Advanced Workbook",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "microsoftsentinelcommunity.azure-sentinel-solution-forcepoint-ngfw",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "ForcepointNgfw",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ForcepointNgfw",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "ForcepointNGFWWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workbookVersion2": "1.0.0",
+    "workbookContentId2": "ForcepointNGFWAdvanced",
+    "workbookId2": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId2'))]",
+    "workbookTemplateSpecName2": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId2')))]",
+    "_workbookContentId2": "[variables('workbookContentId2')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Forcepoint NGFW data connector with template",
+        "displayName": "Forcepoint NGFW template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Forcepoint NGFW data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Forcepoint NGFW",
+                  "publisher": "Forcepoint",
+                  "descriptionMarkdown": "The Forcepoint NGFW (Next Generation Firewall) connector allows you to automatically export user-defined Forcepoint NGFW logs into Microsoft Sentinel in real-time. This enriches visibility into user activities recorded by NGFW, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Forcepoint NGFW log results",
+                      "legend": "CommonSecurityLog",
+                      "baseQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Show all terminated actions from the Forcepoint NGFW",
+                      "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n| where DeviceAction == \"Terminate\"\n"
+                    },
+                    {
+                      "description": "Show all Forcepoint NGFW with suspected compromise behaviour",
+                      "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n| where Activity contains \"compromise\"\n"
+                    },
+                    {
+                      "description": "Show chart grouping all Forcepoint NGFW events by Activity type",
+                      "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n| summarize count=count() by Activity\n | render barchart\n"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CommonSecurityLog (ForcePointNGFW)",
+                      "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+                      "innerSteps": [
+                        {
+                          "title": "1.1 Select or create a Linux machine",
+                          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                        },
+                        {
+                          "title": "1.2 Install the CEF collector on the Linux machine",
+                          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                          "instructions": [
+                            {
+                              "parameters": {
+                                "fillWith": [
+                                  "WorkspaceId",
+                                  "PrimaryKey"
+                                ],
+                                "label": "Run the following command to install and apply the CEF collector:",
+                                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                              },
+                              "type": "CopyableLabel"
+                            }
+                          ]
+                        }
+                      ],
+                      "title": "1. Linux Syslog agent configuration"
+                    },
+                    {
+                      "description": "Set your security solution to send Syslog messages in CEF format to the proxy machine. Make sure you to send the logs to port 514 TCP on the machine's IP address.",
+                      "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+                    },
+                    {
+                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python - version \n\n>2. You must have elevated permissions (sudo) on your machine",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Run the following command to validate your connectivity:",
+                            "value": "sudo wget  -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "3. Validate connection"
+                    },
+                    {
+                      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+                      "title": "4. Secure your machine "
+                    },
+                    {
+                      "description": "To complete the installation of this Forcepoint product integration, follow the guide linked below.\n\n[Installation Guide >](https://frcpnt.com/ngfw-sentinel)",
+                      "title": "5. Forcepoint integration installation guide "
+                    }
+                  ],
+                  "metadata": {
+                    "id": "e002d400-e0b0-4673-959a-eec31378d17c",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Forcepoint"
+                    },
+                    "support": {
+                      "name": "Forcepoint",
+                      "link": "https://support.forcepoint.com/",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint NGFW",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Forcepoint NGFW",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Forcepoint"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Forcepoint NGFW",
+          "publisher": "Forcepoint",
+          "descriptionMarkdown": "The Forcepoint NGFW (Next Generation Firewall) connector allows you to automatically export user-defined Forcepoint NGFW logs into Microsoft Sentinel in real-time. This enriches visibility into user activities recorded by NGFW, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Forcepoint NGFW log results",
+              "legend": "CommonSecurityLog",
+              "baseQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CommonSecurityLog (ForcePointNGFW)",
+              "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Show all terminated actions from the Forcepoint NGFW",
+              "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n| where DeviceAction == \"Terminate\"\n"
+            },
+            {
+              "description": "Show all Forcepoint NGFW with suspected compromise behaviour",
+              "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n| where Activity contains \"compromise\"\n"
+            },
+            {
+              "description": "Show chart grouping all Forcepoint NGFW events by Activity type",
+              "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Forcepoint\"\n| where DeviceProduct == \"NGFW\"\n| summarize count=count() by Activity\n | render barchart\n"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+              "innerSteps": [
+                {
+                  "title": "1.1 Select or create a Linux machine",
+                  "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                },
+                {
+                  "title": "1.2 Install the CEF collector on the Linux machine",
+                  "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python -version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                  "instructions": [
+                    {
+                      "parameters": {
+                        "fillWith": [
+                          "WorkspaceId",
+                          "PrimaryKey"
+                        ],
+                        "label": "Run the following command to install and apply the CEF collector:",
+                        "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                      },
+                      "type": "CopyableLabel"
+                    }
+                  ]
+                }
+              ],
+              "title": "1. Linux Syslog agent configuration"
+            },
+            {
+              "description": "Set your security solution to send Syslog messages in CEF format to the proxy machine. Make sure you to send the logs to port 514 TCP on the machine's IP address.",
+              "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+            },
+            {
+              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python - version \n\n>2. You must have elevated permissions (sudo) on your machine",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Run the following command to validate your connectivity:",
+                    "value": "sudo wget  -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "3. Validate connection"
+            },
+            {
+              "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+              "title": "4. Secure your machine "
+            },
+            {
+              "description": "To complete the installation of this Forcepoint product integration, follow the guide linked below.\n\n[Installation Guide >](https://frcpnt.com/ngfw-sentinel)",
+              "title": "5. Forcepoint integration installation guide "
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Forcepoint NGFW Workbook with template",
+        "displayName": "Forcepoint NGFW workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ForcepointNGFWWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Get insights on firewall activities with the Forcepoint NGFW (Next Generation Firewall) workbook."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# Log results grouped by Activity type\"},\"name\":\"text - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\n| where DeviceVendor == \\\"Forcepoint\\\" and DeviceProduct == \\\"NGFW\\\" and TimeGenerated <= now()\\n| summarize Count= count() by Activity\\n| render barchart\",\"size\":1,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"xAxis\":\"Activity\",\"group\":\"Count\",\"createOtherGroup\":0,\"showLegend\":true}},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"# Number of log results grouped by severity\"},\"name\":\"text - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\n| where DeviceVendor == \\\"Forcepoint\\\" and DeviceProduct == \\\"NGFW\\\" and TimeGenerated <= now()\\n| summarize Count= count() by LogSeverity\\n| render barchart\",\"size\":0,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"group\":\"Count\",\"createOtherGroup\":0,\"showMetrics\":false,\"showLegend\":true}},\"name\":\"query - 5\"},{\"type\":1,\"content\":{\"json\":\"# Log results grouped by Source IP address\"},\"name\":\"text - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\n| where DeviceVendor == \\\"Forcepoint\\\" and DeviceProduct == \\\"NGFW\\\" and TimeGenerated <= now()\\n| summarize Count= count() by SourceIP\\n| render barchart\",\"size\":0,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog| where DeviceVendor == \\\"Forcepoint\\\" and DeviceProduct == \\\"NGFW\\\" and DeviceAction  == 'Terminate' and TimeGenerated <= now()\",\"size\":0,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog| where DeviceVendor == \\\"Forcepoint\\\" and DeviceProduct == \\\"NGFW\\\" and LogSeverity  == '10' and TimeGenerated <= now()\",\"size\":0,\"timeContext\":{\"durationMs\":6566400000,\"endTime\":\"2020-01-16T13:46:00Z\"},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 4\"}],\"fromTemplateId\":\"sentinel-ForcepointNGFW\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=ForcepointNGFWWorkbook; logoFileName=FP_Green_Emblem_RGB-01.svg; description=Get insights on firewall activities with the Forcepoint NGFW (Next Generation Firewall) workbook.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Forcepoint Next Generation Firewall (NGFW); templateRelativePath=ForcepointNGFW.json; subtitle=; provider=Forcepoint}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint NGFW",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Forcepoint NGFW Workbook with template",
+        "displayName": "Forcepoint NGFW workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName2'),'/',variables('workbookVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "ForcepointNGFWAdvancedWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId2')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain threat intelligence correlated security and application insights on Forcepoint NGFW (Next Generation Firewall). Monitor Forcepoint logging servers health."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook2-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":11,\"content\":{\"version\":\"LinkItem/1.0\",\"style\":\"tabs\",\"links\":[{\"id\":\"acdbf49d-f7cc-4f4d-ae20-3e7aa6e653f7\",\"cellValue\":\"Tab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Overview\",\"subTarget\":\"OV\",\"style\":\"link\"},{\"id\":\"d779e358-bb77-4e47-be58-9fad72f26c7a\",\"cellValue\":\"Tab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Events and Protocols\",\"subTarget\":\"UC\",\"style\":\"link\"},{\"id\":\"efbda46f-1fb7-4e12-94e1-ec2269135908\",\"cellValue\":\"Tab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Security Insights\",\"subTarget\":\"SI\",\"style\":\"link\"},{\"id\":\"1cdd9bd5-18e4-4ccf-96f7-2c3866344e85\",\"cellValue\":\"Tab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Audit\",\"subTarget\":\"AT\",\"style\":\"link\"},{\"id\":\"d88a25a6-bf0e-423c-a6d8-7093572eefd9\",\"cellValue\":\"Tab\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Logger Health\",\"subTarget\":\"LH\",\"style\":\"link\"}]},\"name\":\"links - 8\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"d03b36c4-ff99-4d00-8c17-01dd0eb1a8ee\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":43200000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true},\"timeContext\":{\"durationMs\":86400000}},{\"id\":\"4bf12e1f-d957-449e-b329-3207d1fc1490\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"LogSeverity\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor =~ 'FORCEPOINT'\\r\\n| summarize Count = count() by LogSeverity\\r\\n| order by Count desc, LogSeverity asc\\r\\n| project Value = LogSeverity, Label = strcat(LogSeverity, ' - ', Count)\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"selectAllValue\":\"All\",\"showDefault\":false},\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},{\"id\":\"422c1b70-c8ac-41d1-bfb3-ae4535f475ad\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Action\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor =~ 'FORCEPOINT'\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| summarize Count = count() by DeviceAction\\r\\n| order by Count desc, DeviceAction asc\\r\\n| project Value = DeviceAction, Label = strcat(DeviceAction, ' - ', Count)\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"selectAllValue\":\"All\"},\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 2\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| summarize Size=(count()*330)/1024/1024/1024 by Computer\\r\\n| order by Size desc\\r\\n| take 10\",\"size\":3,\"title\":\"Top Reporting Loggers by Ingestion Size(GB)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"50\",\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| summarize count() by DeviceProduct,bin(TimeGenerated,1h)\",\"size\":3,\"title\":\"Top Events By Facility Type\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"DeviceProduct\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"customWidth\":\"50\",\"name\":\"query - 7\"},{\"type\":1,\"content\":{\"json\":\"# Events by Activity type\"},\"conditionalVisibility\":{\"parameterName\":\"Tab\",\"comparison\":\"isEqualTo\",\"value\":\"OV\"},\"name\":\"text - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\n| where DeviceVendor == \\\"FORCEPOINT\\\" \\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\n| summarize count() by Activity, bin(TimeGenerated, 1h)\",\"size\":0,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"conditionalVisibility\":{\"parameterName\":\"Tab\",\"comparison\":\"isEqualTo\",\"value\":\"OV\"},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"# Events by severity\"},\"name\":\"text - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\n| summarize Count= count() by LogSeverity, bin(TimeGenerated, 1h)\",\"size\":0,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"LogSeverity\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"Count\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"LogSeverity\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"Count\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"mapSettings\":{\"locInfo\":\"LatLong\",\"sizeSettings\":\"Count\",\"sizeAggregation\":\"Sum\",\"legendMetric\":\"Count\",\"legendAggregation\":\"Sum\",\"itemColorSettings\":{\"type\":\"heatmap\",\"colorAggregation\":\"Sum\",\"nodeColorField\":\"Count\",\"heatmapPalette\":\"greenRed\"}}},\"name\":\"query - 5\"},{\"type\":1,\"content\":{\"json\":\"# Number of Events Grouped by Source IP address\"},\"name\":\"text - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\n| summarize count() by SourceIP, bin(TimeGenerated, 1h)\\n| order by count_ desc\",\"size\":0,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"name\":\"query - 2\"}]},\"conditionalVisibility\":{\"parameterName\":\"Tab\",\"comparison\":\"isEqualTo\",\"value\":\"OV\"},\"name\":\"Overview\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor =~ 'Forcepoint'\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| summarize count() by DeviceAction, bin(TimeGenerated, 1h)\",\"size\":0,\"title\":\"Event actions, by time\",\"timeContext\":{\"durationMs\":86400000},\"timeContextFromParameter\":\"TimeRange\",\"exportFieldName\":\"series\",\"exportParameterName\":\"ActionSelected\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"name\":\"query - 10\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where DeviceAction == '{ActionSelected}' or '{ActionSelected}' == \\\"All\\\" \\r\\n| where SourceIP != \\\"\\\"\\r\\n| project ReceiptTime, LogSeverity,DeviceFacility,VirualEngine=DeviceExternalID, SourceIP, DestinationIP, ApplicationProtocol, AdditionalExtensions,Message,Activity\",\"size\":0,\"timeContext\":{\"durationMs\":86400000},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 9\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor =~ 'Forcepoint'\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where ApplicationProtocol != \\\"\\\"\\r\\n| where DestinationPort != \\\"\\\"\\r\\n| summarize SentDataMB = sum(SentBytes)/1048576 , DataRecievedMB =sum(ReceivedBytes)/1048576, Amount = count() by ApplicationProtocol, DestinationPort\\r\\n| order by Amount, SentDataMB, DataRecievedMB\\r\\n\\r\\n\",\"size\":0,\"title\":\"Application protocol activities\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"exportFieldName\":\"ApplicationProtocol\",\"exportParameterName\":\"ApplicationProtocolFilter\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"SentDataMB\",\"formatter\":4,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"DataRecievedMB\",\"formatter\":4,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"Amount\",\"formatter\":8,\"formatOptions\":{\"palette\":\"purple\",\"showIcon\":true}}],\"filter\":true}},\"customWidth\":\"50\",\"name\":\"query - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor =~ 'Forcepoint'\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where ApplicationProtocol == '{ApplicationProtocolFilter}' or '{ApplicationProtocolFilter}' == \\\"All\\\"\\r\\n| summarize SentDataMB = sum(SentBytes)/1048576 , DataRecievedMB =sum(ReceivedBytes)/1048576 by bin(TimeGenerated, 1h)\\r\\n\",\"size\":0,\"title\":\"Data flow (MB)\",\"timeContext\":{\"durationMs\":86400000},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"timechart\",\"chartSettings\":{\"yAxis\":[\"DataRecievedMB\",\"SentDataMB\"],\"ySettings\":{\"numberFormatSettings\":{\"unit\":0,\"options\":{\"style\":\"decimal\",\"useGrouping\":true}}}}},\"customWidth\":\"50\",\"name\":\"query - 9\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == 'FORCEPOINT'\\r\\n| where ApplicationProtocol == '{ApplicationProtocolFilter}' or '{ApplicationProtocolFilter}' == \\\"All\\\"\\r\\n| where DeviceFacility == \\\"Inspection\\\"\\r\\n| where Activity == \\\"URL_Category-Accounting\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| extend URL= extract('requestURL=(.*)',1, AdditionalExtensions) \\r\\n| summarize  DataRecievedMB =sum(ReceivedBytes)/1048576 by SourceIP, DestinationIP ,VirtualEngine=DeviceExternalID, ApplicationProtocol, URL\\r\\n| order by DataRecievedMB desc\\r\\n//hint.strategy = shuffle\\r\\n\",\"size\":0,\"title\":\"Aggregated Connections\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Amount\",\"formatter\":8,\"formatOptions\":{\"palette\":\"pink\",\"showIcon\":true}}],\"filter\":true}},\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where DeviceFacility == \\\"Inspection\\\"\\r\\n| where Activity == \\\"URL_Category-Accounting\\\"\\r\\n| where ApplicationProtocol == '{ApplicationProtocolFilter}' or '{ApplicationProtocolFilter}' == \\\"All\\\" \\r\\n| where SourceIP != \\\"\\\"\\r\\n| project ReceiptTime, LogSeverity,DeviceFacility,VirualEngine=DeviceExternalID, SourceIP, DestinationIP, ApplicationProtocol, AdditionalExtensions,Message,Activity\",\"size\":0,\"title\":\"Connection Details\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 10\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where DeviceAction == \\\"Discard\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| summarize count() by Message\\r\\n| order by count_ desc \\r\\n| take 10\\r\\n\",\"size\":3,\"showAnalytics\":true,\"title\":\"Top Discard Reasons\",\"timeContext\":{\"durationMs\":86400000},\"timeContextFromParameter\":\"TimeRange\",\"exportFieldName\":\"series\",\"exportParameterName\":\"SelectedMessage\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"Message\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"style\":\"decimal\",\"maximumFractionDigits\":2,\"maximumSignificantDigits\":3}}},\"showBorder\":true,\"rowLimit\":10,\"sortCriteriaField\":\"count_\",\"sortOrderField\":2}},\"customWidth\":\"50\",\"name\":\"query - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where DeviceAction == \\\"Discard\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where Message == '{SelectedMessage}' or '{SelectedMessage}' == \\\"All\\\"\\r\\n| summarize count() by SourceIP\\r\\n| take 5\",\"size\":3,\"title\":\"Top Source IP Addresses for Discards\",\"timeContext\":{\"durationMs\":86400000},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"50\",\"name\":\"query - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where DeviceAction == \\\"Discard\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where Message == '{SelectedMessage}' or '{SelectedMessage}' == \\\"All\\\"\\r\\n| project TimeGenerated, SourceIP,SourcePort,DestinationIP,DestinationPort,VirtualEngine=DeviceExternalID,ApplicationProtocol,Message, Activity, AdditionalExtensions,DeviceAction\",\"size\":0,\"title\":\"Discard Log Filter\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| extend URLx=extract(\\\"URL=((?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\\\\\(\\\\\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\\\", 1, AdditionalExtensions)\\r\\n| extend URLt=split(URLx, \\\";\\\", 0)\\r\\n| extend URL=tostring(URLt[0])\\r\\n| where URL != \\\"\\\"\\r\\n| summarize ReceivedMBytes =sum(ReceivedBytes)/1048576 by URL\\r\\n| order by ReceivedMBytes desc \\r\\n| take 10\",\"size\":0,\"title\":\"Top Application Downloads (MBytes)\",\"timeContext\":{\"durationMs\":3600000},\"exportFieldName\":\"series\",\"exportParameterName\":\"SelectedURL\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"URL\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"SentBytes\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}},\"showBorder\":false},\"chartSettings\":{\"yAxis\":[\"ReceivedMBytes\"],\"ySettings\":{\"numberFormatSettings\":{\"unit\":0,\"options\":{\"style\":\"decimal\",\"useGrouping\":true}}}}},\"name\":\"query - 9\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| extend URLx=extract(\\\"URL=((?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\\\\\(\\\\\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\\\", 1, AdditionalExtensions)\\r\\n| extend URLt=split(URLx, \\\";\\\", 0)\\r\\n| extend URL=tostring(URLt[0])\\r\\n| where URL == '{SelectedURL}' or '{SelectedURL}' == \\\"All\\\"\\r\\n| summarize ReceivedMBytes =sum(ReceivedBytes)/1048576 by DeviceExternalID\\r\\n| order by ReceivedMBytes desc \\r\\n| take 10\",\"size\":3,\"title\":\"Top Downloads by Virtual Engines (MBytes)\",\"timeContext\":{\"durationMs\":86400000},\"timeContextFromParameter\":\"TimeRange\",\"exportFieldName\":\"label\",\"exportParameterName\":\"SelectedDevice\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\",\"chartSettings\":{\"createOtherGroup\":0}},\"customWidth\":\"50\",\"name\":\"query - 11\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where DeviceExternalID == '{SelectedDevice}' or '{SelectedDevice}' == \\\"All\\\"\\r\\n| extend URLx=extract(\\\"URL=((?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\\\\\(\\\\\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\\\", 1, AdditionalExtensions)\\r\\n| extend URLt=split(URLx, \\\";\\\", 0)\\r\\n| extend URL=tostring(URLt[0])\\r\\n| where URL == '{SelectedURL}' or '{SelectedURL}' == \\\"All\\\"\\r\\n| summarize ReceivedMBytes =sum(ReceivedBytes)/1048576 by SourceIP\\r\\n| order by ReceivedMBytes desc \\r\\n| take 10\",\"size\":3,\"title\":\"Top Source IP Downloads (MBytes) \",\"timeContext\":{\"durationMs\":3600000},\"showRefreshButton\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\",\"chartSettings\":{\"yAxis\":[\"ReceivedMBytes\"],\"createOtherGroup\":0,\"ySettings\":{\"numberFormatSettings\":{\"unit\":0,\"options\":{\"style\":\"decimal\",\"useGrouping\":true}}}}},\"customWidth\":\"50\",\"name\":\"query - 10\"}]},\"conditionalVisibility\":{\"parameterName\":\"Tab\",\"comparison\":\"isEqualTo\",\"value\":\"UC\"},\"name\":\"Events and Protocols\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// source: https://datahub.io/core/geoip2-ipv4\\r\\nlet geodata = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string) [@\\\"https://datahub.io/core/geoip2-ipv4/r/geoip2-ipv4.csv\\\"];\\r\\nlet SuspiciousCountries = datatable (SuspiciousCountries:string)[\\\"Russia\\\",\\\"Ukraine\\\",\\\"Georgia\\\",\\\"Estonia\\\"];\\r\\nlet IPs = CommonSecurityLog\\r\\n| where  DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n| project DestinationIP,VirtualEngine=DeviceExternalID, SourceIP, DeviceAction;\\r\\nIPs\\r\\n| evaluate ipv4_lookup(geodata, DestinationIP, Network)\\r\\n| where country_name in (SuspiciousCountries)\\r\\n| summarize NumberOfSessions=count() by DestinationIP, SourceIP, Country=country_name, VirtualEngine\\r\\n| order by NumberOfSessions desc \",\"size\":0,\"title\":\"IP Traffic with Suspicious Countries\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"NumberOfSessions\",\"formatter\":8,\"formatOptions\":{\"palette\":\"coldHot\"}}],\"filter\":true},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"DestinationIP\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"count_\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"customWidth\":\"50\",\"name\":\"query - 10\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// source: https://datahub.io/core/geoip2-ipv4\\r\\nlet geodata = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string) [@\\\"https://datahub.io/core/geoip2-ipv4/r/geoip2-ipv4.csv\\\"];\\r\\nlet SuspiciousCountries = datatable (SuspiciousCountries:string)[\\\"Russia\\\",\\\"Ukraine\\\",\\\"Georgia\\\",\\\"Estonia\\\"];\\r\\nlet IPs = CommonSecurityLog\\r\\n| where  DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n| project DestinationIP,VirtualEngine=DeviceExternalID, SourceIP, DeviceAction;\\r\\nIPs\\r\\n| evaluate ipv4_lookup(geodata, DestinationIP, Network)\\r\\n| where country_name in (SuspiciousCountries)\\r\\n| summarize NumberOfSessions=count() by VirtualEngine\\r\\n| order by NumberOfSessions desc \\r\\n| take 5\",\"size\":3,\"title\":\"Top 5 Engines Communicating with Suspicious Countries\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"50\",\"name\":\"query - 12\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// source: https://datahub.io/core/geoip2-ipv4\\r\\nlet geodata = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string) [@\\\"https://datahub.io/core/geoip2-ipv4/r/geoip2-ipv4.csv\\\"];\\r\\nlet SuspiciousCountries = datatable (SuspiciousCountries:string)[\\\"Russia\\\",\\\"Ukraine\\\",\\\"Georgia\\\",\\\"Estonia\\\"];\\r\\nlet IPs = CommonSecurityLog\\r\\n| where  DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n| project DestinationIP,VirtualEngine=DeviceExternalID, SourceIP, DeviceAction;\\r\\nlet IPRegex = '[0-9]{1,3}\\\\\\\\.[0-9]{1,3}\\\\\\\\.[0-9]{1,3}\\\\\\\\.[0-9]{1,3}';\\r\\nlet dt_lookBack = 1h;\\r\\nlet ioc_lookBack = 14d;\\r\\nThreatIntelligenceIndicator\\r\\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\\r\\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where Active == true\\r\\n// Picking up only IOC's that contain the entities we want\\r\\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\\r\\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\\r\\n// Taking the first non-empty value based on potential IOC match availability\\r\\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\\r\\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\\r\\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\\r\\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\\r\\n| join kind=innerunique (\\r\\nIPs\\r\\n| evaluate ipv4_lookup(geodata, DestinationIP, Network)\\r\\n| where country_name in (SuspiciousCountries)\\r\\n| summarize NumberOfSessions=count() by DestinationIP, SourceIP, Country=country_name, VirtualEngine\\r\\n) on $left.TI_ipEntity == $right.DestinationIP\\r\\n| project DestinationIP,SourceIP,VirtualEngine,Country, NumberOfSessions, Description,ThreatType, ExternalIndicatorId\\r\\n| order by NumberOfSessions desc\",\"size\":0,\"title\":\"Hourly Malicious Connections Detected with Suspicious Contries\",\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"NumberOfSessions\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"NumberOfSessions\",\"sortOrder\":2}]},\"name\":\"query - 11\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let IPRegex = '[0-9]{1,3}\\\\\\\\.[0-9]{1,3}\\\\\\\\.[0-9]{1,3}\\\\\\\\.[0-9]{1,3}';\\r\\nlet dt_lookBack = 1h;\\r\\nlet ioc_lookBack = 14d;\\r\\nThreatIntelligenceIndicator\\r\\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\\r\\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where Active == true\\r\\n// Picking up only IOC's that contain the entities we want\\r\\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\\r\\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\\r\\n// Taking the first non-empty value based on potential IOC match availability\\r\\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\\r\\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\\r\\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\\r\\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\\r\\n| join kind=innerunique (\\r\\n    CommonSecurityLog\\r\\n    | where TimeGenerated >= ago(dt_lookBack)\\r\\n    | where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n    | where  DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n    | where Message notcontains \\\"timeout\\\" and Message notcontains \\\"reset\\\"\\r\\n    | extend MessageIP = extract(IPRegex, 0, Message)\\r\\n    | extend CS_ipEntity = iff(isnotempty(SourceIP), SourceIP, DestinationIP)\\r\\n    | extend CS_ipEntity = iff(isempty(CS_ipEntity) and isnotempty(MessageIP), MessageIP, CS_ipEntity)\\r\\n    | extend TimeGenerated\\r\\n)\\r\\non $left.TI_ipEntity == $right.CS_ipEntity\\r\\n| where TimeGenerated < ExpirationDateTime\\r\\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by IndicatorId, CS_ipEntity\\r\\n| project SourceIP, DestinationIP,DeviceAction, VirtualEngine = DeviceExternalID, ThreatType,IndicatorId, ExpirationDateTime, ConfidenceScore, LogSeverity\\r\\n\",\"size\":0,\"title\":\"Hourly Botnet Connections Detected \",\"noDataMessage\":\"No Botnet Connections Detected\",\"noDataMessageStyle\":3,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"ConfidenceScore\",\"formatter\":8,\"formatOptions\":{\"min\":0,\"max\":100,\"palette\":\"coldHot\"}}],\"filter\":true}},\"name\":\"query - 0\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let HighRiskPorts = datatable (Port:int, Protocol:string, RiskType:string, RiskDescription:string)[\\r\\n  13,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Daytime protocol used in reflection/amplification attacks\\\",\\r\\n  17,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"QOTD protocol, reflection/amplification attacks\\\",\\r\\n  19,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Chargen protocol, reflection/amplification attacks\\\",\\r\\n  20,\\\"tcp\\\",\\\"Unencrypted\\\",\\\"Unencrypted FTP Traffic\\\",\\r\\n  21,\\\"tcp\\\",\\\"Unencrypted\\\",\\\"Unencrypted FTP Traffic\\\",\\r\\n  22,\\\"tcp\\\",\\\"Management\\\",\\\"SSH, brute force attacks common\\\",\\r\\n  23,\\\"tcp\\\",\\\"Management\\\",\\\"Telnet, allows unauthenticated and/or unencrypted\\\",\\r\\n  53,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"DNS, reflection/amplification attacks\\\",\\r\\n  69,\\\"udp\\\",\\\"Management\\\",\\\"TFTP, allows unauthenticated and/or unencrypted\\\",\\r\\n  111,\\\"udp\\\",\\\"Management\\\",\\\"RPC, unencrypted authentication allowed\\\",\\r\\n  111,\\\"tcp\\\",\\\"Management\\\",\\\"RPC, unencrypted authentication allowed\\\",\\r\\n  119,\\\"tcp\\\",\\\"Unsecure\\\",\\\"NNTP, unencrypted authentication\\\",\\r\\n  123,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Network Time Protocol, reflection/amplification attacks\\\",\\r\\n  135,\\\"tcp\\\",\\\"Management\\\",\\\"End Point Mapper, multiple remote management srvcs\\\",\\r\\n  135,\\\"udp\\\",\\\"Management\\\",\\\"End Point Mapper, multiple remote management srvcs\\\",\\r\\n  137,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Name Service\\\",\\r\\n  137,\\\"udp\\\",\\\"Hacker Recon\\\",\\\"Netbios Name Service\\\",\\r\\n  138,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Datagram Service\\\",\\r\\n  138,\\\"udp\\\",\\\"Hacker Recon\\\",\\\"Netbios Datagram Service\\\",\\r\\n  139,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Session Service\\\",\\r\\n  161,\\\"tcp\\\",\\\"Unsecure/3rd Party Attacks\\\",\\\"SNMP, unsecure / no authentication UDP Reflection attacks\\\",\\r\\n  161,\\\"udp\\\",\\\"Unsecure/3rd Party Attacks\\\",\\\"SNMP, unsecure / no authentication UDP Reflection attacks\\\",\\r\\n  162,\\\"tcp\\\",\\\"Unsecure\\\",\\\"SNMP Trap, unsecure / no authentication\\\",\\r\\n  162,\\\"udp\\\",\\\"Unsecure\\\",\\\"SNMP Trap, unsecure / no authentication\\\",\\r\\n  389,\\\"tcp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"LDAP/CLDAP\\\",\\r\\n  389,\\\"udp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"LDAP/CLDAP\\\",\\r\\n  443,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"UDP Reflection / Amplification attacks\\\",\\r\\n  445,\\\"tcp\\\",\\\"Unsecure\\\",\\\"SMB - well known attack vector\\\",\\r\\n  512,\\\"tcp\\\",\\\"Management\\\",\\\"Rexec on Linux, remote commands w/o encrypt auth\\\",\\r\\n  514,\\\"tcp\\\",\\\"Management\\\",\\\"Remote Shell, remote commands w/o auth or encrypt\\\",\\r\\n  593,\\\"tcp\\\",\\\"Management\\\",\\\"HTTP RPC EPMAP, unencrypted remote procedure call\\\",\\r\\n  593,\\\"udp\\\",\\\"Management\\\",\\\"HTTP RPC EPMAP, unencrypted remote procedure call\\\",\\r\\n  636,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Lightweight Directory Access Protocol\\\",\\r\\n  873,\\\"tcp\\\",\\\"Management\\\",\\\"Rsync, unencrypted file transfer\\\",\\r\\n  1433,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MS SQL Management & Data Access\\\",\\r\\n  1434,\\\"udp\\\",\\\"Data Access/Mgmt\\\",\\\"MS SQL Monitor Port\\\",\\r\\n  1900,\\\"udp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"Simple Service Discovery Protocol, unencrypted\\\",\\r\\n  2049,\\\"tcp\\\",\\\"Unsecure\\\",\\\"Network File System\\\",\\r\\n  2049,\\\"udp\\\",\\\"Unsecure\\\",\\\"Network File System\\\",\\r\\n  2301,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Compaq Management Service, no recent incidents\\\",\\r\\n  2381,\\\"tcp\\\",\\\"Management\\\",\\\"Compaq Management Service, no recent incidents\\\",\\r\\n  3268,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Microsoft Global Catalog LDAP\\\",\\r\\n  3306,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MySQL Database Management Port\\\",\\r\\n  3389,\\\"tcp\\\",\\\"Management/3rd Party Attacks\\\",\\\"RDP, Common brute force attack port\\\",\\r\\n  3389,\\\"udp\\\",\\\"Management/3rd Party Attacks\\\",\\\"RDP, Common brute force attack port\\\",\\r\\n  4333,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MSql\\\",\\r\\n  5353,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"mDNS\\\",\\r\\n  5432,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"PostgresSQL Database Management\\\",\\r\\n  5800,\\\"tcp\\\",\\\"Management\\\",\\\"VNC Remote Frame Buffer over HTTP\\\",\\r\\n  5900,\\\"tcp\\\",\\\"Management\\\",\\\"VNC Remote Frame Buffer over HTTP\\\",\\r\\n  5985,\\\"tcp\\\",\\\"Management\\\",\\\"Windows Powershell\\\",\\r\\n  5986,\\\"tcp\\\",\\\"Management\\\",\\\"Windows Powershell\\\",\\r\\n  6379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  7000,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  7001,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  7199,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9042,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9160,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9200,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Elastic Search\\\",\\r\\n  9300,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Elastic Search\\\",\\r\\n  9987,\\\"udp\\\",\\\"3rd Party Attack\\\",\\\"DSM/SCM Target Interface\\\",\\r\\n  11211,\\\"udp\\\",\\\"Unencrypted\\\",\\\"Memcached\\\",\\r\\n  16379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  26379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  27017,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MongoDB\\\",\\r\\n  ];\\r\\n  HighRiskPorts\\r\\n  | join kind=inner (\\r\\n    CommonSecurityLog\\r\\n    | where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n    | where DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n    | where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n    | where SentBytes > 0 and ReceivedBytes > 0\\r\\n    //Remove private IP communation from DestinationIP\\r\\n    | extend result = ipv4_is_private(DestinationIP) \\r\\n    | where result == 0\\r\\n    | summarize\\r\\n        Count = count(),\\r\\n        StartTime = min(TimeGenerated),\\r\\n        EndTime = max(TimeGenerated)\\r\\n        by \\r\\n        DeviceName,\\r\\n        SourceIP,\\r\\n        DestinationIP,\\r\\n        DestinationPort,\\r\\n        ApplicationProtocol\\r\\n  ) on $left.Port == $right.DestinationPort \\r\\n  | summarize count() by RiskDescription\\r\\n  | order by count_ desc \\r\\n  | take 20\",\"size\":3,\"title\":\"Top Potential Attacks Using Risky Ports\",\"timeContextFromParameter\":\"TimeRange\",\"exportFieldName\":\"RiskDescription\",\"exportParameterName\":\"SelectedRiskDescription\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"RiskDescription\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"count_\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}},\"rowLimit\":20}},\"name\":\"query - 4\",\"styleSettings\":{\"margin\":\"0\",\"padding\":\"0\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let HighRiskPorts = datatable (Port:int, Protocol:string, RiskType:string, RiskDescription:string)[\\r\\n  13,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Daytime protocol used in reflection/amplification attacks\\\",\\r\\n  17,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"QOTD protocol, reflection/amplification attacks\\\",\\r\\n  19,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Chargen protocol, reflection/amplification attacks\\\",\\r\\n  20,\\\"tcp\\\",\\\"Unencrypted\\\",\\\"Unencrypted FTP Traffic\\\",\\r\\n  21,\\\"tcp\\\",\\\"Unencrypted\\\",\\\"Unencrypted FTP Traffic\\\",\\r\\n  22,\\\"tcp\\\",\\\"Management\\\",\\\"SSH, brute force attacks common\\\",\\r\\n  23,\\\"tcp\\\",\\\"Management\\\",\\\"Telnet, allows unauthenticated and/or unencrypted\\\",\\r\\n  53,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"DNS, reflection/amplification attacks\\\",\\r\\n  69,\\\"udp\\\",\\\"Management\\\",\\\"TFTP, allows unauthenticated and/or unencrypted\\\",\\r\\n  111,\\\"udp\\\",\\\"Management\\\",\\\"RPC, unencrypted authentication allowed\\\",\\r\\n  111,\\\"tcp\\\",\\\"Management\\\",\\\"RPC, unencrypted authentication allowed\\\",\\r\\n  119,\\\"tcp\\\",\\\"Unsecure\\\",\\\"NNTP, unencrypted authentication\\\",\\r\\n  123,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Network Time Protocol, reflection/amplification attacks\\\",\\r\\n  135,\\\"tcp\\\",\\\"Management\\\",\\\"End Point Mapper, multiple remote management srvcs\\\",\\r\\n  135,\\\"udp\\\",\\\"Management\\\",\\\"End Point Mapper, multiple remote management srvcs\\\",\\r\\n  137,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Name Service\\\",\\r\\n  137,\\\"udp\\\",\\\"Hacker Recon\\\",\\\"Netbios Name Service\\\",\\r\\n  138,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Datagram Service\\\",\\r\\n  138,\\\"udp\\\",\\\"Hacker Recon\\\",\\\"Netbios Datagram Service\\\",\\r\\n  139,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Session Service\\\",\\r\\n  161,\\\"tcp\\\",\\\"Unsecure/3rd Party Attacks\\\",\\\"SNMP, unsecure / no authentication UDP Reflection attacks\\\",\\r\\n  161,\\\"udp\\\",\\\"Unsecure/3rd Party Attacks\\\",\\\"SNMP, unsecure / no authentication UDP Reflection attacks\\\",\\r\\n  162,\\\"tcp\\\",\\\"Unsecure\\\",\\\"SNMP Trap, unsecure / no authentication\\\",\\r\\n  162,\\\"udp\\\",\\\"Unsecure\\\",\\\"SNMP Trap, unsecure / no authentication\\\",\\r\\n  389,\\\"tcp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"LDAP/CLDAP\\\",\\r\\n  389,\\\"udp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"LDAP/CLDAP\\\",\\r\\n  443,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"UDP Reflection / Amplification attacks\\\",\\r\\n  445,\\\"tcp\\\",\\\"Unsecure\\\",\\\"SMB - well known attack vector\\\",\\r\\n  512,\\\"tcp\\\",\\\"Management\\\",\\\"Rexec on Linux, remote commands w/o encrypt auth\\\",\\r\\n  514,\\\"tcp\\\",\\\"Management\\\",\\\"Remote Shell, remote commands w/o auth or encrypt\\\",\\r\\n  593,\\\"tcp\\\",\\\"Management\\\",\\\"HTTP RPC EPMAP, unencrypted remote procedure call\\\",\\r\\n  593,\\\"udp\\\",\\\"Management\\\",\\\"HTTP RPC EPMAP, unencrypted remote procedure call\\\",\\r\\n  636,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Lightweight Directory Access Protocol\\\",\\r\\n  873,\\\"tcp\\\",\\\"Management\\\",\\\"Rsync, unencrypted file transfer\\\",\\r\\n  1433,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MS SQL Management & Data Access\\\",\\r\\n  1434,\\\"udp\\\",\\\"Data Access/Mgmt\\\",\\\"MS SQL Monitor Port\\\",\\r\\n  1900,\\\"udp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"Simple Service Discovery Protocol, unencrypted\\\",\\r\\n  2049,\\\"tcp\\\",\\\"Unsecure\\\",\\\"Network File System\\\",\\r\\n  2049,\\\"udp\\\",\\\"Unsecure\\\",\\\"Network File System\\\",\\r\\n  2301,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Compaq Management Service, no recent incidents\\\",\\r\\n  2381,\\\"tcp\\\",\\\"Management\\\",\\\"Compaq Management Service, no recent incidents\\\",\\r\\n  3268,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Microsoft Global Catalog LDAP\\\",\\r\\n  3306,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MySQL Database Management Port\\\",\\r\\n  3389,\\\"tcp\\\",\\\"Management/3rd Party Attacks\\\",\\\"RDP, Common brute force attack port\\\",\\r\\n  3389,\\\"udp\\\",\\\"Management/3rd Party Attacks\\\",\\\"RDP, Common brute force attack port\\\",\\r\\n  4333,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MSql\\\",\\r\\n  5353,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"mDNS\\\",\\r\\n  5432,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"PostgresSQL Database Management\\\",\\r\\n  5800,\\\"tcp\\\",\\\"Management\\\",\\\"VNC Remote Frame Buffer over HTTP\\\",\\r\\n  5900,\\\"tcp\\\",\\\"Management\\\",\\\"VNC Remote Frame Buffer over HTTP\\\",\\r\\n  5985,\\\"tcp\\\",\\\"Management\\\",\\\"Windows Powershell\\\",\\r\\n  5986,\\\"tcp\\\",\\\"Management\\\",\\\"Windows Powershell\\\",\\r\\n  6379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  7000,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  7001,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  7199,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9042,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9160,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9200,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Elastic Search\\\",\\r\\n  9300,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Elastic Search\\\",\\r\\n  9987,\\\"udp\\\",\\\"3rd Party Attack\\\",\\\"DSM/SCM Target Interface\\\",\\r\\n  11211,\\\"udp\\\",\\\"Unencrypted\\\",\\\"Memcached\\\",\\r\\n  16379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  26379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  27017,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MongoDB\\\",\\r\\n  ];\\r\\n  HighRiskPorts\\r\\n  | join kind=inner (\\r\\n    CommonSecurityLog\\r\\n    | where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n    | where DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n    | where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n    | where SentBytes > 0 and ReceivedBytes > 0\\r\\n    //Remove private IP communation from DestinationIP\\r\\n    | extend result = ipv4_is_private(DestinationIP) \\r\\n    | where result == 0\\r\\n    | summarize\\r\\n        Count = count(),\\r\\n        StartTime = min(TimeGenerated),\\r\\n        EndTime = max(TimeGenerated)\\r\\n        by \\r\\n        VirtualEngine=DeviceExternalID,\\r\\n        SourceIP,\\r\\n        DestinationIP,\\r\\n        DestinationPort,\\r\\n        ApplicationProtocol\\r\\n  ) on $left.Port == $right.DestinationPort \\r\\n  | project-away Protocol, Port\\r\\n  | order by Count desc, VirtualEngine asc, SourceIP asc//, DestinationIP asc, DestinationPort asc\\r\\n  | extend timestamp = StartTime\\r\\n  | where RiskDescription == '{SelectedRiskDescription}' or '{SelectedRiskDescription}' == \\\"All\\\"\",\"size\":0,\"title\":\"Potential Attacks Using Risky Ports Details\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"filter\":true}},\"showPin\":false,\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let HighRiskPorts = datatable (Port:int, Protocol:string, RiskType:string, RiskDescription:string)[\\r\\n  13,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Daytime protocol used in reflection/amplification attacks\\\",\\r\\n  17,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"QOTD protocol, reflection/amplification attacks\\\",\\r\\n  19,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Chargen protocol, reflection/amplification attacks\\\",\\r\\n  20,\\\"tcp\\\",\\\"Unencrypted\\\",\\\"Unencrypted FTP Traffic\\\",\\r\\n  21,\\\"tcp\\\",\\\"Unencrypted\\\",\\\"Unencrypted FTP Traffic\\\",\\r\\n  22,\\\"tcp\\\",\\\"Management\\\",\\\"SSH, brute force attacks common\\\",\\r\\n  23,\\\"tcp\\\",\\\"Management\\\",\\\"Telnet, allows unauthenticated and/or unencrypted\\\",\\r\\n  53,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"DNS, reflection/amplification attacks\\\",\\r\\n  69,\\\"udp\\\",\\\"Management\\\",\\\"TFTP, allows unauthenticated and/or unencrypted\\\",\\r\\n  111,\\\"udp\\\",\\\"Management\\\",\\\"RPC, unencrypted authentication allowed\\\",\\r\\n  111,\\\"tcp\\\",\\\"Management\\\",\\\"RPC, unencrypted authentication allowed\\\",\\r\\n  119,\\\"tcp\\\",\\\"Unsecure\\\",\\\"NNTP, unencrypted authentication\\\",\\r\\n  123,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"Network Time Protocol, reflection/amplification attacks\\\",\\r\\n  135,\\\"tcp\\\",\\\"Management\\\",\\\"End Point Mapper, multiple remote management srvcs\\\",\\r\\n  135,\\\"udp\\\",\\\"Management\\\",\\\"End Point Mapper, multiple remote management srvcs\\\",\\r\\n  137,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Name Service\\\",\\r\\n  137,\\\"udp\\\",\\\"Hacker Recon\\\",\\\"Netbios Name Service\\\",\\r\\n  138,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Datagram Service\\\",\\r\\n  138,\\\"udp\\\",\\\"Hacker Recon\\\",\\\"Netbios Datagram Service\\\",\\r\\n  139,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Netbios Session Service\\\",\\r\\n  161,\\\"tcp\\\",\\\"Unsecure/3rd Party Attacks\\\",\\\"SNMP, unsecure / no authentication UDP Reflection attacks\\\",\\r\\n  161,\\\"udp\\\",\\\"Unsecure/3rd Party Attacks\\\",\\\"SNMP, unsecure / no authentication UDP Reflection attacks\\\",\\r\\n  162,\\\"tcp\\\",\\\"Unsecure\\\",\\\"SNMP Trap, unsecure / no authentication\\\",\\r\\n  162,\\\"udp\\\",\\\"Unsecure\\\",\\\"SNMP Trap, unsecure / no authentication\\\",\\r\\n  389,\\\"tcp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"LDAP/CLDAP\\\",\\r\\n  389,\\\"udp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"LDAP/CLDAP\\\",\\r\\n  443,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"UDP Reflection / Amplification attacks\\\",\\r\\n  445,\\\"tcp\\\",\\\"Unsecure\\\",\\\"SMB - well known attack vector\\\",\\r\\n  512,\\\"tcp\\\",\\\"Management\\\",\\\"Rexec on Linux, remote commands w/o encrypt auth\\\",\\r\\n  514,\\\"tcp\\\",\\\"Management\\\",\\\"Remote Shell, remote commands w/o auth or encrypt\\\",\\r\\n  593,\\\"tcp\\\",\\\"Management\\\",\\\"HTTP RPC EPMAP, unencrypted remote procedure call\\\",\\r\\n  593,\\\"udp\\\",\\\"Management\\\",\\\"HTTP RPC EPMAP, unencrypted remote procedure call\\\",\\r\\n  636,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Lightweight Directory Access Protocol\\\",\\r\\n  873,\\\"tcp\\\",\\\"Management\\\",\\\"Rsync, unencrypted file transfer\\\",\\r\\n  1433,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MS SQL Management & Data Access\\\",\\r\\n  1434,\\\"udp\\\",\\\"Data Access/Mgmt\\\",\\\"MS SQL Monitor Port\\\",\\r\\n  1900,\\\"udp\\\",\\\"Hacker Recon/3rd Party Attacks\\\",\\\"Simple Service Discovery Protocol, unencrypted\\\",\\r\\n  2049,\\\"tcp\\\",\\\"Unsecure\\\",\\\"Network File System\\\",\\r\\n  2049,\\\"udp\\\",\\\"Unsecure\\\",\\\"Network File System\\\",\\r\\n  2301,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Compaq Management Service, no recent incidents\\\",\\r\\n  2381,\\\"tcp\\\",\\\"Management\\\",\\\"Compaq Management Service, no recent incidents\\\",\\r\\n  3268,\\\"tcp\\\",\\\"Hacker Recon\\\",\\\"Microsoft Global Catalog LDAP\\\",\\r\\n  3306,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MySQL Database Management Port\\\",\\r\\n  3389,\\\"tcp\\\",\\\"Management/3rd Party Attacks\\\",\\\"RDP, Common brute force attack port\\\",\\r\\n  3389,\\\"udp\\\",\\\"Management/3rd Party Attacks\\\",\\\"RDP, Common brute force attack port\\\",\\r\\n  4333,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MSql\\\",\\r\\n  5353,\\\"udp\\\",\\\"3rd Party Attacks\\\",\\\"mDNS\\\",\\r\\n  5432,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"PostgresSQL Database Management\\\",\\r\\n  5800,\\\"tcp\\\",\\\"Management\\\",\\\"VNC Remote Frame Buffer over HTTP\\\",\\r\\n  5900,\\\"tcp\\\",\\\"Management\\\",\\\"VNC Remote Frame Buffer over HTTP\\\",\\r\\n  5985,\\\"tcp\\\",\\\"Management\\\",\\\"Windows Powershell\\\",\\r\\n  5986,\\\"tcp\\\",\\\"Management\\\",\\\"Windows Powershell\\\",\\r\\n  6379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  7000,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  7001,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  7199,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9042,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9160,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Cassandra\\\",\\r\\n  9200,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Elastic Search\\\",\\r\\n  9300,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Elastic Search\\\",\\r\\n  9987,\\\"udp\\\",\\\"3rd Party Attack\\\",\\\"DSM/SCM Target Interface\\\",\\r\\n  11211,\\\"udp\\\",\\\"Unencrypted\\\",\\\"Memcached\\\",\\r\\n  16379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  26379,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"Redis\\\",\\r\\n  27017,\\\"tcp\\\",\\\"Data Access/Mgmt\\\",\\\"MongoDB\\\",\\r\\n  ];\\r\\nlet IPRegex = '[0-9]{1,3}\\\\\\\\.[0-9]{1,3}\\\\\\\\.[0-9]{1,3}\\\\\\\\.[0-9]{1,3}';\\r\\nlet dt_lookBack = 1h;\\r\\nlet ioc_lookBack = 14d;\\r\\n  let SARP= HighRiskPorts\\r\\n  | join kind=innerunique (\\r\\n    CommonSecurityLog\\r\\n    | where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n    | where DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n    | where SentBytes > 0 and ReceivedBytes > 0\\r\\n    //Remove private IP communation from DestinationIP\\r\\n    | extend result = ipv4_is_private(DestinationIP) \\r\\n    | where result == 0\\r\\n    | summarize\\r\\n        Count = count()\\r\\n        by \\r\\n        VirtualEngine=DeviceExternalID,\\r\\n        SourceIP,\\r\\n        DestinationIP,\\r\\n        DestinationPort,\\r\\n        ApplicationProtocol\\r\\n  ) on $left.Port == $right.DestinationPort;\\r\\nlet BOTS = ThreatIntelligenceIndicator\\r\\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\\r\\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where Active == true\\r\\n// Picking up only IOC's that contain the entities we want\\r\\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\\r\\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\\r\\n// Taking the first non-empty value based on potential IOC match availability\\r\\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\\r\\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\\r\\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\\r\\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\\r\\n| join kind=innerunique (\\r\\n    CommonSecurityLog\\r\\n    | where TimeGenerated >= ago(dt_lookBack)\\r\\n    | where  DeviceAction != \\\"Discard\\\" and DeviceAction != \\\"Terminate\\\"\\r\\n    | where Message notcontains \\\"timeout\\\" and Message notcontains \\\"reset\\\"\\r\\n    | extend MessageIP = extract(IPRegex, 0, Message)\\r\\n    | extend CS_ipEntity = iff(isnotempty(SourceIP), SourceIP, DestinationIP)\\r\\n    | extend CS_ipEntity = iff(isempty(CS_ipEntity) and isnotempty(MessageIP), MessageIP, CS_ipEntity)\\r\\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\\r\\n)\\r\\non $left.TI_ipEntity == $right.CS_ipEntity;\\r\\n  SARP | join kind=innerunique BOTS on $left.DestinationIP == $right.SourceIP\\r\\n\\r\\n\",\"size\":0,\"title\":\"Correlated botnet connections with potential attacks using risky Ports\",\"noDataMessage\":\"No Correlated Records\",\"noDataMessageStyle\":3,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Alert\\\"\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where Activity == \\\"File_Malware-Blocked\\\"\\r\\n| summarize count() by  DestinationServiceName, SourceIP, DestinationIP,bin(TimeGenerated, 15m)\",\"size\":0,\"title\":\"Anti-Malware Detection\",\"timeContextFromParameter\":\"TimeRange\",\"timeBrushParameterName\":\"timebrush01\",\"exportFieldName\":\"series\",\"exportParameterName\":\"SelectedDSN\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"name\":\"query - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Alert\\\"\\r\\n| where Activity == \\\"File_Malware-Blocked\\\"\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where DestinationServiceName == '{SelectedDSN}' or '{SelectedDSN}' == \\\"All\\\"\\r\\n| extend URLx=extract(\\\"URL=((?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\\\\\(\\\\\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\\\", 1, AdditionalExtensions)\\r\\n| extend URLt=split(URLx, \\\";\\\", 0)\\r\\n| extend URL=tostring(URLt[0])\\r\\n| project ReceiptTime, DeviceAction, SourceIP, DestinationIP, VirtualEngine = DeviceExternalID , URL, ApplicationProtocol\\r\\n\\r\\n\",\"size\":0,\"timeContextFromParameter\":\"timebrush01\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let dt_lookBack = 4h;\\r\\n  let ioc_lookBack = 14d;\\r\\n  ThreatIntelligenceIndicator\\r\\n  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\\r\\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\\r\\n  | where Active == true\\r\\n  | where isnotempty(Url)\\r\\n  | extend URL=split(Url,\\\"//\\\")\\r\\n  | extend URL=tostring(URL[1])\\r\\n  ////////////\\r\\n  | join kind=innerunique (\\r\\n    CommonSecurityLog\\r\\n    | extend IngestionTime = ingestion_time()\\r\\n    | where IngestionTime > ago(dt_lookBack)\\r\\n    // Select on FP logs\\r\\n    | where DeviceVendor == \\\"FORCEPOINT\\\"\\r\\n    | where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n    | where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n    | extend URLx=extract(\\\"URL=((?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\\\\\(\\\\\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\\\", 1, AdditionalExtensions)\\r\\n    | extend URLt=split(URLx, \\\";\\\", 0)\\r\\n    | extend FP_Url=tostring(URLt[0])\\r\\n    | where isnotempty(FP_Url)\\r\\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\\r\\n  ) on $left.Url == $right.FP_Url\\r\\n  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime\\r\\n  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FP_Url\\r\\n  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, FP_Url, DeviceName\",\"size\":0,\"title\":\"Malicious URLs Detections\",\"noDataMessage\":\"Congratulations ! No malicious URLs detected\",\"noDataMessageStyle\":3,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let dt_lookBack = 1h;\\r\\nlet ioc_lookBack = 14d;\\r\\nlet fileHashIndicators = ThreatIntelligenceIndicator\\r\\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\\r\\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\\r\\n| where Active == true\\r\\n| where isnotempty(FileHashValue);\\r\\n// Handle matches against both lower case and uppercase versions of the hash:\\r\\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\\r\\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\\r\\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\\r\\n|  join kind=innerunique (\\r\\n  CommonSecurityLog \\r\\n  | where TimeGenerated >= ago(dt_lookBack)\\r\\n  | where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n  | where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n  | where isnotempty(FileHash)\\r\\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\\r\\n  )\\r\\non $left.FileHashValue == $right.FileHash\\r\\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\\r\\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\\r\\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\\r\\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\\r\\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity\\r\\n| extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName, URLCustomEntity = Url\",\"size\":0,\"title\":\"Malicous Files Detected\",\"noDataMessageStyle\":4,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"customWidth\":\"50\",\"name\":\"query - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| extend Vulnerbilities=DeviceCustomString3Label\\r\\n| extend VulnerbilityRef=DeviceCustomString3\\r\\n| where Vulnerbilities != \\\"\\\"\\r\\n| extend VirtualEngine=DeviceExternalID\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| summarize count() by VulnerbilityRef, bin(TimeGenerated, 6h)\",\"size\":0,\"title\":\"Vulnerability Related Connections\",\"exportFieldName\":\"series\",\"exportParameterName\":\"SelectedVL\",\"exportDefaultValue\":\"All\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"name\":\"query - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceCustomString3 == '{SelectedVL}' or '{SelectedVL}' == \\\"All\\\"\\r\\n| extend Vulnerbilities=DeviceCustomString3Label\\r\\n| extend VulnerbilityRef=DeviceCustomString3\\r\\n| where Vulnerbilities != \\\"\\\"\\r\\n| extend VirtualEngine=DeviceExternalID\\r\\n| where \\\"{LogSeverity:lable}\\\" == \\\"All\\\" or LogSeverity in ({LogSeverity})\\r\\n| where \\\"{Action:lable}\\\" == \\\"All\\\" or DeviceAction in ({Action})\\r\\n| project TimeGenerated, VulnerbilityRef, VirtualEngine, SourceIP, SourcePort ,DestinationIP, DestinationPort, LogSeverity, DeviceAction\\r\\n\\r\\n\\r\\n\",\"size\":0,\"title\":\"Vulnerability Connections Details\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"showExpandCollapseGrid\":true,\"gridSettings\":{\"filter\":true}},\"name\":\"query - 9\"}]},\"conditionalVisibility\":{\"parameterName\":\"Tab\",\"comparison\":\"isEqualTo\",\"value\":\"SI\"},\"name\":\"Security Insights Group\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Audit\\\"\\r\\n| where Message notcontains \\\"log task\\\"\\r\\n| where Message notcontains \\\"Refresh\\\"\\r\\n| where Message notcontains \\\"Antispoofing\\\"\\r\\n| where Message notcontains \\\"Routing view\\\"\\r\\n| where Message != \\\"\\\"\\r\\n| summarize count() by bin(TimeGenerated,15m)\",\"size\":0,\"title\":\"Audit Logs over time\",\"timeContext\":{\"durationMs\":43200000},\"timeContextFromParameter\":\"TimeRange\",\"timeBrushParameterName\":\"timebrush02\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"timechart\"},\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Audit\\\"\\r\\n| where Message notcontains \\\"log task\\\"\\r\\n| where Message notcontains \\\"Refresh\\\"\\r\\n| where Message notcontains \\\"Antispoofing\\\"\\r\\n| where Message notcontains \\\"Routing view\\\"\\r\\n| where Message != \\\"\\\"\\r\\n| project TimeGenerated,Message,DeviceExternalID,DeviceName\\r\\n\",\"size\":0,\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"timebrush02\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Audit\\\"\\r\\n| where Message notcontains \\\"log task\\\"\\r\\n| where Message notcontains \\\"Refresh\\\"\\r\\n| where Message notcontains \\\"Antispoofing\\\"\\r\\n| where Message notcontains \\\"Routing view\\\"\\r\\n| where Message notcontains \\\"Logout\\\"\\r\\n| where Message notcontains \\\"Login\\\"\\r\\n| where Message contains \\\"modified\\\"\\r\\n| project TimeGenerated,Message,DeviceExternalID,DeviceName\",\"size\":0,\"title\":\"Configuration Modification Logs\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"timebrush02\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 0\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Audit\\\"\\r\\n| where Message notcontains \\\"log task\\\"\\r\\n| where Message notcontains \\\"Refresh\\\"\\r\\n| where Message notcontains \\\"Antispoofing\\\"\\r\\n| where Message notcontains \\\"Routing view\\\"\\r\\n| where Message notcontains \\\"Logout\\\"\\r\\n| where Message notcontains \\\"Login\\\"\\r\\n| where Message contains \\\"created\\\"\\r\\n| project TimeGenerated,Message,DeviceExternalID,DeviceName\",\"size\":0,\"title\":\"Configuration Creation Logs\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"timebrush02\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Audit\\\"\\r\\n| where Message contains \\\"Login succeeded\\\"\\r\\n| project TimeGenerated,Message,DeviceExternalID,DeviceName\",\"size\":0,\"title\":\"Admin Login Records\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"timebrush02\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 1 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog\\r\\n| where DeviceProduct == \\\"Audit\\\"\\r\\n| where Message contains \\\"Logout\\\"\\r\\n| project TimeGenerated,Message,DeviceExternalID,DeviceName\",\"size\":0,\"title\":\"Admin Logout Records\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"timebrush02\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"filter\":true}},\"name\":\"query - 1 - Copy - Copy\"}]},\"conditionalVisibility\":{\"parameterName\":\"Tab\",\"comparison\":\"isEqualTo\",\"value\":\"AT\"},\"name\":\"group - 5\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Heartbeat\\r\\n| where Computer contains \\\"vmloggerprod\\\" // Select the computers according to your logger's naming convention\\r\\n| distinct Computer,bin(TimeGenerated,1h)\\r\\n| summarize count(Computer) by bin(TimeGenerated,1h)\",\"size\":0,\"aggregation\":1,\"title\":\"Number of Reporting Servers Per Hour\",\"timeContext\":{\"durationMs\":86400000},\"showRefreshButton\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"tileSettings\":{\"showBorder\":false}},\"name\":\"query - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perf\\r\\n| where Computer contains \\\"vmloggerprod\\\" // Select the computers according to your logger's naming convention\\r\\n| where CounterName contains \\\"Processor Time\\\"\\r\\n| summarize AvgCPU=avg(CounterValue) by Computer\\r\\n| order by AvgCPU desc\",\"size\":3,\"title\":\"Average Processor Utilization Last 4 Hours\",\"timeContext\":{\"durationMs\":14400000},\"showRefreshButton\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"Computer\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"AvgCPU\",\"formatter\":12,\"formatOptions\":{\"min\":0,\"max\":100,\"palette\":\"coldHot\"},\"numberFormat\":{\"unit\":17,\"options\":{\"style\":\"decimal\",\"maximumFractionDigits\":2,\"maximumSignificantDigits\":3}}},\"showBorder\":false,\"size\":\"auto\"}},\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perf\\r\\n| where Computer contains \\\"vmloggerprod\\\"\\r\\n| where CounterName contains \\\"Processor Time\\\"\\r\\n| where CounterValue >= 99\\r\\n| summarize NumberOfSpikes=count() by Computer, bin(TimeGenerated,1h)\\r\\n//| where TimeGenerated > ago(4h)\\r\\n//| extend NumberOfSpikes4H=sum(NumberOfSpikes1H)\\r\\n//| order by NumberOfSpikes12H desc\",\"size\":0,\"title\":\"Processor 100% Spikes - Last 12 hours\",\"timeContext\":{\"durationMs\":43200000},\"showRefreshButton\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"unstackedbar\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"NumberOfSpikes\",\"formatter\":8,\"formatOptions\":{\"palette\":\"greenRed\"}},{\"columnMatch\":\"SS\",\"formatter\":8,\"formatOptions\":{\"min\":0,\"max\":100,\"palette\":\"greenRed\"}}],\"sortBy\":[{\"itemKey\":\"$gen_heatmap_NumberOfSpikes_2\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"$gen_heatmap_NumberOfSpikes_2\",\"sortOrder\":2}],\"chartSettings\":{\"createOtherGroup\":0}},\"customWidth\":\"50\",\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perf\\r\\n| where Computer contains \\\"vmloggerprod\\\"\\r\\n| where CounterName contains \\\"Processor Time\\\"\\r\\n| where CounterValue >= 99\\r\\n| summarize NumberOfSpikes=count() by Computer\\r\\n| order by NumberOfSpikes desc\",\"size\":0,\"title\":\"Number of Processor 100% Spikes - Last Hour\",\"timeContext\":{\"durationMs\":3600000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"NumberOfSpikes\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"palette\":\"coldHot\"}}],\"sortBy\":[{\"itemKey\":\"$gen_heatmap_NumberOfSpikes_1\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"$gen_heatmap_NumberOfSpikes_1\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query - 5\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"9b965bb7-dcec-4804-8eed-9aeab5494bbf\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Logger\",\"label\":\"Select Logger Machine\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"Perf\\r\\n| where Computer contains \\\"vmloggerprod\\\" // Select the computers according to your logger's naming convention\\r\\n| distinct Computer\\r\\n| order by Computer asc\\r\\n| extend value= Computer, label= Computer\",\"value\":[\"new-vmloggerprod46\",\"new-vmloggerprod47\",\"new-vmloggerprod48\",\"new-vmloggerprod49\"],\"typeSettings\":{\"limitSelectTo\":10,\"additionalResourceOptions\":[\"value::all\"],\"selectAllValue\":\"All\",\"showDefault\":false},\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"formVertical\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 0\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perf\\r\\n| where \\\"All\\\" == '{Logger:label}' or Computer in ({Logger})\\r\\n| where Computer contains \\\"vmloggerprod\\\" // Select the computers according to your logger's naming convention\\r\\n| where CounterName contains \\\"Processor Time\\\"\\r\\n| summarize CPU= max(CounterValue) by Computer, bin(TimeGenerated,2s)\",\"size\":0,\"aggregation\":3,\"title\":\"Processor Utilization Chart (Overlay)\",\"timeContext\":{\"durationMs\":14400000},\"showRefreshButton\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"Computer\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"CPU\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"createOtherGroup\":0}},\"name\":\"query - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perf\\r\\n| where \\\"All\\\" == '{Logger:label}' or Computer in ({Logger})\\r\\n| where Computer contains \\\"vmloggerprod\\\" // Select the computers according to your logger's naming convention\\r\\n| where CounterName contains \\\"Processor Time\\\"\\r\\n| summarize CPU= max(CounterValue) by Computer, bin(TimeGenerated,1m)\",\"size\":0,\"title\":\"Processor Utilization Pattern Detection (Accumulation)\",\"timeContext\":{\"durationMs\":14400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\",\"chartSettings\":{\"createOtherGroup\":0}},\"name\":\"query - 3\"}]},\"conditionalVisibility\":{\"parameterName\":\"Tab\",\"comparison\":\"isEqualTo\",\"value\":\"LH\"},\"name\":\"group - 6\"}],\"fromTemplateId\":\"sentinel-ForcepointNGFWAdvanced\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId2'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=ForcepointNGFWAdvanced; logoFileName=FPAdvLogo.svg; description=Gain threat intelligence correlated security and application insights on Forcepoint NGFW (Next Generation Firewall). Monitor Forcepoint logging servers health.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Forcepoint Next Generation Firewall (NGFW) Advanced Workbook; templateRelativePath=ForcepointNGFWAdvanced.json; subtitle=; provider=Forcepoint}.description",
+                "parentId": "[variables('workbookId2')]",
+                "contentId": "[variables('_workbookContentId2')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint NGFW",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Forcepoint NGFW",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Forcepoint"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId2')]",
+              "version": "[variables('workbookVersion2')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-25",
+        "providers": [
+          "Forcepoint"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

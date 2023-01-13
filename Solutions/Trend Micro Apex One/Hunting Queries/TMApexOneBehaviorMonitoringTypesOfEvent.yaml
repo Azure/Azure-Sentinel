@@ -1,0 +1,38 @@
+id: 433ccdb0-67b6-11ec-90d6-0242ac120003
+name: ApexOne - Behavior monitoring event types by users
+description: |
+  'Shows behavior monitoring event types.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: TrendMicroApexOne
+    dataTypes:
+      - TMApexOneEvent
+tactics:
+  - Privilege Escalation
+  - Persistence
+relevantTechniques:
+  - T1546
+query: |
+  TMApexOneEvent
+  | where TimeGenerated > ago(24h)
+  | where EventMessage has "Behavior Monitoring"
+  | where isnotempty(Event_Type)
+  | extend TypeOfEvent= case(
+  Event_Type == "1", "Process",
+  Event_Type == "2", "Process image",
+  Event_Type == "4", "Registry",
+  Event_Type == "8", "File system",
+  Event_Type == "16", "Driver",
+  Event_Type == "32", "SDT", 
+  Event_Type == "64", "System API",
+  Event_Type == "128", "User Mode",
+  Event_Type == "2048", "Exploit",
+  Event_Type == "65535", "All",
+  "unknown")
+  | summarize EventTypeCount = count() by TypeOfEvent, DstUserName
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity

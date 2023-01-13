@@ -1,0 +1,673 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"PlaybookName": {
+			"type": "string",
+			"defaultValue": "Affected-Key-Credentials-Scanner"
+		},
+		"Environment": {
+			"type": "string",
+			"allowedValues": [
+				"Azure Commercial",
+				"Azure Fairfax (Gov)",
+				"Germany",
+				"China"
+			],
+			"defaultValue": "Azure Commercial",
+			"metadata": {
+				"description": "Cloud Environment"
+			}
+		},
+		"ObjectClass": {
+			"type": "string",
+			"allowedValues": [
+				"Application",
+				"ServicePrincipal"
+			],
+			"defaultValue": "Application",
+			"metadata": {
+				"description": "Select Application/ ServicePrincipal"
+			}
+		},
+		"WorkspaceId": {
+			"type": "string",
+			"metadata": {
+				"description": "Azure Sentinel WorkspaceId"
+			}
+		},
+		"WorkspaceName": {
+			"type": "string",
+			"metadata": {
+				"description": "Azure Sentinel WorkspaceName"
+			}
+		},
+		"TenantId": {
+			"type": "string",
+			"metadata": {
+				"description": "Azure AAD TenantId"
+			}
+		},
+		"ClientId": {
+			"type": "string",
+			"metadata": {
+				"description": "Azure AAD ClientId"
+			}
+		},
+		"ClientSecret": {
+			"type": "string",
+			"metadata": {
+				"description": "Azure AAD ClientSecret"
+			}
+		},
+		"WatchListAlias": {
+			"type": "string",
+			"defaultValue": "Vulnerable_CVE_2021_42306",
+			"metadata": {
+				"description": "Describe Watchlist Name"
+			}
+		},
+		"WatchlistDescription": {
+			"type": "string",
+			"defaultValue": "Vulnerable_CVE_2021_42306",
+			"metadata": {
+				"description": "Describe Watchlist Description"
+			}
+		}
+	},
+	"variables": {
+		"azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+	"metadata": {
+		"support": {
+			"tier": "community"
+		},
+		"tags": [],
+		"lastUpdateTime": "",
+		"title": "",
+		"entities": [],
+		"author": {
+			"name": "Sreedhar Ande"
+		},
+		"prerequisites": "Azure AAD App with necessary permissions",
+		"prerequisitesDeployTemplateFile": "",
+		"description": "This Playbook scans all key credentials in all apps/serviceprincipals in the specified tenant  for credentials with property hasExtendedValue == true by calling Microsoft Graph and adds to Azure Sentinel Watchlist"
+	},
+	"resources": [
+		{
+			"properties": {
+				"provisioningState": "Succeeded",
+				"state": "Disabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						},
+						"Environment": {
+							"defaultValue": "[parameters('Environment')]",
+							"type": "string"
+						},
+						"SubscriptionId": {
+							"defaultValue": "[subscription().subscriptionId]",
+							"type": "string"
+						},
+						"ObjectClass": {
+							"defaultValue": "[parameters('ObjectClass')]",
+							"type": "string"
+						},
+						"ResourceGroup": {
+							"defaultValue": "[resourceGroup().name]",
+							"type": "string"
+						},
+						"WorkspaceId": {
+							"defaultValue": "[parameters('WorkspaceId')]",
+							"type": "string"
+						},
+						"WorkspaceName": {
+							"defaultValue": "[parameters('WorkspaceName')]",
+							"type": "string"
+						},
+						"TenantId": {
+							"defaultValue": "[parameters('TenantId')]",
+							"type": "string"
+						},
+						"ClientId": {
+							"defaultValue": "[parameters('ClientId')]",
+							"type": "string"
+						},
+						"ClientSecret": {
+							"defaultValue": "[parameters('ClientSecret')]",
+							"type": "string"
+						},
+						"WatchListAlias": {
+							"defaultValue": "[parameters('WatchListAlias')]",
+							"type": "string"
+						}
+					},
+					"triggers": {
+						"Recurrence": {
+							"recurrence": {
+								"frequency": "Day",
+								"interval": 1
+							},
+							"evaluatedRecurrence": {
+								"frequency": "Day",
+								"interval": 1
+							},
+							"type": "Recurrence"
+						}
+					},
+					"actions": {
+						"Client_Id": {
+							"runAfter": {
+								"Tenant_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ClientId",
+										"type": "string",
+										"value": "@{parameters('ClientId')}"
+									}
+								]
+							}
+						},
+						"Client_Secret": {
+							"runAfter": {
+								"Client_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ClientSecret",
+										"type": "string",
+										"value": "@{parameters('ClientSecret')}"
+									}
+								]
+							}
+						},
+						"For_each": {
+							"foreach": "@variables('keyCredBody')",
+							"actions": {
+								"Condition": {
+									"actions": {
+										"Condition_2": {
+											"actions": {
+												"JSON_for_Watchlist": {
+													"runAfter": {},
+													"type": "Compose",
+													"inputs": {
+														"AppId": "@items('For_Each')['appId']",
+														"AppName": "@items('For_Each')['displayName']",
+														"EndDateTime": "@items('For_Each')['KeyCredentials']?[0]?['endDateTime']",
+														"HasExtendedValue": "@items('For_Each')['KeyCredentials']?[0]?['hasExtendedValue']",
+														"KeyId": "@items('For_Each')['keyCredentials']?[0]?['keyId']",
+														"ObjectClass": "@variables('ObjectClass')",
+														"StartDateTime": "@items('For_Each')['KeyCredentials']?[0]?['startDateTime']",
+														"Usage": "@items('For_Each')['KeyCredentials']?[0]?['usage']",
+														"isExpired": "@items('For_Each')['KeyCredentials']?[0]?['isExpired']"
+													}
+												},
+												"Watchlists_-_Add_a_new_watchlist_item": {
+													"runAfter": {
+														"JSON_for_Watchlist": [
+															"Succeeded"
+														]
+													},
+													"type": "ApiConnection",
+													"inputs": {
+														"body": "@outputs('JSON_for_Watchlist')",
+														"host": {
+															"connection": {
+																"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+															}
+														},
+														"method": "put",
+														"path": "/Watchlists/subscriptions/@{encodeURIComponent(variables('SubscriptionId'))}/resourceGroups/@{encodeURIComponent(variables('ResourceGroup'))}/workspaces/@{encodeURIComponent(variables('WorkspaceName'))}/watchlists/@{encodeURIComponent(variables('WatchListAlias'))}/watchlistItem"
+													}
+												}
+											},
+											"runAfter": {},
+											"expression": {
+												"and": [
+													{
+														"not": {
+															"equals": [
+																"@\r\nitems('For_Each')['KeyCredentials']?[0]?['Usage']",
+																"Sign"
+															]
+														}
+													},
+													{
+														"equals": [
+															"@\r\nitems('For_Each')['KeyCredentials']?[0]?['Type']",
+															"AsymmetricX509Cert"
+														]
+													},
+													{
+														"equals": [
+															"@items('For_Each')['KeyCredentials']?[0]?['hasExtendedValue']",
+															"True"
+														]
+													}
+												]
+											},
+											"type": "If"
+										}
+									},
+									"runAfter": {},
+									"expression": {
+										"and": [
+											{
+												"equals": [
+													"@empty(items('For_each')['KeyCredentials'])",
+													false
+												]
+											}
+										]
+									},
+									"type": "If"
+								}
+							},
+							"runAfter": {
+								"Results": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"Get_Azure_Environment": {
+							"runAfter": {},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Environment",
+										"type": "string",
+										"value": "@{parameters('Environment')}"
+									}
+								]
+							}
+						},
+						"HTTP": {
+							"runAfter": {
+								"Switch": [
+									"Succeeded"
+								]
+							},
+							"type": "Http",
+							"inputs": {
+								"authentication": {
+									"audience": "@variables('ResourceUrl')",
+									"clientId": "@variables('ClientId')",
+									"secret": "@variables('ClientSecret')",
+									"tenant": "@variables('TenantId')",
+									"type": "ActiveDirectoryOAuth"
+								},
+								"method": "GET",
+								"uri": "@{variables('ResourceUrl')}/beta/myorganization/@{variables('ObjectClass')}s?$select=displayName,id,appId,keyCredentials"
+							}
+						},
+						"Key_Credentials_Body": {
+							"runAfter": {
+								"Watch_List_Alias": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "keyCredBody",
+										"type": "array"
+									}
+								]
+							}
+						},
+						"Object_Class": {
+							"runAfter": {
+								"Get_Azure_Environment": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ObjectClass",
+										"type": "string",
+										"value": "@{parameters('ObjectClass')}"
+									}
+								]
+							}
+						},
+						"Parse_JSON": {
+							"runAfter": {
+								"HTTP": [
+									"Succeeded"
+								]
+							},
+							"type": "ParseJson",
+							"inputs": {
+								"content": "@body('HTTP')",
+								"schema": {
+									"properties": {
+										"value": {
+											"items": {
+												"properties": {
+													"appId": {
+														"type": "string"
+													},
+													"displayName": {
+														"type": "string"
+													},
+													"id": {
+														"type": "string"
+													},
+													"keyCredentials": {
+														"type": "array"
+													}
+												},
+												"required": [
+													"appId",
+													"displayName",
+													"id",
+													"keyCredentials"
+												],
+												"type": "object"
+											},
+											"type": "array"
+										}
+									},
+									"type": "object"
+								}
+							}
+						},
+						"Resource_Group": {
+							"runAfter": {
+								"Subscription_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ResourceGroup",
+										"type": "string",
+										"value": "@{parameters('ResourceGroup')}"
+									}
+								]
+							}
+						},
+						"Resource_Url": {
+							"runAfter": {
+								"Object_Class": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "ResourceUrl",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Results": {
+							"runAfter": {
+								"Parse_JSON": [
+									"Succeeded"
+								]
+							},
+							"type": "SetVariable",
+							"inputs": {
+								"name": "keyCredBody",
+								"value": "@body('Parse_JSON')['value']"
+							}
+						},
+						"Subscription_Id": {
+							"runAfter": {
+								"Resource_Url": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "SubscriptionId",
+										"type": "string",
+										"value": "@{parameters('SubscriptionId')}"
+									}
+								]
+							}
+						},
+						"Switch": {
+							"runAfter": {
+								"Key_Credentials_Body": [
+									"Succeeded"
+								]
+							},
+							"cases": {
+								"Case": {
+									"case": "Azure Commercial",
+									"actions": {
+										"Set_variable_2": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "ResourceUrl",
+												"value": "https://graph.microsoft.com"
+											}
+										}
+									}
+								},
+								"Case_2": {
+									"case": "Germany",
+									"actions": {
+										"Set_variable_3": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "ResourceUrl",
+												"value": "https://graph.microsoft.de"
+											}
+										}
+									}
+								},
+								"Case_3": {
+									"case": "Azure Fairfax (Gov)",
+									"actions": {
+										"Set_variable_4": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "ResourceUrl",
+												"value": "https://graph.microsoft.us"
+											}
+										}
+									}
+								},
+								"Case_4": {
+									"case": "China",
+									"actions": {
+										"Set_variable_5": {
+											"runAfter": {},
+											"type": "SetVariable",
+											"inputs": {
+												"name": "ResourceUrl",
+												"value": "https://microsoftgraph.chinacloudapi.cn"
+											}
+										}
+									}
+								}
+							},
+							"default": {
+								"actions": {
+									"Set_variable_6": {
+										"runAfter": {},
+										"type": "SetVariable",
+										"inputs": {
+											"name": "ResourceUrl",
+											"value": "https://graph.microsoft.com"
+										}
+									}
+								}
+							},
+							"expression": "@variables('Environment')",
+							"type": "Switch"
+						},
+						"Tenant_Id": {
+							"runAfter": {
+								"Workspace_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "TenantId",
+										"type": "string",
+										"value": "@{parameters('TenantId')}"
+									}
+								]
+							}
+						},
+						"Watch_List_Alias": {
+							"runAfter": {
+								"Client_Secret": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "WatchListAlias",
+										"type": "string",
+										"value": "@{parameters('WatchListAlias')}"
+									}
+								]
+							}
+						},
+						"Workspace_Id": {
+							"runAfter": {
+								"Workspace_Name": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "Workspace Id",
+										"type": "string",
+										"value": "@{parameters('WorkspaceId')}"
+									}
+								]
+							}
+						},
+						"Workspace_Name": {
+							"runAfter": {
+								"Resource_Group": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "WorkspaceName",
+										"type": "string",
+										"value": "@{parameters('WorkspaceName')}"
+									}
+								]
+							}
+						}
+					},
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuresentinel": {
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+								"connectionName": "[variables('azuresentinelConnectionName')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"name": "[parameters('PlaybookName')]",
+			"type": "Microsoft.Logic/workflows",
+			"location": "[resourceGroup().location]",
+			"tags": {
+				"createddate": "10/21/2021",
+				"owner": "Sreedhar Ande",
+				"hidden-SentinelTemplateName": "Affected-Key-Credentials-Scanner",
+				"hidden-SentinelTemplateVersion": "1.0"
+			},
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"apiVersion": "2017-07-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]"
+			]
+		},
+		{
+			"name": "[variables('azuresentinelConnectionName')]",
+			"type": "Microsoft.Web/connections",
+			"properties": {
+				"displayName": "[variables('azuresentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			},
+			"apiVersion": "2016-06-01",
+			"location": "[resourceGroup().location]",
+			"kind": "V1"
+		},
+		{
+			"name": "[concat(parameters('WorkspaceName'), '/Microsoft.SecurityInsights/', parameters('WatchListAlias'))]",
+			"type": "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
+			"kind": "",
+			"properties": {
+				"displayName": "[parameters('WatchListAlias')]",
+				"watchlistAlias": "[parameters('WatchListAlias')]",
+				"source": "Vulnerable_CVE_2021_42306.csv",
+				"description": "[parameters('WatchlistDescription')]",
+				"provider": "Microsoft",
+				"isDeleted": false,
+				"labels": [],
+				"defaultDuration": "P1000Y",
+				"contentType": "Text/Csv",
+				"numberOfLinesToSkip": 0,
+				"itemsSearchKey": "AppId",
+				"rawContent": "AppId,AppName,KeyId,EndDateTime,HasExtendedValue,ObjectClass,StartDateTime,Usage,isExpired\r\n1,2,3,4,5,6,7,8,9"
+			},
+			"apiVersion": "2021-03-01-preview"
+		}
+	]
+}

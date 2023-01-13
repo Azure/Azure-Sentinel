@@ -1,0 +1,438 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Barracuda",
+    "comments": "Solution template for Barracuda WAF"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "barracudanetworks.barracuda_web_application_firewall_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Barracuda",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Barracuda",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Barracuda WAF data connector with template",
+        "displayName": "Barracuda WAF template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Barracuda WAF data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Barracuda Web Application Firewall",
+                  "publisher": "Barracuda",
+                  "descriptionMarkdown": "The Barracuda Web Application Firewall (WAF) connector allows you to easily connect your Barracuda logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.\n\n[For more information >​](https://aka.ms/CEF-Barracuda)",
+                  "logo": "barracuda_logo_light.png",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Barracuda CEF",
+                      "baseQuery": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Barracuda CL",
+                      "baseQuery": "barracuda_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All logs",
+                      "query": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | sort by TimeGenerated"
+                    },
+                    {
+                      "description": "Summarize by protocol and destination IP",
+                      "query": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | summarize count() by ApplicationProtocol, DestinationIP​"
+                    },
+                    {
+                      "description": "Barracuda audit logs events",
+                      "query": "barracuda_CL\n            | where Vendor_s == \"Barracuda\" and Product_s == \"WAF\"\n| where LogType_s == \"AUDIT\"\n            | sort by TimeGenerated"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "barracuda_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CommonSecurityLog (Barracuda)",
+                      "lastDataReceivedQuery": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "Barracuda_CL",
+                      "lastDataReceivedQuery": "barracuda_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "The Barracuda Web Application Firewall can integrate with and export logs directly to Microsoft Sentinel via Azure OMS Server.​\n\n1.  Go to [Barracuda WAF configuration](https://aka.ms/asi-barracuda-connector), and follow the instructions, using the parameters below to set up the connection:.\n\n2.  Web Firewall logs facility: Go to the advanced settings (link below) for your workspace and on the **Data > Syslog** tabs, make sure that the facility exists.​\n\n> Notice that the data from all regions will be stored in the selected workspace",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "linkType": "OpenSyslogSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "Configure and connect Barracuda WAF"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "5fcd2f13-eaf9-46a7-8c6e-aa5d86b8f1f7",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Barracuda Networks"
+                    },
+                    "support": {
+                      "name": "Barracuda Networks",
+                      "link": "https://www.barracuda.com/support",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Barracuda WAF",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Barracuda"
+                },
+                "support": {
+                  "name": "Barracuda",
+                  "tier": "Partner",
+                  "link": "https://www.barracuda.com/support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Barracuda WAF",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Barracuda"
+        },
+        "support": {
+          "name": "Barracuda",
+          "tier": "Partner",
+          "link": "https://www.barracuda.com/support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Barracuda Web Application Firewall",
+          "publisher": "Barracuda",
+          "descriptionMarkdown": "The Barracuda Web Application Firewall (WAF) connector allows you to easily connect your Barracuda logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.\n\n[For more information >​](https://aka.ms/CEF-Barracuda)",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Barracuda CEF",
+              "baseQuery": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "Barracuda CL",
+              "baseQuery": "barracuda_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CommonSecurityLog (Barracuda)",
+              "lastDataReceivedQuery": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "Barracuda_CL",
+              "lastDataReceivedQuery": "barracuda_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "barracuda_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All logs",
+              "query": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | sort by TimeGenerated"
+            },
+            {
+              "description": "Summarize by protocol and destination IP",
+              "query": "\nCommonSecurityLog​ \n| where DeviceVendor == \"Barracuda\"\n\n            | summarize count() by ApplicationProtocol, DestinationIP​"
+            },
+            {
+              "description": "Barracuda audit logs events",
+              "query": "barracuda_CL\n            | where Vendor_s == \"Barracuda\" and Product_s == \"WAF\"\n| where LogType_s == \"AUDIT\"\n            | sort by TimeGenerated"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "The Barracuda Web Application Firewall can integrate with and export logs directly to Microsoft Sentinel via Azure OMS Server.​\n\n1.  Go to [Barracuda WAF configuration](https://aka.ms/asi-barracuda-connector), and follow the instructions, using the parameters below to set up the connection:.\n\n2.  Web Firewall logs facility: Go to the advanced settings (link below) for your workspace and on the **Data > Syslog** tabs, make sure that the facility exists.​\n\n> Notice that the data from all regions will be stored in the selected workspace",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "Configure and connect Barracuda WAF"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Barracuda WAF",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Barracuda"
+        },
+        "support": {
+          "name": "Barracuda",
+          "tier": "Partner",
+          "link": "https://www.barracuda.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-13",
+        "providers": [
+          "Barracuda"
+        ],
+        "categories": {
+          "domains": [
+            "Security – Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

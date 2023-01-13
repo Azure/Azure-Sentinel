@@ -1,0 +1,38 @@
+id: 5fe1af14-cd40-48ff-b581-3a12a1f90785
+name: VMware ESXi - Multiple VMs stopped
+description: |
+  'Detects when multiple VMs ware stopped by user.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1529
+query: |
+  let threshold = 5;
+  VMwareESXi
+  | where SyslogMessage has ('VmPoweredOffEvent')
+  | extend SrcUsername = extract(@'\[info\]\s+\[(.*?)\]', 1, SyslogMessage)
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize st_vm = makeset(DstHostname) by SrcUsername, bin(TimeGenerated, 5m)
+  | where array_length(st_vm) > threshold
+  | extend HostCustomEntity = st_vm, AccountCustomEntity = SrcUsername
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

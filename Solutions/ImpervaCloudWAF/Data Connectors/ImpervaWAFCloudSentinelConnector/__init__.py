@@ -138,11 +138,26 @@ class ImpervaFilesHandler:
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
-                    event_message = {"Message": line}
+                    event_message = self.parse_cef(line)
                     events_arr.append(event_message)
         for chunk in self.gen_chunks_to_object(events_arr, chunksize=1000):
             self.sentinel.post_data(json.dumps(chunk), len(chunk), file_name)
-
+    
+    def parse_cef(self,cef_raw):
+        rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
+        parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
+        for key,val in re.findall(rx, cef_raw):
+            if val.startswith('"') and val.endswith('"'):
+                val = val[1:-1]
+            parsed_cef[key]=val
+        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8']
+        for elem in cs_array:
+            if parsed_cef[elem] is not None:
+                parsed_cef[(parsed_cef[f'{elem}Label']).replace(" ", "")] = parsed_cef[elem]
+                parsed_cef.pop(f'{elem}Label')
+                parsed_cef.pop(elem)
+        return parsed_cef
+                
     def gen_chunks_to_object(self, object, chunksize=100):
         chunk = []
         for index, line in enumerate(object):

@@ -1,0 +1,601 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Netskope",
+    "comments": "Solution template for Netskope"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "netskope.netskope_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Netskope",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Netskope",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "Netskope-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "Netskope",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Netskope data connector with template",
+        "displayName": "Netskope template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Netskope data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Netskope (using Azure Function)",
+                  "publisher": "Netskope",
+                  "descriptionMarkdown": "The [Netskope Cloud Security Platform](https://www.netskope.com/platform) connector provides the capability to ingest Netskope logs and events into Azure Sentinel. The connector provides visibility into Netskope Platform Events and Alerts in Azure Sentinel to improve monitoring and investigation capabilities.",
+                  "additionalRequirementBanner": "These queries are based on a Kusto Function to work as expected. Follow the steps to use this Kusto functions alias **Netskope**. [Follow these steps to get this Kusto functions.](https://aka.ms/sentinel-netskope-parser)",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Netskope",
+                      "baseQuery": "Netskope_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Users",
+                      "query": "Netskope\n | summarize count() by SrcUserName \n | top 10 by count_"
+                    },
+                    {
+                      "description": "Top 10 Alerts",
+                      "query": "Netskope\n | where isnotempty(AlertName) \n | summarize count() by AlertName \n| top 10 by count_"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Netskope_CL",
+                      "lastDataReceivedQuery": "Netskope_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "Netskope_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Netskope API Token",
+                        "description": "A Netskope API Token is required. [See the documentation to learn more about Netskope API](https://innovatechcloud.goskope.com/docs/Netskope_Help/en/rest-api-v1-overview.html). **Note:** A Netskope account is required"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to Netskope to pull logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow the steps](https://aka.ms/sentinel-netskope-parser) to use the Kusto function alias, **Netskope**"
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": "**STEP 1 - Configuration steps for the Netskope API**\n\n [Follow these instructions](https://docs.netskope.com/en/rest-api-v1-overview.html) provided by Netskope to obtain an API Token. **Note:** A Netskope account is required"
+                    },
+                    {
+                      "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Netskope connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Netskope API Authorization Token, readily available.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "This method provides an automated deployment of the Netskope connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-netskope-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **API Key**, and **URI**.\n - Use the following schema for the `uri` value: `https://<Tenant Name>.goskope.com` Replace `<Tenant Name>` with your domain.\n - The default **Time Interval** is set to pull the last five (5) minutes of data. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly (in the function.json file, post deployment) to prevent overlapping data ingestion.\n - The default **Log Types** is set to pull all 6 available log types (`alert, page, application, audit, infrastructure, network`), remove any are not required. \n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n6. After successfully deploying the connector, download the Kusto Function to normalize the data fields. [Follow the steps](https://aka.ms/sentinelgithubparsersnetskope) to use the Kusto function alias, **Netskope**.",
+                      "title": "Option 1 - Azure Resource Manager (ARM) Template"
+                    },
+                    {
+                      "description": "This method provides the step-by-step instructions to deploy the Netskope connector manually with Azure Function.",
+                      "title": "Option 2 - Manual Deployment of Azure Functions"
+                    },
+                    {
+                      "description": "**1. Create a Function App**\n\n1.  From the Azure Portal, navigate to [Function App](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp), and select **+ Add**.\n2. In the **Basics** tab, ensure Runtime stack is set to **Powershell Core**. \n3. In the **Hosting** tab, ensure the **Consumption (Serverless)** plan type is selected.\n4. Make other preferrable configuration changes, if needed, then click **Create**."
+                    },
+                    {
+                      "description": "**2. Import Function App Code**\n\n1. In the newly created Function App, select **Functions** on the left pane and click **+ Add**.\n2. Select **Timer Trigger**.\n3. Enter a unique Function **Name** and modify the cron schedule, if needed. The default value is set to run the Function App every 5 minutes. (Note: the Timer trigger should match the `timeInterval` value below to prevent overlapping data), click **Create**.\n4. Click on **Code + Test** on the left pane. \n5. Copy the [Function App Code](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Netskope/AzureFunctionNetskope/run.ps1) and paste into the Function App `run.ps1` editor.\n5. Click **Save**."
+                    },
+                    {
+                      "description": "**3. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following seven (7) application settings individually, with their respective string values (case-sensitive): \n\t\tapikey\n\t\tworkspaceID\n\t\tworkspaceKey\n\t\turi\n\t\ttimeInterval\n\t\tlogTypes\n\t\tlogAnalyticsUri (optional)\n> - Enter the URI that corresponds to your region. The `uri` value must follow the following schema: `https://<Tenant Name>.goskope.com` - There is no need to add subsquent parameters to the Uri, the Function App will dynamically append the parameteres in the proper format.\n> - Set the `timeInterval` (in minutes) to the default value of `5` to correspond to the default Timer Trigger of every `5` minutes. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly to prevent overlapping data ingestion. \n> - Set the `logTypes` to `alert, page, application, audit, infrastructure, network` - This list represents all the avaliable log types. Select the log types based on logging requirements, seperating each by a single comma.\n> - Note: If using Azure Key Vault, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n4. Once all application settings have been entered, click **Save**.\n5. After successfully deploying the connector, download the Kusto Function to normalize the data fields. [Follow the steps](https://aka.ms/sentinelgithubparsersnetskope) to use the Kusto function alias, **Netskope**."
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Netskope",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Netskope"
+                },
+                "support": {
+                  "name": "Netskope",
+                  "tier": "Partner",
+                  "link": "https://www.netskope.com/services#support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Netskope",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Netskope"
+        },
+        "support": {
+          "name": "Netskope",
+          "tier": "Partner",
+          "link": "https://www.netskope.com/services#support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Netskope (using Azure Function)",
+          "publisher": "Netskope",
+          "descriptionMarkdown": "The [Netskope Cloud Security Platform](https://www.netskope.com/platform) connector provides the capability to ingest Netskope logs and events into Azure Sentinel. The connector provides visibility into Netskope Platform Events and Alerts in Azure Sentinel to improve monitoring and investigation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Netskope",
+              "baseQuery": "Netskope_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Netskope_CL",
+              "lastDataReceivedQuery": "Netskope_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Netskope_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Users",
+              "query": "Netskope\n | summarize count() by SrcUserName \n | top 10 by count_"
+            },
+            {
+              "description": "Top 10 Alerts",
+              "query": "Netskope\n | where isnotempty(AlertName) \n | summarize count() by AlertName \n| top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Netskope API Token",
+                "description": "A Netskope API Token is required. [See the documentation to learn more about Netskope API](https://innovatechcloud.goskope.com/docs/Netskope_Help/en/rest-api-v1-overview.html). **Note:** A Netskope account is required"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to Netskope to pull logs into Azure Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow the steps](https://aka.ms/sentinel-netskope-parser) to use the Kusto function alias, **Netskope**"
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": "**STEP 1 - Configuration steps for the Netskope API**\n\n [Follow these instructions](https://docs.netskope.com/en/rest-api-v1-overview.html) provided by Netskope to obtain an API Token. **Note:** A Netskope account is required"
+            },
+            {
+              "description": "**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Netskope connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Netskope API Authorization Token, readily available.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            },
+            {
+              "description": "This method provides an automated deployment of the Netskope connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-netskope-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **API Key**, and **URI**.\n - Use the following schema for the `uri` value: `https://<Tenant Name>.goskope.com` Replace `<Tenant Name>` with your domain.\n - The default **Time Interval** is set to pull the last five (5) minutes of data. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly (in the function.json file, post deployment) to prevent overlapping data ingestion.\n - The default **Log Types** is set to pull all 6 available log types (`alert, page, application, audit, infrastructure, network`), remove any are not required. \n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.\n6. After successfully deploying the connector, download the Kusto Function to normalize the data fields. [Follow the steps](https://aka.ms/sentinelgithubparsersnetskope) to use the Kusto function alias, **Netskope**.",
+              "title": "Option 1 - Azure Resource Manager (ARM) Template"
+            },
+            {
+              "description": "This method provides the step-by-step instructions to deploy the Netskope connector manually with Azure Function.",
+              "title": "Option 2 - Manual Deployment of Azure Functions"
+            },
+            {
+              "description": "**1. Create a Function App**\n\n1.  From the Azure Portal, navigate to [Function App](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp), and select **+ Add**.\n2. In the **Basics** tab, ensure Runtime stack is set to **Powershell Core**. \n3. In the **Hosting** tab, ensure the **Consumption (Serverless)** plan type is selected.\n4. Make other preferrable configuration changes, if needed, then click **Create**."
+            },
+            {
+              "description": "**2. Import Function App Code**\n\n1. In the newly created Function App, select **Functions** on the left pane and click **+ Add**.\n2. Select **Timer Trigger**.\n3. Enter a unique Function **Name** and modify the cron schedule, if needed. The default value is set to run the Function App every 5 minutes. (Note: the Timer trigger should match the `timeInterval` value below to prevent overlapping data), click **Create**.\n4. Click on **Code + Test** on the left pane. \n5. Copy the [Function App Code](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Netskope/AzureFunctionNetskope/run.ps1) and paste into the Function App `run.ps1` editor.\n5. Click **Save**."
+            },
+            {
+              "description": "**3. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following seven (7) application settings individually, with their respective string values (case-sensitive): \n\t\tapikey\n\t\tworkspaceID\n\t\tworkspaceKey\n\t\turi\n\t\ttimeInterval\n\t\tlogTypes\n\t\tlogAnalyticsUri (optional)\n> - Enter the URI that corresponds to your region. The `uri` value must follow the following schema: `https://<Tenant Name>.goskope.com` - There is no need to add subsquent parameters to the Uri, the Function App will dynamically append the parameteres in the proper format.\n> - Set the `timeInterval` (in minutes) to the default value of `5` to correspond to the default Timer Trigger of every `5` minutes. If the time interval needs to be modified, it is recommended to change the Function App Timer Trigger accordingly to prevent overlapping data ingestion. \n> - Set the `logTypes` to `alert, page, application, audit, infrastructure, network` - This list represents all the avaliable log types. Select the log types based on logging requirements, seperating each by a single comma.\n> - Note: If using Azure Key Vault, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n4. Once all application settings have been entered, click **Save**.\n5. After successfully deploying the connector, download the Kusto Function to normalize the data fields. [Follow the steps](https://aka.ms/sentinelgithubparsersnetskope) to use the Kusto function alias, **Netskope**."
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries are based on a Kusto Function to work as expected. Follow the steps to use this Kusto functions alias **Netskope**. [Follow these steps to get this Kusto functions.](https://aka.ms/sentinel-netskope-parser)"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "Netskope Data Parser with template",
+        "displayName": "Netskope Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Netskope Data Parser with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Netskope",
+                "category": "Samples",
+                "functionAlias": "Netskope",
+                "query": "\nNetskope_CL\r\n| project SourceSystem, TimeGenerated, Type, TenantId,\r\nInsertionEpochTimestamp = column_ifexists(\"_insertion_epoch_timestamp_d\", \"\"),\r\nAccessMethod = column_ifexists(\"access_method_s\", \"\"),\r\nAcked = column_ifexists(\"acked_s\", \"\"),\r\nActivity = column_ifexists(\"activity_s\", \"\"),\r\nAlertName = column_ifexists(\"alert_name_s\", \"\"),\r\nAlert = column_ifexists(\"alert_s\", \"\"),\r\nAlertType = column_ifexists(\"alert_type_s\", \"\"),\r\nAppName = column_ifexists(\"app_s\", \"\"),\r\nAppCategory = column_ifexists(\"appcategory_s\", \"\"),\r\nBrowser = column_ifexists(\"browser_s\", \"\"),\r\nBrowserVersion = column_ifexists(\"browser_version_s\", \"\"),\r\nBypassTraffic = column_ifexists(\"bypass_traffic_s\", \"\"),\r\nCcl = column_ifexists(\"ccl_s\", \"\"),\r\nClientBytes = column_ifexists(\"client_bytes_d\", \"\"),\r\nCount = column_ifexists(\"count_d\", \"\"),\r\nDevice = column_ifexists(\"device_s\", \"\"),\r\nDomain = column_ifexists(\"domain_s\", \"\"),\r\nDstGeoCountry = column_ifexists(\"dst_country_s\", \"\"),\r\nDstGeoLatitude = column_ifexists(\"dst_latitude_d\", \"\"),\r\nDstGeoLocation = column_ifexists(\"dst_location_s\", \"\"),\r\nDstGeoLongitude = column_ifexists(\"dst_longitude_d\", \"\"),\r\nDstGeoRegion = column_ifexists(\"dst_region_s\", \"\"),\r\nDstGeoTimezone = column_ifexists(\"dst_timezone_s\", \"\"),\r\nDstGeoZipcode = column_ifexists(\"dst_zipcode_s\", \"\"),\r\nDstIpAddr = column_ifexists(\"dstip_s\", \"\"),\r\nDstPort = column_ifexists(\"dstport_d\", \"\"),\r\nFromUser = column_ifexists(\"from_user_s\", \"\"),\r\nHostname = column_ifexists(\"hostname_s\", \"\"),\r\nHttpTransactionCount = column_ifexists(\"http_transaction_count_d\", \"\"),\r\nLatencyMax = column_ifexists(\"latency_max_d\", \"\"),\r\nLatencyMin = column_ifexists(\"latency_min_d\", \"\"),\r\nLatencyTotal = column_ifexists(\"latency_total_d\", \"\"),\r\nNumBytes = column_ifexists(\"numbytes_d\", \"\"),\r\nObject = column_ifexists(\"object_s\", \"\"),\r\nObjectType = column_ifexists(\"object_type_s\", \"\"),\r\nOrg = column_ifexists(\"org_s\", \"\"),\r\nOrganizationUnit = column_ifexists(\"organization_unit_s\", \"\"),\r\nOs = column_ifexists(\"os_s\", \"\"),\r\nOsVersion = column_ifexists(\"os_version_s\", \"\"),\r\nPage = column_ifexists(\"page_s\", \"\"),\r\nPolicy = column_ifexists(\"policy_s\", \"\"),\r\nReqCnt = column_ifexists(\"req_cnt_d\", \"\"),\r\nRespCnt = column_ifexists(\"resp_cnt_d\", \"\"),\r\nServerBytes = column_ifexists(\"server_bytes_d\", \"\"),\r\nSite = column_ifexists(\"site_s\", \"\"),\r\nSrcGeoCountry = column_ifexists(\"src_country_s\", \"\"),\r\nSrcGeoLatitude = column_ifexists(\"src_latitude_d\", \"\"),\r\nSrcGeoLocation = column_ifexists(\"src_location_s\", \"\"),\r\nSrcGeoLongitude = column_ifexists(\"src_longitude_d\", \"\"),\r\nSrcGeoRegion = column_ifexists(\"src_region_s\", \"\"),\r\nSrcGeoTimezone = column_ifexists(\"src_timezone_s\", \"\"),\r\nSrcGeoZipcode = column_ifexists(\"src_zipcode_s\", \"\"),\r\nSrcIpAddr = column_ifexists(\"srcip_s\", \"\"),\r\nTimestamp = column_ifexists(\"timestamp_d\", \"\"),\r\nToUser = column_ifexists(\"to_user_s\", \"\"),\r\nTrafficType = column_ifexists(\"traffic_type_s\", \"\"),\r\nLogType = column_ifexists(\"type_s\", \"\"),\r\nUrNormalized = column_ifexists(\"ur_normalized_s\", \"\"),\r\nUrl = column_ifexists(\"url_s\", \"\"),\r\nUserGenerated = column_ifexists(\"user_generated_s\", \"\"),\r\nUser = column_ifexists(\"user_s\", \"\"),\r\nUserAgent = column_ifexists(\"useragent_s\", \"\"),\r\nUserIp = column_ifexists(\"userip_s\", \"\"),\r\nUserKey = column_ifexists(\"userkey_s\", \"\"),\r\nIaasAssetTags = column_ifexists(\"iaas_asset_tags_s\", \"\"),\r\nDlpIsUniqueCount = column_ifexists(\"dlp_is_unique_count_s\", \"\"),\r\nFilePasswdProtected = column_ifexists(\"file_passwd_protected_s\", \"\"),\r\nMalicious = column_ifexists(\"malicious_s\", \"\"),\r\nManagedApp = column_ifexists(\"managed_app_s\", \"\"),\r\nShared = column_ifexists(\"shared_s\", \"\"),\r\nModified = column_ifexists(\"modified_s\", \"\"),\r\nConnEndtime = column_ifexists(\"conn_endtime_s\", \"\"),\r\nConnStarttime = column_ifexists(\"conn_starttime_s\", \"\"),\r\nMalsiteLatitude = column_ifexists(\"malsite_latitude_s\", \"\"),\r\nMalsiteLongitude = column_ifexists(\"malsite_longitude_s\", \"\"),\r\nMalsiteReputation = column_ifexists(\"malsite_reputation_s\", \"\"),\r\nBreachDate = column_ifexists(\"breach_date_d\", \"\"),\r\nBreachScore = column_ifexists(\"breach_score_d\", \"\"),\r\nConnDuration = column_ifexists(\"conn_duration_d\", \"\"),\r\nDlpFingerprintScore = column_ifexists(\"dlp_fingerprint_score_d\", \"\"),\r\nDlpRuleCount = column_ifexists(\"dlp_rule_count_d\", \"\"),\r\nDlpRuleScore = column_ifexists(\"dlp_rule_score_d\", \"\"),\r\nDlpUniqueCount = column_ifexists(\"dlp_unique_count_d\", \"\"),\r\nDstGeoipSrc = column_ifexists(\"dst_geoip_src_d\", \"\"),\r\nExternalCollaboratorCount = column_ifexists(\"external_collaborator_count_d\", \"\"),\r\nFileSize = column_ifexists(\"file_size_d\", \"\"),\r\nInternalCollaboratorCount = column_ifexists(\"internal_collaborator_count_d\", \"\"),\r\nMalsiteActive = column_ifexists(\"malsite_active_d\", \"\"),\r\nMalsiteConfidence = column_ifexists(\"malsite_confidence_d\", \"\"),\r\nMalsiteConsecutive = column_ifexists(\"malsite_consecutive_d\", \"\"),\r\nMalsiteFirstSeen = column_ifexists(\"malsite_first_seen_d\", \"\"),\r\nMalsiteHostility = column_ifexists(\"malsite_hostility_d\", \"\"),\r\nMalsiteLastSeen = column_ifexists(\"malsite_last_seen_d\", \"\"),\r\nObjectCount = column_ifexists(\"object_count_d\", \"\"),\r\nPathId = column_ifexists(\"path_id_d\", \"\"),\r\nPolicyId = column_ifexists(\"policy_id_d\", \"\"),\r\nQuarantineProfileId = column_ifexists(\"quarantine_profile_id_d\", \"\"),\r\nRequestId = column_ifexists(\"request_id_d\", \"\"),\r\nRequestIdNew = column_ifexists(\"requestid_s\", \"\"),\r\nRiskLevelId = column_ifexists(\"risk_level_id_d\", \"\"),\r\nRunId = column_ifexists(\"run_id_d\", \"\"),\r\nSaProfileId = column_ifexists(\"sa_profile_id_d\", \"\"),\r\nSaRuleId = column_ifexists(\"sa_rule_id_d\", \"\"),\r\nSessionId = column_ifexists(\"session_id_d\", \"\"),\r\nSessionid = column_ifexists(\"sessionid_d\", \"\"),\r\nSeverityId = column_ifexists(\"severity_id_d\", \"\"),\r\nSeverityLevelId = column_ifexists(\"severity_level_id_d\", \"\"),\r\nSrcGeoIpSrc = column_ifexists(\"src_geoip_src_d\", \"\"),\r\nSuppressionEndTime = column_ifexists(\"suppression_end_time_d\", \"\"),\r\nSuppressionStartTime = column_ifexists(\"suppression_start_time_d\", \"\"),\r\nThreatSourceId = column_ifexists(\"threat_source_id_d\", \"\"),\r\nThreshold = column_ifexists(\"threshold_d\", \"\"),\r\nTotalCollaboratorCount = column_ifexists(\"total_collaborator_count_d\", \"\"),\r\nBinTimestamp = column_ifexists(\"bin_timestamp_d\", \"\"),\r\nBrowserSessionId = column_ifexists(\"browser_session_id_d\", \"\"),\r\nBrowserSessionIdNew = column_ifexists(\"browser_sessionid_s\", \"\"),\r\nConnectionId = column_ifexists(\"connection_id_d\", \"\"),\r\nConnectionIdNew = column_ifexists(\"connectionid_s\", \"\"),\r\nLastTimestamp = column_ifexists(\"last_timestamp_d\", \"\"),\r\nScanTime = column_ifexists(\"scan_time_d\", \"\"),\r\nThresholdTime = column_ifexists(\"threshold_time_d\", \"\"),\r\nAccountId = column_ifexists(\"account_id_d\", \"\"),\r\nAccountName = column_ifexists(\"account_name_s\", \"\"),\r\nActUser = column_ifexists(\"act_user_s\", \"\"),\r\nAction = column_ifexists(\"action_s\", \"\"),\r\nActivityStatus = column_ifexists(\"activity_status_s\", \"\"),\r\nActivityType = column_ifexists(\"activity_type_s\", \"\"),\r\nAppSessionId = column_ifexists(\"app_session_id_d\", \"\"),\r\nAppSessionIdNew = column_ifexists(\"app_sessionid_s\", \"\"),\r\nAttachment = column_ifexists(\"attachment_s\", \"\"),\r\nAuditCategory = column_ifexists(\"audit_category_s\", \"\"),\r\nAuditType = column_ifexists(\"audit_type_s\", \"\"),\r\nBreachId = column_ifexists(\"breach_id_s\", \"\"),\r\nBreachMediaReferences = column_ifexists(\"breach_media_references_s\", \"\"),\r\nBreachTargetReferences = column_ifexists(\"breach_target_references_s\", \"\"),\r\nChannel = column_ifexists(\"channel_s\", \"\"),\r\nDataType = column_ifexists(\"data_type_s\", \"\"),\r\nDetectionEngine = column_ifexists(\"detection_engine_s\", \"\"),\r\nDetectionType = column_ifexists(\"detection_type_s\", \"\"),\r\nDeviceClassification = column_ifexists(\"device_classification_s\", \"\"),\r\nDlpFile = column_ifexists(\"dlp_file_s\", \"\"),\r\nDlpFingerprintClassification = column_ifexists(\"dlp_fingerprint_classification_s\", \"\"),\r\nDlpFingerprintMatch = column_ifexists(\"dlp_fingerprint_match_s\", \"\"),\r\nDlpIncidentId = column_ifexists(\"dlp_incident_id_d\", \"\"),\r\nDlpIncidentIdNew = column_ifexists(\"dlp_incidentid_s\", \"\"),\r\nDlpParentId = column_ifexists(\"dlp_parent_id_d\", \"\"),\r\nDlpParentIdNew = column_ifexists(\"dlp_parentid_s\", \"\"),\r\nDlpProfile = column_ifexists(\"dlp_profile_s\", \"\"),\r\nDlpRule = column_ifexists(\"dlp_rule_s\", \"\"),\r\nDlpRuleSeverity = column_ifexists(\"dlp_rule_severity_s\", \"\"),\r\nDownloadApp = column_ifexists(\"download_app_s\", \"\"),\r\nDstHostname = column_ifexists(\"dsthost_s\", \"\"),\r\nDynamicClassification = column_ifexists(\"dynamic_classification_s\", \"\"),\r\nEncryptFailure = column_ifexists(\"encrypt_failure_s\", \"\"),\r\nEnterprise = column_ifexists(\"enterprise_s\", \"\"),\r\nEnterpriseId = column_ifexists(\"enterprise_id_s\", \"\"),\r\nEventType = column_ifexists(\"event_type_s\", \"\"),\r\nExposure = column_ifexists(\"exposure_s\", \"\"),\r\nFileId = column_ifexists(\"file_id_s\", \"\"),\r\nFileLang = column_ifexists(\"file_lang_s\", \"\"),\r\nFilePath = column_ifexists(\"file_path_s\", \"\"),\r\nFileType = column_ifexists(\"file_type_s\", \"\"),\r\nFileName = column_ifexists(\"filename_s\", \"\"),\r\nFromObject = column_ifexists(\"from_object_s\", \"\"),\r\nFromUserCategory = column_ifexists(\"from_user_category_s\", \"\"),\r\nFromlogs = column_ifexists(\"fromlogs_s\", \"\"),\r\nInstance = column_ifexists(\"instance_s\", \"\"),\r\nInstanceId = column_ifexists(\"instance_id_s\", \"\"),\r\nInstanceName = column_ifexists(\"instance_name_s\", \"\"),\r\nInstanceType = column_ifexists(\"instance_type_s\", \"\"),\r\nJustificationReason = column_ifexists(\"justification_reason_s\", \"\"),\r\nJustificationType = column_ifexists(\"justification_type_s\", \"\"),\r\nLastApp = column_ifexists(\"last_app_s\", \"\"),\r\nLastCountry = column_ifexists(\"last_country_s\", \"\"),\r\nLastDevice = column_ifexists(\"last_device_s\", \"\"),\r\nLastLocation = column_ifexists(\"last_location_s\", \"\"),\r\nLastRegion = column_ifexists(\"last_region_s\", \"\"),\r\nLegalHoldProfileName = column_ifexists(\"legal_hold_profile_name_s\", \"\"),\r\nLhCustodianEmail = column_ifexists(\"lh_custodian_email_s\", \"\"),\r\nLhCustodianName = column_ifexists(\"lh_custodian_name_s\", \"\"),\r\nLhDestApp = column_ifexists(\"lh_dest_app_s\", \"\"),\r\nLhDestInstance = column_ifexists(\"lh_dest_instance_s\", \"\"),\r\nLhFileid = column_ifexists(\"lh_fileid_s\", \"\"),\r\nLhFilename = column_ifexists(\"lh_filename_s\", \"\"),\r\nLhFilepath = column_ifexists(\"lh_filepath_s\", \"\"),\r\nLhOriginalFilename = column_ifexists(\"lh_original_filename_s\", \"\"),\r\nLhShared = column_ifexists(\"lh_shared_s\", \"\"),\r\nLhSharedWith = column_ifexists(\"lh_shared_with_s\", \"\"),\r\nLhVersion = column_ifexists(\"lh_version_s\", \"\"),\r\nLocalMd5 = column_ifexists(\"local_md5_s\", \"\"),\r\nLocalSha1 = column_ifexists(\"local_sha1_s\", \"\"),\r\nLocalSha256 = column_ifexists(\"local_sha256_s\", \"\"),\r\nLogFileName = column_ifexists(\"log_file_name_s\", \"\"),\r\nLoginType = column_ifexists(\"logintype_s\", \"\"),\r\nLoginUrl = column_ifexists(\"loginurl_s\", \"\"),\r\nMalsiteAsNumber = column_ifexists(\"malsite_as_number_s\", \"\"),\r\nMalsiteCategory = column_ifexists(\"malsite_category_s\", \"\"),\r\nMalsiteCity = column_ifexists(\"malsite_city_s\", \"\"),\r\nMalsiteCountry = column_ifexists(\"malsite_country_s\", \"\"),\r\nMalsiteDnsServer = column_ifexists(\"malsite_dns_server_s\", \"\"),\r\nMalsiteId = column_ifexists(\"malsite_id_s\", \"\"),\r\nMalsiteIpHost = column_ifexists(\"malsite_ip_host_s\", \"\"),\r\nMalsiteIsp = column_ifexists(\"malsite_isp_s\", \"\"),\r\nMalsiteRegion = column_ifexists(\"malsite_region_s\", \"\"),\r\nMalwareId = column_ifexists(\"malware_id_s\", \"\"),\r\nMalwareName = column_ifexists(\"malware_name_s\", \"\"),\r\nMalwareProfile = column_ifexists(\"malware_profile_s\", \"\"),\r\nMalwareSeverity = column_ifexists(\"malware_severity_s\", \"\"),\r\nMalwareType = column_ifexists(\"malware_type_s\", \"\"),\r\nManagementid = column_ifexists(\"managementID_s\", \"\"),\r\nMd5 = column_ifexists(\"md5_s\", \"\"),\r\nMimeType = column_ifexists(\"mime_type_s\", \"\"),\r\nNewValue = column_ifexists(\"new_value_s\", \"\"),\r\nNsActivity = column_ifexists(\"ns_activity_s\", \"\"),\r\nNsdeviceuid = column_ifexists(\"nsdeviceuid_s\", \"\"),\r\nObjectId = column_ifexists(\"object_id_s\", \"\"),\r\nOldValue = column_ifexists(\"old_value_s\", \"\"),\r\nOrigTy = column_ifexists(\"orig_ty_s\", \"\"),\r\nOriginalFilePath = column_ifexists(\"original_file_path_s\", \"\"),\r\nOwner = column_ifexists(\"owner_s\", \"\"),\r\nProfileEmails = column_ifexists(\"profile_emails_s\", \"\"),\r\nProfileId = column_ifexists(\"profile_id_s\", \"\"),\r\nQAdmin = column_ifexists(\"q_admin_s\", \"\"),\r\nQApp = column_ifexists(\"q_app_s\", \"\"),\r\nQInstance = column_ifexists(\"q_instance_s\", \"\"),\r\nQOriginalFilename = column_ifexists(\"q_original_filename_s\", \"\"),\r\nQOriginalFilepath = column_ifexists(\"q_original_filepath_s\", \"\"),\r\nQOriginalShared = column_ifexists(\"q_original_shared_s\", \"\"),\r\nQOriginalVersion = column_ifexists(\"q_original_version_s\", \"\"),\r\nQuarantineActionReason = column_ifexists(\"quarantine_action_reason_s\", \"\"),\r\nQuarantineFailure = column_ifexists(\"quarantine_failure_s\", \"\"),\r\nQuarantineFileId = column_ifexists(\"quarantine_file_id_s\", \"\"),\r\nQuarantineFileName = column_ifexists(\"quarantine_file_name_s\", \"\"),\r\nQuarantineProfile = column_ifexists(\"quarantine_profile_s\", \"\"),\r\nReferer = column_ifexists(\"referer_s\", \"\"),\r\nRegionId = column_ifexists(\"region_id_s\", \"\"),\r\nRegionName = column_ifexists(\"region_name_s\", \"\"),\r\nResourceCategory = column_ifexists(\"resource_category_s\", \"\"),\r\nRetroScanName = column_ifexists(\"retro_scan_name_s\", \"\"),\r\nRiskLevel = column_ifexists(\"risk_level_s\", \"\"),\r\nRole = column_ifexists(\"role_s\", \"\"),\r\nSaProfileName = column_ifexists(\"sa_profile_name_s\", \"\"),\r\nSaRuleName = column_ifexists(\"sa_rule_name_s\", \"\"),\r\nSaRuleSeverity = column_ifexists(\"sa_rule_severity_s\", \"\"),\r\nScanType = column_ifexists(\"scan_type_s\", \"\"),\r\nScopes = column_ifexists(\"scopes_s\", \"\"),\r\nSeverity = column_ifexists(\"severity_s\", \"\"),\r\nSeverityLevel = column_ifexists(\"severity_level_s\", \"\"),\r\nSharedCredentialUser = column_ifexists(\"shared_credential_user_s\", \"\"),\r\nSharedDomains = column_ifexists(\"shared_domains_s\", \"\"),\r\nSharedType = column_ifexists(\"shared_type_s\", \"\"),\r\nSharedWith = column_ifexists(\"shared_with_s\", \"\"),\r\nSslDecryptPolicy = column_ifexists(\"ssl_decrypt_policy_s\", \"\"),\r\nSubType = column_ifexists(\"sub_type_s\", \"\"),\r\nSuppressionKey = column_ifexists(\"suppression_key_s\", \"\"),\r\nTeam = column_ifexists(\"team_s\", \"\"),\r\nTelemetryApp = column_ifexists(\"telemetry_app_s\", \"\"),\r\nThreatMatchField = column_ifexists(\"threat_match_field_s\", \"\"),\r\nTitle = column_ifexists(\"title_s\", \"\"),\r\nToObject = column_ifexists(\"to_object_s\", \"\"),\r\nToUserCategory = column_ifexists(\"to_user_category_s\", \"\"),\r\nTransactionId = column_ifexists(\"transaction_id_d\", \"\"),\r\nTransactionIdNew = column_ifexists(\"transactionid_s\", \"\"),\r\nTssMode = column_ifexists(\"tss_mode_s\", \"\"),\r\nTunnelId = column_ifexists(\"tunnel_id_s\", \"\"),\r\nUrl2Activity = column_ifexists(\"Url2Activity_s\", \"\"),\r\nUserCategory = column_ifexists(\"user_category_s\", \"\"),\r\nUserId = column_ifexists(\"user_id_s\", \"\"),\r\nUserName = column_ifexists(\"user_name_s\", \"\"),\r\nUserNormalized = column_ifexists(\"user_normalized_s\", \"\"),\r\nUserRole = column_ifexists(\"user_role_s\", \"\"),\r\nViolatingUser = column_ifexists(\"violating_user_s\", \"\"),\r\nViolatingUserType = column_ifexists(\"violating_user_type_s\", \"\"),\r\nWebUrl = column_ifexists(\"web_url_s\", \"\"),\r\nWorkspace = column_ifexists(\"workspace_s\", \"\"),\r\nWorkspaceId = column_ifexists(\"workspace_id_s\", \"\"),\r\nZipPassword = column_ifexists(\"zip_password_s\", \"\")\r\n\r\n\r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Netskope"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Netskope",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Netskope"
+                },
+                "support": {
+                  "name": "Netskope",
+                  "tier": "Partner",
+                  "link": "https://www.netskope.com/services#support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "Netskope",
+        "category": "Samples",
+        "functionAlias": "Netskope",
+        "query": "\nNetskope_CL\r\n| project SourceSystem, TimeGenerated, Type, TenantId,\r\nInsertionEpochTimestamp = column_ifexists(\"_insertion_epoch_timestamp_d\", \"\"),\r\nAccessMethod = column_ifexists(\"access_method_s\", \"\"),\r\nAcked = column_ifexists(\"acked_s\", \"\"),\r\nActivity = column_ifexists(\"activity_s\", \"\"),\r\nAlertName = column_ifexists(\"alert_name_s\", \"\"),\r\nAlert = column_ifexists(\"alert_s\", \"\"),\r\nAlertType = column_ifexists(\"alert_type_s\", \"\"),\r\nAppName = column_ifexists(\"app_s\", \"\"),\r\nAppCategory = column_ifexists(\"appcategory_s\", \"\"),\r\nBrowser = column_ifexists(\"browser_s\", \"\"),\r\nBrowserVersion = column_ifexists(\"browser_version_s\", \"\"),\r\nBypassTraffic = column_ifexists(\"bypass_traffic_s\", \"\"),\r\nCcl = column_ifexists(\"ccl_s\", \"\"),\r\nClientBytes = column_ifexists(\"client_bytes_d\", \"\"),\r\nCount = column_ifexists(\"count_d\", \"\"),\r\nDevice = column_ifexists(\"device_s\", \"\"),\r\nDomain = column_ifexists(\"domain_s\", \"\"),\r\nDstGeoCountry = column_ifexists(\"dst_country_s\", \"\"),\r\nDstGeoLatitude = column_ifexists(\"dst_latitude_d\", \"\"),\r\nDstGeoLocation = column_ifexists(\"dst_location_s\", \"\"),\r\nDstGeoLongitude = column_ifexists(\"dst_longitude_d\", \"\"),\r\nDstGeoRegion = column_ifexists(\"dst_region_s\", \"\"),\r\nDstGeoTimezone = column_ifexists(\"dst_timezone_s\", \"\"),\r\nDstGeoZipcode = column_ifexists(\"dst_zipcode_s\", \"\"),\r\nDstIpAddr = column_ifexists(\"dstip_s\", \"\"),\r\nDstPort = column_ifexists(\"dstport_d\", \"\"),\r\nFromUser = column_ifexists(\"from_user_s\", \"\"),\r\nHostname = column_ifexists(\"hostname_s\", \"\"),\r\nHttpTransactionCount = column_ifexists(\"http_transaction_count_d\", \"\"),\r\nLatencyMax = column_ifexists(\"latency_max_d\", \"\"),\r\nLatencyMin = column_ifexists(\"latency_min_d\", \"\"),\r\nLatencyTotal = column_ifexists(\"latency_total_d\", \"\"),\r\nNumBytes = column_ifexists(\"numbytes_d\", \"\"),\r\nObject = column_ifexists(\"object_s\", \"\"),\r\nObjectType = column_ifexists(\"object_type_s\", \"\"),\r\nOrg = column_ifexists(\"org_s\", \"\"),\r\nOrganizationUnit = column_ifexists(\"organization_unit_s\", \"\"),\r\nOs = column_ifexists(\"os_s\", \"\"),\r\nOsVersion = column_ifexists(\"os_version_s\", \"\"),\r\nPage = column_ifexists(\"page_s\", \"\"),\r\nPolicy = column_ifexists(\"policy_s\", \"\"),\r\nReqCnt = column_ifexists(\"req_cnt_d\", \"\"),\r\nRespCnt = column_ifexists(\"resp_cnt_d\", \"\"),\r\nServerBytes = column_ifexists(\"server_bytes_d\", \"\"),\r\nSite = column_ifexists(\"site_s\", \"\"),\r\nSrcGeoCountry = column_ifexists(\"src_country_s\", \"\"),\r\nSrcGeoLatitude = column_ifexists(\"src_latitude_d\", \"\"),\r\nSrcGeoLocation = column_ifexists(\"src_location_s\", \"\"),\r\nSrcGeoLongitude = column_ifexists(\"src_longitude_d\", \"\"),\r\nSrcGeoRegion = column_ifexists(\"src_region_s\", \"\"),\r\nSrcGeoTimezone = column_ifexists(\"src_timezone_s\", \"\"),\r\nSrcGeoZipcode = column_ifexists(\"src_zipcode_s\", \"\"),\r\nSrcIpAddr = column_ifexists(\"srcip_s\", \"\"),\r\nTimestamp = column_ifexists(\"timestamp_d\", \"\"),\r\nToUser = column_ifexists(\"to_user_s\", \"\"),\r\nTrafficType = column_ifexists(\"traffic_type_s\", \"\"),\r\nLogType = column_ifexists(\"type_s\", \"\"),\r\nUrNormalized = column_ifexists(\"ur_normalized_s\", \"\"),\r\nUrl = column_ifexists(\"url_s\", \"\"),\r\nUserGenerated = column_ifexists(\"user_generated_s\", \"\"),\r\nUser = column_ifexists(\"user_s\", \"\"),\r\nUserAgent = column_ifexists(\"useragent_s\", \"\"),\r\nUserIp = column_ifexists(\"userip_s\", \"\"),\r\nUserKey = column_ifexists(\"userkey_s\", \"\"),\r\nIaasAssetTags = column_ifexists(\"iaas_asset_tags_s\", \"\"),\r\nDlpIsUniqueCount = column_ifexists(\"dlp_is_unique_count_s\", \"\"),\r\nFilePasswdProtected = column_ifexists(\"file_passwd_protected_s\", \"\"),\r\nMalicious = column_ifexists(\"malicious_s\", \"\"),\r\nManagedApp = column_ifexists(\"managed_app_s\", \"\"),\r\nShared = column_ifexists(\"shared_s\", \"\"),\r\nModified = column_ifexists(\"modified_s\", \"\"),\r\nConnEndtime = column_ifexists(\"conn_endtime_s\", \"\"),\r\nConnStarttime = column_ifexists(\"conn_starttime_s\", \"\"),\r\nMalsiteLatitude = column_ifexists(\"malsite_latitude_s\", \"\"),\r\nMalsiteLongitude = column_ifexists(\"malsite_longitude_s\", \"\"),\r\nMalsiteReputation = column_ifexists(\"malsite_reputation_s\", \"\"),\r\nBreachDate = column_ifexists(\"breach_date_d\", \"\"),\r\nBreachScore = column_ifexists(\"breach_score_d\", \"\"),\r\nConnDuration = column_ifexists(\"conn_duration_d\", \"\"),\r\nDlpFingerprintScore = column_ifexists(\"dlp_fingerprint_score_d\", \"\"),\r\nDlpRuleCount = column_ifexists(\"dlp_rule_count_d\", \"\"),\r\nDlpRuleScore = column_ifexists(\"dlp_rule_score_d\", \"\"),\r\nDlpUniqueCount = column_ifexists(\"dlp_unique_count_d\", \"\"),\r\nDstGeoipSrc = column_ifexists(\"dst_geoip_src_d\", \"\"),\r\nExternalCollaboratorCount = column_ifexists(\"external_collaborator_count_d\", \"\"),\r\nFileSize = column_ifexists(\"file_size_d\", \"\"),\r\nInternalCollaboratorCount = column_ifexists(\"internal_collaborator_count_d\", \"\"),\r\nMalsiteActive = column_ifexists(\"malsite_active_d\", \"\"),\r\nMalsiteConfidence = column_ifexists(\"malsite_confidence_d\", \"\"),\r\nMalsiteConsecutive = column_ifexists(\"malsite_consecutive_d\", \"\"),\r\nMalsiteFirstSeen = column_ifexists(\"malsite_first_seen_d\", \"\"),\r\nMalsiteHostility = column_ifexists(\"malsite_hostility_d\", \"\"),\r\nMalsiteLastSeen = column_ifexists(\"malsite_last_seen_d\", \"\"),\r\nObjectCount = column_ifexists(\"object_count_d\", \"\"),\r\nPathId = column_ifexists(\"path_id_d\", \"\"),\r\nPolicyId = column_ifexists(\"policy_id_d\", \"\"),\r\nQuarantineProfileId = column_ifexists(\"quarantine_profile_id_d\", \"\"),\r\nRequestId = column_ifexists(\"request_id_d\", \"\"),\r\nRequestIdNew = column_ifexists(\"requestid_s\", \"\"),\r\nRiskLevelId = column_ifexists(\"risk_level_id_d\", \"\"),\r\nRunId = column_ifexists(\"run_id_d\", \"\"),\r\nSaProfileId = column_ifexists(\"sa_profile_id_d\", \"\"),\r\nSaRuleId = column_ifexists(\"sa_rule_id_d\", \"\"),\r\nSessionId = column_ifexists(\"session_id_d\", \"\"),\r\nSessionid = column_ifexists(\"sessionid_d\", \"\"),\r\nSeverityId = column_ifexists(\"severity_id_d\", \"\"),\r\nSeverityLevelId = column_ifexists(\"severity_level_id_d\", \"\"),\r\nSrcGeoIpSrc = column_ifexists(\"src_geoip_src_d\", \"\"),\r\nSuppressionEndTime = column_ifexists(\"suppression_end_time_d\", \"\"),\r\nSuppressionStartTime = column_ifexists(\"suppression_start_time_d\", \"\"),\r\nThreatSourceId = column_ifexists(\"threat_source_id_d\", \"\"),\r\nThreshold = column_ifexists(\"threshold_d\", \"\"),\r\nTotalCollaboratorCount = column_ifexists(\"total_collaborator_count_d\", \"\"),\r\nBinTimestamp = column_ifexists(\"bin_timestamp_d\", \"\"),\r\nBrowserSessionId = column_ifexists(\"browser_session_id_d\", \"\"),\r\nBrowserSessionIdNew = column_ifexists(\"browser_sessionid_s\", \"\"),\r\nConnectionId = column_ifexists(\"connection_id_d\", \"\"),\r\nConnectionIdNew = column_ifexists(\"connectionid_s\", \"\"),\r\nLastTimestamp = column_ifexists(\"last_timestamp_d\", \"\"),\r\nScanTime = column_ifexists(\"scan_time_d\", \"\"),\r\nThresholdTime = column_ifexists(\"threshold_time_d\", \"\"),\r\nAccountId = column_ifexists(\"account_id_d\", \"\"),\r\nAccountName = column_ifexists(\"account_name_s\", \"\"),\r\nActUser = column_ifexists(\"act_user_s\", \"\"),\r\nAction = column_ifexists(\"action_s\", \"\"),\r\nActivityStatus = column_ifexists(\"activity_status_s\", \"\"),\r\nActivityType = column_ifexists(\"activity_type_s\", \"\"),\r\nAppSessionId = column_ifexists(\"app_session_id_d\", \"\"),\r\nAppSessionIdNew = column_ifexists(\"app_sessionid_s\", \"\"),\r\nAttachment = column_ifexists(\"attachment_s\", \"\"),\r\nAuditCategory = column_ifexists(\"audit_category_s\", \"\"),\r\nAuditType = column_ifexists(\"audit_type_s\", \"\"),\r\nBreachId = column_ifexists(\"breach_id_s\", \"\"),\r\nBreachMediaReferences = column_ifexists(\"breach_media_references_s\", \"\"),\r\nBreachTargetReferences = column_ifexists(\"breach_target_references_s\", \"\"),\r\nChannel = column_ifexists(\"channel_s\", \"\"),\r\nDataType = column_ifexists(\"data_type_s\", \"\"),\r\nDetectionEngine = column_ifexists(\"detection_engine_s\", \"\"),\r\nDetectionType = column_ifexists(\"detection_type_s\", \"\"),\r\nDeviceClassification = column_ifexists(\"device_classification_s\", \"\"),\r\nDlpFile = column_ifexists(\"dlp_file_s\", \"\"),\r\nDlpFingerprintClassification = column_ifexists(\"dlp_fingerprint_classification_s\", \"\"),\r\nDlpFingerprintMatch = column_ifexists(\"dlp_fingerprint_match_s\", \"\"),\r\nDlpIncidentId = column_ifexists(\"dlp_incident_id_d\", \"\"),\r\nDlpIncidentIdNew = column_ifexists(\"dlp_incidentid_s\", \"\"),\r\nDlpParentId = column_ifexists(\"dlp_parent_id_d\", \"\"),\r\nDlpParentIdNew = column_ifexists(\"dlp_parentid_s\", \"\"),\r\nDlpProfile = column_ifexists(\"dlp_profile_s\", \"\"),\r\nDlpRule = column_ifexists(\"dlp_rule_s\", \"\"),\r\nDlpRuleSeverity = column_ifexists(\"dlp_rule_severity_s\", \"\"),\r\nDownloadApp = column_ifexists(\"download_app_s\", \"\"),\r\nDstHostname = column_ifexists(\"dsthost_s\", \"\"),\r\nDynamicClassification = column_ifexists(\"dynamic_classification_s\", \"\"),\r\nEncryptFailure = column_ifexists(\"encrypt_failure_s\", \"\"),\r\nEnterprise = column_ifexists(\"enterprise_s\", \"\"),\r\nEnterpriseId = column_ifexists(\"enterprise_id_s\", \"\"),\r\nEventType = column_ifexists(\"event_type_s\", \"\"),\r\nExposure = column_ifexists(\"exposure_s\", \"\"),\r\nFileId = column_ifexists(\"file_id_s\", \"\"),\r\nFileLang = column_ifexists(\"file_lang_s\", \"\"),\r\nFilePath = column_ifexists(\"file_path_s\", \"\"),\r\nFileType = column_ifexists(\"file_type_s\", \"\"),\r\nFileName = column_ifexists(\"filename_s\", \"\"),\r\nFromObject = column_ifexists(\"from_object_s\", \"\"),\r\nFromUserCategory = column_ifexists(\"from_user_category_s\", \"\"),\r\nFromlogs = column_ifexists(\"fromlogs_s\", \"\"),\r\nInstance = column_ifexists(\"instance_s\", \"\"),\r\nInstanceId = column_ifexists(\"instance_id_s\", \"\"),\r\nInstanceName = column_ifexists(\"instance_name_s\", \"\"),\r\nInstanceType = column_ifexists(\"instance_type_s\", \"\"),\r\nJustificationReason = column_ifexists(\"justification_reason_s\", \"\"),\r\nJustificationType = column_ifexists(\"justification_type_s\", \"\"),\r\nLastApp = column_ifexists(\"last_app_s\", \"\"),\r\nLastCountry = column_ifexists(\"last_country_s\", \"\"),\r\nLastDevice = column_ifexists(\"last_device_s\", \"\"),\r\nLastLocation = column_ifexists(\"last_location_s\", \"\"),\r\nLastRegion = column_ifexists(\"last_region_s\", \"\"),\r\nLegalHoldProfileName = column_ifexists(\"legal_hold_profile_name_s\", \"\"),\r\nLhCustodianEmail = column_ifexists(\"lh_custodian_email_s\", \"\"),\r\nLhCustodianName = column_ifexists(\"lh_custodian_name_s\", \"\"),\r\nLhDestApp = column_ifexists(\"lh_dest_app_s\", \"\"),\r\nLhDestInstance = column_ifexists(\"lh_dest_instance_s\", \"\"),\r\nLhFileid = column_ifexists(\"lh_fileid_s\", \"\"),\r\nLhFilename = column_ifexists(\"lh_filename_s\", \"\"),\r\nLhFilepath = column_ifexists(\"lh_filepath_s\", \"\"),\r\nLhOriginalFilename = column_ifexists(\"lh_original_filename_s\", \"\"),\r\nLhShared = column_ifexists(\"lh_shared_s\", \"\"),\r\nLhSharedWith = column_ifexists(\"lh_shared_with_s\", \"\"),\r\nLhVersion = column_ifexists(\"lh_version_s\", \"\"),\r\nLocalMd5 = column_ifexists(\"local_md5_s\", \"\"),\r\nLocalSha1 = column_ifexists(\"local_sha1_s\", \"\"),\r\nLocalSha256 = column_ifexists(\"local_sha256_s\", \"\"),\r\nLogFileName = column_ifexists(\"log_file_name_s\", \"\"),\r\nLoginType = column_ifexists(\"logintype_s\", \"\"),\r\nLoginUrl = column_ifexists(\"loginurl_s\", \"\"),\r\nMalsiteAsNumber = column_ifexists(\"malsite_as_number_s\", \"\"),\r\nMalsiteCategory = column_ifexists(\"malsite_category_s\", \"\"),\r\nMalsiteCity = column_ifexists(\"malsite_city_s\", \"\"),\r\nMalsiteCountry = column_ifexists(\"malsite_country_s\", \"\"),\r\nMalsiteDnsServer = column_ifexists(\"malsite_dns_server_s\", \"\"),\r\nMalsiteId = column_ifexists(\"malsite_id_s\", \"\"),\r\nMalsiteIpHost = column_ifexists(\"malsite_ip_host_s\", \"\"),\r\nMalsiteIsp = column_ifexists(\"malsite_isp_s\", \"\"),\r\nMalsiteRegion = column_ifexists(\"malsite_region_s\", \"\"),\r\nMalwareId = column_ifexists(\"malware_id_s\", \"\"),\r\nMalwareName = column_ifexists(\"malware_name_s\", \"\"),\r\nMalwareProfile = column_ifexists(\"malware_profile_s\", \"\"),\r\nMalwareSeverity = column_ifexists(\"malware_severity_s\", \"\"),\r\nMalwareType = column_ifexists(\"malware_type_s\", \"\"),\r\nManagementid = column_ifexists(\"managementID_s\", \"\"),\r\nMd5 = column_ifexists(\"md5_s\", \"\"),\r\nMimeType = column_ifexists(\"mime_type_s\", \"\"),\r\nNewValue = column_ifexists(\"new_value_s\", \"\"),\r\nNsActivity = column_ifexists(\"ns_activity_s\", \"\"),\r\nNsdeviceuid = column_ifexists(\"nsdeviceuid_s\", \"\"),\r\nObjectId = column_ifexists(\"object_id_s\", \"\"),\r\nOldValue = column_ifexists(\"old_value_s\", \"\"),\r\nOrigTy = column_ifexists(\"orig_ty_s\", \"\"),\r\nOriginalFilePath = column_ifexists(\"original_file_path_s\", \"\"),\r\nOwner = column_ifexists(\"owner_s\", \"\"),\r\nProfileEmails = column_ifexists(\"profile_emails_s\", \"\"),\r\nProfileId = column_ifexists(\"profile_id_s\", \"\"),\r\nQAdmin = column_ifexists(\"q_admin_s\", \"\"),\r\nQApp = column_ifexists(\"q_app_s\", \"\"),\r\nQInstance = column_ifexists(\"q_instance_s\", \"\"),\r\nQOriginalFilename = column_ifexists(\"q_original_filename_s\", \"\"),\r\nQOriginalFilepath = column_ifexists(\"q_original_filepath_s\", \"\"),\r\nQOriginalShared = column_ifexists(\"q_original_shared_s\", \"\"),\r\nQOriginalVersion = column_ifexists(\"q_original_version_s\", \"\"),\r\nQuarantineActionReason = column_ifexists(\"quarantine_action_reason_s\", \"\"),\r\nQuarantineFailure = column_ifexists(\"quarantine_failure_s\", \"\"),\r\nQuarantineFileId = column_ifexists(\"quarantine_file_id_s\", \"\"),\r\nQuarantineFileName = column_ifexists(\"quarantine_file_name_s\", \"\"),\r\nQuarantineProfile = column_ifexists(\"quarantine_profile_s\", \"\"),\r\nReferer = column_ifexists(\"referer_s\", \"\"),\r\nRegionId = column_ifexists(\"region_id_s\", \"\"),\r\nRegionName = column_ifexists(\"region_name_s\", \"\"),\r\nResourceCategory = column_ifexists(\"resource_category_s\", \"\"),\r\nRetroScanName = column_ifexists(\"retro_scan_name_s\", \"\"),\r\nRiskLevel = column_ifexists(\"risk_level_s\", \"\"),\r\nRole = column_ifexists(\"role_s\", \"\"),\r\nSaProfileName = column_ifexists(\"sa_profile_name_s\", \"\"),\r\nSaRuleName = column_ifexists(\"sa_rule_name_s\", \"\"),\r\nSaRuleSeverity = column_ifexists(\"sa_rule_severity_s\", \"\"),\r\nScanType = column_ifexists(\"scan_type_s\", \"\"),\r\nScopes = column_ifexists(\"scopes_s\", \"\"),\r\nSeverity = column_ifexists(\"severity_s\", \"\"),\r\nSeverityLevel = column_ifexists(\"severity_level_s\", \"\"),\r\nSharedCredentialUser = column_ifexists(\"shared_credential_user_s\", \"\"),\r\nSharedDomains = column_ifexists(\"shared_domains_s\", \"\"),\r\nSharedType = column_ifexists(\"shared_type_s\", \"\"),\r\nSharedWith = column_ifexists(\"shared_with_s\", \"\"),\r\nSslDecryptPolicy = column_ifexists(\"ssl_decrypt_policy_s\", \"\"),\r\nSubType = column_ifexists(\"sub_type_s\", \"\"),\r\nSuppressionKey = column_ifexists(\"suppression_key_s\", \"\"),\r\nTeam = column_ifexists(\"team_s\", \"\"),\r\nTelemetryApp = column_ifexists(\"telemetry_app_s\", \"\"),\r\nThreatMatchField = column_ifexists(\"threat_match_field_s\", \"\"),\r\nTitle = column_ifexists(\"title_s\", \"\"),\r\nToObject = column_ifexists(\"to_object_s\", \"\"),\r\nToUserCategory = column_ifexists(\"to_user_category_s\", \"\"),\r\nTransactionId = column_ifexists(\"transaction_id_d\", \"\"),\r\nTransactionIdNew = column_ifexists(\"transactionid_s\", \"\"),\r\nTssMode = column_ifexists(\"tss_mode_s\", \"\"),\r\nTunnelId = column_ifexists(\"tunnel_id_s\", \"\"),\r\nUrl2Activity = column_ifexists(\"Url2Activity_s\", \"\"),\r\nUserCategory = column_ifexists(\"user_category_s\", \"\"),\r\nUserId = column_ifexists(\"user_id_s\", \"\"),\r\nUserName = column_ifexists(\"user_name_s\", \"\"),\r\nUserNormalized = column_ifexists(\"user_normalized_s\", \"\"),\r\nUserRole = column_ifexists(\"user_role_s\", \"\"),\r\nViolatingUser = column_ifexists(\"violating_user_s\", \"\"),\r\nViolatingUserType = column_ifexists(\"violating_user_type_s\", \"\"),\r\nWebUrl = column_ifexists(\"web_url_s\", \"\"),\r\nWorkspace = column_ifexists(\"workspace_s\", \"\"),\r\nWorkspaceId = column_ifexists(\"workspace_id_s\", \"\"),\r\nZipPassword = column_ifexists(\"zip_password_s\", \"\")\r\n\r\n\r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Netskope",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Netskope"
+        },
+        "support": {
+          "name": "Netskope",
+          "tier": "Partner",
+          "link": "https://www.netskope.com/services#support"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Netskope",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Netskope"
+        },
+        "support": {
+          "name": "Netskope",
+          "tier": "Partner",
+          "link": "https://www.netskope.com/services#support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-05",
+        "providers": [
+          "Netskope"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

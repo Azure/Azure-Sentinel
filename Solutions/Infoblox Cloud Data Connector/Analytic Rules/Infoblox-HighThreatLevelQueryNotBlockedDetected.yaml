@@ -1,0 +1,44 @@
+id: dc7af829-d716-4774-9d6f-03d9aa7c27a4
+name: Infoblox - High Threat Level Query Not Blocked Detected
+description: |
+  'This creates an incident in the event a single host generates at least 1 high threat level query (Threat Defense security hit) that is not blocked or redirected in 1 hour. Query count threshold and scheduling is customizable. This rule depends on a parser based on a Kusto Function to work as expected called [**InfobloxCDC**](https://aka.ms/sentinel-InfobloxCloudDataConnector-parser).'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: InfobloxCloudDataConnector
+    dataTypes:
+      - CommonSecurityLog (InfobloxCDC)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1565
+query: |
+  let threshold = 1;
+  InfobloxCDC
+  | where DeviceEventClassID has_cs "RPZ"
+  | where ThreatLevel_Score >=80
+  | where InfobloxB1PolicyAction == "Log" or SimplifiedDeviceAction == "PASSTHRU"
+  | summarize count() by SourceIP
+  | where count_ > threshold
+  | join kind=inner (InfobloxCDC
+      | where DeviceEventClassID has_cs "RPZ"
+      | where ThreatLevel_Score >=80
+      | where InfobloxB1PolicyAction == "Log" or SimplifiedDeviceAction == "PASSTHRU"
+      ) on SourceIP
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.1
+kind: Scheduled

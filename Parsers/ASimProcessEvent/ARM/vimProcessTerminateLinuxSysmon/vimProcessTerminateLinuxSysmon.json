@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTerminateLinuxSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Terminate Event ASIM parser for Sysmon for Linux",
+            "category": "ASIM",
+            "FunctionAlias": "vimProcessTerminateLinuxSysmon",
+            "query": "let ParsedProcessEvent=(){\nSyslog\n| where SyslogMessage has_all ('<Provider Name=\"Linux-Sysmon\"', '<EventID>5</EventID>')\n// --------------------------------------------------------------------------------------\n| where\n(isnull(starttime)   or TimeGenerated >= starttime )\nand (isnull(endtime) or TimeGenerated <= endtime )\nand not(disabled)\nand (array_length(dvcipaddr_has_any_prefix)==0)\nand (array_length(commandline_has_all)==0) \nand (array_length(commandline_has_any)==0) \nand (array_length(actingprocess_has_any)==0) \nand (array_length(parentprocess_has_any)==0) \nand (array_length(commandline_has_any_ip_prefix)==0) \nand (eventtype=='*' or eventtype=='ProcessTerminated')\nand (array_length(targetprocess_has_any)==0 or SyslogMessage has_any (targetprocess_has_any)) \nand (actorusername=='*' or SyslogMessage has actorusername)  \nand (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   \n// --------------------------------------------------------------------------------------\n| parse SyslogMessage with *'<Data Name=\"User\">'ActorUsername '</Data>' *\n// --------------------------------------------------------------------------------------\n| where\n  (actorusername=='*' or ActorUsername has actorusername)  \n// --------------------------------------------------------------------------------------\n| parse SyslogMessage with * '<Data Name=\"RuleName\">'RuleName'</Data>'\n                            '<Data Name=\"UtcTime\">'UtcTime'</Data>'\n                            '<Data Name=\"ProcessGuid\">{'ProcessGuid'}</Data>'\n                            '<Data Name=\"ProcessId\">'ProcessId:string'</Data>'\n                            '<Data Name=\"Image\">'Image'</Data>'*\n// --------------------------------------------------------------------------------------\n| where\n   (array_length(targetprocess_has_any)==0 or Image has_any (targetprocess_has_any)) \n// --------------------------------------------------------------------------------------\n| project-away SyslogMessage\n| extend \n    EventType = \"ProcessTerminated\",\n    EventStartTime = todatetime(TimeGenerated),\n    EventEndTime = todatetime(TimeGenerated),\n    EventCount = int(1),\n    EventVendor = \"Microsoft\",\n    EventSchemaVersion = \"0.1.0\",\n    EventSchema = 'ProcessEvent',\n    EventOriginalType='5',\n    EventProduct = \"Sysmon\",\n    EventResult = 'Success',\n    DvcOs = \"Linux\"\n| project-rename\n    DvcHostname = Computer,\n    TargetProcessName = Image,\n    TargetProcessId = ProcessId\n| extend\n    ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n    TargetProcessGuid = ProcessGuid,\n    //***** Aliases ******\n    User = ActorUsername,\n    Process = TargetProcessName,\n    Dvc = DvcHostname\n}; ParsedProcessEvent\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),commandline_has_any:dynamic=dynamic([]),commandline_has_all:dynamic=dynamic([]),commandline_has_any_ip_prefix:dynamic=dynamic([]),actingprocess_has_any:dynamic=dynamic([]),targetprocess_has_any:dynamic=dynamic([]),parentprocess_has_any:dynamic=dynamic([]),actorusername:string='*',dvcipaddr_has_any_prefix:dynamic=dynamic([]),dvcname_has_any:dynamic=dynamic([]),eventtype:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

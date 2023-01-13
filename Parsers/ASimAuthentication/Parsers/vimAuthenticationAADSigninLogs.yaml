@@ -1,0 +1,104 @@
+Parser:
+  Title: Authentication ASIM filtering parser for AAD interactive sign-in logs
+  Version: '0.0'
+  LastUpdated: June 3, 2021
+Product:
+  Name: AAD
+Normalization:
+  Schema: Authentication
+  Version: '0.1.0'
+References:
+- Title: Using functions
+  Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+- Title: Authentication schema documentation
+  Link: https://aka.ms/ASimAuthenticationDoc
+Description: |
+  This ASIM parser supports filtering and normalizing Azure Active Directory Interactive sign in logs, stored in the  SigninLogs table, to the ASIM Authentication schema.
+ParserName: vimAuthenticationSigninLogs
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let AADSigninLogs=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
+  SigninLogs | where not(disabled)
+  // ************************************************************************* 
+  //       <Prefilterring>
+  // *************************************************************************
+  | where 
+    (isnull(starttime)   or TimeGenerated >= starttime) 
+    and (isnull(endtime)     or TimeGenerated <= endtime) 
+    and (targetusername_has=='*' or (UserPrincipalName has targetusername_has ))
+  // ************************************************************************* 
+  //       </Prefilterring>
+  // ************************************************************************* 
+  | extend
+    EventVendor = 'Microsoft'
+    , EventProduct = 'AAD'
+    , EventCount=int(1)
+    , EventSchemaVersion='0.1.0'
+    , EventResult = iff (ResultType ==0, 'Success', 'Failure')
+    , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)
+    , EventStartTime = TimeGenerated
+    , EventEndTime= TimeGenerated
+    , EventType= 'Logon'
+    , SrcDvcId=tostring(DeviceDetail.deviceId)
+    , SrcDvcHostname =tostring(DeviceDetail.displayName)
+    , SrcDvcOs=tostring(DeviceDetail.operatingSystem)
+    // , SrcBrowser= tostring(DeviceDetail.browser)
+    , Location = todynamic(LocationDetails)
+    , TargetUsernameType='Upn'
+    , TargetUserIdType='AADID'
+    , SrcDvcIpAddr=IPAddress
+  | extend
+        SrcGeoCity=tostring(Location.city)
+        , SrcGeoCountry=tostring(Location.countryOrRegion)
+        , SrcGeoLatitude=toreal(Location.geoCoordinates.latitude)
+        , SrcGeoLongitude=toreal(Location.geoCoordinates.longitude)
+   | lookup ASIM_AADSTSErrorCodes on ResultType
+   | project-rename
+       EventOriginalUid =Id
+       , LogonMethod  = AuthenticationRequirement
+       , HttpUserAgent=UserAgent
+       , TargetSessionId=CorrelationId
+       , TargetUserId = UserId
+       , TargetUsername=UserPrincipalName
+       , TargetUserType=UserType
+       , TargetAppId = ResourceIdentity
+       , TargetAppName=ResourceDisplayName
+   | project-reorder
+       TimeGenerated
+       ,EventProduct
+       , EventOriginalUid
+       , EventResult
+       , EventOriginalResultDetails
+       , EventStartTime
+       , EventEndTime
+       , LogonMethod 
+       , TargetSessionId
+       , TargetUserId
+       , TargetUsername
+       , SrcDvcId
+       , SrcDvcHostname 
+       , SrcDvcOs
+       , HttpUserAgent 
+       , SrcGeoCity
+       , SrcGeoCountry
+       , TargetAppId
+       , TargetAppName
+       , SrcDvcIpAddr
+       // ** Aliases
+        | extend 
+          User=TargetUsername
+        , LogonTarget=TargetAppName
+        , Dvc=EventVendor};
+       AADSigninLogs(starttime, endtime, targetusername_has, disabled)

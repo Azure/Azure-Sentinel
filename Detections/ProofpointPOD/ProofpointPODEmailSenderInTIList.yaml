@@ -4,6 +4,12 @@ description: |
   'Email sender in TI list.'
 severity: Medium
 requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
   - connectorId: ProofpointPOD
     dataTypes:
       - ProofpointPOD_maillog_CL
@@ -14,25 +20,33 @@ triggerThreshold: 0
 tactics:
   - Exfiltration
   - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1567
 query: |
-  let ioc_lookBack = 30d;
-  let timeframe = 1h;
-  let TI_email_List =
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
-  | where TimeGenerated > ago(ioc_lookBack)
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
   | where isnotempty(EmailSenderAddress)
-  | summarize make_list(EmailSenderAddress);
-  ProofpointPOD 
-  | where TimeGenerated > ago(timeframe)
-  | where isnotempty(SrcUserUpn)
-  | where SrcUserUpn in~ (TI_email_List)
-  | extend Message = "Email sender in TI list"
-  | project Message, SrcUserUpn, DstUserUpn
-  | extend AccountCustomEntity = SrcUserUpn
+  | extend TI_emailEntity = EmailSenderAddress
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+         ProofpointPOD
+         | where TimeGenerated >= ago(dt_lookBack)
+         | where isnotempty(SrcUserUpn)
+         | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientEmail = SrcUserUpn
+  )
+  on $left.TI_emailEntity == $right.ClientEmail
+  | where ProofpointPOD_TimeGenerated < ExpirationDateTime
+  | summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientEmail
+  | project ProofpointPOD_TimeGenerated, Description, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, ClientEmail
+  | extend timestamp = ProofpointPOD_TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
-kind: scheduled
+        columnName: ClientEmail
+version: 1.1.2
+kind: Scheduled

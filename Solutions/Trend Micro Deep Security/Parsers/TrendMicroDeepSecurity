@@ -1,0 +1,34 @@
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias as TrendMicroDeepSecurity.
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. TrendMicroDeepSecurity | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+
+CommonSecurityLog
+| where DeviceVendor has_any ("TrendMicro", "Trend Micro")
+| extend DeviceCustomNumber1 = coalesce(column_ifexists("FieldDeviceCustomNumber1", long(null)),DeviceCustomNumber1),
+         DeviceCustomNumber2 = coalesce(column_ifexists("FieldDeviceCustomNumber2", long(null)),DeviceCustomNumber2),
+         DeviceCustomNumber3 = coalesce(column_ifexists("FieldDeviceCustomNumber3", long(null)),DeviceCustomNumber3)
+| extend DeepSecurityHostID = DeviceCustomNumber1
+| extend DeepSecurityModuleName =
+iff(toint(DeviceEventClassID) in (20,21,100,850,851,852,853,854),"Firewall",
+iff(toint(DeviceEventClassID)>=1000000 and toint(DeviceEventClassID)<2000000,"Intrusion Prevention",
+iff(toint(DeviceEventClassID)>=2000000 and toint(DeviceEventClassID)<3000000,"Integrity Monitoring",
+iff(toint(DeviceEventClassID)>=3000000 and toint(DeviceEventClassID)<4000000,"Log Inspection",
+iff(toint(DeviceEventClassID)>=4000000 and toint(DeviceEventClassID)<5000000,"Anti-Malware",
+iff(toint(DeviceEventClassID)>=5000000 and toint(DeviceEventClassID)<6000000,"Web Reputation",
+iff(toint(DeviceEventClassID)>=6000000 and toint(DeviceEventClassID)<7000000,"Application Control","System")))))))
+| extend actionReason = iff(DeepSecurityModuleName == "Application Control", DeviceCustomString1, "")
+| extend sha1 = iff(DeepSecurityModuleName == "Application Control", DeviceCustomString2, "")
+| extend md5 = iff(DeepSecurityModuleName == "Application Control", DeviceCustomString3, "")
+| parse AdditionalExtensions with * "target=" target ";" *
+| extend LIDescription = iff (DeepSecurityModuleName == "Log Inspection", DeviceCustomString1, "")
+| extend FragmentationBits = iff (DeepSecurityModuleName == "Firewall", DeviceCustomString3, "")
+| extend TCPFlags = iff (DeepSecurityModuleName == "Firewall" or DeepSecurityModuleName == "Intrusion Prevention", DeviceCustomString2, "")
+| extend InfectedResource = iff(DeepSecurityModuleName == "Anti-Malware", DeviceCustomString3, "")
+| extend ResourceType = iff(DeepSecurityModuleName == "Anti-Malware", DeviceCustomString4, "")
+| extend RiskLevel = iff(DeepSecurityModuleName == "Anti-Malware", DeviceCustomString5, "")
+| extend DPIStreamPosition = iff(DeepSecurityModuleName == "Intrusion Prevention", DeviceCustomString5, "")
+| extend DPIFlags = iff(DeepSecurityModuleName == "Intrusion Prevention", DeviceCustomString6, "")
+| extend DPIPacketPosition = iff(DeepSecurityModuleName == "Intrusion Prevention", DeviceCustomNumber3, 0)
+| where DeviceProduct startswith "Deep Security"
+| project-away DeviceCustomNumber1, DeviceCustomNumber1Label, DeviceCustomNumber2, DeviceCustomNumber2Label, DeviceCustomNumber3, DeviceCustomNumber3Label, DeviceCustomString1, DeviceCustomString1Label, DeviceCustomString2, DeviceCustomString2Label, DeviceCustomString3, DeviceCustomString3Label, DeviceCustomString4, DeviceCustomString4Label, DeviceCustomString5, DeviceCustomString5Label, DeviceCustomString6, DeviceCustomString6Label

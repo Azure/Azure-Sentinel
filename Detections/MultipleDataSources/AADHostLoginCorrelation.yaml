@@ -16,7 +16,13 @@ requiredDataConnectors:
       - SecurityEvent
   - connectorId: Syslog
     dataTypes:
-      - Syslog 
+      - Syslog
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvents
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -28,7 +34,6 @@ relevantTechniques:
   - T1078
   - T1110
 query: |
-
   //Adjust this threshold to fit the environment
   let signin_threshold = 5;
   //Make a list of all IPs with failed signins to AAD above our threshold
@@ -50,14 +55,32 @@ query: |
   | extend Reason = "Multiple failed AAD logins from IP address"
   | project TimeGenerated, Computer, HostIP, IpAddress = SourceIP, SyslogMessage, Facility, ProcessName, Reason;
   //See if any of these IPs have sucessfully logged into Windows hosts
-  let win_logons =
-  SecurityEvent
+  let win_logons = (union isfuzzy=true
+  (SecurityEvent
   | where EventID == 4624
   | where LogonType in (10, 7, 3)
   | where IpAddress != "-"
   | where IpAddress in (suspicious_signins)
   | extend Reason = "Multiple failed AAD logins from IP address"
-  | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, Reason;
+  | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, Reason
+  ),
+  (WindowsEvent
+  | where EventID == 4624 and has_any_ipv4(EventData, toscalar(suspicious_signins))
+  | extend LogonType = tostring(EventData.LogonType)
+  | where LogonType in (10, 7, 3)
+  | extend  IpAddress = tostring(EventData.IpAddress)
+  | where IpAddress != "-"
+  | where IpAddress in (suspicious_signins)
+  | extend Reason = "Multiple failed AAD logins from IP address"
+  | extend Activity = "4624 - An account was successfully logged on."
+  | extend Account =  strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
+  | extend TargetUserSid = tostring(EventData.TargetUserSid)
+  | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+  | extend AccountType =case(Account endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
+  | extend LogonProcessName = tostring(EventData.LogonProcessName)
+  | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, TargetUserSid, Reason
+  )
+  );
   union isfuzzy=true linux_logons,win_logons
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, IPCustomEntity = IpAddress, HostCustomEntity = Computer
   };
@@ -77,5 +100,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.1.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

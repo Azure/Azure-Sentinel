@@ -1,0 +1,62 @@
+id: 2a723664-22c2-4d3e-bbec-5843b90166f3
+name: TI map IP entity to LastPass data
+description: |
+  'Identifies a match in LastPass table from any IP IOC from TI'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: LastPass
+    dataTypes:
+      - LastPassNativePoller_CL
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+tactics:
+  - Impact
+relevantTechniques:
+ - T1485
+query: |
+    let dt_lookBack = 1h;
+    let ioc_lookBack = 14d;
+    ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | where Active == true
+    // Picking up only IOC's that contain the entities we want
+    | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+    // As there is potentially more than 1 indicator type for matching IP, taking Network IP first, then others if that is empty.
+    // Taking the first non-empty value based on potential IOC match availability
+    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+    | join (
+        LastPassNativePoller_CL | where todatetime(Time_s) >= ago(dt_lookBack)
+        | where Action_s != "Reporting"
+        // renaming time column so it is clear the log this came from
+        | extend LastPass_TimeGenerated = todatetime(Time_s)
+    )
+    on $left.TI_ipEntity == $right.IP_Address_s
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, LastPass_TimeGenerated, 
+    TI_ipEntity, IP_Address_s, Username_s, Action_s, Data_s, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
+    | extend timestamp = LastPass_TimeGenerated, AccountCustomEntity = Username_s, IPCustomEntity = IP_Address_s, URLCustomEntity = Url
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

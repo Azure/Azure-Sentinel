@@ -1,0 +1,28 @@
+id: 12198f2f-c53b-4617-8df8-120c66cbb373
+name: AV Detections with USB Disk Drive
+description: |
+  This query make a best-guess detection regarding which removable media device caused an AV detection.
+  The query is best run over 30 days to get the full USB history.
+  Get a list of USB AV detections. This assumes any path not beginning with C is a removable/USB device.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+query: |
+  let usbDetections =
+      DeviceEvents
+      | where ActionType == "AntivirusDetection" and FolderPath !startswith "c" and FolderPath matches regex "^[A-Za-z]{1}"
+      | extend ParsedFields=parse_json(AdditionalFields)
+      | project DetectionTime=Timestamp, DeviceName, ThreatName=tostring(ParsedFields.ThreatName), FileName, FolderPath;
+  //Get a list of USB disk drive connections, grouped by computer name and DeviceID
+  let usbConnections = 
+      DeviceEvents
+      | where ActionType == "PnpDeviceConnected"
+      | extend parsed=parse_json(AdditionalFields)
+      | project Timestamp, DeviceName, DeviceId=tostring(parsed.DeviceId), ClassName=tostring(parsed.ClassName)
+      | where ClassName == "DiskDrive"
+      | summarize UsbFirstSeen=min(Timestamp), UsbLastSeen=max(Timestamp) by DeviceId, DeviceName;
+  //Join USB AV detections and connections, where the detection occurs after the USB has been plugged in
+  usbDetections | join kind=inner (usbConnections) on DeviceName | where DetectionTime > UsbFirstSeen and DetectionTime < UsbLastSeen
+  | project DetectionTime, DeviceName, ThreatName, FileName, FolderPath, DeviceId, UsbFirstSeen, UsbLastSeen
+  | sort by DetectionTime desc

@@ -1,0 +1,36 @@
+id: 3ad91268-5076-403d-9228-5fe8eb661ec3
+name: Endpoint Linux Agent Health Status Report
+description: |
+    This query will provide a report on Linux configurations for Microsoft Defender Endpoint Protection.
+    Tests which are reporting "BAD" as a result imply that the associated capability is not configured per best practice recommendation.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceTvmSecureConfigurationAssessment
+tactics: []
+relevantTechniques: []
+query: |
+DeviceTvmSecureConfigurationAssessment
+| where OSPlatform == "Linux"
+| where ConfigurationId in ('scid-6001', 'scid-6002', 'scid-6090', 'scid-6091', 'scid-6094', 'scid-6095')
+| extend Ted = case(
+    ConfigurationId == "scid-6001", "SensorDataCollection",
+    ConfigurationId == "scid-6002", "ImpairedCommunications",
+    ConfigurationId == "scid-6095", "AntivirusSignatureVersion",
+    ConfigurationId == "scid-6090", "RealtimeProtection",   
+    ConfigurationId == "scid-6091", "PUAProtection",
+    ConfigurationId == "scid-6094", "CloudProtection",
+    "N/A"),
+    Result = case(IsApplicable == 0, "N/A", IsCompliant == 1, "GOOD", "BAD")
+| extend packed = pack(Ted, Result)
+| summarize Tests = make_bag(packed), DeviceName = any(DeviceName) by DeviceId
+| evaluate bag_unpack(Tests)
+entityMappings:
+  - entityType: IoT device 
+    fieldMappings:
+      - identifier: DeviceId
+        columnName: DeviceId
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: FullName

@@ -1,0 +1,189 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "type": "string",
+      "defaultValue": "synack-integration",
+      "metadata": {
+        "description": "The name of the function app that you wish to create."
+      }
+    },
+    "workspaceName": {
+      "type": "string",
+      "defaultValue": "<workspaceName>",
+      "metadata": {
+        "description": "Workspace Name"
+      }
+    },
+    "clientId": {
+      "type": "string",
+      "defaultValue": "<clientID>",
+      "metadata": {
+        "description": "Application (client) ID"
+      }
+    },
+    "clientSecret": {
+      "type": "string",
+      "defaultValue": "<clientSecret>",
+      "metadata": {
+        "description": "Client Secret"
+      }
+    },
+    "synackApiUrlHost": {
+      "type": "string",
+      "defaultValue": "api.synack.com",
+      "metadata": {
+        "description": "Synack API URL host"
+      }
+    },
+    "synackApiToken": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Synack API Token"
+      }
+    },
+    "syncSchedule": {
+      "type": "string",
+      "defaultValue": "0 */15 * * * *",
+      "metadata": {
+        "description": "Synchronization Schedule"
+      }
+    }
+  },
+  "variables": {
+    "functionAppName": "[parameters('appName')]",
+    "hostingPlanName": "[parameters('appName')]",
+    "applicationInsightsName": "[parameters('appName')]",
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+    "synackApiUrl": "[parameters('synackApiUrlHost')]",
+    "synackApiToken": "[parameters('synackApiToken')]",
+    "syncSchedule": "[parameters('syncSchedule')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "Storage"
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "properties": {
+        "name": "[variables('hostingPlanName')]",
+        "computeMode": "Dynamic"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "functionapp",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~3"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~10"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "node"
+            },
+            {
+              "name": "SYNACK_API_URL",
+              "value": "[variables('synackApiUrl')]"
+            },
+            {
+              "name": "SYNACK_API_TOKEN",
+              "value": "[variables('synackApiToken')]"
+            },
+            {
+              "name": "SYNC_SCHEDULE",
+              "value": "[variables('syncSchedule')]"
+            },
+            {
+              "name": "AZURE_SUBSCRIPTION_ID",
+              "value": "[subscription().subscriptionId]"
+            },
+            {
+              "name": "AZURE_RESOURCE_GROUP_NAME",
+              "value": "[resourceGroup().name]"
+            },
+            {
+              "name": "AZURE_WORKSPACE_ID",
+              "value": "[parameters('workspaceName')]"
+            },
+            {
+              "name": "AZURE_CLIENT_ID",
+              "value": "[parameters('clientId')]"
+            },
+            {
+              "name": "AZURE_CLIENT_SECRET",
+              "value": "[parameters('clientSecret')]"
+            },
+            {
+              "name": "AZURE_TENANT_ID",
+              "value": "[subscription().tenantId]"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "https://aka.ms/sentinel-synack-functionapp"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "microsoft.insights/components",
+      "apiVersion": "2020-02-02-preview",
+      "name": "[variables('applicationInsightsName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+      },
+      "properties": {
+        "ApplicationId": "[variables('applicationInsightsName')]",
+        "Request_Source": "IbizaWebAppExtensionCreate"
+      }
+    }
+  ]
+}

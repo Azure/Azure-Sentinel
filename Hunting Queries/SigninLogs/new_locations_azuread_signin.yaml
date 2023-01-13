@@ -21,9 +21,9 @@ query: |
   SigninLogs
   | where TimeGenerated between(starttime..endtime)
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), perIdentityAuthCount = count()
-  by Identity, locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/",
+  by UserPrincipalName, locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/",
   tostring(LocationDetails["city"]), ";" , tostring(LocationDetails["geoCoordinates"]))
-  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), distinctAccountCount = count(), identityList=makeset(Identity) by locationString
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), distinctAccountCount = count(), identityList=makeset(UserPrincipalName) by locationString
   | extend identityList = iff(distinctAccountCount<10, identityList, "multiple (>10)")
   | join kind= anti (
   SigninLogs
@@ -35,4 +35,20 @@ query: |
   on locationString
   // select threshold above which #new accounts from a new location is deemed suspicious
   | where distinctAccountCount > countThreshold
-  | extend timestamp = StartTime
+  | mv-expand todynamic(identityList)
+  | extend timestamp = StartTime, AccountCustomEntity = identityList
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: identityList
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Other", "Identity" ]

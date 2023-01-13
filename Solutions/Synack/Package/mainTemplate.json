@@ -1,0 +1,231 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "author": "Synack",
+        "comments": "Solution template for Synack"
+    },
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "defaultValue": "[parameters('location')]",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "workspaceName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Sentinel is setup"
+            }
+        },
+        "appName": {
+            "defaultValue": "synack-integration",
+            "type": "string"
+        },
+        "clientId": {
+            "defaultValue": "",
+            "type": "string"
+        },
+        "clientSecret": {
+            "defaultValue": "",
+            "type": "securestring"
+        },
+        "synackApiUrlHost": {
+            "defaultValue": "api.synack.com",
+            "type": "string"
+        },
+        "synackApiToken": {
+            "defaultValue": "",
+            "type": "string"
+        },
+        "syncSchedule": {
+            "defaultValue": "0 */15 * * * *",
+            "type": "string"
+        }
+    },
+  "variables": {
+    "functionAppName": "[parameters('appName')]",
+    "hostingPlanName": "[parameters('appName')]",
+    "applicationInsightsName": "[parameters('appName')]",
+    "SynackIntegrationConnector": "SynackIntegrationConnector",
+    "_SynackIntegrationConnector": "[variables('SynackIntegrationConnector')]",
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+    "synackApiUrl": "[parameters('synackApiUrlHost')]",
+    "synackApiToken": "[parameters('synackApiToken')]",
+    "syncSchedule": "[parameters('syncSchedule')]",
+    "sourceId": "synackinc1654614310688.synack-sentinel-integration",
+    "_sourceId": "[variables('sourceId')]"
+  },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-08-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('workspace-location')]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "Storage"
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[parameters('workspace-location')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "computeMode": "Dynamic"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('functionAppName')]",
+            "location": "[parameters('workspace-location')]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-08-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-08-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~3"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "~10"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "node"
+                        },
+                        {
+                            "name": "SYNACK_API_URL",
+                            "value": "[variables('synackApiUrl')]"
+                        },
+                        {
+                            "name": "SYNACK_API_TOKEN",
+                            "value": "[variables('synackApiToken')]"
+                        },
+                        {
+                            "name": "SYNC_SCHEDULE",
+                            "value": "[variables('syncSchedule')]"
+                        },
+                        {
+                            "name": "AZURE_SUBSCRIPTION_ID",
+                            "value": "[subscription().subscriptionId]"
+                        },
+                        {
+                            "name": "AZURE_RESOURCE_GROUP_NAME",
+                            "value": "[resourceGroup().name]"
+                        },
+                        {
+                            "name": "AZURE_WORKSPACE_ID",
+                            "value": "[parameters('workspaceName')]"
+                        },
+                        {
+                            "name": "AZURE_CLIENT_ID",
+                            "value": "[parameters('clientId')]"
+                        },
+                        {
+                            "name": "AZURE_CLIENT_SECRET",
+                            "value": "[parameters('clientSecret')]"
+                        },
+                        {
+                            "name": "AZURE_TENANT_ID",
+                            "value": "[subscription().tenantId]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "https://aka.ms/sentinel-synack-functionapp"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "microsoft.insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('applicationInsightsName')]",
+            "location": "[parameters('workspace-location')]",
+            "tags": {
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+            },
+            "properties": {
+                "ApplicationId": "[variables('applicationInsightsName')]",
+                "Request_Source": "IbizaWebAppExtensionCreate"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "apiVersion": "2021-03-01-preview",
+            "properties": {
+                "version": "1.0.2",
+                "kind": "Solution",
+                "contentId": "[variables('_sourceId')]",
+                "parentId": "[variables('_sourceId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "Synack",
+                    "sourceId": "[variables('_sourceId')]"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                   "criteria": [
+                    {
+                      "kind": "DataConnector",
+                      "contentId": "[variables('_SynackIntegrationConnector')]",
+                      "version": "1.0.0"
+                    }
+				   ]
+                },
+                "providers": [ "Synack" ],
+                "categories": {
+                    "domains": [ "Security - Vulnerability Management" ]
+                },
+                "support": {
+                    "tier": "Partner",
+                    "name": "Synack",
+		            "link": "https://help.synack.com/hc/en-us"
+                },
+                "firstPublishDate": "2022-04-18"
+            },
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+        }
+    ],
+    "outputs": {}
+}

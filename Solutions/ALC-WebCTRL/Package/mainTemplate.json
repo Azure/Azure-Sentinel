@@ -1,0 +1,406 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for ALC-WebCTRL"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-automated-logic-webctrl",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "AutomatedLogicWebCTRL",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "AutomatedLogicWebCTRL",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "ALC-WebCTRL data connector with template",
+        "displayName": "ALC-WebCTRL template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ALC-WebCTRL data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Automated Logic WebCTRL ",
+                  "publisher": "AutomatedLogic",
+                  "descriptionMarkdown": "You can stream the audit logs from the WebCTRL SQL server hosted on Windows machines connected to your Microsoft Sentinel. This connection enables you to view dashboards, create custom alerts and improve investigation. This gives insights into your Industrial Control Systems that are monitored or controlled by the WebCTRL BAS application.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "AutomatedLogic-WebCTRL",
+                      "baseQuery": "Event\n| where Source == \"ALCWebCTRL\""
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Total warnings and errors raised by the application",
+                      "query": "Event\n| where Source == \"ALCWebCTRL\"\n| where EventLevel in (1,2,3)"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Event (AutomatedLogic-WebCTRL)",
+                      "lastDataReceivedQuery": "Event\n| where Source == \"ALCWebCTRL\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "Event\n| where Source == \"ALCWebCTRL\"\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Learn about [agent setup](https://docs.microsoft.com/services-hub/health/mma-setup) and [windows events onboarding](https://docs.microsoft.com/azure/azure-monitor/agents/data-sources-windows-events). \n\n You can skip this step if you have already installed the Microsoft agent for Windows",
+                      "title": "1. Install and onboard the Microsoft agent for Windows."
+                    },
+                    {
+                      "description": "Install and configure the Windows Scheduled Task to read the audit logs in SQL and write them as Windows Events. These Windows Events will be collected by the agent and forward to Microsoft Sentinel.\n\n> Notice that the data from all machines will be stored in the selected workspace",
+                      "innerSteps": [
+                        {
+                          "description": "2.1 Copy the [setup files](https://aka.ms/sentinel-automatedlogicwebctrl-tasksetup) to a location on the server."
+                        },
+                        {
+                          "description": "2.2 Update the [ALC-WebCTRL-AuditPull.ps1](https://aka.ms/sentinel-automatedlogicwebctrl-auditpull) (copied in above step) script parameters like the target database name and windows event id's. Refer comments in the script for more details."
+                        },
+                        {
+                          "description": "2.3 Update the windows task settings in the [ALC-WebCTRL-AuditPullTaskConfig.xml](https://aka.ms/sentinel-automatedlogicwebctrl-auditpulltaskconfig) file that was copied in above step as per requirement. Refer comments in the file for more details."
+                        },
+                        {
+                          "description": "2.4 Install windows tasks using the updated configs copied in the above steps",
+                          "instructions": [
+                            {
+                              "parameters": {
+                                "label": "Run the following command in powershell from the directory where the setup files are copied in step 2.1",
+                                "value": "schtasks.exe /create /XML \"ALC-WebCTRL-AuditPullTaskConfig.xml\" /tn \"ALC-WebCTRL-AuditPull\""
+                              },
+                              "type": "CopyableLabel"
+                            }
+                          ]
+                        }
+                      ],
+                      "title": "2. Configure Windows task to read the audit data and write it to windows events"
+                    },
+                    {
+                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the Event schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, validate below steps for any run time issues:\n\n> 1. Make sure that the scheduled task is created and is in running state in the Windows Task Scheduler.\n\n>2. Check for task execution errors in the history tab in Windows Task Scheduler for the newly created task in step 2.4\n\n>3. Make sure that the SQL Audit table consists new records while the scheduled windows task runs.",
+                      "title": "3. Validate connection"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ALC-WebCTRL",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ALC-WebCTRL",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Automated Logic WebCTRL ",
+          "publisher": "AutomatedLogic",
+          "descriptionMarkdown": "You can stream the audit logs from the WebCTRL SQL server hosted on Windows machines connected to your Microsoft Sentinel. This connection enables you to view dashboards, create custom alerts and improve investigation. This gives insights into your Industrial Control Systems that are monitored or controlled by the WebCTRL BAS application.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "AutomatedLogic-WebCTRL",
+              "baseQuery": "Event\n| where Source == \"ALCWebCTRL\""
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Event (AutomatedLogic-WebCTRL)",
+              "lastDataReceivedQuery": "Event\n| where Source == \"ALCWebCTRL\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Event\n| where Source == \"ALCWebCTRL\"\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Total warnings and errors raised by the application",
+              "query": "Event\n| where Source == \"ALCWebCTRL\"\n| where EventLevel in (1,2,3)"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Learn about [agent setup](https://docs.microsoft.com/services-hub/health/mma-setup) and [windows events onboarding](https://docs.microsoft.com/azure/azure-monitor/agents/data-sources-windows-events). \n\n You can skip this step if you have already installed the Microsoft agent for Windows",
+              "title": "1. Install and onboard the Microsoft agent for Windows."
+            },
+            {
+              "description": "Install and configure the Windows Scheduled Task to read the audit logs in SQL and write them as Windows Events. These Windows Events will be collected by the agent and forward to Microsoft Sentinel.\n\n> Notice that the data from all machines will be stored in the selected workspace",
+              "innerSteps": [
+                {
+                  "description": "2.1 Copy the [setup files](https://aka.ms/sentinel-automatedlogicwebctrl-tasksetup) to a location on the server."
+                },
+                {
+                  "description": "2.2 Update the [ALC-WebCTRL-AuditPull.ps1](https://aka.ms/sentinel-automatedlogicwebctrl-auditpull) (copied in above step) script parameters like the target database name and windows event id's. Refer comments in the script for more details."
+                },
+                {
+                  "description": "2.3 Update the windows task settings in the [ALC-WebCTRL-AuditPullTaskConfig.xml](https://aka.ms/sentinel-automatedlogicwebctrl-auditpulltaskconfig) file that was copied in above step as per requirement. Refer comments in the file for more details."
+                },
+                {
+                  "description": "2.4 Install windows tasks using the updated configs copied in the above steps",
+                  "instructions": [
+                    {
+                      "parameters": {
+                        "label": "Run the following command in powershell from the directory where the setup files are copied in step 2.1",
+                        "value": "schtasks.exe /create /XML \"ALC-WebCTRL-AuditPullTaskConfig.xml\" /tn \"ALC-WebCTRL-AuditPull\""
+                      },
+                      "type": "CopyableLabel"
+                    }
+                  ]
+                }
+              ],
+              "title": "2. Configure Windows task to read the audit data and write it to windows events"
+            },
+            {
+              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the Event schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, validate below steps for any run time issues:\n\n> 1. Make sure that the scheduled task is created and is in running state in the Windows Task Scheduler.\n\n>2. Check for task execution errors in the history tab in Windows Task Scheduler for the newly created task in step 2.4\n\n>3. Make sure that the SQL Audit table consists new records while the scheduled windows task runs.",
+              "title": "3. Validate connection"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ALC-WebCTRL",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-11-18",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Automation (SOAR)",
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -1,0 +1,44 @@
+id: e7dbcbc3-b18f-4635-b27c-718195c369f1
+name: Claroty - Login to uncommon location
+description: |
+  'Detects user login to uncommon location.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Claroty
+    dataTypes:
+      - ClarotyEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let usr_sites = ClarotyEvent
+  | where TimeGenerated > ago(14d)
+  | where EventType has 'Login to SRA succeeded'
+  | extend Site = column_ifexists("site_name","")
+  | where isnotempty(Site)
+  | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
+  | summarize all_loc = makeset(tostring(Site)) by SrcUsername
+  | extend k = 1;
+  ClarotyEvent
+  | where EventType has 'Login to SRA succeeded'
+  | extend Site = column_ifexists("site_name","")
+  | where isnotempty(Site)
+  | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
+  | extend k = 1
+  | join kind=innerunique (usr_sites) on k
+  | where all_loc !contains Site
+  | extend SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0
+kind: Scheduled

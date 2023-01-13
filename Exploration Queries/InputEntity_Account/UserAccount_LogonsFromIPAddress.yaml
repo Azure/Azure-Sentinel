@@ -16,9 +16,11 @@ Tactics:
   - LateralMovement
   - Collection
 query: |
-
-  let GetAllIPbyAccount = (v_Account_Name:string){
-  OfficeActivity
+  let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+  let Legacy = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+  | join
+  (OfficeActivity
   | extend v_Account_Name = case(
     v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
     v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
@@ -29,7 +31,15 @@ query: |
   | summarize min(TimeGenerated), max(TimeGenerated), IP_Aux_info = makeset(info) by ClientIP
   | project IP_Aux_StartTime = min_TimeGenerated, IP_Aux_EndTime = max_TimeGenerated, ClientIP, IP_Aux_info
   | project-rename IP_Address=ClientIP
-  | top 10 by IP_Aux_StartTime desc nulls last 
+  | top 10 by IP_Aux_StartTime desc nulls last | extend exists=int(1)) on exists
+  | project-away exists, exists1 
   };
-  // change <Name> value below
-  GetAllIPbyAccount ('<Name>')
+  let Normalized = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+  | join (
+    imAuthentication(targetusername_has=v_Account_Name)
+  | summarize IP_Aux_StartTime=min(TimeGenerated), IP_Aux_EndTime=max(TimeGenerated) by SrcDvcIpAddr
+  | project-rename IP_Address=SrcDvcIpAddr
+  | top 10 by IP_Aux_StartTime desc nulls last | extend exists=int(1)) on exists | project-away exists, exists1 
+  };
+  union isfuzzy=true Legacy('<Name>'), Normalized('<Name>')

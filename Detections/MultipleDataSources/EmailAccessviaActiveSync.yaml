@@ -14,6 +14,12 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -33,7 +39,23 @@ query: |
   (
   SecurityEvent
   | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4688
   | where CommandLine has_all (cmdList)
+  | project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  ( WindowsEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4688
+  | where EventData has_all (cmdList)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine has_all (cmdList)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
   | project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
@@ -70,5 +92,14 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.1.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: jannieli
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

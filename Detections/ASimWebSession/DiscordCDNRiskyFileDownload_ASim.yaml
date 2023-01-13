@@ -1,0 +1,57 @@
+id: 01e8ffff-dc0c-43fe-aa22-d459c4204553
+name: Discord CDN Risky File Download  (ASIM Web Session Schema)
+description: |
+  'Identifies callouts to Discord CDN addresses for risky file extensions. This detection will trigger when a callout for a risky file is made to a discord server that has only been seen once in your environment. Unique discord servers are identified using the server ID that is included in the request URL (DiscordServerId in query). Discord CDN has been used in multiple campaigns to download additional payloads.
+   This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071.001
+tags:
+  - Discord
+query: |
+  let discord=dynamic(["cdn.discordapp.com", "media.discordapp.com"]);
+    _Im_WebSession(url_has_any=discord, eventresult='Success')
+    | where Url has "attachments"
+    | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, Url)
+    | summarize dcount(Url), make_set(SrcUsername), make_set(SrcIpAddr), make_set(Url), min(TimeGenerated), max(TimeGenerated), make_set(EventResult) by DiscordServerId
+    | mv-expand set_SrcUsername to typeof(string), set_Url to typeof(string), set_EventResult to typeof(string), set_SrcIpAddr to typeof(string)
+    | summarize by DiscordServerId, dcount_Url, set_SrcUsername, min_TimeGenerated, max_TimeGenerated, set_EventResult, set_SrcIpAddr, set_Url
+    | project StartTime=min_TimeGenerated, EndTime=max_TimeGenerated, Result=set_EventResult, SourceUser=set_SrcUsername, SourceIP=set_SrcIpAddr, RequestURL=set_Url
+    | where RequestURL has_any (".bin",".exe",".dll",".bin",".msi")
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SourceUser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+version: 1.1.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

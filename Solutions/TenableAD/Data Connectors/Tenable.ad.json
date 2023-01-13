@@ -1,0 +1,182 @@
+{
+  "id": "Tenable.ad",
+  "title": "Tenable.ad",
+  "publisher": "Tenable",
+  "descriptionMarkdown": "Tenable.ad connector allows to export Tenable.ad Indicators of Exposures, trailflow and Indicators of Attacks logs to Azure Sentinel in real time.\nIt provides a data parser to manipulate the logs more easily. The different workbooks ease your Active Directory monitoring and provide different ways to visualize the data. The analytic templates allow to automate responses regarding different events, exposures, or attacks.",
+  "additionalRequirementBanner": "This data connector depends on a parser based on Kusto Function to work as expected. Follow the steps to use this Kusto Function alias **afad_parser** in queries and workbooks.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "Tenable_ad_CL",
+      "baseQuery": "Tenable_ad_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "Get the number of alerts triggered by each IoE",
+      "query": "afad_parser\n | where MessageType == 0\n | summarize AlertCount = count() by Codename"
+    },
+    {
+      "description": "Get all IoE alerts with severity superior to the threshold",
+      "query": "let threshold = 2;\n let SeverityTable=datatable(Severity:string,Level:int) [\n \"low\", 1,\n \"medium\", 2,\n \"high\", 3,\n \"critical\", 4\n ];\n afad_parser\n | where MessageType == 0\n | lookup kind=leftouter SeverityTable on Severity\n | where Level >= ['threshold']"
+    },
+    {
+      "description": "Get all IoE alerts for the last 24 hours",
+      "query": "afad_parser\r\n| where MessageType == 0 and TimeGenerated > ago(1d)"
+    },
+    {
+      "description": "Get all IoE alerts for the last 7 days",
+      "query": "afad_parser\r\n| where MessageType == 0 and TimeGenerated > ago(7d)"
+    },
+    {
+      "description": "Get all IoE alerts for the last 30 days",
+      "query": "afad_parser\r\n| where MessageType == 0 and TimeGenerated > ago(30d)"
+    },
+    {
+      "description": "Get all trailflow changes for the last 24 hours",
+      "query": "afad_parser\r\n| where MessageType == 1 and TimeGenerated > ago(1d)"
+    },
+    {
+      "description": "Get all trailflow changes for the last 7 days",
+      "query": "afad_parser\r\n| where MessageType == 1 and TimeGenerated > ago(7d)"
+    },{
+      "description": "Get the number of alerts triggered by each IoA",
+      "query": "afad_parser\n | where MessageType == 2\n | summarize AlertCount = count() by Codename"
+    },
+    {
+      "description": "Get all IoA alerts for the last 30 days",
+      "query": "afad_parser\r\n| where MessageType == 2 and TimeGenerated > ago(30d)"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "Tenable_ad_CL",
+      "lastDataReceivedQuery": "Tenable_ad_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "afad_parser\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": true
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Access to Tenable.ad Configuration",
+        "description": "Permissions to configure syslog alerting engine"
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "",
+      "description": ">This data connector depends on a parser based on a Kusto Function to work as expected. [Follow these steps](https://raw.githubusercontent.com/tenable/Azure-Sentinel/Tenable.ad-connector/Solutions/TenableAD/Parsers/afad_parser.kql) to create the Kusto Functions alias, **afad_parser**",
+      "instructions": [
+      ]
+    },
+    {
+      "title": "1. Configure the Syslog server",
+      "description": "You will first need a **linux Syslog** server that Tenable.ad will send logs to. Typically you can run **rsyslog** on **Ubuntu**.\n You can then configure this server as you wish, but it is recommended to be able to output Tenable.ad logs in a separate file.\n\nConfigure rsyslog to accept logs from your Tenable.ad IP address.:\n\n```shell\nsudo -i\n\n# Set Tenable.ad source IP address\nexport TENABLE_AD_IP={Enter your IP address}\n\n# Create rsyslog configuration file\ncat > /etc/rsyslog.d/80-tenable.conf << EOF\n\\$ModLoad imudp\n\\$UDPServerRun 514\n\\$ModLoad imtcp\n\\$InputTCPServerRun 514\n\\$AllowedSender TCP, 127.0.0.1, $TENABLE_AD_IP\n\\$AllowedSender UDP, 127.0.0.1, $TENABLE_AD_IP\n\\$template MsgTemplate,\"%TIMESTAMP:::date-rfc3339% %HOSTNAME% %programname%[%procid%]:%msg%\\n\"\n\\$template remote-incoming-logs, \"/var/log/%PROGRAMNAME%.log\"\n*.* ?remote-incoming-logs;MsgTemplate\nEOF\n\n# Restart rsyslog\nsystemctl restart rsyslog\n```"
+    },
+    {
+      "title": "2. Install and onboard the Microsoft agent for Linux",
+      "description": "The OMS agent will receive the Tenable.ad syslog events and publish it in Sentinel :",
+      "instructions": [
+        {
+          "parameters": {
+            "title": "Choose where to install the agent:",
+            "instructionSteps": [
+              {
+                "title": "Install agent on Azure Linux Virtual Machine",
+                "description": "Select the machine to install the agent on and then click **Connect**.",
+                "instructions": [
+                  {
+                    "parameters": {
+                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                    },
+                    "type": "InstallAgent"
+                  }
+                ]
+              },
+              {
+                "title": "Install agent on a non-Azure Linux Machine",
+                "description": "Download the agent on the relevant machine and follow the instructions.",
+                "instructions": [
+                  {
+                    "parameters": {
+                      "linkType": "InstallAgentOnLinuxNonAzure"
+                    },
+                    "type": "InstallAgent"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "InstructionStepsGroup"
+        }
+      ]
+    },
+    {
+      "title": "3. Check agent logs on the Syslog server",
+      "description": "```shell\ntail -f /var/opt/microsoft/omsagent/log/omsagent.log\n```"
+    },
+    {
+      "title": "4. Configure Tenable.ad to send logs to your Syslog server",
+      "description": "On your **Tenable.ad** portal, go to *System*, *Configuration* and then *Syslog*.\nFrom there you can create a new Syslog alert toward your Syslog server.\n\nOnce this is done, check that the logs are correctly gathered on your server in a separate file (to do this, you can use the *Test the configuration* button in the Syslog alert configuration in Tenable.ad).\nIf you used the Quickstart template, the Syslog server will by default listen on port 514 in UDP and 1514 in TCP, without TLS."
+    },
+    {
+      "title": "5. Configure the custom logs",
+      "description": "Configure the agent to collect the logs.\n\n1. In Sentinel, go to **Configuration** -> **Settings** -> **Workspace settings** -> **Custom logs**.\n2. Click **Add custom log**.\n3. Upload a sample Tenable.ad.log Syslog file from the **Linux** machine running the **Syslog** server and click **Next**\n4. Set the record delimiter to **New Line** if not already the case and click **Next**.\n5. Select **Linux** and enter the file path to the **Syslog** file, click **+** then **Next**. The default location of the file is `/var/log/Tenable.ad.log` if you have a Tenable version <3.1.0, you must also add this linux file location `/var/log/AlsidForAD.log`.\n6. Set the **Name** to *Tenable_ad_CL* (Azure automatically adds *_CL* at the end of the name, there must be only one, make sure the name is not *Tenable_ad_CL_CL*).\n7. Click **Next**, you will see a resume, then click **Create**\n",
+      "instructions": []
+    },
+    {
+      "title": "6. Enjoy !",
+      "description": "> You should now be able to receive logs in the *Tenable_ad_CL* table, logs data can be parse using the **afad_parser()** function, used by all query samples, workbooks and analytic templates."
+    }
+  ],
+  "metadata": {
+    "id": "053c01c0-fe14-4eef-9b35-2637a129677b",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": {
+      "kind": "community"
+    },
+    "author": {
+      "name": "Tenable"
+    },
+    "support": {
+      "name": "Tenable",
+      "link": "https://www.tenable.com/about-tenable/contact-tenable",
+      "tier": "developer"
+    }
+  }
+}

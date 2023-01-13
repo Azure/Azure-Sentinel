@@ -1,0 +1,612 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Cyberpion",
+    "comments": "Solution template for Cyberpion"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Cyberpion Overview",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "cyberpion1597832716616.cyberpion_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "CyberpionSecurityLogs",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "CyberpionSecurityLogs",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "analyticRuleVersion1": "1.0.0",
+    "analyticRulecontentId1": "8e0403b1-07f8-4865-b2e9-74d1e83200a4",
+    "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
+    "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "CyberpionOverviewWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Cyberpion data connector with template",
+        "displayName": "Cyberpion template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Cyberpion data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Cyberpion Security Logs",
+                  "publisher": "Cyberpion",
+                  "descriptionMarkdown": "The Cyberpion Security Logs data connector, ingests logs from the Cyberpion system directly into Sentinel. The connector allows users to visualize their data, create alerts and incidents and improve security investigations.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "CyberpionActionItems_CL",
+                      "baseQuery": "CyberpionActionItems_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Fetch latest Action Items that are currently open",
+                      "query": "let lookbackTime = 14d;\nlet maxTimeGeneratedBucket = toscalar(\n   CyberpionActionItems_CL \n   | where TimeGenerated > ago(lookbackTime)\n   | summarize max(bin(TimeGenerated, 1h))\n   );\nCyberpionActionItems_CL\n | where TimeGenerated > ago(lookbackTime) and is_open_b == true\n | where bin(TimeGenerated, 1h) == maxTimeGeneratedBucket\n "
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CyberpionActionItems_CL",
+                      "lastDataReceivedQuery": "CyberpionActionItems_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "CyberpionActionItems_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Cyberpion Subscription",
+                        "description": "a subscription and account is required for cyberpion logs. [One can be acquired here.](https://azuremarketplace.microsoft.com/en/marketplace/apps/cyberpion1597832716616.cyberpion)"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Follow the [instructions](https://www.cyberpion.com/resource-center/integrations/azure-sentinel/) to integrate Cyberpion Security Alerts into Sentinel.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyberpion",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyberpion"
+                },
+                "support": {
+                  "name": "Cyberpion",
+                  "tier": "Partner",
+                  "link": "https://www.cyberpion.com/contact/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cyberpion",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Cyberpion"
+        },
+        "support": {
+          "name": "Cyberpion",
+          "tier": "Partner",
+          "link": "https://www.cyberpion.com/contact/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Cyberpion Security Logs",
+          "publisher": "Cyberpion",
+          "descriptionMarkdown": "The Cyberpion Security Logs data connector, ingests logs from the Cyberpion system directly into Sentinel. The connector allows users to visualize their data, create alerts and incidents and improve security investigations.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "CyberpionActionItems_CL",
+              "baseQuery": "CyberpionActionItems_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CyberpionActionItems_CL",
+              "lastDataReceivedQuery": "CyberpionActionItems_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "CyberpionActionItems_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Fetch latest Action Items that are currently open",
+              "query": "let lookbackTime = 14d;\nlet maxTimeGeneratedBucket = toscalar(\n   CyberpionActionItems_CL \n   | where TimeGenerated > ago(lookbackTime)\n   | summarize max(bin(TimeGenerated, 1h))\n   );\nCyberpionActionItems_CL\n | where TimeGenerated > ago(lookbackTime) and is_open_b == true\n | where bin(TimeGenerated, 1h) == maxTimeGeneratedBucket\n "
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Cyberpion Subscription",
+                "description": "a subscription and account is required for cyberpion logs. [One can be acquired here.](https://azuremarketplace.microsoft.com/en/marketplace/apps/cyberpion1597832716616.cyberpion)"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Follow the [instructions](https://www.cyberpion.com/resource-center/integrations/azure-sentinel/) to integrate Cyberpion Security Alerts into Sentinel.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('analyticRuleTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "properties": {
+        "description": "Cyberpion Analytics Rule 1 with template",
+        "displayName": "Cyberpion Analytics Rule template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('analyticRuleTemplateSpecName1'),'/',variables('analyticRuleVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "HighUrgencyActionItems_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('AnalyticRulecontentId1')]",
+              "apiVersion": "2022-04-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "This query creates an alert for active Cyberpion Action Items with high urgency (9-10).\n Urgency can be altered using the \"min_urgency\" variable in the query.",
+                "displayName": "High Urgency Cyberpion Action Items",
+                "enabled": false,
+                "query": "let timeframe = 14d;\nlet time_generated_bucket = 1h;\nlet min_urgency = 9;\nlet maxTimeGeneratedBucket = toscalar(\n   CyberpionActionItems_CL\n   | where TimeGenerated > ago(timeframe)\n   | summarize max(bin(TimeGenerated, time_generated_bucket))\n   );\nCyberpionActionItems_CL\n | where TimeGenerated > ago(timeframe) and is_open_b == true\n | where bin(TimeGenerated, time_generated_bucket) == maxTimeGeneratedBucket\n | where urgency_d >= min_urgency\n | extend timestamp = opening_datetime_t\n | extend DNSCustomEntity = host_s\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "CyberpionActionItems_CL"
+                    ],
+                    "connectorId": "CyberpionSecurityLogs"
+                  }
+                ],
+                "tactics": [
+                  "InitialAccess"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "DNS",
+                    "fieldMappings": [
+                      {
+                        "columnName": "DNSCustomEntity",
+                        "identifier": "DomainName"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "properties": {
+                "description": "Cyberpion Analytics Rule 1",
+                "parentId": "[variables('analyticRuleId1')]",
+                "contentId": "[variables('_analyticRulecontentId1')]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyberpion",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyberpion"
+                },
+                "support": {
+                  "name": "Cyberpion",
+                  "tier": "Partner",
+                  "link": "https://www.cyberpion.com/contact/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Cyberpion Workbook with template",
+        "displayName": "Cyberpion workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CyberpionOverviewWorkbookWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Use Cyberpion's Security Logs and this workbook, to get an overview of your online assets, gain insights into their current state, and find ways to better secure your ecosystem."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Cyberpion Action Items\"},\"name\":\"text - 2\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Current Open Action Items\",\"expandable\":true,\"expanded\":true,\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let lookbackTime = 14d;\\nlet bucketTimeSpan = 1h;\\nlet maxTimeGeneratedBucket = toscalar(CyberpionActionItems_CL | where TimeGenerated > ago(lookbackTime)| summarize max(bin(TimeGenerated, bucketTimeSpan)));\\nCyberpionActionItems_CL\\n | where TimeGenerated > ago(lookbackTime) and is_open_b == true\\n | extend TimeGeneratedBucket = bin(TimeGenerated, bucketTimeSpan)\\n | where TimeGeneratedBucket == maxTimeGeneratedBucket\\n | summarize count() by Category\\n | render barchart\\n\\n\",\"size\":0,\"title\":\"Action Items by Category\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"action-items-by-category\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let lookbackTime = 14d;\\nlet bucketTimeSpan = 1h;\\nlet maxTimeGeneratedBucket = toscalar(CyberpionActionItems_CL | where TimeGenerated > ago(lookbackTime)| summarize max(bin(TimeGenerated, bucketTimeSpan)));\\nCyberpionActionItems_CL\\n | where TimeGenerated > ago(lookbackTime) and is_open_b == true\\n | extend TimeGeneratedBucket = bin(TimeGenerated, bucketTimeSpan)\\n | where TimeGeneratedBucket == maxTimeGeneratedBucket\\n | summarize count() by solution_s\\n | render piechart\",\"size\":0,\"title\":\"Most Common Solutions\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"most-common-solution\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let lookbackTime = 14d;\\nlet bucketTimeSpan = 1h;\\nlet maxTimeGeneratedBucket = toscalar(CyberpionActionItems_CL | where TimeGenerated > ago(lookbackTime)| summarize max(bin(TimeGenerated, bucketTimeSpan)));\\nCyberpionActionItems_CL\\n | where TimeGenerated > ago(lookbackTime) and is_open_b == true\\n | extend TimeGeneratedBucket = bin(TimeGenerated, bucketTimeSpan)\\n | where TimeGeneratedBucket == maxTimeGeneratedBucket\\n | extend Urgency = bin(urgency_d, 1)\\n | summarize count() by Urgency\\n | join kind=rightouter (range Urgency from 1.0 to 10.0 step 1) on Urgency\\n | project Urgency = Urgency1, Count = iff(isnotempty(count_), count_, 0)\\n | sort by Urgency asc\\n | extend Urgency = tostring(Urgency)\\n | render barchart\\n\\n\",\"size\":0,\"title\":\"Action Items Count by Urgency\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"chartSettings\":{\"createOtherGroup\":0,\"xSettings\":{\"numberFormatSettings\":{\"unit\":0,\"options\":{\"style\":\"decimal\",\"useGrouping\":true}}},\"ySettings\":{\"numberFormatSettings\":{\"unit\":0,\"options\":{\"style\":\"decimal\",\"useGrouping\":true}}}}},\"customWidth\":\"50\",\"name\":\"open-ai-urgency-bars\"}]},\"name\":\"current-ais\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Historical Info\",\"expandable\":true,\"expanded\":true,\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"e8bb48b6-6706-48bd-b8a1-94de288bcb4c\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true},\"timeContext\":{\"durationMs\":86400000}}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let lookbackTime = now(-{TimeRange:seconds}s);\\nlet bucketTimeSpan = 1h;\\nCyberpionActionItems_CL\\n | where TimeGenerated > lookbackTime and is_open_b == true\\n | project id_s, TimeGenerated\\n | make-series count() default=long(null) on TimeGenerated from bin(lookbackTime, bucketTimeSpan) to now() step bucketTimeSpan\\n | extend open_action_items=series_fill_forward(count_, long(null))\\n | project TimeGenerated, open_action_items\\n | mv-expand TimeGenerated to typeof(datetime), open_action_items to typeof(int)\\n | where isnotnull(open_action_items)\\n | render timechart\",\"size\":0,\"aggregation\":5,\"title\":\"Open Action Items over time\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"action-items-over-time\"}]},\"name\":\"historical-data\"}],\"fromTemplateId\":\"sentinel-CyberpionOverviewWorkbook\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=CyberpionOverviewWorkbook; logoFileName=cyberpion_logo.svg; description=Use Cyberpion's Security Logs and this workbook, to get an overview of your online assets, gain insights into their current state, and find ways to better secure your ecosystem.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Cyberpion Overview; templateRelativePath=CyberpionOverviewWorkbook.json; subtitle=; provider=Cyberpion}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyberpion",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyberpion"
+                },
+                "support": {
+                  "name": "Cyberpion",
+                  "tier": "Partner",
+                  "link": "https://www.cyberpion.com/contact/"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "CyberpionActionItems_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "CyberpionSecurityLogs",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cyberpion",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Cyberpion"
+        },
+        "support": {
+          "name": "Cyberpion",
+          "tier": "Partner",
+          "link": "https://www.cyberpion.com/contact/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRulecontentId1')]",
+              "version": "[variables('analyticRuleVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-02",
+        "providers": [
+          "Cyberpion"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

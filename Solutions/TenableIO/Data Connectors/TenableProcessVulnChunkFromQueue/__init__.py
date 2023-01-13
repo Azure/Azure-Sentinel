@@ -1,12 +1,10 @@
+import os
 import json
 import logging
-import os
-
 import azure.functions as func
 
 from ..exports_store import ExportsTableStore, ExportsTableNames
-
-from ..tenable_helper import TenableIO, TenableStatus
+from ..tenable_helper import TenableIO, TenableStatus, TenableChunkPartitioner
 from ..azure_sentinel import AzureSentinel
 from tenable.errors import APIError
 
@@ -49,12 +47,22 @@ def main(msg: func.QueueMessage) -> None:
                 logging.info(
                     f'received a response from vulns/{export_job_id}/chunks/{chunk_id}')
 
-                # Send to Azure Sentinel here
-                az_sentienl = AzureSentinel(
-                    workspace_id, workspace_key, log_type, log_analytics_uri)
-                az_code = az_sentienl.post_data(json.dumps(chunk))
-                logging.warn(
-                    f'Azure Sentinel reports the following status code: {az_code}')
+                # limiting individual chunk uploaded to sentinel to be < 30 MB size.
+                sub_chunks = TenableChunkPartitioner.partition_chunks_into_30MB_sub_chunks(chunk)
+
+                for sub_chunk in sub_chunks:
+                    serialized_sub_chunk = json.dumps(sub_chunk)
+
+                    logging.info('Uploading sub-chunk with size: %d', len(serialized_sub_chunk))
+
+                    # Send to Azure Sentinel here
+                    az_sentinel = AzureSentinel(
+                        workspace_id, workspace_key, log_type, log_analytics_uri)
+
+                    az_code = az_sentinel.post_data(serialized_sub_chunk)
+
+                    logging.warning(
+                        f'Azure Sentinel reports the following status code: {az_code}')
 
                 vuln_table.update_if_found(export_job_id, str(chunk_id), {
                     'jobStatus': TenableStatus.finished.value

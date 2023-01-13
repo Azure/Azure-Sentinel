@@ -1,0 +1,40 @@
+id: ba663b74-51f4-11ec-bf63-0242ac130002
+name: PaloAlto - Dropping or denying session with traffic
+description: |
+  'Detects dropping or denying session with traffic.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: PaloAltoCDL
+    dataTypes:
+      - PaloAltoCDLEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let threshold = 100;
+  PaloAltoCDLEvent
+  | where EventResourceId =~ 'TRAFFIC'
+  | where EventResult has_any ("deny", "drop", "reject") 
+  | where tolong(DstBytes) > 0
+  | where tolong(NetworkPackets) > 0
+  | summarize count() by SrcIpAddr, DstUsername, bin(TimeGenerated, 10m)
+  | where count_ > threshold
+  | extend AccountCustomEntity = DstUsername, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

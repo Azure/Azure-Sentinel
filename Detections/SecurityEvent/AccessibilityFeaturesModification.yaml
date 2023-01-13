@@ -1,0 +1,48 @@
+id: d714ef62-1a56-4779-804f-91c4158e528d
+name: Modification of Accessibility Features
+description: |
+  'Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered by accessibility features. Windows contains accessibility features that may be launched with a key combination before a user has logged in (ex: when the user is on the Windows logon screen). An adversary can modify the way these programs are launched to get a command prompt or backdoor without logging in to the system.
+   Two common accessibility programs are C:\Windows\System32\sethc.exe, launched when the shift key is pressed five times and C:\Windows\System32\utilman.exe, launched when the Windows + U key combination is pressed. The sethc.exe program is often referred to as "sticky keys", and has been used by adversaries for unauthenticated access through a remote desktop login screen. [1]
+  Ref: https://attack.mitre.org/techniques/T1546/008/'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1546.008
+query: |
+  let ImagesList = dynamic (["sethc.exe","utilman.exe","osk.exe","Magnify.exe","Narrator.exe","DisplaySwitch.exe","AtBroker.exe"]); 
+  let OriginalFileNameList = dynamic (["sethc.exe","utilman.exe","osk.exe","Magnify.exe","Narrator.exe","DisplaySwitch.exe","AtBroker.exe","SR.exe","utilman2.exe","ScreenMagnifier.exe"]); 
+  Event
+  | where EventLog == "Microsoft-Windows-Sysmon/Operational" and EventID==1
+  | parse EventData with * 'Image">' Image "<" * 'OriginalFileName">' OriginalFileName "<" *
+  | where Image has_any (ImagesList) and not (OriginalFileName has_any (OriginalFileNameList))
+  | parse EventData with * 'ProcessGuid">' ProcessGuid "<" * 'Description">' Description "<" * 'CommandLine">' CommandLine "<" * 'CurrentDirectory">' CurrentDirectory "<" * 'User">' User "<" * 'LogonGuid">' LogonGuid "<" * 'Hashes">' Hashes "<" * 'ParentProcessGuid">' ParentProcessGuid "<" * 'ParentImage">' ParentImage "<" * 'ParentCommandLine">' ParentCommandLine "<" * 'ParentUser">' ParentUser "<" *
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description, OriginalFileName, CurrentDirectory, Hashes
+entityMappings:
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: CommandLine
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Vasileios Paschalidis
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

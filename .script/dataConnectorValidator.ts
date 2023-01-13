@@ -11,7 +11,7 @@ import { ConnectorCategory } from "./utils/dataConnector";
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
 
   if(!filePath.includes('Templates'))
-  {  
+  {
     let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
     if(isPotentialConnectorJson(jsonFile))
@@ -32,13 +32,13 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
         console.warn(`Skipping File as it is of type Events : ${filePath}`)
       }
     }
-    else{      
+    else{
       console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
-    } 
+    }
   }
   else{
     console.warn(`Skipping Files under Templates folder : ${filePath}`)
-  } 
+  }
   return ExitCode.SUCCESS;
   }
 
@@ -60,20 +60,38 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
+  {
+    return ConnectorCategory.ThreatIntelligenceIndicator;
+  }
+  else if (dataTypes[0].name.includes("MicrosoftPurviewInformationProtection"))
+  {
+    return ConnectorCategory.MicrosoftPurviewInformationProtection;
+  }
   else if (dataTypes[0].name.includes("Event"))
   {
     return ConnectorCategory.Event;
   }
+  else if (dataTypes[0].name.includes("AzureDevOpsAuditing"))
+  {
+    return ConnectorCategory.AzureDevOpsAuditing;
+  }
+  else if (dataTypes[0].name.includes("AzureDiagnostics"))
+  {
+    return ConnectorCategory.AzureDiagnostics;
+  }
   else if(dataTypes[0].name.endsWith("_CL"))
   {
-    let isAzureFunction:boolean = false;
     if(JSON.stringify(instructionSteps).includes("[Deploy To Azure]"))
     {
-      isAzureFunction = true;
-    }    
-    return isAzureFunction ? ConnectorCategory.AzureFunction: ConnectorCategory.RestAPI;
+        return ConnectorCategory.AzureFunction;
+    }
+    else if((dataTypes[0].name.includes("meraki") || dataTypes[0].name.includes("vCenter")) && JSON.stringify(instructionSteps).includes("\"type\":\"InstallAgent\""))
+    {
+        return ConnectorCategory.SysLog;
+    }
+    return ConnectorCategory.RestAPI;
   }
-
   return "";
 }
 

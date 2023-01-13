@@ -1,0 +1,680 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for JBoss"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-jboss",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "JBossEAP",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "JBossEAP",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "JBossEvent-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "JBossEvent",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "JBoss data connector with template",
+        "displayName": "JBoss template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "JBoss data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "JBoss Enterprise Application Platform",
+                  "publisher": "Red Hat",
+                  "descriptionMarkdown": "The JBoss Enterprise Application Platform data connector provides the capability to ingest [JBoss](https://www.redhat.com/en/technologies/jboss-middleware/application-platform) events into Microsoft Sentinel. Refer to [Red Hat documentation](https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/configuration_guide/logging_with_jboss_eap) for more information.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "JBossLogs_CL",
+                      "baseQuery": "JBossEvent"
+                    }
+                  ],
+                  "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**JBossEvent**](https://aka.ms/sentinel-jbosseap-parser) which is deployed with the Microsoft Sentinel Solution.",
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Processes",
+                      "query": "JBossEvent\n            | summarize count() by ActingProcessName \n            | top 10 by count_"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "JBossEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "JBossLogs_CL",
+                      "lastDataReceivedQuery": "JBossEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 2,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**JBossEvent**](https://aka.ms/sentinel-jbosseap-parser) which is deployed with the Microsoft Sentinel Solution."
+                    },
+                    {
+                      "description": ">**NOTE:** This data connector has been developed using JBoss Enterprise Application Platform 7.4.0."
+                    },
+                    {
+                      "description": "Install the agent on the JBoss server where the logs are generated.\n\n>  Logs from JBoss Server deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.\n    ",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Linux agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux or Windows"
+                    },
+                    {
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Windows agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Windows Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Windows Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "Configure the custom log directory to be collected",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenCustomLogsSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "2. Configure the logs to be collected"
+                    },
+                    {
+                      "description": "1. Select the link above to open your workspace advanced settings \n2. Click **+Add custom**\n3. Click **Browse** to upload a sample of a JBoss log file (e.g. server.log). Then, click **Next >**\n4. Select **Timestamp** as the record delimiter and select Timestamp format **YYYY-MM-DD HH:MM:SS** from the dropdown list then click **Next >**\n5. Select **Windows** or **Linux** and enter the path to JBoss logs based on your configuration. Example:\n - **Linux** Directory:\n\n>Standalone server: EAP_HOME/standalone/log/server.log\n\n>Managed domain: EAP_HOME/domain/servers/SERVER_NAME/log/server.log\n\n6. After entering the path, click the '+' symbol to apply, then click **Next >** \n7. Add **JBossLogs** as the custom log Name and click **Done**"
+                    },
+                    {
+                      "description": "Open Log Analytics to check if the logs are received using the JBossLogs_CL Custom log table.\n\n>**NOTE:** It may take up to 30 minutes before new logs will appear in JBossLogs_CL table.",
+                      "title": "3. Check logs in Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "JBoss",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "JBoss",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "JBoss Enterprise Application Platform",
+          "publisher": "Red Hat",
+          "descriptionMarkdown": "The JBoss Enterprise Application Platform data connector provides the capability to ingest [JBoss](https://www.redhat.com/en/technologies/jboss-middleware/application-platform) events into Microsoft Sentinel. Refer to [Red Hat documentation](https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/configuration_guide/logging_with_jboss_eap) for more information.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "JBossLogs_CL",
+              "baseQuery": "JBossEvent"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "JBossLogs_CL",
+              "lastDataReceivedQuery": "JBossEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "JBossEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Processes",
+              "query": "JBossEvent\n            | summarize count() by ActingProcessName \n            | top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 2,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**JBossEvent**](https://aka.ms/sentinel-jbosseap-parser) which is deployed with the Microsoft Sentinel Solution."
+            },
+            {
+              "description": ">**NOTE:** This data connector has been developed using JBoss Enterprise Application Platform 7.4.0."
+            },
+            {
+              "description": "Install the agent on the JBoss server where the logs are generated.\n\n>  Logs from JBoss Server deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.\n    ",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Linux agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux or Windows"
+            },
+            {
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Windows agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Windows Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Windows Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ]
+            },
+            {
+              "description": "Configure the custom log directory to be collected",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenCustomLogsSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "1. Select the link above to open your workspace advanced settings \n2. Click **+Add custom**\n3. Click **Browse** to upload a sample of a JBoss log file (e.g. server.log). Then, click **Next >**\n4. Select **Timestamp** as the record delimiter and select Timestamp format **YYYY-MM-DD HH:MM:SS** from the dropdown list then click **Next >**\n5. Select **Windows** or **Linux** and enter the path to JBoss logs based on your configuration. Example:\n - **Linux** Directory:\n\n>Standalone server: EAP_HOME/standalone/log/server.log\n\n>Managed domain: EAP_HOME/domain/servers/SERVER_NAME/log/server.log\n\n6. After entering the path, click the '+' symbol to apply, then click **Next >** \n7. Add **JBossLogs** as the custom log Name and click **Done**"
+            },
+            {
+              "description": "Open Log Analytics to check if the logs are received using the JBossLogs_CL Custom log table.\n\n>**NOTE:** It may take up to 30 minutes before new logs will appear in JBossLogs_CL table.",
+              "title": "3. Check logs in Microsoft Sentinel"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**JBossEvent**](https://aka.ms/sentinel-jbosseap-parser) which is deployed with the Microsoft Sentinel Solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "JBossEvent Data Parser with template",
+        "displayName": "JBossEvent Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "JBossEvent Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "JBossEvent",
+                "category": "Samples",
+                "functionAlias": "JBossEvent",
+                "query": "\nJBossLogs_CL\r\n| extend EventVendor = 'Red Hat'\r\n| extend EventProduct = 'JBoss Enterprise Application Platform'\r\n| extend EventCount = 1\r\n| extend EventSchemaVersion = 0.2\r\n| extend EventSeverity = extract(@'\\d{2},\\d{3}\\s(\\w+)\\s+\\[', 1, RawData)\r\n| extend ActingProcessName = extract(@'\\[([A-Za-z0-9.-]+)\\]', 1, RawData)\r\n| extend ActingProcessThread = extract(@'\\]\\s+\\((.*?)\\)', 1, RawData)\r\n| extend EventOriginalType = extract(@\"([A-Z]+[0-9]+)(:)\",1, RawData)\r\n| extend EventMessage = extract(@'\\)\\s([A-Z0-9]+:\\s)?(.*)', 2, RawData)\r\n| project-away RawData\r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "JBossEvent"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "JBoss",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "JBossEvent",
+        "category": "Samples",
+        "functionAlias": "JBossEvent",
+        "query": "\nJBossLogs_CL\r\n| extend EventVendor = 'Red Hat'\r\n| extend EventProduct = 'JBoss Enterprise Application Platform'\r\n| extend EventCount = 1\r\n| extend EventSchemaVersion = 0.2\r\n| extend EventSeverity = extract(@'\\d{2},\\d{3}\\s(\\w+)\\s+\\[', 1, RawData)\r\n| extend ActingProcessName = extract(@'\\[([A-Za-z0-9.-]+)\\]', 1, RawData)\r\n| extend ActingProcessThread = extract(@'\\]\\s+\\((.*?)\\)', 1, RawData)\r\n| extend EventOriginalType = extract(@\"([A-Z]+[0-9]+)(:)\",1, RawData)\r\n| extend EventMessage = extract(@'\\)\\s([A-Z0-9]+:\\s)?(.*)', 2, RawData)\r\n| project-away RawData\r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "JBoss",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "JBoss",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-10-20",
+        "providers": [
+          "RedHat"
+        ],
+        "categories": {
+          "domains": [
+            "Platform",
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

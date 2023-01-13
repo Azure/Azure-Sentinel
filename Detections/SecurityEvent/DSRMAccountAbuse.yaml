@@ -1,0 +1,44 @@
+id: 979c42dd-533e-4ede-b18b-31a84ba8b3d6
+name: DSRM Account Abuse
+description: | 
+  'This query detects an abuse of the DSRM account in order to maintain persistence and access to the organization's Active Directory.
+  Ref: https://adsecurity.org/?p=1785'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  Event
+  | where EventLog == "Microsoft-Windows-Sysmon/Operational" and EventID in (13)
+  | parse EventData with * 'TargetObject">' TargetObject "<" * 'Details">' Details "<" * 
+  | where TargetObject has ("HKLM\\System\\CurrentControlSet\\Control\\Lsa\\DsrmAdminLogonBehavior") and Details == "DWORD (0x00000002)"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventID, Computer,  TargetObject, Details
+entityMappings:
+  - entityType: RegistryKey
+    fieldMappings:
+      - identifier: Key
+        columnName: TargetObject
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Vasileios Paschalidis
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

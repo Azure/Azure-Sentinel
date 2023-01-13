@@ -1,0 +1,36 @@
+id: da04a5d6-e2be-4cba-8cdb-a3f2efa87e9e
+name: Google DNS - Multiple errors to same domain
+description: |
+  'Detects multiple errors to same domain.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+      - GCPCloudDNS
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1095
+query: |
+  let threshold = 2;
+  let err = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
+  GCPCloudDNS
+  | where EventResultDetails in~ (err)
+  | summarize ips = makeset(SrcIpAddr) by Query, bin(TimeGenerated, 10m)
+  | where array_length(ips) >= threshold
+  | extend DNSCustomEntity = Query, IPCustomEntity = ips
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DNSCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

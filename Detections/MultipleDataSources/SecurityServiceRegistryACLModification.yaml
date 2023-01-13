@@ -21,6 +21,12 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -63,6 +69,40 @@ query: |
   | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
   ),
   (
+  WindowsEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4670 and EventData has_any (servicelist) and EventData has 'Key'
+  | extend ObjectType = tostring(EventData.ObjectType)
+  | where ObjectType == 'Key'
+  | extend ObjectName = tostring(EventData.ObjectName)
+  | where ObjectName has_any (servicelist)
+  | extend OldSd = tostring(EventData.OldSd)
+  | extend NewSd = tostring(EventData.NewSd)
+  | extend Reason = case( (OldSd has ';;;SY' and NewSd !has ';;;SY'), 'System Account is removed', (OldSd has_any (FullAccess) and NewSd has_any (ReadAccess)) , 'System permission has been changed to read from full access', (OldSd has_any (FullAccess) and NewSd has_any (DenyAccess)), 'System account has been given denied permission', 'None')
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend ProcessName = tostring(EventData.ProcessName)
+  | extend ProcessId = tostring(EventData.ProcessId)
+  | extend Activity= "4670 - Permissions on an object were changed."
+  | extend HandleId = tostring(EventData.HandleId)
+  | extend  SubjectLogonId = tostring(EventData.SubjectLogonId)
+  | project TimeGenerated, Computer, Account,  ProcessName, ProcessId, ObjectName, EventData, Activity, HandleId, SubjectLogonId, OldSd, NewSd , Reason
+  ),
+  (
+  WindowsEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4688 and EventData has_any (filename) and EventData has_any (servicelist) and EventData has_any (parameters)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend ProcessName = tostring(split(NewProcessName, '\\')[-1])
+  | where ProcessName in~ (filename) 
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine has_any (servicelist) and CommandLine has_any (parameters)
+  | extend  Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend  AccountDomain = tostring(EventData.AccountDomain)
+  | extend  Activity="4688 - A new process has been created."
+  | extend  EventSourceName=Provider
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (
   DeviceProcessEvents
   | where TimeGenerated >= ago(timeframe)
   | where InitiatingProcessFileName in~ (filename) 
@@ -82,5 +122,14 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.1.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ajeet Prakash
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

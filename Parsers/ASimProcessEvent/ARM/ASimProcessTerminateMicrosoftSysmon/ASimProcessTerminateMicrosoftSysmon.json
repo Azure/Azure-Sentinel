@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimProcessTerminateMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Terminate Event ASIM parser for Microsoft Windows Security Events",
+            "category": "ASIM",
+            "FunctionAlias": "ASimProcessTerminateMicrosoftSysmon",
+            "query": "let parser = (disabled:bool = false) {\n    // this is the parser for sysmon from Event table\n    let parser_Event = (disabled:bool=false) {\n        Event \n        | where not(disabled)\n        | where Source == \"Microsoft-Windows-Sysmon\" and EventID == 5\n        | parse-kv EventData as (\n            ProcessId:string,\n            ProcessGuid:string,\n            Image:string,\n            User:string\n          ) \n          with (regex=@'<Data Name=\"(\\w+)\">{?([^<]*?)}?</Data>')\n        | project-rename\n            ActorUsername = User,\n            DvcHostname = Computer,\n            TargetProcessName = Image,\n            TargetProcessGuid = ProcessGuid,\n            TargetProcessId = ProcessId\n        | extend \n            EventProduct = \"Sysmon\"\n        | project-away EventData, ParameterXml, RenderedDescription, MG, ManagementGroupName, Message, AzureDeploymentID, SourceSystem, EventCategory, EventLevelName, EventLevel, EventLog, Role, TenantId, UserName\n    };\n    let parser_WindowsEvent=(disabled:bool=false){\n        WindowsEvent\n        | where not(disabled)\n        | where Provider == \"Microsoft-Windows-Sysmon\" and EventID == 5\n        | extend\n            EventProduct = \"Security Events\",\n            ActorUsername = tostring(EventData.User),\n            TargetProcessName = tostring(EventData.Image),\n            TargetProcessId = tostring(EventData.ProcessId),\n            TargetProcessGuid = tostring(EventData.ProcessGuid)\n        | project-rename\n            DvcHostname = Computer,\n            EventOriginalUid = EventOriginId\n        | project-away Channel, Data, EventData, EventLevelName, EventLevel, ManagementGroupName, Provider, RawEventData, SourceSystem, Task, TenantId\n    };\n    union isfuzzy=true parser_Event(disabled=disabled) // , parser_WindowsEvent(disabled=disabled)\n    | extend  \n        EventType = \"ProcessTerminated\",\n        EventStartTime = todatetime(TimeGenerated),\n        EventEndTime = todatetime(TimeGenerated),\n        EventCount = int(1),\n        EventVendor = \"Microsoft\",\n        EventSchemaVersion = \"0.1.0\",\n        EventSchema = 'ProcessEvent',\n        EventOriginalType=tostring(EventID),\n        EventResult = 'Success',\n        DvcOs = \"Windows\",\n        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n        // -- Aliases \n        User = ActorUsername,\n        Process = TargetProcessName,\n        Dvc = DvcHostname\n    | project-away EventID\n};\nparser (disabled = disabled) \n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

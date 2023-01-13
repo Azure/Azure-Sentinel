@@ -1,0 +1,39 @@
+id: 976d2eee-51cb-11ec-bf63-0242ac130002
+name: PaloAlto - MAC address conflict
+description: |
+  'Detects several users with the same MAC address.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: PaloAltoCDL
+    dataTypes:
+      - PaloAltoCDLEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let threshold = 2;
+  PaloAltoCDLEvent
+  | where EventResourceId =~ 'TRAFFIC'
+  | where isnotempty(DestinationMACAddress) and isnotempty(DstUsername)
+  | summarize UserSet = make_set(DstUsername) by DestinationMACAddress
+  | extend Users = array_length(UserSet)
+  | where Users >= threshold
+  | extend AccountCustomEntity = UserSet, IPCustomEntity = DestinationMACAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

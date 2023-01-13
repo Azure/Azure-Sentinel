@@ -1,0 +1,120 @@
+Parser:
+  Title:  Network Session ASIM parser for Sysmon for Linux
+  Version: '0.3.1'
+  LastUpdated: Dec 28 2022
+Product:
+  Name: Sysmon for Linux
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.0'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Sysmon for Linux event 3 to the ASIM Network Session schema.
+ParserName: ASimNetworkSessionLinuxSysmon
+EquivalentBuiltInParser: _ASim_NetworkSession_LinuxSysmon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+   let DirectionNetworkEvents =
+    Syslog | where not(disabled)
+    | project SyslogMessage, TimeGenerated, HostIP
+    | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>3</EventID>')
+    | parse SyslogMessage with * '<Data Name="SourceIp">' SrcIpAddr:string '</Data>' *
+    | extend outbound = (SrcIpAddr == HostIP or SrcIpAddr in ('127.0.0.1', '0.0.0.0'))
+    ;
+    let parser = (T: (SyslogMessage: string)) {
+      T 
+      | parse SyslogMessage with 
+          *
+          '<EventRecordID>' EventOriginalUid:string '</EventRecordID>'
+          *
+          '<Computer>' SysmonComputer:string '</Computer>'
+          *
+          '<Data Name="RuleName">' RuleName:string '</Data>'
+          '<Data Name="UtcTime">' EventEndTime:datetime '</Data>'
+          '<Data Name="ProcessGuid">{' ProcessGuid:string '}</Data>'
+          '<Data Name="ProcessId">' ProcessId:string '</Data>'
+          '<Data Name="Image">' Process:string '</Data>'
+          '<Data Name="User">' User:string '</Data>'
+          '<Data Name="Protocol">' Protocol:string '</Data>' // -- source is lowercase
+          '<Data Name="Initiated">' Initiated:bool '</Data>' 
+          '<Data Name="SourceIsIpv6">' SourceIsIpv6:bool '</Data>'		
+          '<Data Name="SourceIp">' * '</Data>'
+          '<Data Name="SourceHostname">' SrcHostname:string '</Data>'
+          '<Data Name="SourcePort">' SrcPortNumber:int '</Data>'
+          '<Data Name="SourcePortName">' SrcPortName:string '</Data>'
+          '<Data Name="DestinationIsIpv6">' DestinationIsIpv6:bool '</Data>'
+          '<Data Name="DestinationIp">' DstIpAddr:string '</Data>'
+          '<Data Name="DestinationHostname">' DstHostname:string '</Data>'
+          '<Data Name="DestinationPort">' DstPortNumber:int '</Data>'
+          '<Data Name="DestinationPortName">' DstPortName:string '</Data>'
+          *
+          | project-away DstPortName, DestinationIsIpv6, Initiated, SourceIsIpv6, SrcPortName, RuleName
+    };
+    let OutboundNetworkEvents = 
+      DirectionNetworkEvents
+      | where outbound
+      | invoke parser ()
+      | extend
+        SrcUsernameType = 'Simple',
+        SrcAppType = 'Process'
+      | project-rename 
+        SrcUsername = User,
+        SrcProcessId = ProcessId, 
+        SrcProcessGuid = ProcessGuid,
+        SrcProcessName = Process
+      | extend
+        SrcAppName = SrcProcessName
+      | project-away SyslogMessage
+    ;
+    let InboundNetworkEvents = 
+      DirectionNetworkEvents
+      | where not(outbound)
+      | invoke parser ()
+      | extend
+        DstUsernameType = 'Simple',
+        DstAppType = 'Process'
+      | project-rename 
+        DstUsername = User,
+        DstProcessId = ProcessId, 
+        DstProcessGuid = ProcessGuid,
+        DstProcessName = Process
+      | extend
+        DstAppName = DstProcessName
+      | project-away SyslogMessage
+    ; 
+    let SysmonForLinuxNetwork=
+        union OutboundNetworkEvents, InboundNetworkEvents
+        | extend 
+            EventType = 'NetworkSession',
+            EventStartTime = EventEndTime,
+            EventCount = int(1),
+            EventVendor = 'Microsoft',
+            EventSchemaVersion = '0.2.0',
+            EventSchema = 'NetworkSession', 
+            EventProduct = 'Sysmon for Linux',
+            EventResult = 'Success',
+            EventSeverity = 'Informational',
+            DvcOs = 'Linux',
+            NetworkProtocol = toupper(Protocol),
+            NetworkDirection = iff(outbound, "Outbound", "Inbound"),
+            EventOriginalType = '3' // Set with a constant value to avoid parsing
+        | project-away
+            outbound, Protocol
+        | project-rename 
+            DvcIpAddr = HostIP,
+            DvcHostname = SysmonComputer
+        | extend // aliases
+            Dvc = DvcHostname,
+            Hostname = DstHostname,
+            IpAddr = SrcIpAddr,
+            Src = SrcIpAddr,
+            Dst = DstIpAddr
+    ;
+    SysmonForLinuxNetwork

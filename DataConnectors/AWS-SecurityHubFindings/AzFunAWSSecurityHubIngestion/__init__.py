@@ -13,16 +13,21 @@ import json
 import hashlib
 import hmac
 import base64
+import re
 from threading import Thread
-from io import StringIO
-
+import asn1
+import cffi
+from boto3.session import Session
 import azure.functions as func
+from azure.identity import AzureCliCredential, ChainedTokenCredential, ManagedIdentityCredential, DefaultAzureCredential
+import botocore
+from azure.core.exceptions import ClientAuthenticationError
 
-
+client_id = os.environ.get('ClientID')
 sentinel_customer_id = os.environ.get('WorkspaceID')
 sentinel_shared_key = os.environ.get('WorkspaceKey')
-aws_access_key_id = os.environ.get('AWSAccessKeyId')
-aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
+aws_role_arn = os.environ.get('AWSRoleArn') # Should be full ARN, including AWS account number eg. arn:aws:iam::133761391337:role/AzureSentinelSyncRole
+aws_role_session_name =  os.environ.get('AWSRoleSessionName')
 aws_region_name = os.environ.get('AWSRegionName')
 aws_securityhub_filters = os.environ.get('SecurityHubFilters')
 sentinel_log_type = os.environ.get('LogAnalyticsCustomLogName')
@@ -43,9 +48,20 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Starting program')
+    # auth to azure ad
+    logging.info ("Authenticating to Azure AD.")
+    try:
+        managed_identity = ManagedIdentityCredential()
+        azure_cli = AzureCliCredential()
+        default_azure_credential = DefaultAzureCredential(exclude_shared_token_cache_credential=True)
+        credential_chain = ChainedTokenCredential(managed_identity, azure_cli, default_azure_credential)
+        token_meta = credential_chain.get_token(client_id)
+        token = token_meta.token
+    except ClientAuthenticationError as error:
+        logging.info ("Authenticating to Azure AD: %s" % error)
     
     sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
-    securityHubSession = SecurityHubClient(aws_access_key_id, aws_secret_acces_key, aws_region_name)
+    securityHubSession = SecurityHubClient(aws_role_arn, aws_role_session_name, aws_region_name, token)
     securityhub_filters_dict = {}
     logging.info ('SecurityHubFilters : {0}'.format(aws_securityhub_filters))
     if aws_securityhub_filters:
@@ -109,19 +125,42 @@ def main(mytimer: func.TimerRequest) -> None:
     if successfull_sent_events_number == 0 and failed_sent_events_number == 0:
         logging.info('No Fresh SecurityHub Events')
 
-
 class SecurityHubClient:
-    def __init__(self, aws_access_key_id, aws_secret_acces_key, aws_region_name):
-        self.aws_access_key_id = aws_access_key_id
-        self.aws_secret_acces_key = aws_secret_acces_key
-        self.aws_region_name = aws_region_name       
+    def __init__(self, aws_role_arn, aws_role_session_name, aws_region_name, token):
 
+        # define input
+        self.role_arn = aws_role_arn
+        self.role_session_name = aws_role_session_name
+        self.aws_region_name = aws_region_name
+        self.web_identity_token = token
+
+        # create an STS client object that represents a live connection to the STS service
+        sts_client = boto3.client('sts')
+	
+        # call assume_role method using input + client
+        try:
+            assumed_role_object=sts_client.assume_role_with_web_identity(
+                RoleArn=self.role_arn,
+                RoleSessionName=self.role_session_name,
+                WebIdentityToken=self.web_identity_token
+                )
+            logging.info ("Successfully assumed role with web identity.")            
+        except botocore.exceptions.ClientError as error:
+            logging.info ("Assuming role with web identity failed: %s" % error)
+
+        # from the response, get credentials
+        credentials=assumed_role_object['Credentials']
+        logging.info ('AccessKeyId : {0}'.format(credentials['AccessKeyId']))
+        logging.info ('AssumedRoleArn : {0}'.format(assumed_role_object['AssumedRoleUser']['Arn']))
+
+        # use temp creds to make connection
         self.securityhub = boto3.client(
             'securityhub',
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_acces_key,
+            aws_access_key_id=credentials['AccessKeyId'],
+            aws_secret_access_key=credentials['SecretAccessKey'],
+            aws_session_token=credentials['SessionToken'],
             region_name=self.aws_region_name
-        )    
+        )
 
     def freshEventTimestampGenerator(self, freshEventsDuration):
         tm = datetime.datetime.utcfromtimestamp(time.time())
@@ -249,4 +288,3 @@ class AzureSentinelConnector:
             middle = int(len(queue) / 2)
             queues_list = [queue[:middle], queue[middle:]]
             return self._split_big_request(queues_list[0]) + self._split_big_request(queues_list[1])
-

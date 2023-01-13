@@ -1,0 +1,64 @@
+id: d5e012c2-29ba-4a02-a813-37b928aafe2d
+name: Awake Security - High Severity Matches By Device
+description: This query searches for devices with high severity event(s).
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AristaAwakeSecurity
+    dataTypes:
+      - CommonSecurityLog (AwakeSecurity)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: []
+query: |
+  CommonSecurityLog
+  | where DeviceVendor == "Arista Networks" and DeviceProduct == "Awake Security" and toint(LogSeverity) > 6
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), Models=make_set(Activity), ASPMatchURLs=make_set(DeviceCustomString2), SourceIPs=make_set(SourceIP),
+    DestinationIPs=make_set(DestinationIP), ModelMatchCount=sum(EventCount), MaxSeverity=max(todecimal  (LogSeverity)) by SourceHostName
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: Awake Security - High Severity Matches On Device {{SourceHostName}}
+  alertDescriptionFormat: |
+    Device {{SourceHostName}} matched the following high-severity Awake model(s):
+
+    {{Models}}
+
+    The destination IPs associated with these matches were:
+
+    {{DestinationIPs}}
+  alertTacticsColumnName: null
+  alertSeverityColumnName: MaxSeverity
+customDetails:
+  Matched_Models: Models
+  Matches_ASP_URLs: ASPMatchURLs
+  Device: SourceHostName
+  Matches_Count: ModelMatchCount
+  Matches_Max_Severity: MaxSeverity
+  Matches_Dest_IPs: DestinationIPs
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPs
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 3d
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - Device
+version: 1.0.0
+kind: Scheduled

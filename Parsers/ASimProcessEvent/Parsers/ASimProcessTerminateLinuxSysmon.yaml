@@ -1,0 +1,59 @@
+Parser:
+  Title: Process Terminate Event ASIM parser for Sysmon for Linux 
+  Version: '0.1.1'
+  LastUpdated: Feb 23, 2022
+Product:
+  Name: Sysmon for Linux
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Sysmon for Linux process terminate events (event 5) collected using the Syslog connector to the ASIM Process Event normalized schema. 
+ParserName: ASimProcessTerminateLinuxSysmon
+EquivalentBuiltInParser: _ASim_ProcessTerminate_LinuxSysmon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: | 
+            let ParsedProcessEvent=(){
+            Syslog
+            | where not(disabled)
+            | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>5</EventID>')
+            | parse SyslogMessage with * '<Data Name="RuleName">'RuleName'</Data>'
+                                        '<Data Name="UtcTime">'UtcTime'</Data>'
+                                        '<Data Name="ProcessGuid">{'ProcessGuid'}</Data>'
+                                        '<Data Name="ProcessId">'ProcessId:string'</Data>'
+                                        '<Data Name="Image">'Image'</Data>'*
+            | parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>' *
+            | project-away SyslogMessage
+            | extend 
+                                    EventType = "ProcessTerminated",
+                                    EventStartTime = todatetime(TimeGenerated),
+                                    EventEndTime = todatetime(TimeGenerated),
+                                    EventCount = int(1),
+                                    EventVendor = "Microsoft",
+                                    EventSchemaVersion = "0.1.0",
+                                    EventSchema = 'ProcessEvent',
+                                    EventOriginalType='5',
+                                    EventProduct = "Sysmon",
+                                    EventResult = 'Success',
+                                    DvcOs = "Linux"
+                            | project-rename
+                                    DvcHostname = Computer,
+                                    TargetProcessName = Image,
+                                    TargetProcessId = ProcessId
+                            | extend
+                                    ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+                                    TargetProcessGuid = ProcessGuid,
+                                    //***** Aliases ******
+                                    User = ActorUsername,
+                                    Process = TargetProcessName,
+                                    Dvc = DvcHostname
+            }; ParsedProcessEvent
+

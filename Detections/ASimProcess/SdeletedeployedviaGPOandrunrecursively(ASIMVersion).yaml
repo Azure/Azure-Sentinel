@@ -1,0 +1,46 @@
+id: 30c8b802-ace1-4408-bc29-4c5c5afb49e1
+name: Sdelete deployed via GPO and run recursively (ASIM Version)
+description: |
+  'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.
+    This query uses the Advanced Security Information Model. Parsers will need to be deployed before use: https://docs.microsoft.com/azure/sentinel/normalization'
+severity: Medium
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+tags:
+  -
+query: |
+  imProcess
+    | where EventType =~ "ProcessCreated"
+    | where Process endswith "svchost.exe"
+    | where CommandLine has "-k GPSvcGroup" or CommandLine has "-s gpsvc"
+    | extend timekey = bin(TimeGenerated, 1m)
+    | project timekey, ActingProcessId, Dvc
+    | join kind=inner (imProcess
+    | where EventType =~ "ProcessCreated"
+    | where Process =~ "sdelete.exe" or CommandLine has "sdelete"
+    | where ActingProcessName endswith "svchost.exe"
+    | where CommandLine has_all ("-s", "-r")
+    | extend timekey = bin(TimeGenerated, 1m)
+    ) on $left.ActingProcessId == $right.ParentProcessId, timekey, Dvc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorUsername
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DvcIpAddr
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Dvc
+version: 1.0.2
+kind: Scheduled

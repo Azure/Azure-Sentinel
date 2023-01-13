@@ -1,0 +1,2256 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"comments": "Solution template for Deception (HoneyTokens)"
+	},
+	"parameters": {
+		"location": {
+			"type": "string",
+			"defaultValue": "[resourceGroup().location]",
+			"metadata": {
+				"description": "Location for all resources."
+			}
+		},
+		"workspace-location": {
+			"type": "string",
+			"minLength": 1,
+			"defaultValue": "[parameters('location')]",
+			"metadata": {
+				"description": "Region to deploy solution resources"
+			}
+		},
+		"workspace": {
+			"defaultValue": "",
+			"type": "string",
+			"metadata": {
+				"description": "Workspace name for Log Analytics where Sentinel is setup"
+			}
+		},
+		"SentinelWorkspaceName": {
+			"defaultValue": "[parameters('workspace')]",
+			"type": "string",
+			"metadata": {
+				"description": "Workspace name for Log Analytics where Sentinel is setup"
+			}
+		},
+		"CommonLAWorkspaceName": {
+			"defaultValue": "HTDummyLA",
+			"type": "string",
+			"metadata": {
+				"description": "Workspace name for new Log Analytics worspace to be shared with all resource owners together with the workbook"
+			}
+		},
+		"KeyVaultHoneyTokensAnalyticId": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"minLength": 1,
+			"metadata": {
+				"description": "Unique id for the KeyVault HoneyTokens scheduled alert rule"
+			}
+		},
+		"KVScrtsHoneyTokensAnalyticId": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"minLength": 1,
+			"metadata": {
+				"description": "Unique id for the KeyVault HoneyTokens scheduled alert rule"
+			}
+		},
+		"KVDiagSettingHoneyTokensAnalyticId": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"minLength": 1,
+			"metadata": {
+				"description": "Unique id for the KeyVault HoneyTokens scheduled alert rule"
+			}
+		},
+		"PlaybookName_HoneyTokenWLCheckKV": {
+			"defaultValue": "HoneyTokenWLCheckKV",
+			"type": "string"
+		},
+		"roleNameGuid_HoneyTokenWLCheckKV": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"metadata": {
+				"description": "A new GUID used to identify the role assignment"
+			}
+		},
+		"PlaybookName_HoneyTokensAdd2WLKV": {
+			"defaultValue": "HoneyTokenAdd2WLKV",
+			"type": "string"
+		},
+		"roleNameGuid_HoneyTokensAdd2WLKV": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"metadata": {
+				"description": "A new GUID used to identify the role assignment"
+			}
+		},
+		"PlaybookName_HoneyTokensEnableKVPolicy": {
+			"defaultValue": "HoneyTokensEnableKVPolicy",
+			"type": "String"
+		},
+		"incidentsWorkbookDisplayName": {
+			"type": "string",
+			"defaultValue": "HoneyTokensIncidents",
+			"metadata": {
+				"description": "The friendly name for the workbook that is used in the Gallery or Saved List.  This name must be unique within a resource group."
+			}
+		},
+		"workbookType": {
+			"type": "string",
+			"defaultValue": "sentinel",
+			"metadata": {
+				"description": "The gallery that the workbook will been shown under. Supported values include workbook, tsg, etc. Usually, this is 'workbook'"
+			}
+		},
+		"incidentsWorkbookId": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"metadata": {
+				"description": "The unique guid for this workbook instance"
+			}
+		},
+		"managementWorkbookDisplayName": {
+			"type": "string",
+			"defaultValue": "SOCHTManagement",
+			"metadata": {
+				"description": "The friendly name for the workbook that is used in the Gallery or Saved List.  This name must be unique within a resource group."
+			}
+		},
+		"managementWorkbookId": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"metadata": {
+				"description": "The unique guid for this workbook instance"
+			}
+		},
+		"SOCEmailAddress": {
+			"type": "string",
+			"metadata": {
+				"description": "The e-mail address of the SOC for reporting deletion of a honeytoken"
+			}
+		},
+		"AzureFuncServicePlan": {
+			"type": "string",
+			"defaultValue": "Premium",
+			"allowedValues": [
+				"Premium",
+				"Consumption"
+			],
+			"metadata": {
+				"description": "Choose the service plan for the Azure function that deploys honeytokens at scale. This function requires permissions to key-vault on behalf of the user running it. Premium plan has a higher cost, and would allow you to configure some features (like assigning the function a specific IP/domain) that are more desirable from security perspective."
+			}
+		},
+		"functionAppName": {
+			"type": "string",
+			"metadata": {
+				"description": "A unique name for the function app used for deploying key-vault honeytokens at scale"
+			}
+		},
+		"aadClientId": {
+			"type": "string",
+			"metadata": {
+				"description": "Please create a new app-registration in Azure Active Directory and provide the ClientId here"
+			}
+		},
+		"aadClientSecret": {
+			"type": "secureString",
+			"metadata": {
+				"description": "Please create a new app-registration in Azure Active Directory and provide the Client secret here"
+			}
+		},
+		"KeyVaultNameStoringAppSecretNewOrExisting": {
+			"type": "string",
+			"allowedValues": [
+				"new",
+				"existing"
+			],
+			"metadata": {
+				"description": "Determines whether or not a new key-vault should be provisioned."
+			}
+		},
+		"KeyVaultNameStoringAppSecret": {
+			"type": "string",
+			"metadata": {
+				"description": "Please provide the name of the KV in which to store the app secret as part of this deployment"
+			}
+		},
+		"ResourceGroupNameOfKeyVaultStoringAppSecret": {
+			"type": "string",
+			"metadata": {
+				"description": "Please specify the name of the resource group of the KeyVault of the secret of the registered app"
+			}
+		},
+		"LocationNameOfKeyVaultStoringAppSecret": {
+			"type": "string",
+			"metadata": {
+				"description": "Please specify the location of the resource group of the KeyVault of the secret of the registered app"
+			}
+		},
+		"SecretName": {
+			"type": "string",
+			"metadata": {
+				"description": "Please provide the name of the secret in KV holding the app secret here"
+			}
+		},
+		"roleNameGuid_HTDeployFunc": {
+			"type": "string",
+			"defaultValue": "[newGuid()]",
+			"metadata": {
+				"description": "A new GUID used to identify the role assignment"
+			}
+		},
+		"kyKywords": {
+			"type": "string",
+			"metadata": {
+				"description": "A comma-separated list of keywords to use in  generated honeytoken key-vault key names, e.g. prod,dev,key,... "
+			}
+		},
+		"scrtKywords": {
+			"type": "string",
+			"metadata": {
+				"description": "A comma-separated list of keywords to use in generated honeytoken key-vault secret names, e.g. prod,dev,key,... "
+			}
+		},
+		"AdditionalHTProb": {
+			"type": "string",
+			"metadata": {
+				"description": "The probability to use for installing an additional honeytoken into the same key-vault"
+			}
+		},
+		"loginEndpoint": {
+			"type": "string",
+			"defaultValue": "[concat('https://login.','microsoftonline.com/')]"
+		},
+		"logAnalyticsEndpoint": {
+			"type": "string",
+			"defaultValue": "[concat('api.','loganalytics.io')]"
+		},
+		"logAnalyticsEndpointQuery": {
+			"type": "string",
+			"defaultValue": "/v1/workspaces/@{variables('SentinelWSId')}/query?query=@{variables('query')}"
+		}
+	},
+	"functions": [
+		{
+			"namespace": "honeytokens",
+			"members": {
+				"embedLinksinManagementWB": {
+					"parameters": [
+						{
+							"name": "WBTemplate",
+							"type": "string"
+						},
+						{
+							"name": "ChechKVLogicAppLink",
+							"type": "string"
+						},
+						{
+							"name": "Add2WLLogicAppLink",
+							"type": "string"
+						},
+						{
+							"name": "SentinelResourceId",
+							"type": "string"
+						},
+						{
+							"name": "SentinelWorkspaceId",
+							"type": "string"
+						},
+						{
+							"name": "CommonLAResourceId",
+							"type": "string"
+						},
+						{
+							"name": "AzureFuncLink",
+							"type": "string"
+						},
+						{
+							"name": "AzureKVPolicyLogicAppLink",
+							"type": "string"
+						},
+						{
+							"name": "SOCEmailAddress",
+							"type": "string"
+						}
+					],
+					"output": {
+						"type": "string",
+						"value": "[replace(replace(replace(replace(replace(replace(replace(replace(replace(parameters('WBTemplate'), '<Template_ChechKVLogicAppLink>', parameters('ChechKVLogicAppLink')),           '<Template_Add2WLLogicAppLink>', parameters('Add2WLLogicAppLink')),           '<Template_SentinelResourceId>', parameters('SentinelResourceId')),        '<Template_SentinelWSId>', parameters('SentinelWorkspaceId')),'<Template_AzureFuncLink>', parameters('AzureFuncLink')),        '<Template_AzureKVPolicyLogicAppLink>', parameters('AzureKVPolicyLogicAppLink')), '<Template_Empty>', ''), '<Template_SOCEmailAddress>', parameters('SOCEmailAddress')), '<Template_CommonLAResourceId>', parameters('CommonLAResourceId'))]"
+					}
+				}
+			}
+		}
+	],
+	"variables": {
+		"WatchListName": "HoneyTokens",
+		"AzureSentinelConnectionName": "azuresentinel-honeytokens",
+		"sentinel-connection": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/azuresentinel')]",
+		"_sentinel-connection": "[variables('sentinel-connection')]",
+		"honeytoken-connection": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/',parameters('workspace-location'),'/managedApis/', variables('AzureSentinelConnectionName'))]",
+		"_honeytoken-connection": "[variables('honeytoken-connection')]",
+		"sourceId": "azuresentinelhoneytokens.azuresentinelhoneytokens",
+		"_sourceId": "[variables('sourceId')]",
+		"HoneyTokensIncidents_workbook": "HoneyTokensIncidents_workbook",
+		"_HoneyTokensIncidents_workbook": "[variables('HoneyTokensIncidents_workbook')]",
+		"SOCHTManagement_workbook": "SOCHTManagement_workbook",
+		"_SOCHTManagement_workbook": "[variables('SOCHTManagement_workbook')]",
+		"HoneyTokenKeyAccessed_AnalyticalRules": "HoneyTokenKeyAccessed_AnalyticalRules",
+		"_HoneyTokenKeyAccessed_AnalyticalRules": "[variables('HoneyTokenKeyAccessed_AnalyticalRules')]",
+		"HoneyTokenSecretAccessed_AnalyticalRules": "HoneyTokenSecretAccessed_AnalyticalRules",
+		"_HoneyTokenSecretAccessed_AnalyticalRules": "[variables('HoneyTokenSecretAccessed_AnalyticalRules')]",
+		"HoneyTokenDiagnosticSettingsDeletedOrChanged_AnalyticalRules": "HoneyTokenDiagnosticSettingsDeletedOrChanged_AnalyticalRules",
+		"_HoneyTokenDiagnosticSettingsDeletedOrChanged_AnalyticalRules": "[variables('HoneyTokenDiagnosticSettingsDeletedOrChanged_AnalyticalRules')]",
+		"HoneyToken_HoneyTokenWLCheckKV": "HoneyToken_HoneyTokenWLCheckKV",
+		"_HoneyToken_HoneyTokenWLCheckKV": "[variables('HoneyToken_HoneyTokenWLCheckKV')]",
+		"HoneyToken_HoneyTokensAdd2WLKV": "HoneyToken_HoneyTokensAdd2WLKV",
+		"_HoneyToken_HoneyTokensAdd2WLKV": "[variables('HoneyToken_HoneyTokensAdd2WLKV')]",
+		"HoneyToken_HoneyTokensEnableKVPolicy": "HoneyToken_HoneyTokensEnableKVPolicy",
+		"_HoneyToken_HoneyTokensEnableKVPolicy": "[variables('HoneyToken_HoneyTokensEnableKVPolicy')]",
+		"WBTemplate": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"crossComponentResources\":[\"<Template_CommonLAResourceId>\"],\"parameters\":[{\"id\":\"f6adea26-730d-42cd-a38a-49db447d7d99\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Subscription\",\"type\":6,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"includeAll\":false,\"showDefault\":false},\"timeContext\":{\"durationMs\":86400000}},{\"id\":\"41346e38-04ce-4c14-bc0a-59c8d5f2f7a2\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"SentinelWorkspace\",\"type\":1,\"isRequired\":true,\"isHiddenWhenLocked\":true,\"criteriaData\":[{\"criteriaContext\":{\"operator\":\"Default\",\"rightValType\":\"param\",\"resultValType\":\"static\",\"resultVal\":\"<Template_SentinelResourceId>\"}}],\"timeContext\":{\"durationMs\":86400000}},{\"id\":\"589399d1-9a6d-49c1-9171-fc1c5a16ef3d\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"SentinelWSId\",\"type\":1,\"isHiddenWhenLocked\":true,\"criteriaData\":[{\"criteriaContext\":{\"operator\":\"Default\",\"rightValType\":\"param\",\"resultValType\":\"static\",\"resultVal\":\"<Template_SentinelWSId>\"}}],\"timeContext\":{\"durationMs\":86400000}},{\"id\":\"259daeda-3e9d-42ce-aa50-54d75ae6a9ff\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"tenantId\",\"type\":1,\"query\":\"resourcecontainers\\r\\n| where type == \\\"microsoft.resources/subscriptions\\\"\\r\\n| project tenantId\",\"isHiddenWhenLocked\":true,\"timeContext\":{\"durationMs\":86400000},\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"}],\"style\":\"pills\",\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},\"name\":\"parameters - 8\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"598e6fe5-7f29-42bb-850c-209172d2d482\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"tenantDomain\",\"type\":1,\"query\":\"{\\\"version\\\":\\\"ARMEndpoint/1.0\\\",\\\"headers\\\":[<Template_Empty>],\\\"method\\\":\\\"GET\\\",\\\"path\\\":\\\"/tenants/?api-version=2020-01-01\\\",\\\"urlParams\\\":[<Template_Empty>],\\\"batchDisabled\\\":false,\\\"transformers\\\":[{\\\"type\\\":\\\"jsonpath\\\",\\\"settings\\\":{\\\"tablePath\\\":\\\"$.value[?(@.tenantId=='{tenantId}')]\\\",\\\"columns\\\":[{\\\"path\\\":\\\"$.defaultDomain\\\",\\\"columnid\\\":\\\"defaultDomain\\\"}]}}]}\",\"isHiddenWhenLocked\":true,\"timeContext\":{\"durationMs\":86400000},\"queryType\":12}],\"style\":\"pills\",\"queryType\":12},\"name\":\"parameters - 3\"},{\"type\":11,\"content\":{\"version\":\"LinkItem/1.0\",\"style\":\"tabs\",\"links\":[{\"id\":\"3692f547-a08c-475a-8c9b-f45354546eee\",\"cellValue\":\"HTResource\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Welcome\",\"subTarget\":\"Welcome\",\"style\":\"link\"},{\"id\":\"ee85c1c1-26a5-4897-99ea-9b43e91ba54c\",\"cellValue\":\"HTResource\",\"linkTarget\":\"parameter\",\"linkLabel\":\"Azure Key Vault \",\"subTarget\":\"KV\",\"style\":\"link\"}]},\"name\":\"links - 9\"},{\"type\":1,\"content\":{\"json\":\"<H3>Welcome to the honeytokens management workbook<br>\\r\\nPlease accept the trusted hosts message</H3>\\r\\n(Click the refresh button above if no message appears here)\"},\"conditionalVisibility\":{\"parameterName\":\"HTResource\",\"comparison\":\"isEqualTo\",\"value\":\"Welcome\"},\"name\":\"text - 5\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"loadType\":\"always\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Resources\\r\\n| where type =~ 'microsoft.keyvault/vaults'\\r\\n| project id, resourceGroup, subscriptionId\\r\\n| join kind=inner (\\r\\n    resourcecontainers\\r\\n    | where type == \\\"microsoft.resources/subscriptions\\\"\\r\\n    | project Subscription=name, subscriptionId\\r\\n) on subscriptionId\\r\\n| project id, resourceGroup, Subscription, subscriptionId\",\"size\":0,\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\",\"crossComponentResources\":[\"{Subscription}\"]},\"conditionalVisibility\":{\"parameterName\":\"HTResource\",\"comparison\":\"isEqualTo\",\"value\":\"never\"},\"name\":\"query - ARG KVs\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"crossComponentResources\":[\"{Subscription}\"],\"parameters\":[{\"id\":\"13e848ba-e422-442b-9c4f-fec0e7ab2454\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"allKVIds\",\"type\":1,\"query\":\"Resources\\r\\n| where type =~ 'microsoft.keyvault/vaults'\\r\\n| project id, resourceGroup, subscriptionId\\r\\n| join kind=inner (\\r\\n    resourcecontainers\\r\\n    | where type == \\\"microsoft.resources/subscriptions\\\"\\r\\n    | project Subscription=name, subscriptionId\\r\\n) on subscriptionId\\r\\n| project id\\r\\n| summarize strcat(\\\"'\\\", strcat_array(makelist(id),\\\"', '\\\"), \\\"'\\\") \",\"crossComponentResources\":[\"{Subscription}\"],\"isHiddenWhenLocked\":true,\"timeContext\":{\"durationMs\":86400000},\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"}],\"style\":\"pills\",\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},\"name\":\"parameters - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"{\\\"version\\\":\\\"CustomEndpoint/1.0\\\",\\\"data\\\":\\\"{\\\\r\\\\n    \\\\\\\"allKVIds\\\\\\\":\\\\\\\"{allKVIds}\\\\\\\"\\\\r\\\\n}\\\",\\\"method\\\":\\\"POST\\\",\\\"url\\\":\\\"<Template_ChechKVLogicAppLink>\\\",\\\"contentType\\\":\\\"text/plain\\\",\\\"urlParams\\\":[<Template_Empty>],\\\"transformers\\\":[{\\\"type\\\":\\\"jsonpath\\\",\\\"settings\\\":{\\\"tablePath\\\":\\\"$.tables[*].rows\\\",\\\"columns\\\":[{\\\"path\\\":\\\"$[0]\\\",\\\"columnid\\\":\\\"ResourceId\\\"}]}}]}\",\"size\":4,\"noDataMessage\":\" \",\"queryType\":10},\"conditionalVisibility\":{\"parameterName\":\"HTResource\",\"comparison\":\"isEqualTo\",\"value\":\"never\"},\"name\":\"query - Check watchlist\"},{\"type\":1,\"content\":{\"json\":\"<H3>KeyVault HoneyTokens deployment status:</H3>\\r\\nAllow a few minutes for this page to update\"},\"name\":\"text - 12\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"{\\\"version\\\":\\\"Merge/1.0\\\",\\\"merges\\\":[{\\\"id\\\":\\\"29b9b222-255a-42e1-ae7c-e8cf4fbec0e1\\\",\\\"mergeType\\\":\\\"leftouter\\\",\\\"leftTable\\\":\\\"query - ARG KVs\\\",\\\"rightTable\\\":\\\"query - Check watchlist\\\",\\\"leftColumn\\\":\\\"id\\\",\\\"rightColumn\\\":\\\"ResourceId\\\"}],\\\"projectRename\\\":[{\\\"originalName\\\":\\\"[Added column]\\\",\\\"mergedName\\\":\\\"Total Monitored\\\",\\\"isNewItem\\\":true,\\\"newItemData\\\":[{\\\"criteriaContext\\\":{\\\"operator\\\":\\\"Default\\\",\\\"rightValType\\\":\\\"column\\\",\\\"resultValType\\\":\\\"static\\\",\\\"resultVal\\\":\\\"1\\\"}}]},{\\\"originalName\\\":\\\"[Added column]\\\",\\\"mergedName\\\":\\\"HasHT\\\",\\\"isNewItem\\\":true,\\\"newItemData\\\":[{\\\"criteriaContext\\\":{\\\"leftOperand\\\":\\\"Is Monitored by SOC\\\",\\\"operator\\\":\\\"is Empty\\\",\\\"rightValType\\\":\\\"column\\\",\\\"resultValType\\\":\\\"static\\\",\\\"resultVal\\\":\\\"0\\\"}},{\\\"criteriaContext\\\":{\\\"operator\\\":\\\"Default\\\",\\\"rightValType\\\":\\\"column\\\",\\\"resultValType\\\":\\\"static\\\",\\\"resultVal\\\":\\\"1\\\"}}]},{\\\"originalName\\\":\\\"[Added column]\\\",\\\"mergedName\\\":\\\"NoHT\\\",\\\"isNewItem\\\":true,\\\"newItemData\\\":[{\\\"criteriaContext\\\":{\\\"leftOperand\\\":\\\"Is Monitored by SOC\\\",\\\"operator\\\":\\\"is Empty\\\",\\\"rightValType\\\":\\\"column\\\",\\\"resultValType\\\":\\\"static\\\",\\\"resultVal\\\":\\\"1\\\"}},{\\\"criteriaContext\\\":{\\\"operator\\\":\\\"Default\\\",\\\"rightValType\\\":\\\"column\\\",\\\"resultValType\\\":\\\"static\\\",\\\"resultVal\\\":\\\"0\\\"}}]},{\\\"originalName\\\":\\\"[query - ARG KVs].Subscription\\\",\\\"mergedName\\\":\\\"Subscription\\\",\\\"fromId\\\":\\\"unknown\\\"},{\\\"originalName\\\":\\\"[query - ARG KVs].id\\\",\\\"mergedName\\\":\\\"Key Vault\\\",\\\"fromId\\\":\\\"29b9b222-255a-42e1-ae7c-e8cf4fbec0e1\\\"},{\\\"originalName\\\":\\\"[query - ARG KVs].resourceGroup\\\",\\\"mergedName\\\":\\\"Resource Group\\\",\\\"fromId\\\":\\\"29b9b222-255a-42e1-ae7c-e8cf4fbec0e1\\\"},{\\\"originalName\\\":\\\"[query - ARG KVs].subscriptionId\\\",\\\"mergedName\\\":\\\"subscriptionId\\\",\\\"fromId\\\":\\\"29b9b222-255a-42e1-ae7c-e8cf4fbec0e1\\\"},{\\\"originalName\\\":\\\"[query - Check watchlist].ResourceId\\\",\\\"mergedName\\\":\\\"Is Monitored by SOC\\\",\\\"fromId\\\":\\\"29b9b222-255a-42e1-ae7c-e8cf4fbec0e1\\\"}]}\",\"size\":0,\"exportedParameters\":[{\"fieldName\":\"Key Vault\",\"parameterName\":\"KVId\"},{\"fieldName\":\"Resource Group\",\"parameterName\":\"ResourceGroup\",\"parameterType\":1},{\"fieldName\":\"subscriptionId\",\"parameterName\":\"subscriptionId\",\"parameterType\":1}],\"queryType\":7,\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Total\",\"formatter\":22,\"formatOptions\":{\"aggregation\":\"Sum\",\"compositeBarSettings\":{\"labelText\":\"[\\\"HasHT\\\"] of [\\\"Total Monitored\\\"] are monitored\",\"columnSettings\":[{\"columnName\":\"HasHT\",\"color\":\"green\"},{\"columnName\":\"NoHT\",\"color\":\"redBright\"}]}}},{\"columnMatch\":\"HasHT\",\"formatter\":5},{\"columnMatch\":\"NoHT\",\"formatter\":5},{\"columnMatch\":\"Subscription\",\"formatter\":5},{\"columnMatch\":\"KVId\",\"formatter\":13,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"subscriptionId\",\"formatter\":5},{\"columnMatch\":\"ResourceId\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"is Empty\",\"representation\":\"failed\",\"text\":\"\"},{\"operator\":\"Default\",\"representation\":\"success\",\"text\":\"\"}]}},{\"columnMatch\":\"Monitored by SOC\",\"formatter\":18,\"formatOptions\":{\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"is Empty\",\"representation\":\"failed\",\"text\":\"\"},{\"operator\":\"Default\",\"representation\":\"success\",\"text\":\"\"}],\"customColumnWidthSetting\":\"25ch\"}}],\"hierarchySettings\":{\"treeType\":1,\"groupBy\":[\"Subscription\"]}}},\"showPin\":false,\"name\":\"query - merged ARG, HTWatchlist - Copy\"},{\"type\":1,\"content\":{\"json\":\"<H2>Take an action:</H2>\\r\\n<p>\\r\\n<h3>Deploy at scale:</h3>\\r\\n\\r\\n\"},\"name\":\"text - 4\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"crossComponentResources\":[\"<Template_CommonLAResourceId>\"],\"parameters\":[{\"id\":\"53883df7-dad5-45c3-b781-1388c3d9b7ed\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"keyVaults\",\"type\":1,\"query\":\"Resources\\r\\n| where type =~ 'microsoft.keyvault/vaults'\\r\\n| project id, resourceGroup, subscriptionId\\r\\n| join kind=inner (\\r\\n    resourcecontainers\\r\\n    | where type == \\\"microsoft.resources/subscriptions\\\"\\r\\n    | project Subscription=name, subscriptionId\\r\\n) on subscriptionId\\r\\n| project id\",\"crossComponentResources\":[\"{Subscription}\"],\"isHiddenWhenLocked\":true,\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"0790aeb5-c392-4e24-bdce-37b0a88f3ec9\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"policyModificationUrl\",\"type\":1,\"query\":\"print 1\\r\\n| project  url=url_encode('<Template_AzureKVPolicyLogicAppLink>&keyVaults={keyVaults}&')\\r\\n\",\"crossComponentResources\":[\"<Template_CommonLAResourceId>\"],\"isHiddenWhenLocked\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},{\"id\":\"f4f52706-cdbf-4344-bca6-d4e1d13f0536\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"zippedKVs\",\"type\":1,\"query\":\"print ids='{keyVaults}'\\r\\n| extend ids=iff(ids startswith '[', ids, strcat('[',ids,']'))\\r\\n| project ids=url_encode(gzip_compress_to_base64_string(ids))\",\"crossComponentResources\":[\"<Template_CommonLAResourceId>\"],\"isHiddenWhenLocked\":true,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 10\"},{\"type\":11,\"content\":{\"version\":\"LinkItem/1.0\",\"style\":\"bullets\",\"links\":[{\"id\":\"bb2bf345-8331-47cd-be00-caffb3a2d68f\",\"cellValue\":\"https://portal.azure.com/#create/Microsoft.Template/uri/{policyModificationUrl}op=add\",\"linkTarget\":\"Url\",\"linkLabel\":\"Enable your user\",\"preText\":\"\",\"postText\":\" in the access policy of all the key-vaults (one deployment per subscription - please select above)\",\"style\":\"link\"},{\"id\":\"657e8775-1885-495d-ac18-c743f1297295\",\"cellValue\":\"https://<Template_AzureFuncLink>?zippedKVs={zippedKVs}&SentinelWS={SentinelWSId}&SentinelResourceId={SentinelWorkspace}\",\"linkTarget\":\"Url\",\"linkLabel\":\"click to deploy\",\"preText\":\"Select above a specific key-vault to deploy a honeytoken to it or\",\"postText\":\"honeytokens to all the key-vaults above\",\"style\":\"link\"},{\"id\":\"2a3990ed-4ae7-4398-9da8-85d84b06cedc\",\"cellValue\":\"https://portal.azure.com/#create/Microsoft.Template/uri/{policyModificationUrl}op=remove\",\"linkTarget\":\"Url\",\"linkLabel\":\"Disable your user\",\"postText\":\" in the access policy of all the key-vaults (one deployment per subscription - please select above)\",\"style\":\"link\"}]},\"name\":\"links - 9\"},{\"type\":1,\"content\":{\"json\":\"<h3>Deploy on a specific key vault:</h3>The following links take you to the relevant pages in the Azure portal where you can manually add the honeytokens:\"},\"conditionalVisibility\":{\"parameterName\":\"KVId\",\"comparison\":\"isNotEqualTo\"},\"name\":\"text - 11\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"7f78c7e7-864a-4b0c-b4af-1c78786c6c85\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"SOCMailAddress\",\"type\":1,\"isRequired\":true,\"value\":\"<Template_SOCEmailAddress>\",\"isHiddenWhenLocked\":true,\"timeContext\":{\"durationMs\":86400000}},{\"id\":\"d8a6e597-6f8c-42ae-b154-302dbdf8186d\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"EmailContent\",\"type\":1,\"isRequired\":true,\"isHiddenWhenLocked\":true,\"criteriaData\":[{\"criteriaContext\":{\"operator\":\"Default\",\"rightValType\":\"param\",\"resultValType\":\"static\",\"resultVal\":\"?subject=Request to discard honeytoken monitoring for key-vault instance&body=Dear SOC,%0d%0a%0d%0aPlease remove honeytoken monitoring for key-vault {KVId}.%0d%0a%0d%0aThanks,%0d%0aThe key-vault owner\"}}],\"timeContext\":{\"durationMs\":86400000}},{\"id\":\"ef70716f-10f6-4a9c-a74e-7dfc1d09a745\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"HTType\",\"type\":2,\"isRequired\":true,\"query\":\"{\\\"version\\\":\\\"1.0.0\\\",\\\"content\\\":\\\"[\\\\\\\"key\\\\\\\",\\\\\\\"secret\\\\\\\"]\\\"}\",\"value\":\"secret\",\"queryType\":8,\"label\":\"Honeytoken type\"},{\"id\":\"7f8ef67d-ac97-44e4-b298-566965c74b13\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"HTKeyName\",\"label\":\"New honeytoken name\",\"type\":1,\"value\":\"XXX\"}],\"style\":\"pills\",\"queryType\":8},\"conditionalVisibility\":{\"parameterName\":\"KVId\",\"comparison\":\"isNotEqualTo\"},\"name\":\"parameters - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"{\\\"version\\\":\\\"1.0.0\\\",\\\"content\\\":\\\"[\\\\r\\\\n\\\\t{\\\\r\\\\n\\\\t\\\\t\\\\\\\"Operation\\\\\\\": \\\\\\\"Deploy a honey-token\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Task\\\\\\\": \\\\\\\"Click to validate the key vault is audited\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Link\\\\\\\": \\\\\\\"https://portal.azure.com/#@{tenantDomain}/resource{KVId}/diagnostics\\\\\\\"\\\\r\\\\n\\\\t},\\\\r\\\\n\\\\t{\\\\r\\\\n\\\\t\\\\t\\\\\\\"Operation\\\\\\\": \\\\\\\"Deploy a honey-token\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Task\\\\\\\": \\\\\\\"Grant rights to your user in the key vault’s policy, if this right is missing\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Link\\\\\\\": \\\\\\\"https://portal.azure.com/#@{tenantDomain}/resource{KVId}/access_policies\\\\\\\"\\\\r\\\\n\\\\t},\\\\r\\\\n\\\\t{\\\\r\\\\n\\\\t\\\\t\\\\\\\"Operation\\\\\\\": \\\\\\\"Deploy a honey-token\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Task\\\\\\\": \\\\\\\"Click to add a honey token to the key-vault\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Link\\\\\\\": \\\\\\\"https://portal.azure.com/#@{tenantDomain}/resource{KVId}/{HTType}s\\\\\\\"\\\\r\\\\n\\\\t},\\\\r\\\\n\\\\t{\\\\r\\\\n\\\\t\\\\t\\\\\\\"Operation\\\\\\\": \\\\\\\"Deploy a honey-token\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Task\\\\\\\": \\\\\\\"Add monitoring in the SOC ({HTType}: {HTKeyName})\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Link\\\\\\\": \\\\\\\"<Template_Add2WLLogicAppLink>&&KVId={KVId}&HTType={HTType}&HTKeyName={HTKeyName}\\\\\\\"\\\\r\\\\n\\\\t},\\\\r\\\\n\\\\t{\\\\r\\\\n\\\\t\\\\t\\\\\\\"Operation\\\\\\\": \\\\\\\"Deploy a honey-token\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Task\\\\\\\": \\\\\\\"Remove user rights in your key vault’s policy if needed\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Link\\\\\\\": \\\\\\\"https://portal.azure.com/#@{tenantDomain}/resource{KVId}/access_policies\\\\\\\"\\\\r\\\\n\\\\t},\\\\r\\\\n\\\\t{\\\\r\\\\n\\\\t\\\\t\\\\\\\"Operation\\\\\\\": \\\\\\\"Remove a honey-token\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Task\\\\\\\": \\\\\\\"Click to delete the honey token from the key-vault\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\r\\\\n\\\\t\\\\t\\\\\\\"Link\\\\\\\": \\\\\\\"https://portal.azure.com/#@{tenantDomain}/resource{KVId}/keys\\\\\\\"\\\\r\\\\n\\\\t},\\\\r\\\\n\\\\t{\\\\r\\\\n\\\\t\\\\t\\\\\\\"Operation\\\\\\\": \\\\\\\"Remove a honey-token\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Task\\\\\\\": \\\\\\\"Send an email to update the SOC\\\\\\\",\\\\r\\\\n\\\\t\\\\t\\\\\\\"Link\\\\\\\": \\\\\\\"mailto:{SOCMailAddress}{EmailContent}\\\\\\\"\\\\r\\\\n\\\\t}\\\\r\\\\n]\\\\r\\\\n\\\"}\",\"size\":1,\"queryType\":8,\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Operation\",\"formatter\":5},{\"columnMatch\":\"Task\",\"formatter\":1,\"formatOptions\":{\"linkColumn\":\"Link\",\"linkTarget\":\"Url\"}},{\"columnMatch\":\"Link\",\"formatter\":5}],\"hierarchySettings\":{\"treeType\":1,\"groupBy\":[\"Operation\"]}}},\"conditionalVisibility\":{\"parameterName\":\"KVId\",\"comparison\":\"isNotEqualTo\"},\"name\":\"query - 3\"}]},\"conditionalVisibility\":{\"parameterName\":\"HTResource\",\"comparison\":\"isEqualTo\",\"value\":\"KV\"},\"name\":\"KVManage\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"{\\\"version\\\":\\\"CustomEndpoint/1.0\\\",\\\"data\\\":\\\"{\\\\r\\\\n    \\\\\\\"allKVIds\\\\\\\":\\\\\\\"''\\\\\\\"\\\\r\\\\n}\\\",\\\"method\\\":\\\"POST\\\",\\\"url\\\":\\\"<Template_ChechKVLogicAppLink>\\\",\\\"contentType\\\":\\\"text/plain\\\",\\\"urlParams\\\":[<Template_Empty>],\\\"transformers\\\":[{\\\"type\\\":\\\"jsonpath\\\",\\\"settings\\\":{\\\"tablePath\\\":\\\"$.dummy\\\",\\\"columns\\\":[<Template_Empty>]}}]}\",\"size\":4,\"noDataMessage\":\" \",\"queryType\":10},\"name\":\"dummy query - to get the add2trusted hosts message\"}],\"isLocked\":false,\"defaultResourceIds\":[\"<Template_SentinelResourceId>\",\"<Template_CommonLAResourceId>\"],\"fallbackResourceIds\":[\"<Template_SentinelResourceId>\",\"<Template_CommonLAResourceId>\"],\"fromTemplateId\":\"sentinel-UserWorkbook\"}",
+		"logAnalyticsReaderRole": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/73c42c96-874c-492b-b04d-ab87d138a893')]",
+		"_logAnalyticsReaderRole": "[variables('logAnalyticsReaderRole')]",
+		"azureSentinelContributorRole": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/ab8e14d6-4a74-4a29-9ba8-549422addade')]",
+		"_azureSentinelContributorRole": "[variables('azureSentinelContributorRole')]",
+		"SentinelResourceId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/microsoft.operationalinsights/workspaces/', parameters('SentinelWorkspaceName'))]",
+		"CommonLAResourceId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourcegroups/', resourceGroup().name, '/providers/microsoft.operationalinsights/workspaces/', parameters('CommonLAWorkspaceName'))]",
+		"_SentinelResourceId": "[variables('SentinelResourceId')]",
+		"AppInsightsLogName": "[concat(parameters('functionAppName'),'Logs')]",
+		"storageAccountName": "[concat(replace(toLower(parameters('functionAppName')),'-',''),'sa')]",
+		"StorageSuffix": "[environment().suffixes.storage]",
+		"aadClientSecret": "[parameters('aadClientSecret')]",
+		"incidentsWorkbookContent": {
+			"version": "Notebook/1.0",
+			"items": [
+				{
+					"type": 9,
+					"content": {
+						"version": "KqlParameterItem/1.0",
+						"parameters": [
+							{
+								"id": "3807ff63-b851-47dd-87cc-db8e484e8afb",
+								"version": "KqlParameterItem/1.0",
+								"name": "DefaultSubscription_Internal",
+								"type": 1,
+								"isRequired": true,
+								"query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
+								"isHiddenWhenLocked": true,
+								"timeContext": {
+									"durationMs": 0
+								},
+								"timeContextFromParameter": "TimeRange",
+								"queryType": 1,
+								"resourceType": "microsoft.resourcegraph/resources"
+							},
+							{
+								"id": "e282bcfd-676d-4ebe-9a0a-9d047904de22",
+								"version": "KqlParameterItem/1.0",
+								"name": "TimeRange",
+								"label": "Incidents time range",
+								"type": 4,
+								"isRequired": true,
+								"value": {
+									"durationMs": 259200000
+								},
+								"typeSettings": {
+									"selectableValues": [
+										{
+											"durationMs": 300000
+										},
+										{
+											"durationMs": 900000
+										},
+										{
+											"durationMs": 1800000
+										},
+										{
+											"durationMs": 3600000
+										},
+										{
+											"durationMs": 14400000
+										},
+										{
+											"durationMs": 43200000
+										},
+										{
+											"durationMs": 86400000
+										},
+										{
+											"durationMs": 172800000
+										},
+										{
+											"durationMs": 259200000
+										},
+										{
+											"durationMs": 604800000
+										},
+										{
+											"durationMs": 1209600000
+										},
+										{
+											"durationMs": 2419200000
+										},
+										{
+											"durationMs": 2592000000
+										},
+										{
+											"durationMs": 5184000000
+										},
+										{
+											"durationMs": 7776000000
+										}
+									],
+									"allowCustom": true
+								}
+							},
+							{
+								"id": "37772c97-1955-4907-89b2-e24f88ca1269",
+								"version": "KqlParameterItem/1.0",
+								"name": "ResourceSubscriptions",
+								"label": "Resource Subscriptions",
+								"type": 6,
+								"isRequired": true,
+								"multiSelect": true,
+								"quote": "'",
+								"delimiter": ",",
+								"query": "SecurityIncident\r\n| where Title startswith \"HoneyTokens\"\r\n| summarize arg_max(TimeGenerated,*) by IncidentName, IncidentNumber, IncidentUrl\r\n| mvexpand AlertIds to typeof(string)\r\n| join kind=inner (SecurityAlert) on $left.AlertIds == $right.SystemAlertId\r\n| mv-apply ent = todynamic(Entities) on\r\n    (\r\n    where ent.Type == \"azure-resource\"\r\n    | project KeyVault=ent.ResourceId\r\n    | parse KeyVault with '/SUBSCRIPTIONS/' KeyVaultSubscriptionId '/RESOURCEGROUPS/' *\r\n    )\r\n| distinct KeyVaultSubscriptionId\r\n| project strcat('/subscriptions/', tolower(KeyVaultSubscriptionId))\r\n",
+								"typeSettings": {
+									"additionalResourceOptions": [
+										"value::all"
+									],
+									"showDefault": false
+								},
+								"timeContext": {
+									"durationMs": 0
+								},
+								"timeContextFromParameter": "TimeRange",
+								"defaultValue": "value::all",
+								"queryType": 0,
+								"resourceType": "microsoft.operationalinsights/workspaces"
+							}
+						],
+						"style": "pills",
+						"queryType": 0,
+						"resourceType": "microsoft.operationalinsights/workspaces"
+					},
+					"name": "parameters - 1"
+				},
+				{
+					"type": 1,
+					"content": {
+						"json": "<H2>No Incidents found.</H2>"
+					},
+					"conditionalVisibility": {
+						"parameterName": "ResourceSubscriptions",
+						"comparison": "isEqualTo"
+					},
+					"name": "text - 2"
+				},
+				{
+					"type": 12,
+					"content": {
+						"version": "NotebookGroup/1.0",
+						"groupType": "editable",
+						"items": [
+							{
+								"type": 1,
+								"content": {
+									"json": "<H3>Select one of the following honeytoken incidents to investigate:</H3>\r\n"
+								},
+								"name": "text - 1"
+							},
+							{
+								"type": 3,
+								"content": {
+									"version": "KqlItem/1.0",
+									"query": "SecurityIncident\r\n| where Title startswith \"HoneyTokens\"\r\n| summarize arg_max(TimeGenerated,*) by IncidentName, IncidentNumber, IncidentUrl\r\n| mvexpand AlertIds to typeof(string)\r\n| join kind=inner (SecurityAlert) on $left.AlertIds == $right.SystemAlertId\r\n| parse IncidentUrl with * \"/providers/Microsoft.OperationalInsights/workspaces/\" WorkspaceName \"/providers/Microsoft.SecurityInsights/Incidents/\" *\r\n| project WorkspaceSubscriptionId, WorkspaceResourceGroup, WorkspaceName, IncidentNumber, IncidentUrl, TimeGenerated, Status, Severity, Classification, AlertsCount=toint(AdditionalData.alertsCount), Entities, CustomDetails=todynamic(tostring(todynamic(ExtendedProperties)[\"Custom Details\"]))\r\n| extend HoneyTokenName=CustomDetails.HoneyTokenName, OperationsPerformed=CustomDetails.OperationsPerformed\r\n| mvexpand HoneyTokenName\r\n| mvexpand OperationsPerformed\r\n| mvexpand todynamic(tostring(OperationsPerformed))\r\n| summarize make_set(OperationsPerformed) by WorkspaceSubscriptionId, WorkspaceResourceGroup, WorkspaceName, IncidentNumber, IncidentUrl, TimeGenerated, Status, Severity, Classification, AlertsCount, Entities, HoneyTokenName=tostring(HoneyTokenName)\r\n| mv-apply ent = todynamic(Entities) on\r\n    (\r\n    where ent.Type == \"azure-resource\"\r\n    | project KeyVault=ent.ResourceId\r\n    | parse KeyVault with '/SUBSCRIPTIONS/' KeyVaultSubscriptionId '/RESOURCEGROUPS/' *\r\n    )\r\n| extend OperationsPerformed = set_OperationsPerformed\r\n| project WorkspaceSubscriptionId, WorkspaceResourceGroup, WorkspaceName, IncidentNumber, IncidentUrl, TimeGenerated, Status, Severity, AlertsCount, KeyVaultSubscriptionId, KeyVault, HoneyTokenName, OperationsPerformed, Entities, Classification\r\n| extend KVName=split(KeyVault, \"/\")[-1]\r\n| where strcat('/subscriptions/', tolower(KeyVaultSubscriptionId)) in ({ResourceSubscriptions})\r\n| summarize Entities=make_set(todynamic(Entities)), HoneyTokenNames=make_set(HoneyTokenName) by WorkspaceSubscriptionId,\r\nWorkspaceResourceGroup,\r\nWorkspaceName,\r\nIncidentNumber,\t\r\nIncidentUrl,\t\r\nTimeGenerated,\t\r\nStatus,\t\r\nSeverity,\t\r\nAlertsCount,\t\r\nKeyVaultSubscriptionId,\t\r\ntostring(KeyVault),\t\r\nOperationsPerformed=replace_string(replace_string(tostring(OperationsPerformed),'[',''),']',''),\t\r\nClassification,\t\r\ntostring(KVName)\r\n",
+									"size": 1,
+									"timeContext": {
+										"durationMs": 0
+									},
+									"timeContextFromParameter": "TimeRange",
+									"exportedParameters": [
+										{
+											"fieldName": "Entities",
+											"parameterName": "Entities",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "HoneyTokenNames",
+											"parameterName": "HoneyTokenNames",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "KVName",
+											"parameterName": "KVName",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "TimeGenerated",
+											"parameterName": "StartTime",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "WorkspaceSubscriptionId",
+											"parameterName": "SubscriptionId",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "KeyVault",
+											"parameterName": "KVId",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "WorkspaceResourceGroup",
+											"parameterName": "ResourceGroup",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "WorkspaceName",
+											"parameterName": "WorkspaceName",
+											"parameterType": 1
+										}
+									],
+									"queryType": 0,
+									"resourceType": "microsoft.operationalinsights/workspaces",
+									"gridSettings": {
+										"formatters": [
+											{
+												"columnMatch": "WorkspaceSubscriptionId",
+												"formatter": 5
+											},
+											{
+												"columnMatch": "WorkspaceResourceGroup",
+												"formatter": 5
+											},
+											{
+												"columnMatch": "IncidentNumber",
+												"formatter": 1,
+												"formatOptions": {
+													"linkColumn": "IncidentUrl",
+													"linkTarget": "Url"
+												}
+											},
+											{
+												"columnMatch": "IncidentUrl",
+												"formatter": 5
+											},
+											{
+												"columnMatch": "Severity",
+												"formatter": 18,
+												"formatOptions": {
+													"thresholdsOptions": "colors",
+													"thresholdsGrid": [
+														{
+															"operator": "==",
+															"thresholdValue": "High",
+															"representation": "redBright",
+															"text": "{0}{1}"
+														},
+														{
+															"operator": "==",
+															"thresholdValue": "Medium",
+															"representation": "orange",
+															"text": "{0}{1}"
+														},
+														{
+															"operator": "==",
+															"thresholdValue": "Low",
+															"representation": "yellow",
+															"text": "{0}{1}"
+														},
+														{
+															"representation": "gray",
+															"text": "{0}{1}"
+														},
+														{
+															"operator": "Default",
+															"text": "{0}{1}"
+														}
+													]
+												}
+											},
+											{
+												"columnMatch": "KeyVault",
+												"formatter": 13,
+												"formatOptions": {
+													"showIcon": true,
+													"linkTarget": "Resource"
+												}
+											},
+											{
+												"columnMatch": "OperationsPerformed",
+												"formatter": 18,
+												"formatOptions": {
+													"thresholdsOptions": "colors",
+													"thresholdsGrid": [
+														{
+															"operator": "contains",
+															"thresholdValue": "decrypt",
+															"representation": "redBright",
+															"text": "{0}{1}"
+														},
+														{
+															"operator": "Default",
+															"representation": "gray",
+															"text": "{0}{1}"
+														}
+													]
+												}
+											},
+											{
+												"columnMatch": "Entities",
+												"formatter": 5
+											},
+											{
+												"columnMatch": "KVName",
+												"formatter": 5
+											}
+										],
+										"filter": true
+									}
+								},
+								"name": "query - 0"
+							},
+							{
+								"type": 1,
+								"content": {
+									"json": "<H2><b>Step 1:</b> Validate the activity in the logs:</H2>\r\nThis section presents the activity related to the entities in the alert within the selected time window around the alert. \r\n<ul>\r\n<li>Can you identify suspicious or unexpected activity? </li>\r\n</ul>\r\n\r\n\r\n"
+								},
+								"conditionalVisibility": {
+									"parameterName": "HoneyTokenKeyName",
+									"comparison": "isNotEqualTo",
+									"value": ""
+								},
+								"name": "text - 3"
+							},
+							{
+								"type": 1,
+								"content": {
+									"json": "<H3>Select one of the incident entities to investigate:</H3>\r\n"
+								},
+								"conditionalVisibility": {
+									"parameterName": "KVName",
+									"comparison": "isNotEqualTo"
+								},
+								"name": "text - 18"
+							},
+							{
+								"type": 3,
+								"content": {
+									"version": "KqlItem/1.0",
+									"query": "print Entities=dynamic({Entities})\r\n| mv-expand Entities\r\n| project EntityType=tostring(Entities.Type), Entity=tostring(Entities[tostring(bag_keys(Entities)[1])])\r\n",
+									"size": 1,
+									"timeContext": {
+										"durationMs": 86400000
+									},
+									"exportedParameters": [
+										{
+											"fieldName": "Entity",
+											"parameterName": "Entity",
+											"parameterType": 1
+										},
+										{
+											"fieldName": "EntityType",
+											"parameterName": "EntityType",
+											"parameterType": 1
+										}
+									],
+									"queryType": 0,
+									"resourceType": "microsoft.operationalinsights/workspaces",
+									"gridSettings": {
+										"formatters": [
+											{
+												"columnMatch": "Entity",
+												"formatter": 1
+											}
+										]
+									}
+								},
+								"conditionalVisibility": {
+									"parameterName": "KVName",
+									"comparison": "isNotEqualTo"
+								},
+								"name": "query - 17"
+							},
+							{
+								"type": 9,
+								"content": {
+									"version": "KqlParameterItem/1.0",
+									"parameters": [
+										{
+											"id": "0c4d4daa-5109-4e4c-90c8-e6acaf6b76ae",
+											"version": "KqlParameterItem/1.0",
+											"name": "TimeWin",
+											"label": "Time window",
+											"type": 2,
+											"description": "Time window in days to search around the alert",
+											"query": "print TimeWin=range(1d, 7d, 1d)\r\n| mv-expand TimeWin \r\n| extend TimeWin=totimespan(TimeWin)\r\n| extend TimeWinText=strcat(toint(TimeWin/1d), iff(TimeWin == 1d, ' day ',' days '))//, toint(TimeWin/1d-toint(TimeWin/1d))*24, ' hours')",
+											"value": "5.00:00:00",
+											"typeSettings": {
+												"showDefault": false
+											},
+											"timeContext": {
+												"durationMs": 86400000
+											},
+											"queryType": 0,
+											"resourceType": "microsoft.operationalinsights/workspaces"
+										},
+										{
+											"id": "e78776f9-43d6-407d-8be9-0d22514c2935",
+											"version": "KqlParameterItem/1.0",
+											"name": "EmailContent",
+											"type": 1,
+											"query": "print Subject=\"SOC inquiry\",\r\nBody=\"Dear User,\\n\\nA suspicious activity was observed on your {SqlName} SQL server.\\nPlease confirm you are aware of this activity, or contact us for assistance.\\n\\nThanks,\\nThe SOC\"\r\n| project EmailContent=strcat('?subject=', Subject, '&body=', replace('\\n','%0d%0a',Body))\r\n\r\n",
+											"isHiddenWhenLocked": true,
+											"queryType": 0,
+											"resourceType": "microsoft.operationalinsights/workspaces"
+										},
+										{
+											"id": "0dc504e2-b66c-40e3-aea1-aa805e524057",
+											"version": "KqlParameterItem/1.0",
+											"name": "EntityPageId",
+											"type": 1,
+											"isRequired": true,
+											"query": "{\"version\":\"ARMEndpoint/1.0\",\"headers\":[<Template_Empty>],\"method\":\"GET\",\"path\":\"/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/providers/Microsoft.SecurityInsights/entities/?api-version=2019-01-01-preview&$search={Entity}\",\"urlParams\":[<Template_Empty>],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value[0].name\",\"columns\":[<Template_Empty>]}}]}",
+											"isHiddenWhenLocked": true,
+											"queryType": 12
+										}
+									],
+									"style": "pills",
+									"queryType": 12
+								},
+								"conditionalVisibility": {
+									"parameterName": "HoneyTokenNames",
+									"comparison": "isNotEqualTo",
+									"value": ""
+								},
+								"name": "parameters - 2"
+							},
+							{
+								"type": 11,
+								"content": {
+									"version": "LinkItem/1.0",
+									"style": "bullets",
+									"links": [
+										{
+											"id": "86f1cc0a-6198-42bd-b49a-18302e6d8a4b",
+											"cellValue": "https://portal.azure.com/#asset/Microsoft_Azure_Security_Insights/Entity/subscriptions/{SubscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{WorkspaceName}/providers/Microsoft.SecurityInsights/entities/{EntityPageId}",
+											"linkTarget": "Url",
+											"linkLabel": "Open entity in Sentinel",
+											"style": "link"
+										}
+									]
+								},
+								"conditionalVisibility": {
+									"parameterName": "EntityPageId",
+									"comparison": "isNotEqualTo"
+								},
+								"name": "links - 11"
+							},
+							{
+								"type": 1,
+								"content": {
+									"json": "<H3>Search for all the activity of {EntityType} {Entity}:</H3>\r\n\r\n\r\n"
+								},
+								"conditionalVisibility": {
+									"parameterName": "Entity",
+									"comparison": "isNotEqualTo",
+									"value": ""
+								},
+								"name": "text - 3 - Copy"
+							},
+							{
+								"type": 12,
+								"content": {
+									"version": "NotebookGroup/1.0",
+									"groupType": "editable",
+									"items": [
+										{
+											"type": 3,
+											"content": {
+												"version": "KqlItem/1.0",
+												"query": "let t = datetime({StartTime});\r\nlet timeWin = timespan({TimeWin});\r\nAzureDiagnostics\r\n| where TimeGenerated between ((t-timeWin) .. (t+timeWin))\r\n| search \"{Entity}\"\r\n| summarize min(TimeGenerated), count()\r\n    by\r\n    Category,\r\n    Operation=OperationName,\r\n    Caller=CallerIPAddress,\r\n    ActivityStatus=iff(ResultType != 'Success', 'Other', ResultType)\r\n| summarize\r\n    ['Earliest Call']=min(min_TimeGenerated),\r\n    ActivityStatus=make_list(pack('Status', ActivityStatus, 'Count', count_))\r\n    by Category, Operation, Caller\r\n| extend Chat = iff(Caller contains \"@\", \"💬\", \"\")\r\n| extend ChatLink=strcat(\"https://teams.microsoft.com/l/chat/0/0?users=\", Caller)\r\n| extend Email= iff(Caller contains \"@\", \"📧\", \"\")\r\n| extend EmailLink=strcat(\"mailto:\", Caller, \"\")\r\n| project\r\n    Category,\r\n    Operation,\r\n    ['Earliest Call'],\r\n    Caller,\r\n    Chat,\r\n    ChatLink,\r\n    Email,\r\n    EmailLink,\r\n    ActivityStatus\r\n| mv-expand ActivityStatus \r\n| evaluate bag_unpack(ActivityStatus)\r\n| union (print Status='dummy', Count=1\r\n    | take 0) // force the columns existance\r\n| evaluate pivot(Status, sum(Count))\r\n| extend ['Activity Status'] = column_ifexists('Success', 0) + column_ifexists('Other', 0)\r\n| union (print Success=0, Other=0\r\n    | take 0)\r\n",
+												"size": 1,
+												"showAnalytics": true,
+												"title": "Choose a record to present full details:",
+												"exportedParameters": [
+													{
+														"fieldName": "Operation",
+														"parameterName": "Operation",
+														"parameterType": 1
+													},
+													{
+														"fieldName": "Caller",
+														"parameterName": "Caller",
+														"parameterType": 1,
+														"defaultValue": ""
+													}
+												],
+												"queryType": 0,
+												"resourceType": "microsoft.operationalinsights/workspaces",
+												"gridSettings": {
+													"formatters": [
+														{
+															"columnMatch": "Chat",
+															"formatter": 1,
+															"formatOptions": {
+																"linkColumn": "ChatLink",
+																"linkTarget": "Url"
+															}
+														},
+														{
+															"columnMatch": "ChatLink",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Email",
+															"formatter": 1,
+															"formatOptions": {
+																"linkColumn": "EmailLink",
+																"linkTarget": "Url"
+															}
+														},
+														{
+															"columnMatch": "EmailLink",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Start",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Success",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Activity Status",
+															"formatter": 22,
+															"formatOptions": {
+																"compositeBarSettings": {
+																	"labelText": " Total: [\"Activity Status\"]",
+																	"columnSettings": [
+																		{
+																			"columnName": "Other",
+																			"color": "gray"
+																		},
+																		{
+																			"columnName": "Success",
+																			"color": "blue"
+																		}
+																	]
+																}
+															}
+														},
+														{
+															"columnMatch": "Other",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Start",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Accept",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Failure",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Active",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "_Empty",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Accepted",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Failed",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Started",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Succeeded",
+															"formatter": 5
+														}
+													]
+												}
+											},
+											"conditionalVisibility": {
+												"parameterName": "Entity",
+												"comparison": "isNotEqualTo"
+											},
+											"name": "query - 15 - Copy"
+										},
+										{
+											"type": 3,
+											"content": {
+												"version": "KqlItem/1.0",
+												"query": "let t = datetime({StartTime});\r\nlet timeWin = timespan({TimeWin});\r\nAzureDiagnostics\r\n| where TimeGenerated between ((t-timeWin) .. (t+timeWin))\r\n| search \"{Entity}\"\r\n| extend Operation=OperationName, Caller=CallerIPAddress\r\n| where Operation == \"{Operation}\"\r\n| where (\"{Caller}\" == \"\" and isempty(Caller)) or \"{Caller}\" == Caller \r\n\r\n",
+												"size": 0,
+												"showAnalytics": true,
+												"title": "Full details",
+												"noDataMessage": "Click a record on the left to see full details",
+												"queryType": 0,
+												"resourceType": "microsoft.operationalinsights/workspaces",
+												"gridSettings": {
+													"formatters": [
+														{
+															"columnMatch": "Chat",
+															"formatter": 1,
+															"formatOptions": {
+																"linkColumn": "ChatLink",
+																"linkTarget": "Url"
+															}
+														},
+														{
+															"columnMatch": "ChatLink",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Email",
+															"formatter": 1,
+															"formatOptions": {
+																"linkColumn": "EmailLink",
+																"linkTarget": "Url"
+															}
+														},
+														{
+															"columnMatch": "EmailLink",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Accepted",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Active",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Failed",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Started",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Succeeded",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "_Empty",
+															"formatter": 5
+														},
+														{
+															"columnMatch": "Activity Status",
+															"formatter": 22,
+															"formatOptions": {
+																"compositeBarSettings": {
+																	"labelText": " Total: [\"Activity Status\"]",
+																	"columnSettings": [
+																		{
+																			"columnName": "_Empty",
+																			"color": "gray"
+																		},
+																		{
+																			"columnName": "Accepted",
+																			"color": "blue"
+																		},
+																		{
+																			"columnName": "Active",
+																			"color": "orange"
+																		},
+																		{
+																			"columnName": "Failed",
+																			"color": "redBright"
+																		},
+																		{
+																			"columnName": "Started",
+																			"color": "green"
+																		},
+																		{
+																			"columnName": "Succeeded",
+																			"color": "turquoise"
+																		}
+																	]
+																}
+															}
+														}
+													]
+												}
+											},
+											"conditionalVisibilities": [
+												{
+													"parameterName": "Entity",
+													"comparison": "isNotEqualTo"
+												},
+												{
+													"parameterName": "Operation",
+													"comparison": "isNotEqualTo"
+												}
+											],
+											"name": "query - 15 - Copy - Copy",
+											"styleSettings": {
+												"margin": "10"
+											}
+										}
+									]
+								},
+								"name": "group - 18",
+								"styleSettings": {
+									"showBorder": true
+								}
+							},
+							{
+								"type": 1,
+								"content": {
+									"json": "<H2><b>Step 2:</b> Validate the activity with the relevant users</H2>\r\n<br>\r\nThis section presents users with control plane activity (ARM) around the alert time.\r\n<ul>\r\n<li>Contact one of the users - can they explain the activity?</li>\r\n</ul>\r\n<br>\r\n<H3>Select a user to contact regarding the activity:</H3>\r\n"
+								},
+								"conditionalVisibility": {
+									"parameterName": "SubscriptionId",
+									"comparison": "isNotEqualTo"
+								},
+								"name": "text - 7"
+							},
+							{
+								"type": 3,
+								"content": {
+									"version": "KqlItem/1.0",
+									"query": "let t = datetime({StartTime});\r\nlet timeWin = timespan({TimeWin});\r\nAzureActivity\r\n| where TimeGenerated between ((t-timeWin) .. (t+timeWin))\r\n| where ActivityStatusValue == \"Succeeded\"\r\n| where SubscriptionId == \"{SubscriptionId}\"\r\n| where Caller has '@'\r\n| summarize latestActivity=max(TimeGenerated) by Caller, hasAccessedResourceGroup=(ResourceGroup == \"{ResourceGroup}\"), hasAccessedResource=(ResourceId == \"{KVId}\")\r\n| extend Chat = iff(isnotempty(Caller),\"💬\",\"\")\r\n| extend ChatLink=strcat(\"https://teams.microsoft.com/l/chat/0/0?users=\", Caller)\r\n| extend Email= iff(isnotempty(Caller),\"📧\",\"\")\r\n| extend EmailLink=strcat(\"mailto:\",Caller,\"{EmailContent}\")\r\n| order by hasAccessedResource desc, hasAccessedResourceGroup desc, latestActivity desc\r\n| project-rename ['Accessed Resource']=hasAccessedResource, ['Accessed Resource Group']=hasAccessedResourceGroup\r\n| take 10\r\n",
+									"size": 1,
+									"noDataMessage": "No control-plane activity found ",
+									"queryType": 0,
+									"resourceType": "microsoft.operationalinsights/workspaces",
+									"gridSettings": {
+										"formatters": [
+											{
+												"columnMatch": "Chat",
+												"formatter": 1,
+												"formatOptions": {
+													"linkColumn": "ChatLink",
+													"linkTarget": "Url"
+												}
+											},
+											{
+												"columnMatch": "ChatLink",
+												"formatter": 5
+											},
+											{
+												"columnMatch": "Email",
+												"formatter": 1,
+												"formatOptions": {
+													"linkColumn": "EmailLink",
+													"linkTarget": "Url"
+												}
+											},
+											{
+												"columnMatch": "EmailLink",
+												"formatter": 5
+											}
+										]
+									}
+								},
+								"conditionalVisibility": {
+									"parameterName": "SubscriptionId",
+									"comparison": "isNotEqualTo"
+								},
+								"name": "query - 8"
+							}
+						]
+					},
+					"conditionalVisibility": {
+						"parameterName": "ResourceSubscriptions",
+						"comparison": "isNotEqualTo"
+					},
+					"name": "KVGroup"
+				}
+			],
+			"isLocked": false,
+			"fallbackResourceIds": [
+				"/subscriptions/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX/resourcegroups/XXX/providers/microsoft.operationalinsights/workspaces/XXX"
+			],
+			"fromTemplateId": "sentinel-UserWorkbook"
+		}
+	},
+	"resources": [
+		{
+			"apiVersion": "2022-09-01",
+			"name": "pid-02d48d0f-13b4-4316-bbe8-e221cae975e4-partnercenter",
+			"type": "Microsoft.Resources/deployments",
+			"properties": {
+				"mode": "Incremental",
+				"template": {
+					"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+					"contentVersion": "1.0.0.0",
+					"resources": []
+				}
+			}
+		},
+		{
+			"type": "Microsoft.OperationalInsights/workspaces",
+			"apiVersion": "2022-10-01",
+			"name": "[parameters('CommonLAWorkspaceName')]",
+			"location": "[parameters('location')]",
+			"properties": {
+				"sku": {
+					"name": "PerGB2018"
+				},
+				"features": {
+					"enableLogAccessUsingOnlyResourcePermissions": true
+				}
+			}
+		},
+		{
+			"type": "Microsoft.OperationalInsights/workspaces/tables",
+			"apiVersion": "2022-10-01",
+			"name": "[format('{0}/{1}', parameters('CommonLAWorkspaceName'), 'Heartbeat')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.OperationalInsights/workspaces', parameters('CommonLAWorkspaceName'))]"
+			],
+			"properties": {
+				"retentionInDays": "30"
+			}
+		},
+		{
+			"name": "[concat(parameters('SentinelWorkspaceName'), '/Microsoft.SecurityInsights/', variables('WatchListName'))]",
+			"type": "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
+			"properties": {
+				"displayName": "[variables('WatchListName')]",
+				"source": "HoneyTokens.csv",
+				"description": "HoneyTokens' solution watchlist",
+				"provider": "Custom",
+				"isDeleted": false,
+				"defaultDuration": "P1000Y",
+				"contentType": "Text/Csv",
+				"numberOfLinesToSkip": 0,
+				"itemsSearchKey": "ResourceId",
+				"rawContent": "ResourceProvider,ResourceId,HoneyToken,Properties\r\nMicrosoft.KeyVault,dummy,dummy,{}\r\n"
+			},
+			"apiVersion": "2021-03-01-preview"
+		},
+		{
+			"name": "[concat(parameters('SentinelWorkspaceName'),'/Microsoft.SecurityInsights/', parameters('KeyVaultHoneyTokensAnalyticId'))]",
+			"type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+			"kind": "Scheduled",
+			"apiVersion": "2021-03-01-preview",
+			"dependsOn": [
+				"[resourceId('Microsoft.OperationalInsights/workspaces/providers/Watchlists', parameters('SentinelWorkspaceName'), 'Microsoft.SecurityInsights', variables('WatchListName'))]"
+			],
+			"properties": {
+				"displayName": "HoneyTokens: KeyVault HoneyToken key accessed",
+				"description": "A honeytoken key-vault key was accessed",
+				"severity": "Medium",
+				"enabled": true,
+				"query": "[concat('let timeframe=5m;\nlet fullAzureLogs = \n    (AzureDiagnostics\n    | union (print TimeGenerated=now(), ResourceType=\"\", OperationName=\"\", ResourceId=\"\", requestUri_s=\"\", \n    CallerIPAddress=\"\", identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g=\"\", \n    identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s=\"\" | take 0))\n    | where TimeGenerated > ago(timeframe)\n    | where ResourceType == \"VAULTS\"\n    | where OperationName !in (\"KeyNearExpiryEventGridNotification\", \"KeyExpiredEventGridNotification\", \"KeyNewVersionEventGridNotification\", \"KeyBackup\", \"KeyCreate\", \"KeyList\", \"KeyRestore\", \"KeyResourcePut\", \"KeyResourceGet\", \"KeyResourceList\", \"KeyRecover\", \"KeyGetDeleted\")\n    | project ResourceId=toupper(ResourceId), requestUri_s, OperationName, CallerIPAddress\n        , AccountObjectId=identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, AccountUPN=identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_name_s\n    | parse kind=regex flags=U requestUri_s with \"https://\" KVName \"', environment().suffixes.keyvaultDns, '/keys/\" HoneyToken \"[?|/]\" *\n    | parse kind=regex requestUri_s with \"', environment().authentication.audiences[1],'\" * \"/providers/Microsoft.KeyVault/vaults/\" KVName2 \"/keys/\" HoneyToken2 \"[?|/]\" *   \n    | extend KVName=iff(isempty(KVName), KVName2, KVName), HoneyToken=toupper(iff(isempty(HoneyToken), HoneyToken2, HoneyToken));\n// basic alert on honeytoken access\nfullAzureLogs\n| join kind=inner (\n    (_GetWatchlist(\"HoneyTokens\") \n    | union (print ResourceProvider=\"\",ResourceId=\"\",HoneyToken=\"\",Properties=\"{}\" | take 0))\n    | where todynamic(Properties).Type == \"key\"\n    | extend ResourceId=toupper(ResourceId), HoneyToken=toupper(HoneyToken)\n    )\n    on ResourceId, HoneyToken\n| summarize make_set(OperationName) by ResourceId, HoneyToken, CallerIPAddress, AccountObjectId, AccountUPN\n// enrich with Account that accessed the KV at this time if available\n| join kind=leftouter (fullAzureLogs\n    | distinct ResourceId, AccountObjectId, AccountUPN\n    | where isnotempty(AccountObjectId))\n    on ResourceId\n| project ResourceId, HoneyToken, set_OperationName, CallerIPAddress, \n    AccountObjectId=iff(isempty(AccountObjectId), AccountObjectId1, AccountObjectId), \n    AccountUPN=iff(isempty(AccountUPN), AccountUPN1, AccountUPN)\n| extend AccountName=tostring(split(AccountUPN, \"@\")[0]), UPNSuffix=tostring(split(AccountUPN, \"@\")[1])\n| extend Severity=iff(set_OperationName contains \"/decrypt?\",\"High\", \"Medium\")')]",
+				"queryFrequency": "PT5M",
+				"queryPeriod": "PT5M",
+				"triggerOperator": "GreaterThan",
+				"triggerThreshold": 0,
+				"suppressionDuration": "PT5H",
+				"suppressionEnabled": false,
+				"tactics": [
+					"Discovery"
+				],
+				"incidentConfiguration": {
+					"createIncident": true,
+					"groupingConfiguration": {
+						"enabled": true,
+						"reopenClosedIncident": true,
+						"lookbackDuration": "PT5H",
+						"matchingMethod": "Selected",
+						"groupByEntities": [
+							"AzureResource"
+						]
+					}
+				},
+				"eventGroupingSettings": {
+					"aggregationKind": "AlertPerResult"
+				},
+				"alertDetailsOverride": {
+					"alertDescriptionFormat": "HoneyToken accessed. Operations: {{set_OperationName}}",
+					"alertSeverityColumnName": "Severity"
+				},
+				"customDetails": {
+					"HoneyTokenName": "HoneyToken",
+					"OperationsPerformed": "set_OperationName"
+				},
+				"entityMappings": [
+					{
+						"entityType": "AzureResource",
+						"fieldMappings": [
+							{
+								"identifier": "ResourceId",
+								"columnName": "ResourceId"
+							}
+						]
+					},
+					{
+						"entityType": "IP",
+						"fieldMappings": [
+							{
+								"identifier": "Address",
+								"columnName": "CallerIPAddress"
+							}
+						]
+					},
+					{
+						"entityType": "Account",
+						"fieldMappings": [
+							{
+								"identifier": "AadUserId",
+								"columnName": "AccountObjectId"
+							}
+						]
+					},
+					{
+						"entityType": "Account",
+						"fieldMappings": [
+							{
+								"identifier": "Name",
+								"columnName": "AccountName"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"name": "[concat(parameters('SentinelWorkspaceName'),'/Microsoft.SecurityInsights/', parameters('KVScrtsHoneyTokensAnalyticId'))]",
+			"type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+			"kind": "Scheduled",
+			"apiVersion": "2021-03-01-preview",
+			"dependsOn": [
+				"[resourceId('Microsoft.OperationalInsights/workspaces/providers/Watchlists', parameters('SentinelWorkspaceName'), 'Microsoft.SecurityInsights', variables('WatchListName'))]"
+			],
+			"properties": {
+				"displayName": "HoneyTokens: KeyVault HoneyToken secret accessed",
+				"description": "A honeytoken key-vault secret was accessed",
+				"severity": "Medium",
+				"enabled": true,
+				"query": "[concat('let timeframe=5m;\nlet fullAzureLogs =\n(AzureDiagnostics\n| union (print TimeGenerated=now(), ResourceType=\"\", OperationName=\"\", ResourceId=\"\", requestUri_s=\"\",\nCallerIPAddress=\"\", identity_claim_oid_g=\"\",\nidentity_claim_upn_s=\"\" | take 0))\n| where TimeGenerated > ago(timeframe)\n| where ResourceType == \"VAULTS\"\n| where OperationName in (\"SecretGet\", \"SecretDelete\")\n| project ResourceId=toupper(ResourceId), requestUri_s, OperationName, CallerIPAddress\n, AccountObjectId=identity_claim_oid_g\n, AccountUPN=identity_claim_upn_s\n| parse kind=regex flags=U requestUri_s with \"https://\" KVName \"', environment().suffixes.keyvaultDns, '/secrets/\" HoneyToken \"[?|/]\" *\n| parse kind=regex requestUri_s with \"', environment().authentication.audiences[1] ,'\" * \"/providers/Microsoft.KeyVault/vaults/\" KVName2 \"/secrets/\" HoneyToken2 \"[?|/]\" *\n| extend KVName=iff(isempty(KVName), KVName2, KVName), HoneyToken=toupper(iff(isempty(HoneyToken), HoneyToken2, HoneyToken));\n// basic alert on honeytoken access\nfullAzureLogs\n| join kind=inner (\n(_GetWatchlist(\"HoneyTokens\") \n| union (print ResourceProvider=\"\",ResourceId=\"\",HoneyToken=\"\",Properties=\"{}\" | take 0))\n| where todynamic(Properties).Type == \"secret\"\n| extend ResourceId=toupper(ResourceId), HoneyToken=toupper(HoneyToken)\n)\non ResourceId, HoneyToken\n| summarize make_set(OperationName) by ResourceId, HoneyToken, CallerIPAddress, AccountObjectId, AccountUPN\n// enrich with Account that accessed the KV at this time if available\n| join kind=leftouter (fullAzureLogs\n| distinct ResourceId, AccountObjectId, AccountUPN\n| where isnotempty(AccountObjectId))\non ResourceId\n| project ResourceId, HoneyToken, set_OperationName, CallerIPAddress,AccountObjectId,AccountUPN\n| extend AccountName=tostring(split(AccountUPN, \"@\")[0]), UPNSuffix=tostring(split(AccountUPN, \"@\")[1])')]",
+				"queryFrequency": "PT5M",
+				"queryPeriod": "PT5M",
+				"triggerOperator": "GreaterThan",
+				"triggerThreshold": 0,
+				"suppressionDuration": "PT5H",
+				"suppressionEnabled": false,
+				"tactics": [
+					"Discovery"
+				],
+				"incidentConfiguration": {
+					"createIncident": true,
+					"groupingConfiguration": {
+						"enabled": true,
+						"reopenClosedIncident": true,
+						"lookbackDuration": "PT5H",
+						"matchingMethod": "Selected",
+						"groupByEntities": [
+							"AzureResource"
+						]
+					}
+				},
+				"eventGroupingSettings": {
+					"aggregationKind": "AlertPerResult"
+				},
+				"alertDetailsOverride": {
+					"alertDescriptionFormat": "HoneyToken accessed. Operations: {{set_OperationName}}"
+				},
+				"customDetails": {
+					"HoneyTokenName": "HoneyToken",
+					"OperationsPerformed": "set_OperationName"
+				},
+				"entityMappings": [
+					{
+						"entityType": "AzureResource",
+						"fieldMappings": [
+							{
+								"identifier": "ResourceId",
+								"columnName": "ResourceId"
+							}
+						]
+					},
+					{
+						"entityType": "IP",
+						"fieldMappings": [
+							{
+								"identifier": "Address",
+								"columnName": "CallerIPAddress"
+							}
+						]
+					},
+					{
+						"entityType": "Account",
+						"fieldMappings": [
+							{
+								"identifier": "AadUserId",
+								"columnName": "AccountObjectId"
+							}
+						]
+					},
+					{
+						"entityType": "Account",
+						"fieldMappings": [
+							{
+								"identifier": "Name",
+								"columnName": "AccountName"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"name": "[concat(parameters('SentinelWorkspaceName'),'/Microsoft.SecurityInsights/', parameters('KVDiagSettingHoneyTokensAnalyticId'))]",
+			"type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+			"kind": "Scheduled",
+			"apiVersion": "2021-03-01-preview",
+			"dependsOn": [
+				"[resourceId('Microsoft.OperationalInsights/workspaces/providers/Watchlists', parameters('SentinelWorkspaceName'), 'Microsoft.SecurityInsights', variables('WatchListName'))]"
+			],
+			"properties": {
+				"displayName": "HoneyTokens: KeyVault HoneyToken diagnostic settings deleted or changed",
+				"description": "This alert pops if any of the following two happen:\n1. diagnostic settings for a honey token keyvault is deleted.\n2. diagnostic settings  a honey token keyvault are changed such that \"AuditEvent\" is turned off.",
+				"severity": "High",
+				"enabled": true,
+				"query": "let timeframe=5m;\r\nAzureActivity | where TimeGenerated > ago(timeframe) | where ResourceProviderValue == \"MICROSOFT.KEYVAULT\"\r\n| extend d=parse_json(Properties)\r\n| extend requestBodyProperties=parse_json(tostring(d.requestbody)).properties\r\n| extend logs=parse_json(tostring(requestBodyProperties)).logs\r\n| where todynamic(Properties).message == \"microsoft.insights/diagnosticSettings/delete\" or (logs[0].category == \"AuditEvent\" and logs[0].enabled == false)\r\n| project-away d, requestBodyProperties, logs\r\n| parse kind=regex todynamic(Properties).entity with \"/subscriptions/\" * \"/resourceGroups/\" * \"/providers/Microsoft.KeyVault/vaults/\" keyvault \"/providers/microsoft.insights/diagnosticSettings/\" diagnosticSettingsName | extend keyvault, diagnosticSettingsName\r\n| join kind=inner (_GetWatchlist('HoneyTokens') | union (print ResourceProvider=\"dummy\", ResourceId=\"dummy\", HoneyToken=\"dummy\")\r\n| parse kind=regex ResourceId with \"/subscriptions/\" * \"/resourceGroups/\" * \"/providers/Microsoft.KeyVault/vaults/\" keyvault\r\n| distinct keyvault) on keyvault\r\n| extend ResourceId = _ResourceId, AccountUPN = Caller | extend AccountName = tostring(split(AccountUPN, '@')[0]), UPNSuffix=tostring(split(AccountUPN, '@')[1]), Severity=\"High\", AccountObjectId=todynamic(Claims)['http://schemas.microsoft.com/identity/claims/objectidentifier']",
+				"queryFrequency": "PT5M",
+				"queryPeriod": "PT5M",
+				"triggerOperator": "GreaterThan",
+				"triggerThreshold": 0,
+				"suppressionDuration": "PT5H",
+				"suppressionEnabled": false,
+				"tactics": [
+					"DefenseEvasion"
+				],
+				"incidentConfiguration": {
+					"createIncident": true,
+					"groupingConfiguration": {
+						"enabled": true,
+						"reopenClosedIncident": true,
+						"lookbackDuration": "PT5H",
+						"matchingMethod": "AllEntities"
+					}
+				},
+				"eventGroupingSettings": {
+					"aggregationKind": "SingleAlert"
+				},
+				"entityMappings": [
+					{
+						"entityType": "AzureResource",
+						"fieldMappings": [
+							{
+								"identifier": "ResourceId",
+								"columnName": "ResourceId"
+							}
+						]
+					},
+					{
+						"entityType": "IP",
+						"fieldMappings": [
+							{
+								"identifier": "Address",
+								"columnName": "CallerIpAddress"
+							}
+						]
+					},
+					{
+						"entityType": "Account",
+						"fieldMappings": [
+							{
+								"identifier": "AadUserId",
+								"columnName": "AccountObjectId"
+							}
+						]
+					},
+					{
+						"entityType": "Account",
+						"fieldMappings": [
+							{
+								"identifier": "Name",
+								"columnName": "AccountName"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[parameters('workspace-location')]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "ThisLA2Sentinel",
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[variables('_sentinel-connection')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2019-05-01",
+			"name": "[parameters('PlaybookName_HoneyTokenWLCheckKV')]",
+			"location": "[parameters('workspace-location')]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"tags": {
+				"LogicAppsCategory": "security"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"type": "Object"
+						}
+					},
+					"triggers": {
+						"manual": {
+							"inputs": {
+								"method": "POST",
+								"schema": {
+									"properties": {
+										"allKVIds": {
+											"type": "string"
+										}
+									},
+									"type": "object"
+								}
+							},
+							"kind": "Http",
+							"type": "Request"
+						}
+					},
+					"actions": {
+						"HTTP": {
+							"inputs": {
+								"authentication": {
+									"audience": "[concat('https://',parameters('logAnalyticsEndpoint'))]",
+									"type": "ManagedServiceIdentity"
+								},
+								"method": "GET",
+								"uri": "[concat('https://',parameters('logAnalyticsEndpoint'),parameters('logAnalyticsEndpointQuery'))]"
+							},
+							"runAfter": {
+								"Initialize_query": [
+									"Succeeded"
+								]
+							},
+							"type": "Http"
+						},
+						"Initialize_SentinelWSId": {
+							"inputs": {
+								"variables": [
+									{
+										"name": "SentinelWSId",
+										"type": "string",
+										"value": "[reference(resourceId('microsoft.operationalinsights/workspaces', parameters('SentinelWorkspaceName')), '2021-06-01').customerId]"
+									}
+								]
+							},
+							"runAfter": {
+								"Parse_JSON": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable"
+						},
+						"Initialize_query": {
+							"inputs": {
+								"variables": [
+									{
+										"name": "query",
+										"type": "string",
+										"value": "_GetWatchlist('HoneyTokens') | union (print ResourceProvider=\"dummy\", ResourceId=\"dummy\", HoneyToken=\"dummy\")| where tolower(ResourceProvider) == 'microsoft.keyvault' | where ResourceId in (@{body('Parse_JSON')?['allKVIds']}) | summarize by ResourceId | union (print ResourceId=\"_dummy\")"
+									}
+								]
+							},
+							"runAfter": {
+								"Initialize_SentinelWSId": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable"
+						},
+						"Parse_JSON": {
+							"inputs": {
+								"content": "@{triggerBody()} ",
+								"schema": {
+									"properties": {
+										"allKVIds": {
+											"type": "string"
+										}
+									},
+									"type": "object"
+								}
+							},
+							"type": "ParseJson"
+						},
+						"Response": {
+							"inputs": {
+								"body": "@body('HTTP')",
+								"statusCode": 200
+							},
+							"kind": "Http",
+							"runAfter": {
+								"HTTP": [
+									"Succeeded"
+								]
+							},
+							"type": "Response"
+						}
+					}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuresentinel": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+								"connectionName": "[variables('AzureSentinelConnectionName')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								},
+								"id": "[variables('_sentinel-connection')]"
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2022-04-01",
+			"name": "[parameters('roleNameGuid_HoneyTokenWLCheckKV')]",
+			"scope": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('SentinelWorkspaceName'))]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName_HoneyTokenWLCheckKV'))]"
+			],
+			"properties": {
+				"roleDefinitionId": "[variables('_logAnalyticsReaderRole')]",
+				"principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName_HoneyTokenWLCheckKV')), '2019-05-01', 'full').identity.principalId]",
+				"principalType": "ServicePrincipal"
+			}
+		},
+		{
+			"name": "[parameters('PlaybookName_HoneyTokensAdd2WLKV')]",
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2019-05-01",
+			"location": "[parameters('workspace-location')]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"tags": {
+				"LogicAppsCategory": "security"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"actions": {
+						"Parse_JSON": {
+							"inputs": {
+								"content": "@triggerOutputs()['queries']",
+								"schema": {
+									"properties": {
+										"HTKeyName": {
+											"type": "string"
+										},
+										"HTType": {
+											"type": "string"
+										},
+										"KVId": {
+											"type": "string"
+										}
+									},
+									"type": "object"
+								}
+							},
+							"type": "ParseJson"
+						},
+						"Response": {
+							"inputs": {
+								"body": "<H2>Honeytoken was successfully added to monitored list</H2>",
+								"headers": {
+									"Content-Type": "text/html; charset=UTF-8"
+								},
+								"statusCode": 200
+							},
+							"kind": "Http",
+							"runAfter": {
+								"Watchlists_-_Add_a_new_watchlist_item": [
+									"Succeeded"
+								]
+							},
+							"type": "Response"
+						},
+						"Watchlists_-_Add_a_new_watchlist_item": {
+							"inputs": {
+								"body": {
+									"HoneyToken": "@{body('Parse_JSON')?['HTKeyName']}",
+									"Properties": "{\"Type\": \"@{body('Parse_JSON')?['HTType']}\"}",
+									"ResourceId": "@{body('Parse_JSON')?['KVId']}",
+									"ResourceProvider": "Microsoft.KeyVault"
+								},
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+									}
+								},
+								"method": "put",
+								"path": "[concat('/Watchlists/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/workspaces/', parameters('SentinelWorkspaceName'), '/watchlists/', variables('WatchListName'), '/watchlistItem')]"
+							},
+							"runAfter": {
+								"Parse_JSON": [
+									"Succeeded"
+								]
+							},
+							"type": "ApiConnection"
+						}
+					},
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"type": "Object"
+						}
+					},
+					"triggers": {
+						"manual": {
+							"inputs": {
+								"method": "GET"
+							},
+							"kind": "Http",
+							"type": "Request"
+						}
+					}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuresentinel": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+								"connectionName": "[variables('AzureSentinelConnectionName')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								},
+								"id": "[variables('_honeytoken-connection')]"
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2022-04-01",
+			"name": "[parameters('roleNameGuid_HoneyTokensAdd2WLKV')]",
+			"scope": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('SentinelWorkspaceName'))]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName_HoneyTokensAdd2WLKV'))]"
+			],
+			"properties": {
+				"roleDefinitionId": "[variables('_azureSentinelContributorRole')]",
+				"principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName_HoneyTokensAdd2WLKV')), '2019-05-01', 'full').identity.principalId]",
+				"principalType": "ServicePrincipal"
+			}
+		},
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2019-05-01",
+			"name": "[parameters('PlaybookName_HoneyTokensEnableKVPolicy')]",
+			"location": "[parameters('workspace-location')]",
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"triggers": {
+						"manual": {
+							"type": "Request",
+							"kind": "Http",
+							"inputs": {
+								"method": "GET"
+							}
+						}
+					},
+					"actions": {
+						"Append_to_string_variable_2": {
+							"runAfter": {
+								"For_each": [
+									"Succeeded"
+								]
+							},
+							"type": "AppendToStringVariable",
+							"inputs": {
+								"name": "armTemplate",
+								"value": "@join(variables('armItemsArray'),',')"
+							}
+						},
+						"Append_to_string_variable_3": {
+							"runAfter": {
+								"Append_to_string_variable_2": [
+									"Succeeded"
+								]
+							},
+							"type": "AppendToStringVariable",
+							"inputs": {
+								"name": "armTemplate",
+								"value": "]}"
+							}
+						},
+						"For_each": {
+							"foreach": "@split(replace(replace(triggerOutputs()['queries']['keyVaults'],'[',''),']',''),',')",
+							"actions": {
+								"Append_to_array_variable": {
+									"type": "AppendToArrayVariable",
+									"inputs": {
+										"name": "armItemsArray",
+										"value": {
+											"apiVersion": "2017-05-10",
+											"name": "nestedAppServiceDeploy_@{last(split(items('For_each'),'/'))}",
+											"properties": {
+												"mode": "Incremental",
+												"template": {
+													"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+													"contentVersion": "1.0.0.0",
+													"resources": [
+														{
+															"apiVersion": "2019-09-01",
+															"name": "@{last(split(items('For_each'),'/'))}/@{triggerOutputs()['queries']['op']}",
+															"properties": {
+																"accessPolicies": [
+																	{
+																		"objectId": "[[parameters('UserObjectId')]",
+																		"permissions": {
+																			"keys": [
+																				"List",
+																				"Create"
+																			],
+																			"secrets": [
+																				"List",
+																				"Set"
+																			]
+																		},
+																		"tenantId": "[[parameters('tenantId')]"
+																	}
+																]
+															},
+															"type": "Microsoft.KeyVault/vaults/accessPolicies"
+														}
+													]
+												}
+											},
+											"resourceGroup": "@{split(string(items('For_each')),'/')[4]}",
+											"type": "Microsoft.Resources/deployments"
+										}
+									}
+								}
+							},
+							"runAfter": {
+								"Initialize_variable_2": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach",
+							"runtimeConfiguration": {
+								"concurrency": {
+									"repetitions": 20
+								}
+							}
+						},
+						"Initialize_variable": {
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "armTemplate",
+										"type": "string",
+										"value": "{\n            \"$schema\": \"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#\",\n            \"contentVersion\": \"1.0.0.0\",\n            \"parameters\": {\n                \"tenantId\": {\n                    \"type\": \"string\",\n                    \"metadata\": {\n                        \"description\": \"The tenant guid in Azure Active Directory\"\n                    }\n                },\n                \"UserObjectId\": {\n                    \"type\": \"string\",\n                    \"metadata\": {\n                        \"description\": \"The user objectId in Azure Active Directory\"\n                    }\n                },\n\t\t\"IUnderstandThatThisTemplateModifiesThePolicyOfAllTheListedResourcesPermanently\" :{\n            \"type\": \"string\",\n            \"metadata\": {\n                \"description\": \"Another deployment will be required to revert the policy for all these resources\"\n            },\n\"allowedValues\": [\n      \"Accept\"\n    ]\n\t\t}\n            },\n            \"resources\": ["
+									}
+								]
+							}
+						},
+						"Initialize_variable_2": {
+							"runAfter": {
+								"Initialize_variable": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "armItemsArray",
+										"type": "array"
+									}
+								]
+							}
+						},
+						"Response": {
+							"runAfter": {
+								"Append_to_string_variable_3": [
+									"Succeeded"
+								]
+							},
+							"type": "Response",
+							"kind": "Http",
+							"inputs": {
+								"body": "@variables('armTemplate')",
+								"headers": {
+									"Access-Control-Allow-Origin": "https://portal.azure.com",
+									"Content-type": "application/json"
+								},
+								"statusCode": 200
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"name": "[parameters('incidentsWorkbookId')]",
+			"type": "microsoft.insights/workbooks",
+			"location": "[parameters('workspace-location')]",
+			"apiVersion": "2021-03-08",
+			"kind": "shared",
+			"properties": {
+				"displayName": "[parameters('incidentsWorkbookDisplayName')]",
+				"serializedData": "[replace(string(variables('incidentsWorkbookContent')), '<Template_Empty>', '')]",
+				"version": "1.0",
+				"sourceId": "[variables('_SentinelResourceId')]",
+				"category": "[parameters('workbookType')]"
+			}
+		},
+		{
+			"name": "[parameters('managementWorkbookId')]",
+			"type": "microsoft.insights/workbooks",
+			"location": "[parameters('workspace-location')]",
+			"apiVersion": "2021-03-08",
+			"dependsOn": [
+				"[resourceId('Microsoft.OperationalInsights/workspaces', parameters('CommonLAWorkspaceName'))]",
+				"[resourceId('Microsoft.Logic/workflows/', parameters('PlaybookName_HoneyTokenWLCheckKV'))]",
+				"[resourceId('Microsoft.Logic/workflows/', parameters('PlaybookName_HoneyTokensAdd2WLKV'))]"
+			],
+			"kind": "shared",
+			"properties": {
+				"displayName": "[parameters('managementWorkbookDisplayName')]",
+				"serializedData": "[honeytokens.embedLinksinManagementWB(variables('WBTemplate'),                 listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', parameters('PlaybookName_HoneyTokenWLCheckKV'), 'manual'), '2019-05-01').value,               listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', parameters('PlaybookName_HoneyTokensAdd2WLKV'), 'manual'), '2019-05-01').value,                variables('SentinelResourceId'), reference(resourceId('microsoft.operationalinsights/workspaces', parameters('SentinelWorkspaceName')), '2022-10-01').customerId, variables('CommonLAResourceId'), concat(parameters('functionAppName'),'.azurewebsites.net/api/HTDeployFunc'), listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', parameters('PlaybookName_HoneyTokensEnableKVPolicy'), 'manual'), '2019-05-01').value, parameters('SOCEmailAddress'))]",
+				"version": "1.0",
+				"sourceId": "[variables('_SentinelResourceId')]",
+				"category": "[parameters('workbookType')]"
+			}
+		},
+		{
+			"type": "microsoft.insights/components",
+			"apiVersion": "2020-02-02",
+			"name": "[variables('AppInsightsLogName')]",
+			"location": "[parameters('workspace-location')]",
+			"kind": "web",
+			"properties": {
+				"Application_Type": "web",
+				"ApplicationId": "[parameters('functionAppName')]"
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts",
+			"apiVersion": "2021-04-01",
+			"name": "[variables('storageAccountName')]",
+			"location": "[parameters('workspace-location')]",
+			"sku": {
+				"name": "Standard_LRS",
+				"tier": "Standard"
+			},
+			"kind": "Storage",
+			"properties": {
+				"networkAcls": {
+					"bypass": "AzureServices",
+					"defaultAction": "Allow"
+				},
+				"supportsHttpsTrafficOnly": true,
+				"encryption": {
+					"services": {
+						"file": {
+							"keyType": "Account",
+							"enabled": true
+						},
+						"blob": {
+							"keyType": "Account",
+							"enabled": true
+						}
+					},
+					"keySource": "Microsoft.Storage"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts/blobServices",
+			"apiVersion": "2021-01-01",
+			"name": "[concat(variables('storageAccountName'), '/default')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('storageAccountName')))]"
+			],
+			"sku": {
+				"name": "Standard_LRS",
+				"tier": "Standard"
+			},
+			"properties": {
+				"deleteRetentionPolicy": {
+					"enabled": false
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts/fileServices",
+			"apiVersion": "2021-01-01",
+			"name": "[concat(variables('storageAccountName'), '/default')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('storageAccountName')))]"
+			],
+			"sku": {
+				"name": "Standard_LRS",
+				"tier": "Standard"
+			},
+			"properties": {}
+		},
+		{
+			"condition": "[equals(parameters('AzureFuncServicePlan'), 'Premium')]",
+			"type": "Microsoft.Web/serverfarms",
+			"apiVersion": "2021-01-15",
+			"name": "[concat('serverfarm_',parameters('functionAppName'))]",
+			"location": "[parameters('workspace-location')]",
+			"sku": {
+				"name": "S1",
+				"tier": "Standard",
+				"size": "S1",
+				"family": "S",
+				"capacity": 1
+			},
+			"kind": "linux",
+			"properties": {
+				"reserved": true
+			}
+		},
+		{
+			"type": "Microsoft.Web/sites",
+			"apiVersion": "2021-02-01",
+			"name": "[parameters('functionAppName')]",
+			"location": "[parameters('workspace-location')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/serverfarms', concat('serverfarm_',parameters('functionAppName')))]",
+				"[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+				"[resourceId('Microsoft.Insights/components', variables('AppInsightsLogName'))]",
+				"[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('storageAccountName'), 'default')]"
+			],
+			"kind": "functionapp,linux",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"properties": {
+				"enabled": true,
+				"hyperV": false,
+				"httpsOnly": true,
+				"clientAffinityEnabled": true,
+				"serverFarmId": "[if(equals(parameters('AzureFuncServicePlan'), 'Premium'), resourceId('Microsoft.Web/serverfarms', concat('serverfarm_',parameters('functionAppName'))), json('null'))]",
+				"reserved": true,
+				"siteConfig": {
+					"pythonVersion": "3.8",
+					"linuxFxVersion": "PYTHON|3.8",
+					"appSettings": [
+						{
+							"name": "FUNCTIONS_EXTENSION_VERSION",
+							"value": "~3"
+						},
+						{
+							"name": "FUNCTIONS_WORKER_RUNTIME",
+							"value": "python"
+						},
+						{
+							"name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+							"value": "[reference(resourceId('Microsoft.insights/components', variables('AppInsightsLogName'))).InstrumentationKey]"
+						},
+						{
+							"name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+							"value": "[reference(resourceId('microsoft.insights/components', variables('AppInsightsLogName'))).ConnectionString]"
+						},
+						{
+							"name": "AzureWebJobsStorage",
+							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('storageAccountName'))), '2021-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+						},
+						{
+							"name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('storageAccountName')),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('storageAccountName'))), '2021-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+						},
+						{
+							"name": "WEBSITE_CONTENTSHARE",
+							"value": "[toLower(variables('storageAccountName'))]"
+						},
+						{
+							"name": "HTDeployFuncAppSecret",
+							"value": "[concat('@Microsoft.KeyVault(VaultName=',parameters('KeyVaultNameStoringAppSecret'),';SecretName=',parameters('SecretName'),')')]"
+						},
+						{
+							"name": "PARAMS",
+							"value": "[concat('{\"CLIENT_ID\": \"', parameters('aadClientId'),                          '\", \"TENANT\": \"',subscription().tenantId,                          '\", \"KEY_KEYWORDS\": ', concat('[\"',replace(parameters('kyKywords'),',','\",\"'),'\"]'),                           ', \"SECRET_KEYWORDS\": ', concat('[\"',replace(parameters('scrtKywords'),',','\",\"'),'\"]'),                           ', \"ADDITIONAL_HT_PROB\": ', parameters('AdditionalHTProb') ,'}')]"
+						},
+						{
+							"name": "WEBSITE_RUN_FROM_PACKAGE",
+							"value": "https://aka.ms/sentinelhoneytokensdeployfunc"
+						},
+						{
+							"name": "ENABLE_ORYX_BUILD",
+							"value": "true"
+						},
+						{
+							"name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+							"value": "true"
+						}
+					],
+					"http20Enabled": false,
+					"enabled": true,
+					"hyperV": false,
+					"httpsOnly": true,
+					"siteAuthSettings": {
+						"enabled": true,
+						"unauthenticatedClientAction": "RedirectToLoginPage",
+						"tokenStoreEnabled": true,
+						"defaultProvider": "AzureActiveDirectory",
+						"isAadAutoProvisioned": false,
+						"clientId": "[parameters('aadClientId')]",
+						"clientSecret": "[parameters('aadClientSecret')]",
+						"issuer": "[concat(parameters('loginEndpoint'), subscription().tenantId, '/')]",
+						"allowedAudiences": [
+							"[concat('https://',tolower(parameters('functionAppName')),'.azurewebsites.net')]"
+						],
+						"additionalLoginParams": [
+							"[concat('resource=', parameters('aadClientId'))]"
+						]
+					}
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Resources/deployments",
+			"apiVersion": "2021-01-01",
+			"name": "[concat('nestedAppServiceDeploy_', parameters('KeyVaultNameStoringAppSecret'), '_', uniqueString(subscription().subscriptionId))]",
+			"resourceGroup": "[parameters('ResourceGroupNameOfKeyVaultStoringAppSecret')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+			],
+			"properties": {
+				"mode": "Incremental",
+				"template": {
+					"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+					"contentVersion": "1.0.0.0",
+					"resources": [
+						{
+							"condition": "[equals(parameters('KeyVaultNameStoringAppSecretNewOrExisting'), 'new')]",
+							"type": "Microsoft.KeyVault/vaults",
+							"apiVersion": "2021-04-01-preview",
+							"name": "[parameters('KeyVaultNameStoringAppSecret')]",
+							"location": "[parameters('LocationNameOfKeyVaultStoringAppSecret')]",
+							"properties": {
+								"tenantId": "[subscription().tenantId]",
+								"sku": {
+									"family": "A",
+									"name": "Standard"
+								},
+								"accessPolicies": "[createArray()]"
+							}
+						},
+						{
+							"type": "Microsoft.KeyVault/vaults/secrets",
+							"apiVersion": "2021-06-01-preview",
+							"name": "[concat(parameters('KeyVaultNameStoringAppSecret'), '/', parameters('SecretName'))]",
+							"properties": {
+								"value": "[variables('aadClientSecret')]"
+							},
+							"dependsOn": "[skip(if(equals(parameters('KeyVaultNameStoringAppSecretNewOrExisting'), 'new'),array(resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultNameStoringAppSecret'))),createArray()),0)]"
+						},
+						{
+							"name": "[concat(parameters('KeyVaultNameStoringAppSecret'), '/add')]",
+							"type": "Microsoft.KeyVault/vaults/accessPolicies",
+							"apiVersion": "2021-06-01-preview",
+							"properties": {
+								"accessPolicies": [
+									{
+										"tenantId": "[subscription().tenantId]",
+										"objectId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-01-01', 'full').identity.principalId]",
+										"permissions": {
+											"secrets": [
+												"get"
+											]
+										}
+									}
+								]
+							},
+							"dependsOn": "[skip(if(equals(parameters('KeyVaultNameStoringAppSecretNewOrExisting'), 'new'),array(resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultNameStoringAppSecret'))),createArray()),0)]"
+						}
+					]
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+			"apiVersion": "2021-01-01",
+			"name": "[concat(variables('storageAccountName'), '/default/azure-webjobs-hosts')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]",
+				"[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+			],
+			"properties": {
+				"publicAccess": "None"
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+			"apiVersion": "2021-01-01",
+			"name": "[concat(variables('storageAccountName'), '/default/azure-webjobs-secrets')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]",
+				"[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+			],
+			"properties": {
+				"publicAccess": "None"
+			}
+		},
+		{
+			"type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+			"apiVersion": "2021-01-01",
+			"name": "[concat(variables('storageAccountName'), '/default/', tolower(parameters('functionAppName')))]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('storageAccountName'), 'default')]",
+				"[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+			],
+			"properties": {
+				"shareQuota": 5120
+			}
+		},
+		{
+			"type": "Microsoft.Authorization/roleAssignments",
+			"apiVersion": "2022-04-01",
+			"name": "[parameters('roleNameGuid_HTDeployFunc')]",
+			"scope": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('SentinelWorkspaceName'))]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+			],
+			"properties": {
+				"roleDefinitionId": "[variables('_azureSentinelContributorRole')]",
+				"principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-01-01', 'full').identity.principalId]",
+				"principalType": "ServicePrincipal"
+			}
+		},
+		{
+			"type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+			"apiVersion": "2021-03-01-preview",
+			"properties": {
+				"version": "1.0.53",
+				"kind": "Solution",
+				"contentId": "[variables('_sourceId')]",
+				"parentId": "[variables('_sourceId')]",
+				"source": {
+					"kind": "Solution",
+					"name": "HoneyToken",
+					"sourceId": "[variables('_sourceId')]"
+				},
+				"support": {
+					"name": "Community",
+					"tier": "Community",
+					"link": "https://github.com/Azure/Azure-Sentinel/issues"
+				},
+				"dependencies": {
+					"operator": "AND",
+					"criteria": [
+						{
+							"kind": "Workbook",
+							"contentId": "[variables('_HoneyTokensIncidents_workbook')]",
+							"version": "1.0.53"
+						},
+						{
+							"kind": "Workbook",
+							"contentId": "[variables('_SOCHTManagement_workbook')]",
+							"version": "1.0.53"
+						},
+						{
+							"kind": "AnalyticsRule",
+							"contentId": "[variables('_HoneyTokenKeyAccessed_AnalyticalRules')]",
+							"version": "1.0.53"
+						},
+						{
+							"kind": "AnalyticsRule",
+							"contentId": "[variables('_HoneyTokenSecretAccessed_AnalyticalRules')]",
+							"version": "1.0.53"
+						},
+						{
+							"kind": "AnalyticsRule",
+							"contentId": "[variables('_HoneyTokenDiagnosticSettingsDeletedOrChanged_AnalyticalRules')]",
+							"version": "1.0.53"
+						},
+						{
+							"kind": "Playbook",
+							"contentId": "[variables('_HoneyToken_HoneyTokenWLCheckKV')]",
+							"version": "1.0.53"
+						},
+						{
+							"kind": "Playbook",
+							"contentId": "[variables('_HoneyToken_HoneyTokensAdd2WLKV')]",
+							"version": "1.0.53"
+						},
+						{
+							"kind": "Playbook",
+							"contentId": "[variables('_HoneyToken_HoneyTokensEnableKVPolicy')]",
+							"version": "1.0.53"
+						}
+					]
+				},
+				"firstPublishDate": "2021-11-01",
+				"providers": [
+					"Microsoft"
+				],
+				"categories": {
+					"domains": [
+						"Security - Threat Protection"
+					]
+				}
+			},
+			"name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+		}
+	],
+	"outputs": {
+		"ManagementWorkbookLink": {
+			"type": "string",
+			"value": "[concat('https://portal.azure.com/#blade/AppInsightsExtension/UsageNotebookBlade/ComponentId/',uricomponent(toLower(variables('SentinelResourceId'))),'/ConfigurationId/',uricomponent(resourceId('microsoft.insights/workbooks', parameters('managementWorkbookId'))),'/Type/sentinel/WorkbookTemplateName/',parameters('managementWorkbookDisplayName'))]"
+		},
+		"PolicyDeploymentLink": {
+			"type": "string",
+			"value": "https://portal.azure.com/#create/Microsoft.Template/uri/https%3a%2f%2faka.ms%2fsentinelhoneytokenspolicy"
+		}
+	}
+}

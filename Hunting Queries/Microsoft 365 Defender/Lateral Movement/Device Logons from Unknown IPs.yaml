@@ -1,0 +1,26 @@
+id: a6d76204-efb2-4ccd-a068-d5a9e6876236
+name: Device Logons from Unknown IPs
+description: |
+  Device Logons from Unknown IP Addresses.
+  This query identifies device logons from IP addresses not associated with any machine in Defender ATP.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceLogonEvents
+  - DeviceNetworkInfo
+  - IdentityLogonEvents
+query: |
+  DeviceLogonEvents
+  | where RemoteIPType == "Public"
+  | join kind=leftanti (
+      DeviceNetworkInfo
+      | project NetworkInfo = todynamic(IPAddresses )
+      | mvexpand NetworkInfo
+      | project IpAddress = tostring(parse_json(NetworkInfo).IPAddress)
+      | distinct IpAddress
+  ) on $left.RemoteIP == $right.IpAddress // Removes any IP addresses assigned to a device
+  | join kind=leftanti (
+      IdentityLogonEvents
+      | where ISP != "INTERNAL_NETWORK"
+  ) on $left.RemoteIP == $right.IPAddress // Remove any IP addresses identified as internal by Microsoft Cloud App Security
+  | summarize EarliestEvent = min(Timestamp), LatestEvent = max(Timestamp), Instances = count(), DistinctMachines = dcount(DeviceId) by AccountDomain, AccountName, LogonType, RemoteIP, ActionType

@@ -1,0 +1,70 @@
+id: 42436753-9944-4d70-801c-daaa4d19ddd2
+name: A host is potentially running PowerShell to send HTTP(S) requests (ASIM Web Session schema)
+description: |
+  'This rule identifies a web request with a user agent header known to belong PowerShell. <br>You can add custom Powershell indicating User-Agent headers using a watchlist, for more information refer to the [UnusualUserAgents Watchlist](https://aka.ms/ASimUnusualUserAgentsWatchlist).<br><br>
+   This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'
+severity: Medium
+tags:
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/CiscoUmbrella/CiscoUmbrellaPowershellUserAgentDetected.yaml
+    version: 1.0.0
+  - Schema: ASimWebSession
+    SchemaVersion: 0.2.1
+requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandandControl
+  - DefenseEvasion
+query: |
+    let threatCategory="Powershell";
+    let knownUserAgentsIndicators = materialize(externaldata(UserAgent:string, Category:string)
+        [ @"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv"]
+            with(format="csv", ignoreFirstRecord=True));
+    let knownUserAgents=toscalar(knownUserAgentsIndicators | where Category==threatCategory | where isnotempty(UserAgent) | summarize make_list(UserAgent));
+    let customUserAgents=toscalar(_GetWatchlist("UnusualUserAgents") | where SearchKey==threatCategory | extend UserAgent=column_ifexists("UserAgent","") | where isnotempty(UserAgent) | summarize make_list(UserAgent));
+    let fullUAList = array_concat(knownUserAgents,customUserAgents);
+    _Im_WebSession(httpuseragent_has_any=fullUAList)
+    | project SrcIpAddr, Url, TimeGenerated,HttpUserAgent, SrcUsername
+
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SrcUsername
+
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Host {{SrcIpAddr}} is potentially running PowerShell'
+  alertDescriptionFormat: 'The host at address {{SrcIpAddr}} sent an HTTP request to the URL {{Url}} with the HTTP user agent header {{HttpUserAgent}}. This user agent is known to be used by PoerShell and indicates suspicious activity on the host.'
+customDetails:
+  UserAgent: HttpUserAgent
+
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.1.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Yaron
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

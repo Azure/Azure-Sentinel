@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionAzureFirewall",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Azure Firewall logs",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionAzureFirewall",
+            "query": "let parser = (disabled:bool=false) {\n    let AzureFirewallNetworkRuleLogs = \n        AzureDiagnostics\n        | where not(disabled)\n        | where Category == \"AzureFirewallNetworkRule\"\n        | where isnotempty(msg_s)\n        | project msg_s, OperationName, SubscriptionId, ResourceId, TimeGenerated, Type, _ResourceId;\n    let AzureFirewallSessionLogs = \n        AzureFirewallNetworkRuleLogs\n        | where OperationName in (\"AzureFirewallNetworkRuleLog\",\"AzureFirewallThreatIntelLog\")\n        | parse-where\n            msg_s with           NetworkProtocol:string \n            \" request from \"     SrcIpAddr:string\n            \":\"                  SrcPortNumber:int\n            \" to \"               DstIpAddr:string\n            \":\"                  DstPortNumber:int\n            \". Action: \"         DvcAction:string\n            \".\"                  *\n        | project-away msg_s\n        | extend NetworkIcmpCode = iff(NetworkProtocol startswith \"ICMP\", toint(extract (\"type=(\\\\d+)\",1,NetworkProtocol)), int(null))\n        | extend NetworkIcmpType = iff(isnotnull(NetworkIcmpCode), _ASIM_LookupICMPType(NetworkIcmpCode), \"\")\n        | extend NetworkProtocol = iff(NetworkProtocol startswith \"ICMP\", \"ICMP\", NetworkProtocol)\n        | extend EventSeverity = case (\n            OperationName  == \"AzureFirewallThreatIntelLog\", \"Medium\",\n            DvcAction == \"Deny\", \"Low\",\n            \"Informational\")\n        | extend EventResult = iff(DvcAction == \"Allow\", \"Success\", \"Failure\")\n        ;\n    let AzureFirewallNATLogs = \n        AzureFirewallNetworkRuleLogs\n        | where OperationName == \"AzureFirewallNatRuleLog\"\n        | parse-where\n            msg_s with           NetworkProtocol:string \n            \" request from \"     SrcIpAddr:string\n            \":\"                  SrcPortNumber:int\n            \" to \"               DstIpAddr:string\n            \":\"                  DstPortNumber:int\n            \" was DNAT'ed to \"   DstNatIpAddr:string\n            \":\"                  DstNatPortNumber:int\n        | project-away msg_s\n        | extend EventSeverity = \"Informational\"\n        | extend EventResult = \"Success\"\n        | extend DvcAction = \"Allow\"\n        ;\n    union AzureFirewallSessionLogs, AzureFirewallNATLogs\n    | extend\n        EventVendor=\"Microsoft\",\n        EventProduct=\"Azure Firewall\",\n        EventType=\"NetworkSession\",\n        EventCount=toint(1),\n        EventSchemaVersion=\"0.2.2\",\n        EventSchema=\"NetworkSession\",\n        DvcIdType = \"AzureResourceId\"\n    | project-rename\n        DvcSubscriptionId = SubscriptionId,\n        DvcId = ResourceId\n    // -- Aliases\n    | extend\n        IpAddr = SrcIpAddr,\n        Src = SrcIpAddr,\n        Dst = DstIpAddr,\n        Dvc = DvcId,\n        EventStartTime = TimeGenerated,\n        EventEndTime = TimeGenerated\n    | project-keep\n        Src*,\n        Dst*,\n        Event*,\n        Dvc*,\n        Network*,\n        IpAddr,\n        Type,\n        _ResourceId,\n        TimeGenerated\n};\nparser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

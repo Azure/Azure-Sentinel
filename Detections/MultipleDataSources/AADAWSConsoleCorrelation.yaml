@@ -25,12 +25,11 @@ relevantTechniques:
   - T1078
   - T1110
 query: |
-
   //Adjust this threshold to fit your environment
-  let signin_threshold = 5; 
+  let signin_threshold = 5;
   //Make a list of IPs with AAD signin failures above our threshold
   let aadFunc = (tableName:string){
-  let Suspicious_signins = 
+  let Suspicious_signins =
   table(tableName)
   | where ResultType !in ("0", "50125", "50140")
   | where IPAddress !in ("127.0.0.1", "::1")
@@ -41,18 +40,18 @@ query: |
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  let Suspicious_signins = 
+  let Suspicious_signins =
   union isfuzzy=true aadSignin, aadNonInt
   | summarize make_set(set_IPAddress);
   //See if any of those IPs have sucessfully logged into the AWS console
   AWSCloudTrail
   | where EventName =~ "ConsoleLogin"
-  | extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin) 
+  | extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)
   | where LoginResult =~ "Success"
   | where SourceIpAddress in (Suspicious_signins)
   | extend Reason = "Multiple failed AAD logins from IP address"
   | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)
-  | extend User = iif(isempty(UserIdentityUserName), UserIdentityType, UserIdentityUserName) 
+  | extend User = iif(isempty(UserIdentityUserName), UserIdentityType, UserIdentityUserName)
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, User, AWSRegion, SourceIpAddress, UserAgent, MFAUsed
   | extend timestamp = StartTimeUtc, AccountCustomEntity = User, IPCustomEntity = SourceIpAddress
 entityMappings:
@@ -64,5 +63,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

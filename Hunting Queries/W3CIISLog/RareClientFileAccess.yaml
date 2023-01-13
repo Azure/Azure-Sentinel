@@ -20,8 +20,12 @@ query: |
   let scriptExtensions = dynamic([".php", ".aspx", ".asp", ".cfml"]);
   let data = W3CIISLog
   | where csUriStem has_any(scriptExtensions)
-  //Exclude local addresses, needs editing to match your network configuration
-  | where cIP !startswith "10." and cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127." and cIP !startswith "172."
+  // find sucessfull connection 
+  |where scStatus == 200
+  //Exclude local addresses, needs editing to match your network configuration using ipv4_is_private operator
+  |where ipv4_is_private(cIP) == false and  cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
+  // excluded internal web page 
+  |where ipv4_is_private(sIP) == false   
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), makelist(cIP), count(TimeGenerated) by csUriStem, sSiteName, csUserAgent;
   data
   | mvexpand list_cIP
@@ -30,4 +34,19 @@ query: |
   | where dcount_list_cIP == clientThreshold 
   //Selects user agent strings that are probably browsers, comment out to see all
   | where csUserAgent startswith "Mozilla"
-  | extend timestamp = StartTime
+  | extend timestamp = StartTime, UserAgentCustomEntity = csUserAgent
+entityMappings:
+  - entityType: CloudLogonSession
+    fieldMappings:
+      - identifier: UserAgent
+        columnName: csUserAgent
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Thomas McElroy
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Other" ]

@@ -1,0 +1,273 @@
+Parser:
+  Title: DNS activity ASIM filtering parser for Microsoft DNS logs collected using NXlog
+  Version: '0.4'
+  LastUpdated: Dec 11 2022
+Product:
+  Name: MS DNS Events
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Microsoft DNS logs, collected using NXlog, to the ASIM Dns normalized schema.
+ParserName: vimDnsMicrosoftNXlog
+EquivalentBuiltInParser: _Im_Dns_MicrosoftNXlog
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ASimDnsMicrosoftNXLog = (
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
+    , disabled:bool=false
+    ){
+  let EventTypeTable=datatable(EventOriginalType:real,EventType:string)[
+      256, 'Query'
+    , 257, 'Query'
+    , 258, 'Query'
+    , 259, 'Query'
+    , 260, 'Query'
+    , 261, 'Query'
+    , 262, 'Query'
+    , 263, 'Dynamic update'
+    , 264, 'Dynamic update'
+    , 265, 'Zone XFR'
+    , 266, 'Zone XFR'
+    , 267, 'Zone XFR'
+    , 268, 'Zone XFR'
+    , 269, 'Zone XFR'
+    , 270, 'Zone XFR'
+    , 271, 'Zone XFR'
+    , 272, 'Zone XFR'
+    , 273, 'Zone XFR'
+    , 274, 'Zone XFR'
+    , 275, 'Zone XFR'
+    , 276, 'Zone XFR'
+    , 277, 'Dynamic update'
+    , 278, 'Dynamic update'
+    , 279, 'Query'
+    , 280, 'Query'
+  ];
+  let EventSubTypeTable=datatable(EventOriginalType:real,EventSubType:string)[
+    256, 'request'
+  , 257, 'response'
+  , 258, 'response'
+  , 259, 'response'
+  , 260, 'request'
+  , 261, 'response'
+  , 262, 'response'
+  , 263, 'request'
+  , 264, 'response'
+  , 265, 'request'
+  , 266, 'request'
+  , 267, 'response'
+  , 268, 'response'
+  , 269, 'request'
+  , 270, 'request'
+  , 271, 'response'
+  , 272, 'response'
+  , 273, 'request'
+  , 274, 'request'
+  , 275, 'response'
+  , 276, 'response'
+  , 277, 'request'
+  , 278, 'response'
+  , 279, 'response'
+  , 280, 'response'
+  ];
+  let EventResultTable=datatable(EventOriginalType:real,EventResult:string)[
+      256, 'NA'
+    , 257, 'Success'
+    , 258, 'Failure'
+    , 259, 'Failure'
+    , 260, 'NA'
+    , 261, 'NA'
+    , 262, 'Failure'
+    , 263, 'NA'
+    , 264, 'Based on RCODE'
+    , 265, 'NA'
+    , 266, 'NA'
+    , 267, 'Based on RCODE'
+    , 268, 'Based on RCODE'
+    , 269, 'NA'
+    , 270, 'NA'
+    , 271, 'Based on RCODE'
+    , 272, 'Based on RCODE'
+    , 273, 'NA'
+    , 274, 'NA'
+    , 275, 'Success'
+    , 276, 'Success'
+    , 277, 'NA'
+    , 278, 'Based on RCODE'
+    , 279, 'NA'
+    , 280, 'NA'
+  ];
+  let RCodeTable=datatable(DnsResponseCode:int,ResponseCodeName:string)[
+      0,'NOERROR'
+    , 1,'FORMERR'
+    , 2,'SERVFAIL'
+    , 3,'NXDOMAIN'
+    , 4,'NOTIMP'
+    , 5,'REFUSED'
+    , 6,'YXDOMAIN'
+    , 7,'YXRRSET'
+    , 8,'NXRRSET'
+    , 9,'NOTAUTH'
+    , 10,'NOTZONE'
+    , 11,'DSOTYPENI'
+    , 16,'BADVERS'
+    , 16,'BADSIG'
+    , 17,'BADKEY'
+    , 18,'BADTIME'
+    , 19,'BADMODE'
+    , 20,'BADNAME'
+    , 21,'BADALG'
+    , 22,'BADTRUNC'
+    , 23,'BADCOOKIE'
+  ];
+  let QTypeTable=datatable(DnsQueryType:int,QTypeName:string)[
+      0, 'Reserved'
+    , 1, 'A'
+    , 2, 'NS'
+    , 3, 'MD'
+    , 4, 'MF'
+    , 5, 'CNAME'
+    , 6, 'SOA'
+    , 7, 'MB'
+    , 8 ,'MG'
+    , 9 ,'MR'
+    , 10,'NULL'
+    , 11,'WKS'
+    , 12,'PTR'
+    , 13,'HINFO'
+    , 14,'MINFO'
+    , 15,'MX'
+    , 16,'TXT'
+    , 17,'RP'
+    , 18,'AFSDB'
+    , 19,'X25'
+    , 20,'ISDN'
+    , 21,'RT'
+    , 22,'NSAP'
+    , 23,'NSAP-PTR'
+    , 24,'SIG'
+    , 25,'KEY'
+    , 26,'PX'
+    , 27,'GPOS'
+    , 28,'AAAA'
+    , 29,'LOC'
+    , 30,'NXT'
+    , 31,'EID'
+    , 32,'NIMLOC'
+    , 33,'SRV'
+  ];
+  NXLog_DNS_Server_CL | where not(disabled)
+  | where EventID_d < 281
+  | project-rename 
+     EventOriginalType=EventID_d
+  | lookup EventTypeTable on EventOriginalType
+  | extend
+    eventtype = iff (eventtype == "lookup", "Query", eventtype)
+  //  Pre-parsing filtering:
+    | where
+      // Return empty list if response IPs are passed
+      (response_has_ipv4=='*')
+      and (array_length(response_has_any_prefix) ==0) 
+      and (eventtype=='*' or EventType == eventtype)   
+      and (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime) 
+      and (srcipaddr=='*' or Source_s==srcipaddr)
+      and (array_length(domain_has_any) ==0 or QNAME_s has_any (domain_has_any))
+      and (responsecodename=='*' or RCODE_s=~responsecodename)
+  // --
+  | project-rename
+      DnsFlags=Flags_s,
+      DnsQuery=QNAME_s,
+      DnsQueryType=QTYPE_s,
+      DnsResponseCode=RCODE_s,
+      DnsResponseName=PacketData_s,
+      Dvc=Hostname_s,
+      EventOriginalUid=GUID_g,
+      EventStartTime=EventTime_t,
+      SrcIpAddr=Source_s
+  | extend
+      DnsQuery=trim_end(".",DnsQuery),
+      DnsQueryType=toint(DnsQueryType),
+      DnsResponseCode=toint(DnsResponseCode),
+      SrcPortNumber=toint(Port_s),
+      DvcHostname=Dvc,
+      EventEndTime=EventStartTime,
+      EventProduct = "DNS Server",
+      EventSchemaVersion = "0.1.3",
+      EventVendor = "Microsoft",
+      EventSchema = "Dns",
+      EventCount = int(1),
+      NetworkProtocol=iff(TCP_s == "0","UDP","TCP"),
+      TransactionIdHex=tohex(toint(XID_s)),
+      DnsFlagsAuthenticated = tobool(AD_s),
+      DnsFlagsAuthoritative = tobool(AA_s),
+      DnsFlagsRecursionDesired = tobool(RD_s)
+  | lookup EventSubTypeTable on EventOriginalType
+  | lookup EventResultTable on EventOriginalType
+  | lookup RCodeTable on DnsResponseCode
+  | lookup QTypeTable on DnsQueryType
+  | extend
+      EventResultDetails = case (isnotempty(ResponseCodeName), ResponseCodeName
+        , DnsResponseCode between (3841 .. 4095), 'Reserved for Private Use'
+        , 'Unassigned'),
+      EventOriginalType = tostring(EventOriginalType)
+  | extend
+      Domain=DnsQuery,
+      DnsResponseCodeName=EventResultDetails,
+      DnsQueryTypeName = case (isnotempty(QTypeName), QTypeName
+        , DnsQueryType between (66 .. 98), 'Unassigned'
+        , DnsQueryType between (110 .. 248), 'Unassigned'
+        , DnsQueryType between (261 .. 32767), 'Unassigned'
+        , 'Unassigned'),
+       EventResult=iff (EventResult == "Based on RCODE", iff(DnsResponseCode == 0, "Success", "Failure"),EventResult)
+  | extend
+    // Aliases
+      IpAddr = SrcIpAddr,
+      Src = SrcIpAddr,
+    // Backward compatibility
+      Query = DnsQuery,
+      QueryType = DnsQueryType,
+      QueryTypeName = DnsQueryTypeName,
+      ResponseCode = DnsResponseCode,
+      ResponseCodeName = DnsResponseCodeName
+  | project-away
+      *_s, *_d, QTypeName, TenantId, SourceSystem, MG, ManagementGroupName, Computer, RawData
+  };
+  ASimDnsMicrosoftNXLog (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)

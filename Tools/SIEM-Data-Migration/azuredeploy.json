@@ -1,0 +1,398 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Deployment location"
+      }
+    },
+    "windowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2019-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "2016-Nano-Server",
+        "2016-Datacenter-with-Containers",
+        "2016-Datacenter",
+        "2019-Datacenter"
+      ],
+      "metadata": {
+        "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
+      }
+    },
+    "vmName": {
+      "type": "string",
+      "metadata": {
+        "title": "VM Name",
+        "description": "This is the name of the your VM"
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "testadmin",
+      "metadata": {
+        "description": "Username for the Virtual Machine."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the Virtual Machine."
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "metadata": {
+        "description": "New or Existing VNet Name"
+      }
+    },
+    "virtualNetworkNewOrExisting": {
+      "type": "string",
+      "metadata": {
+        "description": "Boolean indicating whether the VNet is new or existing"
+      }
+    },
+    "virtualNetworkAddressPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "VNet address prefix"
+      }
+    },
+    "virtualNetworkResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource group of the VNet"
+      }
+    },
+    "virtualMachineSize": {
+      "type": "string",
+      "metadata": {
+        "description": "The size of the VM"
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "New or Existing subnet Name"
+      }
+    },
+    "subnetAddressPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Subnet address prefix"
+      }
+    },
+    "platform": {
+        "type": "string",
+        "metadata": {
+            "description": "Target migration platform"
+        }
+    },
+    "storageAccountName": {
+        "type": "string",
+        "defaultValue": "dummyName",
+        "metadata": {
+            "description": "Name of the storage account"
+        }
+    },
+    "storageAccountType": {
+        "type": "string",
+        "defaultValue": "Standard",
+        "metadata": {
+            "description": "Type of storage account (Premium or Standard and replication)"
+        }
+    },
+    "adxClusterName": {
+        "type": "string",
+        "defaultValue": "contosoAdx",
+        "metadata": {
+            "description": "Name of the ADX Cluster"
+        }
+    },
+    "adxDbName": {
+        "type": "string",
+        "defaultValue": "contosoDb",
+        "metadata": {
+            "description": "ADX Database name"
+        }
+    },
+    "adxSku": {
+        "type": "string",
+        "defaultValue": "Dev(No SLA)_Standard_D11_v2",
+        "metadata": {
+            "description": "ADX cluster SKU"
+        }
+    },
+    "adxClusterSize": {
+        "type": "int",
+        "defaultValue": 1,
+        "metadata": {
+            "description": "ADX cluster size"
+        }
+    },
+    "workspaceName": {
+      "type": "string",
+      "defaultValue": "[concat('sentinel', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name of the Microsoft Sentinel workspace"
+      }
+    }
+  },
+  "variables": {
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'sawinvm')]",
+    "publicIPAddressName": "[concat(uniqueString(resourceGroup().id),'IP')]",
+    "vmName": "[parameters('vmName')]",
+    "nicName": "[concat(parameters('vmName'),'Nic')]",
+    "vnetId": {
+      "new": "[resourceId('Microsoft.Network/virtualNetworks',parameters('virtualNetworkName'))]",
+      "existing": "[resourceId(parameters('virtualNetworkResourceGroup'),'Microsoft.Network/virtualNetworks',parameters('virtualNetworkName'))]"
+    },
+    "subnetId": "[concat(variables('vnetId')[parameters('virtualNetworkNewOrExisting')],'/subnets/',parameters('subnetName'))]",
+    "publicIPAddressType": "Dynamic"
+  },
+  "resources": [
+    {
+      "condition": "[equals(parameters('virtualNetworkNewOrExisting'),'new')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2021-02-01",
+      "name": "[parameters('virtualNetworkName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('virtualNetworkAddressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('subnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetAddressPrefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+     "name": "networkSecurityGroup1",
+     "type": "Microsoft.Network/networkSecurityGroups",
+     "apiVersion": "2020-11-01",
+     "location": "[parameters('location')]",
+     "properties": {
+         "securityRules": [
+             {
+                 "name": "nsgRule1",
+                 "properties": {
+                     "description": "RDP",
+                     "protocol": "Tcp",
+                     "sourcePortRange": "*",
+                     "destinationPortRange": "3389",
+                     "sourceAddressPrefix": "*",
+                     "destinationAddressPrefix": "*",
+                     "access": "Allow",
+                     "priority": 100,
+                     "direction": "Inbound"
+                 }
+             }
+         ]
+     }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('publicIPAddressName')]",
+      "apiVersion": "2021-02-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[variables('nicName')]",
+      "apiVersion": "2021-02-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('publicIPAddressName'))]"
+              },
+              "subnet": {
+                "id": "[variables('subnetId')]"
+              }
+            }
+          }  
+        ],
+        "networkSecurityGroup": {
+            "id": "[resourceId('Microsoft.Network/networkSecurityGroups','networkSecurityGroup1')]"
+        },
+        "enableIPForwarding": true
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('publicIPAddressName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "Storage",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('vmName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', 'networkSecurityGroup1')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('virtualMachineSize')]"
+        },
+        "osProfile": {
+          "computerName": "[variables('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "[parameters('windowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "diskSizeGB": 1023,
+              "lun": 0,
+              "createOption": "Empty"
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true,
+            "storageUri": "[reference(resourceId('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))).primaryEndpoints.blob]"
+          }
+        }
+      }
+    },
+    {
+        "apiVersion": "2018-06-01",
+        "type": "Microsoft.Compute/virtualMachines/extensions",
+        "name": "[concat(variables('vmName'),'/downloadApps')]",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', variables('vmName'))]"
+        ],
+        "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "CustomScriptExtension",
+            "typeHandlerVersion": "1.8",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+                 "fileUris": [
+                    "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/SIEM-Data-Migration/installTools.ps1"
+                ],
+                "commandToExecute": "powershell -ExecutionPolicy Unrestricted -File installTools.ps1"
+            }
+        }
+    },
+    {
+        "condition": "[equals(parameters('storageAccountName'),'storage')]",
+        "type": "Microsoft.Storage/storageAccounts",
+        "apiVersion": "2021-06-01",
+        "name": "[parameters('storageAccountName')]",
+        "location": "[parameters('location')]",
+        "sku": {
+            "name": "[parameters('storageAccountType')]"
+        },
+        "kind": "StorageV2",
+        "properties": {}
+    },
+    {
+          "condition": "[equals(parameters('platform'),'adx')]",
+          "name": "[parameters('adxClusterName')]",
+          "type": "Microsoft.Kusto/clusters",
+          "sku": {
+              "name": "[parameters('adxSku')]",
+              "tier": "[if(startsWith(parameters('adxSku'),'Dev'),'Basic','Standard')]",
+              "capacity": "[parameters('adxClusterSize')]"
+          },
+          "apiVersion": "2020-09-18",
+          "location": "[parameters('location')]",
+          "properties": {
+              "trustedExternalTenants": [],
+              "enableDiskEncryption": false,
+              "enableStreamingIngest": false,
+              "enablePurge": false,
+              "enableDoubleEncryption": false,
+              "engineType": "V3"
+          }
+      },
+      {
+          "condition": "[equals(parameters('platform'),'adx')]",
+          "name": "[concat(parameters('adxClusterName'), '/', parameters('adxDbName'))]",
+          "type": "Microsoft.Kusto/clusters/databases",
+          "apiVersion": "2020-09-18",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+              "[resourceId('Microsoft.Kusto/clusters', parameters('adxClusterName'))]"
+          ],
+          "properties": {
+              "softDeletePeriodInDays": 365,
+              "hotCachePeriodInDays": 31
+          }
+      },
+      {
+            "condition": "[equals(parameters('platform'),'loganalytics')]",
+            "name": "[parameters('workspaceName')]",
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2020-08-01",
+            "location": "[parameters('location')]",
+            "properties": {
+                "retentionInDays": "90",
+                "sku": {
+                    "name": "pergb2018"
+                }
+            }
+      },
+      {
+            "condition": "[equals(parameters('platform'),'loganalytics')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/default')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/onboardingStates",
+            "apiVersion": "2021-10-01",
+            "properties": {
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+            ]
+      }
+  ]
+}

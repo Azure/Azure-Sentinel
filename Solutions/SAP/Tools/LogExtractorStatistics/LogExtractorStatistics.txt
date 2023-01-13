@@ -1,0 +1,206 @@
+*&---------------------------------------------------------------------*
+*& Report ZLOG_STATISTICS
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zlog_statistics.
+
+PARAMETERS:
+  strtdate LIKE sy-datum OBLIGATORY DEFAULT sy-datum,
+  enddate  LIKE sy-datum OBLIGATORY DEFAULT sy-datum.
+
+INITIALIZATION.
+
+START-OF-SELECTION.
+  PERFORM calc_audit_log_length.
+  PERFORM calc_change_documents.
+  PERFORM calc_application_log.
+
+*&---------------------------------------------------------------------*
+*&      Form  calc_application_log
+*&---------------------------------------------------------------------*
+FORM calc_application_log.
+  DATA: lv_lines_sel   TYPE i,
+        lv_lines_sel_s TYPE string,
+        msg            TYPE string.
+
+  NEW-LINE.
+  WRITE '"""""""""""""""""""""""""""""""""""""""""""""""""""""""""'.
+
+  SELECT COUNT(*)
+  INTO lv_lines_sel
+  FROM balhdr
+  WHERE aldate BETWEEN strtdate AND enddate.
+
+  lv_lines_sel_s = lv_lines_sel.
+
+  CLEAR msg.
+  CONCATENATE 'Found' lv_lines_sel_s 'lines from appplication log header between' strtdate 'and' enddate INTO msg SEPARATED BY space.
+  NEW-LINE.
+  WRITE msg.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  calc_change_documents
+*&---------------------------------------------------------------------*
+FORM calc_change_documents.
+  TYPES: BEGIN OF cdhdr_keys,
+           mandant    TYPE mandt,
+           objectclas TYPE cdobjectcl,
+           objectid   TYPE cdobjectv,
+           changenr   TYPE cdchangenr,
+         END OF cdhdr_keys.
+
+  DATA: lv_curr_date  TYPE datum,
+        lv_curr_year  TYPE datum,
+        msg           TYPE string,
+        lt_cdhdr_keys TYPE TABLE OF cdhdr_keys.
+
+
+  NEW-LINE.
+  WRITE '"""""""""""""""""""""""""""""""""""""""""""""""""""""""""'.
+
+  CLEAR msg.
+  CONCATENATE 'Getting data about change document from' strtdate 'to' enddate INTO msg SEPARATED BY space.
+  NEW-LINE.
+  WRITE msg.
+
+
+  DATA: lv_number_cdhdr   TYPE i,
+        lv_number_cdhdr_s TYPE string.
+
+  SELECT COUNT(*)
+  INTO lv_number_cdhdr
+  FROM cdhdr
+  WHERE udate BETWEEN strtdate AND enddate.
+
+  lv_number_cdhdr_s = lv_number_cdhdr.
+
+  CLEAR msg.
+  CONCATENATE lv_number_cdhdr_s 'rows selected from CDHDR' INTO msg SEPARATED BY space.
+  NEW-LINE.
+  WRITE msg.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  substract_months_from_date
+*&      Support maximum of 12 months
+*&
+*&---------------------------------------------------------------------*
+FORM substract_months_from_date USING    iv_months   TYPE i
+                                CHANGING c_date TYPE udate.
+  IF iv_months > 12.
+    RETURN.
+  ENDIF.
+
+  DATA: lv_year         TYPE i,
+        lv_year_n       TYPE numc4,
+        lv_month        TYPE i,
+        lv_month_n      TYPE numc2,
+        lv_day          TYPE i,
+        lv_day_n        TYPE numc2,
+        lv_month_to_sub TYPE i.
+
+  lv_month_to_sub = iv_months.
+
+  lv_year = c_date(4).
+  lv_month = c_date+4(2).
+  lv_day   = c_date+6(2).
+
+  IF iv_months > lv_month.
+    lv_year = lv_year - 1.
+    lv_month_to_sub = lv_month_to_sub - lv_month.
+    lv_month = 12 - lv_month_to_sub.
+  ELSE.
+    lv_month = lv_month - lv_month_to_sub.
+  ENDIF.
+
+  lv_year_n  = lv_year.
+  lv_month_n = lv_month.
+  lv_day_n   = lv_day.
+
+  CONCATENATE lv_year_n lv_month_n lv_day_n INTO c_date.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  calc_audit_log_length
+*&---------------------------------------------------------------------*
+FORM calc_audit_log_length.
+  DATA: lt_audit_files TYPE TABLE OF rsauflist,
+        ls_audit_files LIKE LINE OF lt_audit_files.
+
+  NEW-LINE.
+  WRITE '"""""""""""""""""""""""""""""""""""""""""""""""""""""""""'.
+
+  CALL FUNCTION 'RSAU_LIST_AUDIT_FILES'
+    TABLES
+      audit_file_list = lt_audit_files
+    EXCEPTIONS
+      io_error        = 1
+      no_authority    = 2
+      OTHERS          = 3.
+
+  CASE sy-subrc.
+    WHEN 0.
+      "Do nothing
+    WHEN 1.
+      NEW-LINE.
+      WRITE 'Error while reading audit_files, IO Error'.
+      RETURN.
+    WHEN 2.
+      NEW-LINE.
+      WRITE 'Error while reading audit_files, No authority - Object:S_ADMI_FCD, id:S_ADMI_FCD, value:AUDD'.
+      RETURN.
+    WHEN OTHERS.
+      NEW-LINE.
+      WRITE 'Error while reading audit_files'.
+      RETURN.
+  ENDCASE.
+
+  IF lt_audit_files IS INITIAL.
+    NEW-LINE.
+    WRITE 'No audit files were found, please check audit configuration'.
+    RETURN.
+  ENDIF.
+
+  DATA: min_date        TYPE datum,
+        max_date        TYPE datum,
+        number_of_files TYPE i,
+        msg             TYPE string,
+        log_len_sum     TYPE i,
+        log_len_sum_s   TYPE string.
+
+* Get min & max date.
+  SORT lt_audit_files BY mdate ASCENDING.
+  DESCRIBE TABLE lt_audit_files LINES number_of_files.
+
+  " Min.
+  CLEAR ls_audit_files.
+  READ TABLE lt_audit_files INDEX 1 INTO ls_audit_files.
+  min_date = ls_audit_files-mdate.
+
+  " Max.
+  CLEAR ls_audit_files.
+  READ TABLE lt_audit_files INDEX number_of_files INTO ls_audit_files.
+  max_date = ls_audit_files-mdate.
+
+  CLEAR msg.
+  NEW-LINE.
+  CONCATENATE 'audit log files from' min_date 'to' max_date 'found, now filtering between' strtdate 'and' enddate INTO msg SEPARATED BY space.
+  WRITE msg.
+
+  CLEAR ls_audit_files.
+  LOOP AT lt_audit_files INTO ls_audit_files WHERE mdate BETWEEN strtdate and enddate.
+    log_len_sum = log_len_sum + ls_audit_files-len.
+  ENDLOOP.
+
+  log_len_sum_s = log_len_sum.
+  CLEAR msg.
+  NEW-LINE.
+  CONCATENATE 'Found' log_len_sum_s 'bytes in AUDIT LOG' INTO msg SEPARATED BY space.
+  WRITE msg.
+
+ENDFORM.

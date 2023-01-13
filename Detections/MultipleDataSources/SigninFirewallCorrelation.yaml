@@ -1,7 +1,7 @@
 id: 157c0cfc-d76d-463b-8755-c781608cdc1a
 name: Cisco - firewall block but success logon to Azure AD
 description: |
-  'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins. 
+  'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins.
   Because the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect
   and could indicate credential compromise for the user account.'
 severity: Medium
@@ -24,21 +24,18 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-
-  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
   let aadFunc = (tableName:string){
   CommonSecurityLog
   | where DeviceVendor =~ "Cisco"
   | where DeviceAction =~ "denied"
-  | extend SourceIPType = iff(SourceIP matches regex PrivateIPregex,"private" ,"public" )
-  | where SourceIPType == "public"
+  | where ipv4_is_private(SourceIP) == false
   | summarize count() by SourceIP
   | join (
       // Successful signins from IPs blocked by the firewall solution are suspect
       // Include fully successful sign-ins, but also ones that failed only at MFA stage
       // as that supposes the password was sucessfully guessed.
     table(tableName)
-    | where ResultType in ("0", "50074", "50076") 
+    | where ResultType in ("0", "50074", "50076")
   ) on $left.SourceIP == $right.IPAddress
   | extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName
   };
@@ -54,5 +51,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
-kind: scheduled
+version: 1.0.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: timbMSFT
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Network" ]

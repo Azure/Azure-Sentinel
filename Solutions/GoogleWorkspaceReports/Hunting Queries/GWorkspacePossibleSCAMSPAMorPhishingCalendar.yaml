@@ -1,0 +1,31 @@
+id: 29ce9d14-5dab-11ec-bf63-0242ac130002
+name: GWorkspace - Possible SCAM/SPAM or Phishing via Calendar
+description: |
+  'Query searches possible SCAM/SPAM or phishing via calendar.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: GoogleWorkspaceReportsAPI
+    dataTypes:
+      - GWorkspaceActivityReports
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let OwnDomains = 
+  GWorkspaceActivityReports
+  | where TimeGenerated > ago(30d)
+  | where isnotempty(OwnerDomain) 
+  | summarize domain_lst = make_set(OwnerDomain);
+  GWorkspaceActivityReports
+  | where TimeGenerated > ago(24h)
+  | where isnotempty(OrganizerCalendarId) 
+  | extend UserDomain = extract(@"([a-zA-Z0-9.-_]+)@([a-zA-Z0-9.-]+)",2,OrganizerCalendarId)
+  | where UserDomain !in~ (OwnDomains)
+  | where ActorCallerType has "EXTERNAL_USER"
+  | extend AccountCustomEntity = OrganizerCalendarId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity

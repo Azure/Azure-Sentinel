@@ -1,0 +1,47 @@
+id: 2937bc6b-7cda-4fba-b452-ea43ba8e835f
+name:  Possible Resource-Based Constrained Delegation Abuse
+description: |
+  'This query identifies Active Directory computer objects modifications that allow an adversary to abuse the Resource-based constrained delegation. 
+  This query checks for event id 5136 that the Object Class field is "computer" and the LDAP Display Name is "msDS-AllowedToActOnBehalfOfOtherIdentity" which is an indicator of Resource-based constrained delegation.
+  Ref: https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1134
+query: |
+ SecurityEvent
+ | where EventID == 5136 
+ | parse EventData with * 'ObjectClass">' ObjectClass "<" *
+ | parse EventData with * 'AttributeLDAPDisplayName">' AttributeLDAPDisplayName "<" *
+ | where ObjectClass == "computer" and AttributeLDAPDisplayName == "msDS-AllowedToActOnBehalfOfOtherIdentity"
+ | parse EventData with * 'ObjectDN">' ObjectDN "<" *
+ | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SubjectAccount
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Vasileios Paschalidis
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

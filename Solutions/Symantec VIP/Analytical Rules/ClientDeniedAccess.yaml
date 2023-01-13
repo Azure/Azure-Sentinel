@@ -1,0 +1,44 @@
+id: a9956d3a-07a9-44a6-a279-081a85020cae
+name: ClientDeniedAccess
+description: |
+  'Creates an incident in the event a Client has an excessive amounts of denied access requests.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SymantecVIP
+    dataTypes: 
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess 
+relevantTechniques:
+  - T1110
+query: |
+
+  let threshold = 15;
+  let rejectedAccess = SymantecVIP
+  | where isnotempty(RADIUSAuth)
+  | where RADIUSAuth =~ "Reject"
+  | summarize Total = count() by ClientIP, bin(TimeGenerated, 15m)
+  | where Total > threshold
+  | project ClientIP;
+  SymantecVIP
+  | where isnotempty(RADIUSAuth)
+  | where RADIUSAuth =~ "Reject"
+  | join kind=inner rejectedAccess on ClientIP
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by ClientIP, User
+  | extend timestamp = StartTime, IPCustomEntity = ClientIP, AccountCustomEntity = User
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+status: Available
+kind: Scheduled

@@ -1,0 +1,44 @@
+id: 88f8fbc0-345d-458e-85f6-f73921d5ef50
+name: Certified Pre-Owned - backup of CA private key - rule 2
+description: |
+  This query identifies someone that performs a backup of they CA key.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1036
+query: |
+  SecurityEvent
+  // Fill in the machine name of your CA.
+  | where EventID == 5059 and Computer contains "<YOUR CA MACHINE NAME>"
+  | where EventData contains "%%2499" and EventData contains "%%2464"
+  | extend EventData=parse_xml(EventData)
+  | mv-apply d=EventData.EventData.Data on
+  (
+      where d["@Name"]=="KeyName"
+      | project KeyName=tostring(d["#text"])
+  )
+  | mv-apply d=EventData.EventData.Data on
+  (
+      where d["@Name"]=="SubjectUserName"
+      | project SubjectUserName=tostring(d["#text"])
+  )
+  | parse Account with "<YOUR DOMAIN NAME>\\" CleanAccount "$"
+  | where not(Computer startswith CleanAccount)
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.0
+kind: Scheduled

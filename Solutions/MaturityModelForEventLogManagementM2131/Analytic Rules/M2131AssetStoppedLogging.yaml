@@ -1,0 +1,34 @@
+id: 4be5b645-1d08-49e4-b58d-07294ff19223
+name: M2131_AssetStoppedLogging
+description: |
+  'This alert is designed to monitor assets within the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when a monitored asset fails to provide a heartbeat within 24 hours.'
+severity: Medium
+status: Available 
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let LastHeartbeatTime = Heartbeat
+  | summarize LastHeartbeat_Time = arg_max(TimeGenerated, *) by ResourceId;
+  Heartbeat
+  | where TimeGenerated > ago(14d)
+  | summarize LastHeartbeat_Hours = datetime_diff("hour",now(), max(TimeGenerated)) by ResourceId
+  | where ResourceId <> ""
+  | where ResourceId <> "None"
+  | join kind=inner (LastHeartbeatTime) on ResourceId
+  | where LastHeartbeat_Hours > 24
+  | project LastHeartbeat_Hours, LastHeartbeat_Time, Computer, ComputerIP, Category, OSType, OSName, ResourceId, SubscriptionId, ResourceGroup, RemoteIPCountry 
+  | sort by LastHeartbeat_Hours desc
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.0.0
+kind: Scheduled

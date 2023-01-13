@@ -5,14 +5,14 @@
 
 ## Objectives
 
-This module guides you through the Analytics Rule part in Azure Sentinel, and shows you how to create diffrent type of rules (Security Detections)
+This module guides you through the Analytics Rule part in Microsoft Sentinel, and shows you how to create diffrent type of rules (Security Detections)
 
 #### Prerequisites
 
-This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed on your Azure Sentinel instance.
+This module assumes that you have completed [Module 1](Module-1-Setting-up-the-environment.md), as the data and the artifacts that we will be using in this module need to be deployed on your Microsoft Sentinel instance.
 
 ### Exercise 1: Analytics Rules overview
-1. Open your newly created Azure sentinel instance.
+1. Open your newly created Microsoft Sentinel instance.
 2. On the left menu navigate to analytics and select **Rule template** section
 3. Review the analytics rules templates that ship with the product.
 4. On the analytics rule filter select **Data sources** and check **security Event**, review all the analytic rules on the above data source.
@@ -24,21 +24,21 @@ This module assumes that you have completed [Module 1](Module-1-Setting-up-the-e
 7. Review the rule defintion like tactics and severity.
 8. Press **Next: Set rule logic** in the bottom of the page 
 9. in the rule logic screen, you have the ability to create or modify the rule KQL query, control of the entity mapping and define the scheduling and lookback time range.
-10. After you reviewed the rule configuration options, close this page and navigate back to the main azure sentinel Overview screen 
+10. After you reviewed the rule configuration options, close this page and navigate back to the main Microsoft Sentinel Overview screen 
 
 ### Exercise 2: Enable Microsoft incident creation rule
 
-Azure Sentinel is a cloud-native SIEM and as such, it acts as single pane of glass for alerts and event correlation. 
+Microsoft Sentinel is a cloud-native SIEM and as such, it acts as single pane of glass for alerts and event correlation. 
 For this purpose, and to be able to ingest and surafce alerts from Microsoft Security Products, we create a **Microsoft incident creation rule**.
 In this exercise, we will review this feature and create one example rule with a filtering option to help the analyst deal with alert fatigue.
 
-1. In Azure Sentinel main page press on the **Analytics** section.
+1. In Microsoft Sentinel main page press on the **Analytics** section.
 2. In the top bar press on **+Create** and select **Microsoft incident creation rule**
 
 ![Select Microsoft incident creation rule](../Images/m3-microsoft-creation-rule.gif?raw=true)
 
-3. In the rule name enter **"Azure Defender only medium and high Alerts"** 
-4. In the **Microsoft security service** dropdown select **Azure Defender**
+3. In the rule name enter **"Defender for Cloud only medium and high Alerts"** 
+4. In the **Microsoft security service** dropdown select **Defender for Cloud**
 5. In the **Filter by severity** select **custom** and mark **High** and **Medium**
 
 ![Azure Defender Filter by severity](../Images/m3-microsoft-creation-rule02.gif?raw=true)
@@ -51,9 +51,9 @@ In this exercise, we will review this feature and create one example rule with a
 
 ### Exercise 3: Review Fusion Rule (Advanced Multistage Attack Detection)
 
-Fusion rule is a unique kind of detection rule. With Fusion rule, Azure Sentinel can automatically detect multistage attacks by identifying combinations of anomalous behaviors and suspicious activities That are observed at various stages of the kill-chain.
+Fusion rule is a unique kind of detection rule. With Fusion rule, Microsoft Sentinel can automatically detect multistage attacks by identifying combinations of anomalous behaviors and suspicious activities That are observed at various stages of the kill-chain.
 
-In this exercise we will learn how to distinguish and review **Fusion rule** in Azure Sentinel.
+In this exercise we will learn how to distinguish and review **Fusion rule** in Microsoft Sentinel.
 
 1. In the analytics page rule template tab, use the **Rule Type** filter and select **Fusion**
 
@@ -71,11 +71,11 @@ In the below example we are seeing 2 low severity alerts from **Azure Active Dir
 
 ![fustion alert story](../Images/m3-fusion03.gif?raw=true)
 
-### Exercise 4: Create Azure sentinel custom analytics rule
+### Exercise 4: Create Microsoft Sentinel custom analytics rule
 
 Your Security consult notify you about this thread https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/
 Base on the attack vector and the organization risk he recommend you to create detection rule for this malicious activity.
-In this exercise you will use Azure sentinel analytics rule wizard to create new detection.
+In this exercise you will use Microsoft Sentinel analytics rule wizard to create new detection.
 
 1. Review the article in the above link and understand what is the data source that will be part of the detection.
 2. Check if this operation are capture as part of your collection strategy:
@@ -83,7 +83,7 @@ In this exercise you will use Azure sentinel analytics rule wizard to create new
 
 **important note: in this lab we are using custom logs that replace the Out-off-the-box tables** 
 
-- Run the search query below to see the list of operation Azure sentinel cupture in the last 24hr 
+- Run the search query below to see the list of activities Microsoft Sentinel captured in the last 24hr 
 	
     ```powershell
 	OfficeActivity_CL
@@ -136,10 +136,10 @@ To make your SOC more productive, save analyst time and effectively triage newly
 
 - In the **Alert Name Format** copy the above dynamic title **"Malicious Inbox Rule, affected user {{UserId__s}}"**
 
-4. In the **Query scheduling** set the **run query every** to **5 minutes** and the **Lookup data to last 12 Hours** (This scheduling are not ideal for production environment and should be tune).
+4. In the **Query scheduling** set the **run query every** to **5 minutes** and the **Lookup data to last 12 Hours** (This scheduling might not be ideal for production environment and should be tune). If you deployed the lab more than 12 hours ago, you will need to change the lookback period.
 5. In the **Suppression** leave it on **Off**
 6. Press the **Next:Incident settings(Preview)** 
-7. As your SOC is under stress, we want to reduce the number of alerts and be sure that when analyst handle a specific incident, he/she will see all related events or other incidents related to the same attack story. For that we will **implement Alert grouping** feature. to do so, follow the steps below: 
+7. As your SOC is under stress, we want to reduce the number of alerts and be sure that when analyst handle a specific incident, he/she will see all related events or other incidents related to the same attack story. For that we will **implement Alert grouping** feature. To do so, follow the steps below: 
 
 - In the **Incident settings (Preview)** under **Alert grouping** change it to **Enabled**.
 - Modify the **Limit the group to alerts created within the selected time frame** to **12 hours**.
@@ -153,7 +153,7 @@ To make your SOC more productive, save analyst time and effectively triage newly
 After we created the custom analytics rule that detect us for  malicious inbox rule rules.
 Let's review the incident that was created from this analytics rule.
 	
-1. On the main Azure Sentinel main page, select **incidents** and review the incident page
+1. On the main Microsoft Sentinel main page, select **incidents** and review the incident page
 2. Locate a new incident with title **"Malicious Inbox Rule, affected user AdeleV@contoso.OnMicrosoft.com"** notice that the name adapt and the effected user name added to the incident name.
 3. In the right pane we can review the incident preview, this view will gave us high level overview on the incident and the entity that related to it.
 
