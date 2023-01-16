@@ -12,7 +12,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         console.log(`filePath is ${filePath}`)
         const searchText = "Azure Sentinel"
         const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
-        const hasTargetProductAzureSentinel = fileContent.includes("''targetProduct'': ''Azure Sentinel''")
+        const hasTargetProductAzureSentinel = fileContent.includes('"targetProduct": "Azure Sentinel"')
 
         console.log(`hasAzureSentinelText is ${hasAzureSentinelText}`)
         console.log(`hasTargetProductAzureSentinel is ${hasTargetProductAzureSentinel}`)
