@@ -11,7 +11,7 @@ You can see a sample of a generated JSON ARM Hunting Template for Sentinel here 
 
 ## Prerequisites
 
-You will need an existing Microsoft Sentinel workspace, connected to a GitHub repository for [Deploying Custom Content from your repository](https://learn.microsoft.com/en-us/azure/sentinel/ci-cd?tabs=github).
+You will need an existing Microsoft Sentinel workspace, connected to a GitHub repository for [Deploying Custom Content from your repository](https://learn.microsoft.com/en-us/azure/sentinel/ci-cd?tabs=github). Make sure you have a Hunting folder within your Github repository to hold the ARM templates.
 
 You will need [Defender for Endpoint alerts Syncronized to Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/microsoft-365-defender-sentinel-integration) which populates the required SecurityAlerts table in Sentinel. 
 
