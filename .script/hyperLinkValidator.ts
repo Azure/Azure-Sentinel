@@ -41,7 +41,10 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                     var isGithubLink = false;
                     if (link.includes('https://raw.githubusercontent.com') || link.includes('https://github.com'))
                     {
-                        isGithubLink = true;
+                        if (!link.includes('&&sudo'))
+                        {
+                            isGithubLink = true;
+                        }
                     }
 
                     if (isGithubLink)
@@ -66,6 +69,10 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         {
                             console.log(`Skipping Hyperlink validation for '${link}' in file path : '${filePath}'`);
                         }
+                    }
+                    else
+                    {
+                        console.log(`Skipping Hyperlink validation for '${link}' in file path : '${filePath}'`);
                     }
                 }
             }
