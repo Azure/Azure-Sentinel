@@ -12,7 +12,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         const replaceText = '"targetProduct": "Azure Sentinel"';
 
         const hasTargetProductAzureSentinel = fileContent.includes(replaceText);
-        const replacedFileContent = fileContent.replace(replaceText, "");
+        const replacedFileContent = fileContent.replaceAll(replaceText, "");
         console.log(replacedFileContent);
 
         const hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
