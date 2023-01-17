@@ -52,14 +52,16 @@ This logic app uses a System Managed Identity to access secrets from Key Vault. 
 
 Steps to give "Managed Identity" access to Keyvault
 
-•	Select the Keyvault resource where you have stored your Github Personal Access Token secret.
-•	Click on Access policies Blade.
-•	Click on Create.
-•	Under Secret permissions columun, Select Get and List from "Secret Management Operations".
-•	Click next to go to Principal tab and choose your deployed playbook name.
-•	Click Next leave application tab as it is.
-•	Click Review and create.
-•	Click Create.
+Select the Keyvault resource where you have stored your Github Personal Access Token secret.
+Click on Access policies Blade.
+Click on Create.
+Under Secret permissions columun, Select Get and List from "Secret Management Operations".
+Click next to go to Principal tab and choose your deployed playbook name.
+Click Next leave application tab as it is.
+Click Review and create.
+Click Create.
+
+Your access policy should look like the below snapshot.
 ![Keyvault-access-policy](./Media/keyvault-access-policy.png)
 
 
