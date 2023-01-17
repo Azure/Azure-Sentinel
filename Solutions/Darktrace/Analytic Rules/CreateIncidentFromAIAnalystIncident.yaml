@@ -7,27 +7,30 @@ requiredDataConnectors:
   - connectorId: DarktraceRESTConnector
     dataTypes:
       - darktrace_model_alerts_CL
-queryFrequency: 5m
-queryPeriod: 5m
-triggerOperator: gt
-triggerThreshold: 0
 tactics: [] # no tactics are ingested for AIA events at the moment 
 relevantTechniques: []
 query: |
-  darktrace_model_alerts_CL
-  | where dtProduct_s == "AI Analyst"
+  darktrace_model_alerts_CL //anything starting with 'Dt' is not an ASIM mapping 
+  | where dtProduct_s =="AI Analyst"
   | project-rename  EventStartTime=startTime_s
   | project-rename EventEndTime = endTime_s
-  | project-rename NetworkRuleName=title_s
-  | project-rename CurrentGroup=externalId_g //externalId is the Current Group ID from Darktrace 
+  | project-rename NetworkRuleName=title_s //incident event name
+  | project-rename DtCurrentGroup=externalId_g //externalId is the Current Group ID from Darktrace 
   | project-rename ThreatCategory=dtProduct_s
-  | extend ThreatRiskLevel=score_d //This is the event score, which is different from the GroupScore
+  | project-rename  ThreatRiskLevel=score_d //incident event score (not the group score)
+  | extend EventVendor = "Darktrace"
+  | extend EventProduct = "Darktrace DETECT"
   | project-rename SrcHostname=hostname_s
-  | project-rename DarktraceLink=url_s
-  | project-rename Summary=summary_s
-  | project-rename GroupScore=groupScore_d
-  | project-rename GroupCategory=groupCategory_s
-  | project-rename SrcDeviceName=bestDeviceName_s
+  | project-rename SrcIpAddr=deviceIP_s
+  | project-rename DtURL=url_s
+  | project-rename DtSummary=summary_s //summary for the incident event 
+  | project-rename DtGroupScore=groupScore_d
+  | project-rename DtGroupCategory=groupCategory_s // 3 possible catgrs: compliance, suspicious, critical
+  | extend DtSentinelCategory=DtGroupCategory
+  | extend DtSentinelCategory=replace_regex(DtSentinelCategory, @'compliance', @'Low')
+  | extend DtSentinelCategory=replace_regex(DtSentinelCategory, @'suspicious', @'Medium')
+  | extend DtSentinelCategory=replace_regex(DtSentinelCategory, @'critical', @'High')
+  | project-rename DtSrcDeviceName=bestDeviceName_s, DtIndentifier=identifier_s, ActivityID=activityId_s, DtGroupingID=groupingId_s, DtGroupByActivity=groupByActivity_b, DtSummaryFirstSentence=summaryFirstSentence_s, DtNewEvent=newEvent_b, DtCGLegacy=currentGroup_s, DtGroupPreviousGroups=groupPreviousGroups_s, DtTime=time_s, DtSeverity=Severity, DtLongitude=longitude_d, DtLatitude=latitude_d 
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 entityMappings: 
@@ -35,23 +38,42 @@ entityMappings:
    fieldMappings:
     - identifier: "HostName"
       columnName: "SrcDeviceName"
+ - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
 customDetails:
-  EventStartTime: EventStartTime
-  Title: NetworkRuleName
-  CurrentGroupID: CurrentGroup
-  EventScore: ThreatRiskLevel
-  IncidentSummary: Summary
-  DarktraceLink: DarktraceLink
-  EventEndTime: EventEndTime
-  GroupScore: GroupScore
-  GroupCategory: GroupCategory
-  SrcDeviceName: SrcDeviceName
+  EventStartTime: EventStartTime,
+  EventEndTime: EventEndTime,
+  NetworkRuleName: NetworkRuleName,
+  DtCurrentGroup: DtCurrentGroup,
+  ThreatCategory: ThreatCategory,
+  ThreatRiskLevel: ThreatRiskLevel,
+  SrcIpAddr: SrcIpAddr,
+  SrcHostname: SrcHostname,
+  DtURL: DtURL,
+  DtSummary: DtSummary,
+  DtGroupScore: DtGroupScore,
+  DtGroupCategory: DtGroupCategory,
+  DtSentinelCategory: DtSentinelCategory,
+  DtSrcDeviceName: DtSrcDeviceName,
+  DtNewEvent: DtNewEvent,
+  DtSeverity: DtSeverity
 alertDetailsOverride: 
-  alertDisplayNameFormat: '{{NetworkRuleName}}'
-  alertDescriptionFormat: '{{Summary}}'
+  alertDisplayNameFormat: 'Darktrace: {{ThreatRiskLevel}} - {{NetworkRuleName}}'
+  alertDescriptionFormat: '{{DtSummary}}'
   alertTacticsColumnName: 
-  alertSeverityColumnName: 
-version: 1.0.0
+  alertSeverityColumnName: DtSentinelCategory
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: DtURL
+    - alertProperty: ProviderName
+      value: EventVendor
+    - alertProperty: ProductName
+      value: EventProduct
+    - alertProperty: ProductComponentName
+      value: ThreatCategory
+version: 1.1.0
 kind: NRT               
 
 
