@@ -20,6 +20,7 @@ You will need to generate a [Personal Access Token](https://docs.github.com/en/a
 You will need your Personal Access Token from GitHub stored in Keyvault and have the Secret Identifier (URL) of the secret handy.
 
 You can retrieve your Secret Identifier (URL) by opening the secret and copying the displayed Secret Identifier value as shown in the example below.
+
 ![Secret](./Media/secret-identifier.png)
 
 ## Step 1: Deploy this logic app to your organization
