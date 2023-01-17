@@ -9,12 +9,22 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     {
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel"
-        const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
-        const hasTargetProductAzureSentinel = fileContent.includes('"targetProduct": "Azure Sentinel"')
+        const replaceText = '"targetProduct": "Azure Sentinel"';
 
-        if (hasAzureSentinelText && !hasTargetProductAzureSentinel)
+        const hasTargetProductAzureSentinel = fileContent.includes(replaceText);
+        const replacedFileContent = fileContent.replace(replaceText, "");
+        const hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
+
+        if (hasAzureSentinelText)
         {
-            throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
+            if (hasTargetProductAzureSentinel)
+            {
+                throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' except 'targetProduct' key-value pair in file '${filePath}'`);
+            }
+            else
+            {
+                throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
+            }
         }
     }
     return ExitCode.SUCCESS;
