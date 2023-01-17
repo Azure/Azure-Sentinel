@@ -128,11 +128,17 @@ class Auth0Connector:
                 'audience': self.audience
             }
         header = {'content-type': "application/x-www-form-urlencoded"}
+        logging.info("Request Headers : {header}")
+        logging.info("Request Data : {params}")
         resp = requests.post(self.domain + '/oauth/token', headers=header, data=params)
+        logging.log("Authentication token response : {resp}")
+
         try:
             token = resp.json()['access_token']
         except KeyError:
             raise Exception('Token not provided.')
+        except Exception as E:
+            logging.error("Exception while parsing token : {E}")
         return token
 
     def _get_header(self):
