@@ -41,10 +41,13 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                     var isGithubLink = false;
                     if (link.includes('https://raw.githubusercontent.com') || link.includes('https://github.com'))
                     {
-                        if (!link.includes('&&sudo'))
-                        {
-                            isGithubLink = true;
-                        }
+                        isGithubLink = true;
+                    }
+
+                    if (link.includes('&&sudo'))
+                    {
+                        //IGNORE HYPERLINKS WHICH HAS &&SUDO IN IT
+                        isGithubLink = false;
                     }
 
                     if (isGithubLink)
