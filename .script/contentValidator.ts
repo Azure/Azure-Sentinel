@@ -15,23 +15,16 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         const replacedFileContent = fileContent.replace(replaceText, "");
         const hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
 
-        console.log(`hasAzureSentinelText is ${hasAzureSentinelText}`)
         if (hasAzureSentinelText)
         {
             if (hasTargetProductAzureSentinel)
             {
-                console.log(`Inside of if condition - has tag`);
-                throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' except targetProduct key-value pair in file '${filePath}'`);
+                throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' except 'targetProduct' key-value pair in file '${filePath}'`);
             }
             else
             {
-                console.log(`Inside of if condition - no tag`);
                 throw new Error(`Please update text from 'Azure Sentinel' to 'Microsoft Sentinel' in file '${filePath}'`);
             }
-        }
-        else
-        {
-            console.log(`Inside of else condition`)
         }
     }
     return ExitCode.SUCCESS;
