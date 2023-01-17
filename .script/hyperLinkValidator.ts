@@ -44,6 +44,12 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         isGithubLink = true;
                     }
 
+                    if (link.includes('&&sudo'))
+                    {
+                        //IGNORE HYPERLINKS WHICH HAS &&SUDO IN IT
+                        isGithubLink = false;
+                    }
+
                     if (isGithubLink)
                     {
                         const pr = await GetPRDetails();
@@ -66,6 +72,10 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                         {
                             console.log(`Skipping Hyperlink validation for '${link}' in file path : '${filePath}'`);
                         }
+                    }
+                    else
+                    {
+                        console.log(`Skipping Hyperlink validation for '${link}' in file path : '${filePath}'`);
                     }
                 }
             }
