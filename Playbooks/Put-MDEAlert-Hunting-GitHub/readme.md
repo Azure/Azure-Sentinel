@@ -50,6 +50,19 @@ Select the following image to sign in with your Azure account and open the logic
 
 This logic app uses a System Managed Identity to access secrets from Key Vault. As a prerequisite you must have a Key Vault created with your GitHub API Key stored and give this Logic App's System Managed Identity the ability to Read the associated Secret at the Key Vault Git Hub Credentials URL. To learn more about how to use managed identities within Logic Apps, see the article [**Logic Apps and Managed Identities**](https://docs.microsoft.com/azure/logic-apps/create-managed-service-identity).
 
+Steps to give "Managed Identity" access to Keyvault
+
+•	Select the Keyvault resource where you have stored your Github Personal Access Token secret.
+•	Click on Access policies Blade.
+•	Click on Create.
+•	Under Secret permissions columun, Select Get and List from "Secret Management Operations".
+•	Click next to go to Principal tab and choose your deployed playbook name.
+•	Click Next leave application tab as it is.
+•	Click Review and create.
+•	Click Create.
+![Keyvault-access-policy](./Media/keyvault-access-policy.png)
+
+
 > [!WARNING]
 > Ensure you follow best practices regarding managing secrets within Logic apps by using secure inputs and outputs as documented in the article, [Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app).
 
