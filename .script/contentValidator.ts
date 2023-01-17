@@ -10,7 +10,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel"
         const hasAzureSentinelText = fileContent.toLowerCase().includes(searchText.toLowerCase());
-        const hasTargetProductAzureSentinel = fileContent.includes("''targetProduct'': ''Azure Sentinel''")
+        const hasTargetProductAzureSentinel = fileContent.includes('"targetProduct": "Azure Sentinel"')
 
         if (hasAzureSentinelText && !hasTargetProductAzureSentinel)
         {
