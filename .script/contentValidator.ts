@@ -9,10 +9,11 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     {
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel"
-        const replaceText = '"targetProduct": "Azure Sentinel"';
+        const searchTargetProductAzureSentinelTag = '"targetProduct": "Azure Sentinel"';
+        const replaceTextTargetProductTag = /"targetProduct": "Azure Sentinel"/gi
 
-        const hasTargetProductAzureSentinel = fileContent.includes(replaceText);
-        const replacedFileContent = fileContent.replace(replaceText, "");
+        const hasTargetProductAzureSentinel = fileContent.includes(searchTargetProductAzureSentinelTag);
+        const replacedFileContent = fileContent.replace(replaceTextTargetProductTag, "");
         const hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
 
         if (hasAzureSentinelText)
