@@ -76,7 +76,11 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 		
 		# Populate settings.json	
 		if [ -f "$settingsjson" ]; then
-			echo "$(jq '.auto_update = true' "$settingsjson")" > "$settingsjson"
+			if [ ! -s "$settingsjson" ]; then
+				echo $UPDATEPOLICY> "$settingsjson"
+			else
+				echo "$(jq '.auto_update = true' "$settingsjson")" > "$settingsjson"
+			fi	
 		else
 			echo $UPDATEPOLICY> "$settingsjson"
 		fi

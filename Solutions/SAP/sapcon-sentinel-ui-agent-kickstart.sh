@@ -428,8 +428,9 @@ if [ ! $? -eq 0 ]; then
 	exit 1
 fi
 
-#populate settings.json
-echo $UPDATEPOLICY> "$sysfileloc/$settingsjson"
+# Commenting out the following lines as they are not required for now
+# #populate settings.json
+# echo $UPDATEPOLICY> "$sysfileloc/$settingsjson"
 
 log 'System information Has been Updated'
 
