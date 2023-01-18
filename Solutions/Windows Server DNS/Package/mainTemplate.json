@@ -56,22 +56,22 @@
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
     "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
     "_workbookContentId1": "[variables('workbookContentId1')]",
-    "analyticRuleVersion1": "1.0.0",
+    "analyticRuleVersion1": "1.0.1",
     "analyticRulecontentId1": "a0907abe-6925-4d90-af2b-c7e89dc201a6",
     "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
     "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
     "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]",
-    "analyticRuleVersion2": "1.0.0",
+    "analyticRuleVersion2": "1.0.1",
     "analyticRulecontentId2": "15ae38a2-2e29-48f7-883f-863fb25a5a06",
     "_analyticRulecontentId2": "[variables('analyticRulecontentId2')]",
     "analyticRuleId2": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId2'))]",
     "analyticRuleTemplateSpecName2": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId2')))]",
-    "analyticRuleVersion3": "1.0.0",
+    "analyticRuleVersion3": "1.0.1",
     "analyticRulecontentId3": "0d76e9cf-788d-4a69-ac7d-f234826b5bed",
     "_analyticRulecontentId3": "[variables('analyticRulecontentId3')]",
     "analyticRuleId3": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId3'))]",
     "analyticRuleTemplateSpecName3": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId3')))]",
-    "analyticRuleVersion4": "1.0.0",
+    "analyticRuleVersion4": "1.0.1",
     "analyticRulecontentId4": "a83ef0f4-dace-4767-bce3-ebd32599d2a0",
     "_analyticRulecontentId4": "[variables('analyticRulecontentId4')]",
     "analyticRuleId4": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId4'))]",
@@ -155,7 +155,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "Windows Server DNS data connector with template version 2.0.1",
+        "description": "Windows Server DNS data connector with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -339,7 +339,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "DnsWorkbook Workbook with template version 2.0.1",
+        "description": "DnsWorkbook Workbook with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -387,6 +387,23 @@
                   "email": "support@microsoft.com",
                   "tier": "Microsoft",
                   "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "DnsInventory",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "DnsEvents",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "DNS",
+                      "kind": "DataConnector"
+                    }
+                  ]
                 }
               }
             }
@@ -421,7 +438,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "DNS_HighNXDomainCount_detection_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "DNS_HighNXDomainCount_detection_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion1')]",
@@ -435,10 +452,10 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Identifies clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains\nwhere most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with \nNXDomain records in prior 10-day baseline period).",
+                "description": "Identifies clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains\nwhere most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with\nNXDomain records in prior 10-day baseline period).",
                 "displayName": "Potential DGA detected",
                 "enabled": false,
-                "query": "\nlet starttime = 10d;\nlet endtime = 1d;\nlet threshold = 100;\nlet nxDomainDnsEvents = DnsEvents \n| where ResultCode == 3 \n| where QueryType in (\"A\", \"AAAA\")\n| where ipv4_is_match(\"127.0.0.1\", ClientIP) == False\n| where Name !contains \"/\"\n| where Name contains \".\";\nnxDomainDnsEvents\n| where TimeGenerated > ago(endtime)\n| extend sld = tostring(split(Name, \".\")[-2])\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(sld) by ClientIP\n| where dcount_sld > threshold\n// Filter out previously seen IPs\n| join kind=leftanti (nxDomainDnsEvents\n    | where TimeGenerated between(ago(starttime)..ago(endtime))\n    | extend sld = tostring(split(Name, \".\")[-2])\n    | summarize dcount(sld) by ClientIP\n    | where dcount_sld > threshold ) on ClientIP\n// Pull out sample NXDomain responses for those remaining potentially infected IPs\n| join kind = inner (nxDomainDnsEvents | summarize by Name, ClientIP) on ClientIP\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), sampleNXDomainList=make_list(Name, 100)  by ClientIP, dcount_sld\n| extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP\n",
+                "query": "let starttime = 10d;\nlet endtime = 1d;\nlet threshold = 100;\nlet nxDomainDnsEvents = DnsEvents\n| where ResultCode == 3\n| where QueryType in (\"A\", \"AAAA\")\n| where ipv4_is_match(\"127.0.0.1\", ClientIP) == False\n| where Name !contains \"/\"\n| where Name contains \".\";\nnxDomainDnsEvents\n| where TimeGenerated > ago(endtime)\n| extend sld = tostring(split(Name, \".\")[-2])\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(sld) by ClientIP\n| where dcount_sld > threshold\n// Filter out previously seen IPs\n| join kind=leftanti (nxDomainDnsEvents\n    | where TimeGenerated between(ago(starttime)..ago(endtime))\n    | extend sld = tostring(split(Name, \".\")[-2])\n    | summarize dcount(sld) by ClientIP\n    | where dcount_sld > threshold ) on ClientIP\n// Pull out sample NXDomain responses for those remaining potentially infected IPs\n| join kind = inner (nxDomainDnsEvents | summarize by Name, ClientIP) on ClientIP\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), sampleNXDomainList=make_list(Name, 100)  by ClientIP, dcount_sld\n| extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P10D",
                 "severity": "Medium",
@@ -460,13 +477,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -529,7 +546,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "DNS_HighReverseDNSCount_detection_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "DNS_HighReverseDNSCount_detection_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion2')]",
@@ -546,7 +563,7 @@
                 "description": "Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.\nAlert is generated if the IP performing such reverse DNS lookups was not seen doing so in the preceding 7-day period.",
                 "displayName": "Rare client observed with high reverse DNS lookup count",
                 "enabled": false,
-                "query": "\nlet starttime = 8d;\nlet endtime = 1d;\nlet threshold = 10;\nDnsEvents \n| where TimeGenerated > ago(endtime)\n| where Name contains \"in-addr.arpa\" \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(Name) by ClientIP\n| where dcount_Name > threshold\n| project StartTimeUtc, EndTimeUtc, ClientIP , dcount_Name \n| join kind=leftanti (DnsEvents \n    | where TimeGenerated between(ago(starttime)..ago(endtime))\n    | where Name contains \"in-addr.arpa\" \n    | summarize dcount(Name) by ClientIP, bin(TimeGenerated, 1d)\n    | where dcount_Name > threshold\n    | project ClientIP , dcount_Name \n) on ClientIP\n| extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP\n",
+                "query": "let starttime = 8d;\nlet endtime = 1d;\nlet threshold = 10;\nDnsEvents\n| where TimeGenerated > ago(endtime)\n| where Name contains \"in-addr.arpa\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(Name) by ClientIP\n| where dcount_Name > threshold\n| project StartTimeUtc, EndTimeUtc, ClientIP , dcount_Name\n| join kind=leftanti (DnsEvents\n    | where TimeGenerated between(ago(starttime)..ago(endtime))\n    | where Name contains \"in-addr.arpa\"\n    | summarize dcount(Name) by ClientIP, bin(TimeGenerated, 1d)\n    | where dcount_Name > threshold\n    | project ClientIP , dcount_Name\n) on ClientIP\n| extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P8D",
                 "severity": "Medium",
@@ -568,13 +585,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -637,7 +654,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName3'))]"
       ],
       "properties": {
-        "description": "DNS_Miners_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "DNS_Miners_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion3')]",
@@ -654,7 +671,7 @@
                 "description": "Identifies IP addresses that may be performing DNS lookups associated with common currency mining pools.",
                 "displayName": "DNS events related to mining pools",
                 "enabled": false,
-                "query": "\nDnsEvents\n| where Name contains \".\"\n| where Name has_any (\"monerohash.com\", \"do-dear.com\", \"xmrminerpro.com\", \"secumine.net\", \"xmrpool.com\", \"minexmr.org\", \"hashanywhere.com\", \n\"xmrget.com\", \"mininglottery.eu\", \"minergate.com\", \"moriaxmr.com\", \"multipooler.com\", \"moneropools.com\", \"xmrpool.eu\", \"coolmining.club\", \n\"supportxmr.com\", \"minexmr.com\", \"hashvault.pro\", \"xmrpool.net\", \"crypto-pool.fr\", \"xmr.pt\", \"miner.rocks\", \"walpool.com\", \"herominers.com\", \n\"gntl.co.uk\", \"semipool.com\", \"coinfoundry.org\", \"cryptoknight.cc\", \"fairhash.org\", \"baikalmine.com\", \"tubepool.xyz\", \"fairpool.xyz\", \"asiapool.io\", \n\"coinpoolit.webhop.me\", \"nanopool.org\", \"moneropool.com\", \"miner.center\", \"prohash.net\", \"poolto.be\", \"cryptoescrow.eu\", \"monerominers.net\", \"cryptonotepool.org\", \n\"extrmepool.org\", \"webcoin.me\", \"kippo.eu\", \"hashinvest.ws\", \"monero.farm\", \"supportxmr.com\", \"xmrpool.eu\", \"linux-repository-updates.com\", \"1gh.com\", \n\"dwarfpool.com\", \"hash-to-coins.com\", \"hashvault.pro\", \"pool-proxy.com\", \"hashfor.cash\", \"fairpool.cloud\", \"litecoinpool.org\", \"mineshaft.ml\", \"abcxyz.stream\", \n\"moneropool.ru\", \"cryptonotepool.org.uk\", \"extremepool.org\", \"extremehash.com\", \"hashinvest.net\", \"unipool.pro\", \"crypto-pools.org\", \"monero.net\", \n\"backup-pool.com\", \"mooo.com\", \"freeyy.me\", \"cryptonight.net\", \"shscrypto.net\")\n| extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer\n",
+                "query": "DnsEvents\n| where Name contains \".\"\n| where Name has_any (\"monerohash.com\", \"do-dear.com\", \"xmrminerpro.com\", \"secumine.net\", \"xmrpool.com\", \"minexmr.org\", \"hashanywhere.com\",\n\"xmrget.com\", \"mininglottery.eu\", \"minergate.com\", \"moriaxmr.com\", \"multipooler.com\", \"moneropools.com\", \"xmrpool.eu\", \"coolmining.club\",\n\"supportxmr.com\", \"minexmr.com\", \"hashvault.pro\", \"xmrpool.net\", \"crypto-pool.fr\", \"xmr.pt\", \"miner.rocks\", \"walpool.com\", \"herominers.com\",\n\"gntl.co.uk\", \"semipool.com\", \"coinfoundry.org\", \"cryptoknight.cc\", \"fairhash.org\", \"baikalmine.com\", \"tubepool.xyz\", \"fairpool.xyz\", \"asiapool.io\",\n\"coinpoolit.webhop.me\", \"nanopool.org\", \"moneropool.com\", \"miner.center\", \"prohash.net\", \"poolto.be\", \"cryptoescrow.eu\", \"monerominers.net\", \"cryptonotepool.org\",\n\"extrmepool.org\", \"webcoin.me\", \"kippo.eu\", \"hashinvest.ws\", \"monero.farm\", \"supportxmr.com\", \"xmrpool.eu\", \"linux-repository-updates.com\", \"1gh.com\",\n\"dwarfpool.com\", \"hash-to-coins.com\", \"hashvault.pro\", \"pool-proxy.com\", \"hashfor.cash\", \"fairpool.cloud\", \"litecoinpool.org\", \"mineshaft.ml\", \"abcxyz.stream\",\n\"moneropool.ru\", \"cryptonotepool.org.uk\", \"extremepool.org\", \"extremehash.com\", \"hashinvest.net\", \"unipool.pro\", \"crypto-pools.org\", \"monero.net\",\n\"backup-pool.com\", \"mooo.com\", \"freeyy.me\", \"cryptonight.net\", \"shscrypto.net\")\n| extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P1D",
                 "severity": "Low",
@@ -676,22 +693,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "HostCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -754,7 +771,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName4'))]"
       ],
       "properties": {
-        "description": "DNS_TorProxies_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "DNS_TorProxies_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion4')]",
@@ -771,7 +788,7 @@
                 "description": "Identifies IP addresses performing DNS lookups associated with common ToR proxies.",
                 "displayName": "DNS events related to ToR proxies",
                 "enabled": false,
-                "query": "\nDnsEvents\n| where Name contains \".\"\n| where Name has_any (\"tor2web.org\", \"tor2web.com\", \"torlink.co\", \"onion.to\", \"onion.ink\", \"onion.cab\", \"onion.nu\", \"onion.link\", \n\"onion.it\", \"onion.city\", \"onion.direct\", \"onion.top\", \"onion.casa\", \"onion.plus\", \"onion.rip\", \"onion.dog\", \"tor2web.fi\", \n\"tor2web.blutmagie.de\", \"onion.sh\", \"onion.lu\", \"onion.pet\", \"t2w.pw\", \"tor2web.ae.org\", \"tor2web.io\", \"tor2web.xyz\", \"onion.lt\", \n\"s1.tor-gateways.de\", \"s2.tor-gateways.de\", \"s3.tor-gateways.de\", \"s4.tor-gateways.de\", \"s5.tor-gateways.de\", \"hiddenservice.net\")\n| extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer\n",
+                "query": "DnsEvents\n| where Name contains \".\"\n| where Name has_any (\"tor2web.org\", \"tor2web.com\", \"torlink.co\", \"onion.to\", \"onion.ink\", \"onion.cab\", \"onion.nu\", \"onion.link\",\n\"onion.it\", \"onion.city\", \"onion.direct\", \"onion.top\", \"onion.casa\", \"onion.plus\", \"onion.rip\", \"onion.dog\", \"tor2web.fi\",\n\"tor2web.blutmagie.de\", \"onion.sh\", \"onion.lu\", \"onion.pet\", \"t2w.pw\", \"tor2web.ae.org\", \"tor2web.io\", \"tor2web.xyz\", \"onion.lt\",\n\"s1.tor-gateways.de\", \"s2.tor-gateways.de\", \"s3.tor-gateways.de\", \"s4.tor-gateways.de\", \"s5.tor-gateways.de\", \"hiddenservice.net\")\n| extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, HostCustomEntity = Computer\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P1D",
                 "severity": "Low",
@@ -793,22 +810,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "HostCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPCustomEntity"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -871,7 +888,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName5'))]"
       ],
       "properties": {
-        "description": "NRT_DNS_Related_To_Mining_Pools_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "description": "NRT_DNS_Related_To_Mining_Pools_AnalyticalRules Analytics Rule with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleVersion5')]",
@@ -906,22 +923,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "Computer"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "ClientIP"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -984,7 +1001,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName1'))]"
       ],
       "properties": {
-        "description": "DNS_CommonlyAbusedTLDs_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "DNS_CommonlyAbusedTLDs_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion1')]",
@@ -1076,7 +1093,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName2'))]"
       ],
       "properties": {
-        "description": "DNS_DomainAnomalousLookupIncrease_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "DNS_DomainAnomalousLookupIncrease_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion2')]",
@@ -1168,7 +1185,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName3'))]"
       ],
       "properties": {
-        "description": "DNS_FullNameAnomalousLookupIncrease_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "DNS_FullNameAnomalousLookupIncrease_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion3')]",
@@ -1260,7 +1277,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName4'))]"
       ],
       "properties": {
-        "description": "DNS_HighPercentNXDomainCount_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "DNS_HighPercentNXDomainCount_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion4')]",
@@ -1352,7 +1369,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName5'))]"
       ],
       "properties": {
-        "description": "DNS_HighReverseDNSCount_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "DNS_HighReverseDNSCount_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion5')]",
@@ -1444,7 +1461,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName6'))]"
       ],
       "properties": {
-        "description": "DNS_LongURILookup_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "DNS_LongURILookup_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion6')]",
@@ -1536,7 +1553,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName7'))]"
       ],
       "properties": {
-        "description": "DNS_WannaCry_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "DNS_WannaCry_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion7')]",
@@ -1628,7 +1645,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName8'))]"
       ],
       "properties": {
-        "description": "Solorigate-DNS-Pattern_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "Solorigate-DNS-Pattern_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion8')]",
@@ -1720,7 +1737,7 @@
         "[resourceId('Microsoft.Resources/templateSpecs', variables('huntingQueryTemplateSpecName9'))]"
       ],
       "properties": {
-        "description": "Solorigate-Encoded-Domain-URL_HuntingQueries Hunting Query with template version 2.0.1",
+        "description": "Solorigate-Encoded-Domain-URL_HuntingQueries Hunting Query with template version 2.0.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryVersion9')]",
@@ -1790,7 +1807,7 @@
       "apiVersion": "2022-01-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.1",
+        "version": "2.0.2",
         "kind": "Solution",
         "contentSchemaVersion": "2.0.0",
         "contentId": "[variables('_solutionId')]",
