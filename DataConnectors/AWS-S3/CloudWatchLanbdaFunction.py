@@ -5,7 +5,6 @@ import csv
 import time
 import pandas as pd
 from datetime import datetime
-import numpy as np
 
 logs = boto3.client('logs')
 s3 = boto3.resource('s3')
@@ -21,6 +20,11 @@ START_TIME_UTC = datetime(2023,1,17,6,40) # Please enter start time for exportin
 END_TIME_UTC = datetime(2023,1,19,6,58) # Please enter end time for exporting logs (year, month, day, hour, minutes) pay attention to time differences, here it should be UTC time
 
 def lambda_handler(event, context):
+    """
+    The function gets data from cloud watch and put it in the desired bucket in the required format for Sentinel.
+    :param event: object that contains information about the current state of the execution environment.
+    :param context: object that contains information about the current execution context.
+    """
     unix_start_time = int(time.mktime(START_TIME_UTC.timetuple()))*1000
     unix_end_time = int(time.mktime(END_TIME_UTC.timetuple()))*1000
     try:
