@@ -233,8 +233,7 @@ namespace Helios2Sentinel
             try
             {
                 var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-                var secret = secretClient.GetSecret(secretName);
-                return  secret.Value.Value;
+                return secretClient.GetSecret(secretName).Value.Value;
             }
             catch  (Exception ex)
             {

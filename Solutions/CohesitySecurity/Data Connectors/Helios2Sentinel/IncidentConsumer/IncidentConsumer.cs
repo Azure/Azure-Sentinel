@@ -73,8 +73,7 @@ namespace IncidentConsumer
         {
             Stream dataObjects = response.Content.ReadAsStreamAsync().Result;
             StreamReader reader = new StreamReader(dataObjects);
-            string responseObj = reader.ReadToEnd();
-            return responseObj;
+            return reader.ReadToEnd();
         }
 
         private static string DoPUT(string URI, string body, String token, ILogger log)
@@ -89,8 +88,7 @@ namespace IncidentConsumer
                 client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 HttpResponseMessage response = client.PutAsync(URI, jsonContent).Result;
-                string responseObj = GetResponseStream(response);
-                return responseObj;
+                return GetResponseStream(response);
             }
             catch (Exception ex)
             {

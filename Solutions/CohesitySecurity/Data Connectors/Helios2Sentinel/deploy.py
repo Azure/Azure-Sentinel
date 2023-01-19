@@ -16,6 +16,7 @@ def get_function_name_by_prefix(funNamePrefix):
 
 def publish_function_name_by_prefix(funNamePrefix, subFolder):
     function_name = get_function_name_by_prefix(funNamePrefix)
+    subprocess.run(['dotnet', 'clean'], cwd=subFolder)
     subprocess.run(['func', 'azure', 'functionapp', 'publish', function_name, '--force'], cwd=subFolder)
 
 
