@@ -5,19 +5,20 @@ import csv
 import time
 import pandas as pd
 from datetime import datetime
+import os
 
 logs = boto3.client('logs')
 s3 = boto3.resource('s3')
 
 
 # Please set the following parameters:
-LOG_GROUP_NAME = "" # Please enter log group name
-LOG_STREAM_NAME = "" # Please enter log stream name
-BUCKET_NAME = "" # Please enter bucket name
-BUCKET_PREFIX = "" # Please enter bucket prefix that ends with '/' , if no such, leave empty
-OUTPUT_FILE_NAME = "" # Please change to desired name
-START_TIME_UTC = datetime(2023,1,17,6,40) # Please enter start time for exporting logs (year, month, day, hour, minutes) pay attention to time differences, here it should be UTC time
-END_TIME_UTC = datetime(2023,1,19,6,58) # Please enter end time for exporting logs (year, month, day, hour, minutes) pay attention to time differences, here it should be UTC time
+LOG_GROUP_NAME = os.environ['LOG_GROUP_NAME'] # Please enter log group name
+LOG_STREAM_NAME = os.environ['LOG_STREAM_NAME'] # Please enter log stream name
+BUCKET_NAME = os.environ['BUCKET_NAME'] # Please enter bucket name
+BUCKET_PREFIX = os.environ['BUCKET_PREFIX'] # Please enter bucket prefix that ends with '/' , if no such, leave empty
+OUTPUT_FILE_NAME = os.environ['OUTPUT_FILE_NAME'] # Please change to desired name
+START_TIME_UTC = datetime.strptime(os.environ['START_TIME_UTC'], '%m/%d/%Y %H:%M') # Please enter start time for exporting logs in the following format: '%m/%d/%Y %H:%M' for example: '12/31/2022 06:55'  pay attention to time differences, here it should be UTC time
+END_TIME_UTC = datetime.strptime(os.environ['END_TIME_UTC'], '%m/%d/%Y %H:%M') # Please enter end time for exporting logs in the following format: '%m/%d/%Y %H:%M' for example: '12/31/2022 07:10' pay attention to time differences, here it should be UTC time
 
 def lambda_handler(event, context):
     """
