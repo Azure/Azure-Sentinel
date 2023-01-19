@@ -1,4 +1,5 @@
 using Azure.Identity;
+using Microsoft.Identity.Client;
 using Azure.Security.KeyVault.Secrets;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,6 @@ using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Microsoft.WindowsAzure.Storage;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -50,18 +50,23 @@ namespace IncidentConsumer
         {
             try
             {
-                var credential = new ClientCredential(ClientId, ClientKey);
-                var authenticationContext = new AuthenticationContext($"https://login.microsoftonline.com/{TenantId}");
-                var result = await authenticationContext.AcquireTokenAsync(uri, credential);
-                return result.AccessToken;
+                string authority = $"https://login.microsoftonline.com/{TenantId}";
+                IConfidentialClientApplication app = ConfidentialClientApplicationBuilder.Create(ClientId)
+                                                     .WithClientSecret(ClientKey)
+                                                     .WithAuthority(authority)
+                                                     .Build();
+                var authResult = await app.AcquireTokenForClient(
+                                     new[] { uri })
+                                 .ExecuteAsync()
+                                 .ConfigureAwait(false);
+                return authResult.AccessToken;
             }
             catch (Exception ex)
             {
                 log.LogError("GetAccessTokenAsync uri --> " + uri);
                 log.LogError("GetAccessTokenAsync ex --> " + ex.Message);
+                return null;
             }
-            throw new Exception();
-            return null;
         }
 
         private string doPUT(string URI, string body, String token, ILogger log)
@@ -70,7 +75,7 @@ namespace IncidentConsumer
             {
                 Uri uri = new Uri(String.Format(URI));
                 // Create the request
-                var httpWebRequest = (HttpWebRequest) WebRequest.Create(uri);
+                var httpWebRequest = (HttpWebRequest)WebRequest.Create(uri);
                 httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
                 httpWebRequest.ContentType = "application/json";
                 httpWebRequest.Method = "PUT";
@@ -91,6 +96,7 @@ namespace IncidentConsumer
                 {
                     result = streamReader.ReadToEnd();
                 }
+
                 return result;
             }
             catch (Exception ex)
@@ -98,16 +104,15 @@ namespace IncidentConsumer
                 log.LogError("doPUT URI --> " + URI);
                 log.LogError("doPUT body --> " + body);
                 log.LogError("doPUT ex --> " + ex.Message);
+                return null;
             }
-            throw new Exception();
-            return null;
         }
 
         [FunctionName("IncidentConsumer")]
         public void Run([QueueTrigger("cohesity-incidents", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
         {
             log.LogInformation("queueItem --> " + queueItem);
-            string token = GetAccessTokenAsync(ARM_ENDPOINT, log).Result;
+            string token = GetAccessTokenAsync($"{ARM_ENDPOINT}.default", log).Result;
             log.LogInformation("token --> " + token);
             string subscription = Environment.GetEnvironmentVariable("subscription");
             string resourceGroup = Environment.GetEnvironmentVariable("resourceGroup");

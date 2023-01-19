@@ -54,7 +54,7 @@ namespace Helios2Sentinel
             return ((DateTimeOffset)DateTime.Now).ToUnixTimeMilliseconds() * 1000;
         }
 
-        public static async Task ParseAlertToQueue(
+        public static Task ParseAlertToQueue(
             [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             dynamic alert, ILogger log)
         {
@@ -106,6 +106,8 @@ namespace Helios2Sentinel
             {
                 outputQueueItem.Add(JsonConvert.SerializeObject(output));
             }
+
+            return Task.CompletedTask;
         }
 
         private static string GetData(string path, ILogger log)
@@ -199,9 +201,9 @@ namespace Helios2Sentinel
 
                 foreach (var alert in alerts)
                 {
-                    tasks.Add(Task.Run(() =>
+                    tasks.Add(Task.Run(async () =>
                     {
-                        ParseAlertToQueue(outputQueueItem, alert, log);
+                        await ParseAlertToQueue(outputQueueItem, alert, log);
                     }));
                 }
                 Task t = Task.WhenAll(tasks);
@@ -235,9 +237,8 @@ namespace Helios2Sentinel
             catch  (Exception ex)
             {
                 log.LogInformation("GetSecret ex --> " + ex.Message);
+                return  null;
             }
-            throw new Exception();
-            return  null;
         }
     }
 }
