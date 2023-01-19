@@ -153,7 +153,7 @@ namespace Kqlvalidations.Tests
             
             // The KQL validation ignores no tabular expression error. For instance, "let x = table;" is considered a valid query.
             // Add "| count" at the end of the query, to fail queries without tabular expressions.
-            if (ignoreNoTabularExpressionError) {
+            if (!ignoreNoTabularExpressionError) {
                 queryStr += " | count";
             }
 
