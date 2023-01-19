@@ -1,4 +1,4 @@
-# DNS Domain Solution for Microsoft Sentinel Summarization capability
+# DNS Essentials Summarization capability
 
 This logic app helps to summarize DNS data into custom tables. Please note - enabling this playbook would incur additional cost.
 
