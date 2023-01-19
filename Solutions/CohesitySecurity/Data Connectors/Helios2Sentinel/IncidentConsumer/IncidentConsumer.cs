@@ -69,35 +69,28 @@ namespace IncidentConsumer
             }
         }
 
-        private string doPUT(string URI, string body, String token, ILogger log)
+        private static string GetResponseStream(HttpResponseMessage response)
+        {
+            Stream dataObjects = response.Content.ReadAsStreamAsync().Result;
+            StreamReader reader = new StreamReader(dataObjects);
+            string responseObj = reader.ReadToEnd();
+            return responseObj;
+        }
+
+        private static string DoPUT(string URI, string body, String token, ILogger log)
         {
             try
             {
-                Uri uri = new Uri(String.Format(URI));
-                // Create the request
-                var httpWebRequest = (HttpWebRequest)WebRequest.Create(uri);
-                httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
-                httpWebRequest.ContentType = "application/json";
-                httpWebRequest.Method = "PUT";
+                // **** Call the Http Client Service ****
+                HttpClient client = new HttpClient();
+                var jsonContent = new StringContent(body, Encoding.UTF8, "application/json");
 
-                using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
-                {
-                    streamWriter.Write(body);
-                    streamWriter.Flush();
-                    streamWriter.Close();
-                }
-
-                // Get the response
-                HttpWebResponse httpResponse = null;
-                string result = null;
-                httpResponse = (HttpWebResponse) httpWebRequest.GetResponse();
-
-                using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
-                {
-                    result = streamReader.ReadToEnd();
-                }
-
-                return result;
+                // Add an Accept header for JSON format.
+                client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                HttpResponseMessage response = client.PutAsync(URI, jsonContent).Result;
+                string responseObj = GetResponseStream(response);
+                return responseObj;
             }
             catch (Exception ex)
             {
@@ -120,7 +113,7 @@ namespace IncidentConsumer
             dynamic body = JsonConvert.DeserializeObject(queueItem);
             string incidentID = Guid.NewGuid().ToString();
             string URI = $"{ARM_ENDPOINT}subscriptions/{subscription}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{workspace}/providers/Microsoft.SecurityInsights/incidents/{incidentID}?api-version=2021-10-01";
-            string result = doPUT(URI, body.ToString(), token, log);
+            string result = DoPUT(URI, body.ToString(), token, log);
             log.LogInformation("result --> " + result);
         }
     }

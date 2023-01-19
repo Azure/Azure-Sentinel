@@ -175,6 +175,8 @@ namespace Helios2Sentinel
                 catch (Exception ex)
                 {
                     startDateUsecs = GetPreviousUnixTime(log);
+                    log.LogError("apiKey Exception --> 2 " + apiKey);
+                    log.LogError("blobKey Exception --> 2 " + blobKey);
                     log.LogError("Exception --> 2 " + ex.Message);
                 }
 
@@ -236,7 +238,9 @@ namespace Helios2Sentinel
             }
             catch  (Exception ex)
             {
-                log.LogInformation("GetSecret ex --> " + ex.Message);
+                log.LogError("secretName Exception --> 4 " + secretName);
+                log.LogError("kvUri Exception --> 4 " + kvUri);
+                log.LogError("Exception --> 4 " + ex.Message);
                 return  null;
             }
         }
