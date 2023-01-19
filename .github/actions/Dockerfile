@@ -10,7 +10,6 @@ ARG createUiChanged
 ENV createUiChanged ${createUiChanged}
 
 ENV sname ${SolutionName}
-ENV sname1 $SolutionName
 RUN echo "mainTemplateChanged ${mainTemplateChanged}"
 RUN echo "createUiChanged ${createUiChanged}"
 
