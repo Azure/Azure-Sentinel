@@ -88,7 +88,7 @@ class AzureSentinelConnector:
                 self._make_request(uri, body, headers)
             except Exception as err:
                 if try_number < 3:
-                    logging.warning('Error while sending data to Azure Sentinel. Try number: {}. {}'.format(try_number, err))
+                    logging.warning('Error while sending data to Microsoft Sentinel. Try number: {}. {}'.format(try_number, err))
                     time.sleep(try_number)
                     try_number += 1
                 else:
@@ -99,14 +99,14 @@ class AzureSentinelConnector:
                     self.failed_sent_events_number += events_number
                     raise err
             else:
-                logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
+                logging.info('{} events have been successfully sent to Microsoft Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
                 break
 
     def _make_request(self, uri, body, headers):
         response = requests.post(uri, data=body, headers=headers)
         if not (200 <= response.status_code <= 299):
-            raise Exception("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
+            raise Exception("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status_code))
 
     def _check_size(self, queue):
         data_bytes_len = len(json.dumps(queue).encode())
