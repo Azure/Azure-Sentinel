@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM filtering parser for Fortinet FortiGate
-  Version: '0.2.1'
-  LastUpdated: Jul 3rd, 2022
+  Version: '0.3'
+  LastUpdated: Dec 11, 2022
 Product:
   Name: Fortinet FortiGate
 Normalization:
@@ -234,7 +234,7 @@ ParserQuery: |
     )
     | where ASimMatchingIpAddr != "No match" 
     | project-away temp_*
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceName,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceName,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID
     | lookup EventLookup on DeviceAction 
     | where  (array_length(hostname_has_any)==0) and (eventresult=="*" or (DvcAction=="Allow" and eventresult=="Success") or (eventresult=="Failure"))
     | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
@@ -243,7 +243,6 @@ ParserQuery: |
       , DstIpAddr = DestinationIP
       , DstPortNumber = DestinationPort
       , Dvc = DeviceName
-      , EventEndTime = TimeGenerated
       , EventMessage = Activity
       , EventOriginalSeverity = LogSeverity
       , EventProduct = DeviceProduct
@@ -252,6 +251,7 @@ ParserQuery: |
       , SrcInterfaceName = DeviceInboundInterface
       , SrcIpAddr = SourceIP
       , SrcPortNumber = SourcePort
+      , DvcId = DeviceExternalID
     | lookup ProtocolLookup on Protocol
     | project-rename DvcOriginalAction = DeviceAction
     | parse AdditionalExtensions with "start=" EventStartTime:datetime
@@ -274,7 +274,9 @@ ParserQuery: |
       , EventSeverity = iif(EventOriginalSeverity == 5, "Informational", "")
       , EventType = "NetworkSession"
       , EventVendor = "Fortinet"
+      , DvcIdType = "Other"
       , NetworkBytes = DstBytes + SrcBytes
+      , EventEndTime = TimeGenerated
       , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
           , DstIpAddr contains ":", "IPv6"
           , "")
@@ -284,7 +286,8 @@ ParserQuery: |
           Dst = DstIpAddr,
           SessionId = NetworkSessionId,
           IpAddr = SrcIpAddr,
+          Duration = NetworkDuration,
           Rule = tostring(NetworkRuleNumber)
-    | project-away Protocol
+    | project-away Protocol, AdditionalExtensions
   };
   Parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)

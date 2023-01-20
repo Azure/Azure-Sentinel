@@ -167,6 +167,10 @@ while IFS= read -r contid; do
 							envstring+="-e $variable "
 						fi
 					done
+					# Check if we have an agent guid already. if we don't have - generate and add to the envstring
+					if [[ $envstring != *"SENTINEL_AGENT_GUID="* ]]; then
+						envstring+="-e SENTINEL_AGENT_GUID=$(uuidgen) "
+					fi
 
 					isRunning=$(docker inspect --format='{{.State.Running}}' "$contname")
 					if [ "$isRunning" == "true" ]; then

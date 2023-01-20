@@ -247,6 +247,10 @@ while [[ $# -gt 0 ]]; do
 		PREVIEW=1
 		shift 1
 		;;
+	--multi-clients)
+		MULTICLIENTS=1
+		shift 1
+		;;
 	--script-debug)
 		set -x
 		shift 1
@@ -285,6 +289,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--http-proxy <proxy url>"
 		echo "--confirm-all-prompts"
 		echo "--preview"
+		echo "--multi-clients"
 		exit 1
 		;;
 	*)
@@ -625,7 +630,13 @@ else
 	echo 'SAP system is reachable'
 fi
 
-sysfileloc=$CONFIGPATH/$containername/$SID/
+if [ $MULTICLIENTS ]; then
+	intprefix="$SID-$CLIENTNUMBER"
+else
+	intprefix="$SID"
+fi
+
+sysfileloc=$CONFIGPATH/$containername/$intprefix/
 sudo mkdir -p "$sysfileloc"
 sudo chown "$USER" "$sysfileloc"
 if [ ! $? -eq 0 ]; then
@@ -758,11 +769,11 @@ if [ ! $sdkok -eq 0 ]; then
 fi
 
 #Building the container
-containername="$containername-$SID"
+containername="$containername-$intprefix"
 
 sudo docker inspect "$containername" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
-	echo 'Azure Sentinel SAP connector is already installed. The previous connector will be removed and replaced by the new version.'
+	echo "Azure Sentinel SAP connector is already installed for instance $intprefix. The previous connector will be removed and replaced by the new version."
 	pause 'Press any key to update'
 	sudo docker stop "$containername" >/dev/null
 	sudo docker container rm "$containername" >/dev/null
@@ -775,17 +786,21 @@ fi
 if [ -n "$HTTPPROXY" ]; then
 	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
 fi
+
+# Generating SENTINEL_AGENT_GUID
+cmdparams=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
+
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "kvsi" ]; then
 	echo "Creating docker container for use with Azure Key vault and application authentication"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "cfgf" ]; then
 	echo "Creating docker container for use with secrets in config file"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
 fi
-echo 'Azure Sentinel SAP connector was updated for instance '"$SID"
+echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
 
 sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.ini "$sysfileloc$sysconf"
 if [ ! $? -eq 0 ]; then
@@ -811,19 +826,19 @@ sed -i '/\[ABAP Central Instance]/a'"sysid = $SID"'' "$sysfileloc"$sysconf
 if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 
 	sed -i '/\[Secrets Source]/a'"secrets = AZURE_KEY_VAULT"'' "$sysfileloc"$sysconf
-	sed -i '/\[Secrets Source]/a'"intprefix = $SID"'' "$sysfileloc"$sysconf
+	sed -i '/\[Secrets Source]/a'"intprefix = $intprefix"'' "$sysfileloc"$sysconf
 	sed -i '/\[Secrets Source]/a'"keyvault = $kv"'' "$sysfileloc"$sysconf
 
 	if [ ! $USESNC ]; then
-		az keyvault secret set --name "$SID"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
-		az keyvault secret set --name "$SID"-ABAPUSER --value "$uservar" --description SECRET_ABAP_USER --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
+		az keyvault secret set --name "$intprefix"-ABAPUSER --value "$uservar" --description SECRET_ABAP_USER --vault-name "$kv" >/dev/null
 	fi
-	az keyvault secret set --name "$SID"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
+	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
 		echo 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
 		exit 1
 	fi
-	az keyvault secret set --name "$SID"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
+	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
 elif [ "$MODE" == 'cfgf' ]; then
 	sed -i '/\[Secrets Source]/a'"secrets = DOCKER_FIXED"'' "$sysfileloc"$sysconf
 	sed -i '/\[Azure Credentials\]/a'"loganalyticswsid = $logwsid"'' "$sysfileloc"$sysconf

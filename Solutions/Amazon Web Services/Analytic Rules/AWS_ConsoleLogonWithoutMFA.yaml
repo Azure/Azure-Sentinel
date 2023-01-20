@@ -3,7 +3,7 @@ name: Login to AWS Management Console without MFA
 description: |
   'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.
   You can limit this detection to trigger for adminsitrative accounts if you do not have MFA enabled on all accounts.
-  This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used 
+  This is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used
   and the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'
 severity: Low
 status: Available
@@ -26,14 +26,14 @@ tactics:
 relevantTechniques:
   - T1078
 query: |
-
   AWSCloudTrail
-  | where EventName =~ "ConsoleLogin" 
-  | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)
+  | where EventName =~ "ConsoleLogin"
+  | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), indexId = indexof(tostring(UserIdentityPrincipalid),":")
   | where MFAUsed !~ "Yes" and LoginResult !~ "Failure"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent, 
-  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress
+  | where SessionIssuerUserName !contains "AWSReservedSSO"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,
+  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, indexId
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = iif(isempty(UserIdentityUserName),substring(UserIdentityPrincipalid, toint(indexId)+1), UserIdentityUserName), IPCustomEntity = SourceIpAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -43,5 +43,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.0
+version: 1.0.3
 kind: Scheduled

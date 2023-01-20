@@ -1,8 +1,8 @@
 Id: d3ff27e1-714b-491e-8274-cf34e48cfee5
 Parser:
   Title: DNS activity ASIM filtering parser for Infoblox NIOS
-  Version: '0.5.1'
-  LastUpdated: Sept 23 2022
+  Version: '0.5'
+  LastUpdated: Dec 11 2022
 Product:
   Name: Infoblox NIOS
 Normalization:
@@ -46,6 +46,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;
   let response = (
     starttime:datetime=datetime(null), 
     endtime:datetime=datetime(null), 
@@ -58,7 +59,7 @@ ParserQuery: |
     disabled:bool=false
   ) 
   {
-    Syslog
+    SyslogProjected
     | where not(disabled)
       and (eventtype in~ ('lookup', 'Query'))
     // -- Pre filtering
@@ -85,7 +86,7 @@ ParserQuery: |
     | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
     | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
     | extend EventSubType = "response"
-    | project-away DnsResponseNameIndex,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away SyslogMessage, ProcessName, DnsResponseNameIndex
   };
   let request =(
     starttime:datetime=datetime(null), 
@@ -99,7 +100,7 @@ ParserQuery: |
     disabled:bool=false
   ) 
   {
-    Syslog 
+    SyslogProjected 
     | where not(disabled)
     // -- Pre filtering
       and (eventtype in~ ('lookup', 'Query'))
@@ -128,7 +129,7 @@ ParserQuery: |
     | extend 
         EventSubType = "request",
         DnsResponseCodeName = "NA"
-    | project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away SyslogMessage, ProcessName
   };
   let parser = (
     starttime:datetime=datetime(null), 
@@ -142,7 +143,29 @@ ParserQuery: |
     disabled:bool=false
   ) 
   {
-    union response (disabled), request (disabled)
+    union 
+      response (
+        starttime=starttime, 
+        endtime=endtime, 
+        srcipaddr=srcipaddr,
+        domain_has_any=domain_has_any,
+        responsecodename=responsecodename, 
+        response_has_ipv4=response_has_ipv4, 
+        response_has_any_prefix=response_has_any_prefix, 
+        eventtype=eventtype, 
+        disabled=disabled
+      ),
+      request (
+        starttime=starttime, 
+        endtime=endtime, 
+        srcipaddr=srcipaddr,
+        domain_has_any=domain_has_any,
+        responsecodename=responsecodename, 
+        response_has_ipv4=response_has_ipv4, 
+        response_has_any_prefix=response_has_any_prefix, 
+        eventtype=eventtype, 
+        disabled=disabled
+      )    
     // -- Post-filtering
     | where
         (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
@@ -170,13 +193,7 @@ ParserQuery: |
         IpAddr=SrcIpAddr,
         Src=SrcIpAddr,
         EventResultDetails = DnsResponseCodeName
-    // -- Backward Compatibility
-    | extend
-        Query=DnsQuery,
-        QueryTypeName=DnsQueryTypeName,
-        ResponseCodeName=DnsResponseCodeName,
-        QueryClassName=DnsQueryClassName,
-        Flags=DnsFlags
+    | project-away HostIP
   };
   parser  (
     starttime=starttime, 
