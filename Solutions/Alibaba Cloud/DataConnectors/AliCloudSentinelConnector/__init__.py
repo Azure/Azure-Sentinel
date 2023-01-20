@@ -40,7 +40,7 @@ if (not match):
 def generate_date():
     current_time = datetime.utcnow().replace(second=0, microsecond=0) - timedelta(minutes=10)
     state = StateManager(connection_string=connection_string)
-    past_time = datetime.strptime("30 Nov 00", "%d.%m.%Y %H:%M:%S")
+    past_time = datetime.strptime(state.get(), "%d.%m.%Y %H:%M:%S")
     if past_time is not None:
         logging.info("The last time point is: {}".format(past_time))
     else:
