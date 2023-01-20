@@ -167,6 +167,7 @@ namespace Helios2Sentinel
             {
                 string apiKey = GetSecret("ApiKey", log);
                 string blobKey = Environment.GetEnvironmentVariable("Workspace") + "\\" + apiKey;
+                bool hasException = false;
 
                 try
                 {
@@ -174,13 +175,13 @@ namespace Helios2Sentinel
                 }
                 catch (Exception ex)
                 {
-                    startDateUsecs = GetPreviousUnixTime(log);
+                    hasException = true;
                     log.LogError("apiKey Exception --> 2 " + apiKey);
                     log.LogError("blobKey Exception --> 2 " + blobKey);
                     log.LogError("Exception --> 2 " + ex.Message);
                 }
 
-                if (startDateUsecs == 0)
+                if (startDateUsecs == 0 || hasException)
                 {
                     TestAlertToQueue(outputQueueItem);
                     startDateUsecs = GetPreviousUnixTime(log);
