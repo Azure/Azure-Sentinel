@@ -182,6 +182,7 @@ namespace Helios2Sentinel
 
                 if (startDateUsecs == 0)
                 {
+                    TestAlertToQueue(outputQueueItem);
                     startDateUsecs = GetPreviousUnixTime(log);
                 }
 
@@ -224,6 +225,20 @@ namespace Helios2Sentinel
             catch  (Exception ex)
             {
                 log.LogError("Exception --> 3 " + ex.Message);
+            }
+        }
+
+        private static void TestAlertToQueue([Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem)
+        {
+            dynamic output = new ExpandoObject();
+            output.properties = new ExpandoObject();
+            output.properties.title = "Test Incident";
+            output.properties.Description = "This is a test incident that confirms that the installation has completed correctly.";
+            output.properties.severity = "Low";
+
+            lock (queueLock)
+            {
+                outputQueueItem.Add(JsonConvert.SerializeObject(output));
             }
         }
 
