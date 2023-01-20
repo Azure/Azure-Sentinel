@@ -1,4 +1,5 @@
 using Azure.Identity;
+using Microsoft.Identity.Client;
 using Azure.Security.KeyVault.Secrets;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,6 @@ using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Microsoft.WindowsAzure.Storage;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -47,6 +47,7 @@ namespace IncidentConsumer
          * as it uses obsolete technology to get the bearer token.
          */
         internal async Task<string> GetAccessTokenAsync(string uri, ILogger log)
+<<<<<<< HEAD
         {
             try
             {
@@ -98,16 +99,69 @@ namespace IncidentConsumer
                 log.LogError("doPUT URI --> " + URI);
                 log.LogError("doPUT body --> " + body);
                 log.LogError("doPUT ex --> " + ex.Message);
+=======
+        {
+            try
+            {
+                string authority = $"https://login.microsoftonline.com/{TenantId}";
+                IConfidentialClientApplication app = ConfidentialClientApplicationBuilder.Create(ClientId)
+                                                     .WithClientSecret(ClientKey)
+                                                     .WithAuthority(authority)
+                                                     .Build();
+                var authResult = await app.AcquireTokenForClient(
+                                     new[] { uri })
+                                 .ExecuteAsync()
+                                 .ConfigureAwait(false);
+                return authResult.AccessToken;
             }
-            throw new Exception();
-            return null;
+            catch (Exception ex)
+            {
+                log.LogError("GetAccessTokenAsync uri --> " + uri);
+                log.LogError("GetAccessTokenAsync ex --> " + ex.Message);
+                return null;
+            }
+        }
+
+        private static string GetResponseStream(HttpResponseMessage response)
+        {
+            Stream dataObjects = response.Content.ReadAsStreamAsync().Result;
+            StreamReader reader = new StreamReader(dataObjects);
+            return reader.ReadToEnd();
+        }
+
+        private static string DoPUT(string URI, string body, String token, ILogger log)
+        {
+            try
+            {
+                // **** Call the Http Client Service ****
+                HttpClient client = new HttpClient();
+                var jsonContent = new StringContent(body, Encoding.UTF8, "application/json");
+
+                // Add an Accept header for JSON format.
+                client.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                HttpResponseMessage response = client.PutAsync(URI, jsonContent).Result;
+                return GetResponseStream(response);
+            }
+            catch (Exception ex)
+            {
+                log.LogError("doPUT URI --> " + URI);
+                log.LogError("doPUT body --> " + body);
+                log.LogError("doPUT ex --> " + ex.Message);
+                return null;
+>>>>>>> CohesitySecurity.internal
+            }
         }
 
         [FunctionName("IncidentConsumer")]
         public void Run([QueueTrigger("cohesity-incidents", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
         {
             log.LogInformation("queueItem --> " + queueItem);
+<<<<<<< HEAD
             string token = GetAccessTokenAsync(ARM_ENDPOINT, log).Result;
+=======
+            string token = GetAccessTokenAsync($"{ARM_ENDPOINT}.default", log).Result;
+>>>>>>> CohesitySecurity.internal
             log.LogInformation("token --> " + token);
             string subscription = Environment.GetEnvironmentVariable("subscription");
             string resourceGroup = Environment.GetEnvironmentVariable("resourceGroup");
@@ -115,7 +169,7 @@ namespace IncidentConsumer
             dynamic body = JsonConvert.DeserializeObject(queueItem);
             string incidentID = Guid.NewGuid().ToString();
             string URI = $"{ARM_ENDPOINT}subscriptions/{subscription}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{workspace}/providers/Microsoft.SecurityInsights/incidents/{incidentID}?api-version=2021-10-01";
-            string result = doPUT(URI, body.ToString(), token, log);
+            string result = DoPUT(URI, body.ToString(), token, log);
             log.LogInformation("result --> " + result);
         }
     }
