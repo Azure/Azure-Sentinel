@@ -16,10 +16,7 @@ def get_function_name_by_prefix(funNamePrefix):
 
 def publish_function_name_by_prefix(funNamePrefix, subFolder):
     function_name = get_function_name_by_prefix(funNamePrefix)
-<<<<<<< HEAD
-=======
     subprocess.run(['dotnet', 'clean'], cwd=subFolder)
->>>>>>> CohesitySecurity.internal
     subprocess.run(['func', 'azure', 'functionapp', 'publish', function_name, '--force'], cwd=subFolder)
 
 

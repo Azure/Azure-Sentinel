@@ -47,59 +47,6 @@ namespace IncidentConsumer
          * as it uses obsolete technology to get the bearer token.
          */
         internal async Task<string> GetAccessTokenAsync(string uri, ILogger log)
-<<<<<<< HEAD
-        {
-            try
-            {
-                var credential = new ClientCredential(ClientId, ClientKey);
-                var authenticationContext = new AuthenticationContext($"https://login.microsoftonline.com/{TenantId}");
-                var result = await authenticationContext.AcquireTokenAsync(uri, credential);
-                return result.AccessToken;
-            }
-            catch (Exception ex)
-            {
-                log.LogError("GetAccessTokenAsync uri --> " + uri);
-                log.LogError("GetAccessTokenAsync ex --> " + ex.Message);
-            }
-            throw new Exception();
-            return null;
-        }
-
-        private string doPUT(string URI, string body, String token, ILogger log)
-        {
-            try
-            {
-                Uri uri = new Uri(String.Format(URI));
-                // Create the request
-                var httpWebRequest = (HttpWebRequest) WebRequest.Create(uri);
-                httpWebRequest.Headers.Add(HttpRequestHeader.Authorization, "Bearer " + token);
-                httpWebRequest.ContentType = "application/json";
-                httpWebRequest.Method = "PUT";
-
-                using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
-                {
-                    streamWriter.Write(body);
-                    streamWriter.Flush();
-                    streamWriter.Close();
-                }
-
-                // Get the response
-                HttpWebResponse httpResponse = null;
-                string result = null;
-                httpResponse = (HttpWebResponse) httpWebRequest.GetResponse();
-
-                using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
-                {
-                    result = streamReader.ReadToEnd();
-                }
-                return result;
-            }
-            catch (Exception ex)
-            {
-                log.LogError("doPUT URI --> " + URI);
-                log.LogError("doPUT body --> " + body);
-                log.LogError("doPUT ex --> " + ex.Message);
-=======
         {
             try
             {
@@ -149,7 +96,6 @@ namespace IncidentConsumer
                 log.LogError("doPUT body --> " + body);
                 log.LogError("doPUT ex --> " + ex.Message);
                 return null;
->>>>>>> CohesitySecurity.internal
             }
         }
 
@@ -157,11 +103,7 @@ namespace IncidentConsumer
         public void Run([QueueTrigger("cohesity-incidents", Connection = "AzureWebJobsStorage")]string queueItem, ILogger log)
         {
             log.LogInformation("queueItem --> " + queueItem);
-<<<<<<< HEAD
-            string token = GetAccessTokenAsync(ARM_ENDPOINT, log).Result;
-=======
             string token = GetAccessTokenAsync($"{ARM_ENDPOINT}.default", log).Result;
->>>>>>> CohesitySecurity.internal
             log.LogInformation("token --> " + token);
             string subscription = Environment.GetEnvironmentVariable("subscription");
             string resourceGroup = Environment.GetEnvironmentVariable("resourceGroup");

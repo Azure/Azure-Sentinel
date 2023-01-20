@@ -54,11 +54,7 @@ namespace Helios2Sentinel
             return ((DateTimeOffset)DateTime.Now).ToUnixTimeMilliseconds() * 1000;
         }
 
-<<<<<<< HEAD
-        public static async Task ParseAlertToQueue(
-=======
         public static Task ParseAlertToQueue(
->>>>>>> CohesitySecurity.internal
             [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             dynamic alert, ILogger log)
         {
@@ -171,10 +167,7 @@ namespace Helios2Sentinel
             {
                 string apiKey = GetSecret("ApiKey", log);
                 string blobKey = Environment.GetEnvironmentVariable("Workspace") + "\\" + apiKey;
-<<<<<<< HEAD
-=======
                 bool hasException = false;
->>>>>>> CohesitySecurity.internal
 
                 try
                 {
@@ -212,11 +205,7 @@ namespace Helios2Sentinel
 
                 foreach (var alert in alerts)
                 {
-<<<<<<< HEAD
-                    tasks.Add(Task.Run(() =>
-=======
                     tasks.Add(Task.Run(async () =>
->>>>>>> CohesitySecurity.internal
                     {
                         await ParseAlertToQueue(outputQueueItem, alert, log);
                     }));
@@ -240,8 +229,6 @@ namespace Helios2Sentinel
             }
         }
 
-<<<<<<< HEAD
-=======
         private static void TestAlertToQueue([Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem)
         {
             dynamic output = new ExpandoObject();
@@ -256,24 +243,12 @@ namespace Helios2Sentinel
             }
         }
 
->>>>>>> CohesitySecurity.internal
         private static string GetSecret(string secretName, ILogger log)
         {
             var kvUri = $"https://{IncidentProducer.keyVaultName}.vault.azure.net";
             try
             {
                 var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-<<<<<<< HEAD
-                var secret = secretClient.GetSecret(secretName);
-                return  secret.Value.Value;
-            }
-            catch  (Exception ex)
-            {
-                log.LogInformation("GetSecret ex --> " + ex.Message);
-            }
-            throw new Exception();
-            return  null;
-=======
                 return secretClient.GetSecret(secretName).Value.Value;
             }
             catch  (Exception ex)
@@ -283,7 +258,6 @@ namespace Helios2Sentinel
                 log.LogError("Exception --> 4 " + ex.Message);
                 return  null;
             }
->>>>>>> CohesitySecurity.internal
         }
     }
 }
