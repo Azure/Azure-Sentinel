@@ -18,7 +18,9 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 * Intezer Community API key. If issue with community key, reach out to Intezer and/or do free trial.
 * Logic Apps Custom Connector for Intezer-Analyze-Community
 * Keyvault to store Intezer API key as secret malware-intezer-api-key
+  * Target keyvault parameter can be provided either through portal, either through `azuredeploy.parameters*.json` file, either shared parameters file defined through [sentinel-deployment.config](https://learn.microsoft.com/en-us/azure/sentinel/ci-cd-custom-deploy?tabs=github#scale-your-deployments-with-parameter-files)
   * Keyvault networking restrictions from LogicApps: https://aka.ms/connectors-ip-addresses
+  * Logic App managed identity should be given read access, typically through [access policy](https://learn.microsoft.com/en-us/azure/key-vault/general/assign-access-policy?tabs=azure-portal)
 * Logic App managed identity should be given Sentinel Responder role to read incident trigger and write comment/tag to incident
 
 ## Screenshots
