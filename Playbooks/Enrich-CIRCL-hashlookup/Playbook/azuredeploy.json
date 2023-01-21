@@ -138,6 +138,29 @@
                         }
                     },
                     "actions": {
+                        "Bulk_search_of_MD5_hashes": {
+                            "runAfter": {
+                                "For_each_md5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "hashes": "@{variables('md5_hashes')}"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['CIRCL-hashlookup']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/bulk/md5"
+                            }
+                        },
                         "Bulk_search_of_SHA-1_hashes": {
                             "runAfter": {
                                 "For_each_sha1": [
@@ -160,118 +183,6 @@
                                 "method": "post",
                                 "path": "/bulk/sha1"
                             }
-                        },
-                        "Condition_-_Check_for_FileHash_Entity": {
-                            "actions": {
-                                "Bulk_search_of_MD5_hashes": {
-                                    "runAfter": {
-                                        "For_each_md5": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "hashes": "@{variables('md5_hashes')}"
-                                        },
-                                        "headers": {
-                                            "Content-Type": "application/json"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['CIRCL-hashlookup']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "path": "/bulk/md5"
-                                    }
-                                },
-                                "Condition_if_md5_bulk_search_non-empty_output": {
-                                    "actions": {
-                                        "Append_MD5_output_to_string_variable_comment": {
-                                            "runAfter": {},
-                                            "type": "AppendToStringVariable",
-                                            "inputs": {
-                                                "name": "comment",
-                                                "value": "MD5\n@{body('Bulk_search_of_MD5_hashes')}\n"
-                                            }
-                                        },
-                                        "Set_variable": {
-                                            "runAfter": {
-                                                "Append_MD5_output_to_string_variable_comment": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "hash_match",
-                                                "value": "@bool(true)"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Bulk_search_of_MD5_hashes": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "not": {
-                                                    "equals": [
-                                                        "@string(body('Bulk_search_of_MD5_hashes'))",
-                                                        "[[]"
-                                                    ]
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Filter_array_md5": {
-                                    "runAfter": {},
-                                    "type": "Query",
-                                    "inputs": {
-                                        "from": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
-                                        "where": "@equals(item()?['Algorithm'], 'MD5')"
-                                    }
-                                },
-                                "For_each_md5": {
-                                    "foreach": "@body('Filter_array_md5')",
-                                    "actions": {
-                                        "Append_to_array_variable": {
-                                            "runAfter": {},
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "md5_hashes",
-                                                "value": "@items('For_each_md5')?['Value']"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Filter_array_md5": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Foreach"
-                                }
-                            },
-                            "runAfter": {
-                                "Initialize_variable_sha1_hashes": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "greater": [
-                                            "@length(body('Entities_-_Get_FileHashes')?['Filehashes'])",
-                                            0
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
                         },
                         "Condition_-_No_entities": {
                             "actions": {
@@ -302,7 +213,7 @@
                         },
                         "Condition_if_hash_match": {
                             "actions": {
-                                "Add_comment_to_incident_(V3)_3": {
+                                "Add_comment_to_incident_(V3)_-_ThreatIntelFound": {
                                     "runAfter": {},
                                     "type": "ApiConnection",
                                     "inputs": {
@@ -318,10 +229,37 @@
                                         "method": "post",
                                         "path": "/Incidents/Comment"
                                     }
+                                },
+                                "Update_incident_-_ThreatIntelFound": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)_-_ThreatIntelFound": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "ThreatIntelFound-CIRCL-hashlookup"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
                                 }
                             },
                             "runAfter": {
-                                "Condition_-_Check_for_FileHash_Entity": [
+                                "Condition_if_md5_bulk_search_non-empty_output": [
                                     "Succeeded"
                                 ],
                                 "Condition_if_sha1_bulk_search_non-empty_output": [
@@ -330,7 +268,7 @@
                             },
                             "else": {
                                 "actions": {
-                                    "Update_incident": {
+                                    "Update_incident_-_NoThreatIntelFound": {
                                         "runAfter": {},
                                         "type": "ApiConnection",
                                         "inputs": {
@@ -362,6 +300,48 @@
                                             "@variables('hash_match')",
                                             "@bool(true)"
                                         ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_if_md5_bulk_search_non-empty_output": {
+                            "actions": {
+                                "Append_MD5_output_to_string_variable_comment": {
+                                    "runAfter": {},
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "comment",
+                                        "value": "MD5\n@{body('Bulk_search_of_MD5_hashes')}\n"
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Append_MD5_output_to_string_variable_comment": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "hash_match",
+                                        "value": "@bool(true)"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Bulk_search_of_MD5_hashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@string(body('Bulk_search_of_MD5_hashes'))",
+                                                "[[]"
+                                            ]
+                                        }
                                     }
                                 ]
                             },
@@ -423,6 +403,18 @@
                                 "path": "/entities/filehash"
                             }
                         },
+                        "Filter_array_md5": {
+                            "runAfter": {
+                                "Initialize_variable_sha1_hashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                                "where": "@equals(item()?['Algorithm'], 'MD5')"
+                            }
+                        },
                         "Filter_array_sha1": {
                             "runAfter": {
                                 "Initialize_variable_sha1_hashes": [
@@ -435,10 +427,29 @@
                                 "where": "@equals(item()?['Algorithm'], 'SHA1')"
                             }
                         },
+                        "For_each_md5": {
+                            "foreach": "@body('Filter_array_md5')",
+                            "actions": {
+                                "Append_to_array_variable_md5": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "md5_hashes",
+                                        "value": "@items('For_each_md5')?['Value']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_array_md5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
                         "For_each_sha1": {
                             "foreach": "@body('Filter_array_sha1')",
                             "actions": {
-                                "Append_to_array_variable_2": {
+                                "Append_to_array_variable_sha1": {
                                     "runAfter": {},
                                     "type": "AppendToArrayVariable",
                                     "inputs": {
