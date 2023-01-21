@@ -23,6 +23,8 @@ ParserQuery: |
   let SSHDSignInAuthorized=(disabled:bool=false){
   Syslog | where not(disabled)
     | where ProcessName == "sshd" and SyslogMessage has 'Accepted '
+    | parse SyslogMessage with * "for " TargetUsername " from " SrcIpAddr " port"
+    | parse SyslogMessage with * " message repeated " EventCount " times:" *
     | extend
     EventVendor = 'OpenBSD'
     , EventProduct = 'sshd'
@@ -34,12 +36,7 @@ ParserQuery: |
     , EventEndTime = TimeGenerated
     , EventType = 'Logon'
     , DvcHostname = Computer
-    //, DvcIpAddr = extract(@'\d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3}', 1, SyslogMessage)
-    , DvcIpAddr = extract("from (([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3}))) port",1,SyslogMessage)
     , TargetUsernameType = 'Simple'
-    , TargetUsername = extract(@'for (.*?) from', 1, SyslogMessage)
-    , EventResultDetails = 'Other'
-    , EventOriginalRestultDetails = 'Connection authorized'
   // ************************
   //      <Aliases>
   // ************************
@@ -53,7 +50,9 @@ ParserQuery: |
     };
   let SSHDAuthFailure1=(disabled:bool=false){
   Syslog | where not(disabled)
-    | where ProcessName == "sshd" and SyslogMessage has 'Failed '
+    | where ProcessName == "sshd" and SyslogMessage has_any ('Failed password ', 'Failed publickey ', 'Invalid user ')
+    | parse SyslogMessage with * " from " SrcIpAddr " port"
+    | parse SyslogMessage with * " message repeated " EventCount " times:" *
     | extend
     EventVendor = 'OpenBSD'
     , EventProduct = 'sshd'
@@ -65,8 +64,6 @@ ParserQuery: |
     , EventEndTime = TimeGenerated
     , EventType = 'Logon'
     , DvcHostname = Computer
-    //, DvcIpAddr = extract(@'from \d{1,3}\.\d{1.3}\.\d{1,3}\.\d{1,3} port', 1, SyslogMessage)
-    , DvcIpAddr = extract("from (([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3}))) port",1,SyslogMessage)
     , TargetUsernameType = 'Simple'
     , TargetUsername = extract(@'for (invalid user )?(.*?) from', 2, SyslogMessage)
     , EventResultDetails = 'No such user or password'
@@ -75,7 +72,10 @@ ParserQuery: |
     };
   let SSHDDisconnect=(disabled:bool=false){
   Syslog | where not(disabled)
-    | where ProcessName == "sshd" and SyslogMessage has 'session closed for user '
+    | where ProcessName == "sshd" and SyslogMessage has_any ('session closed for user ', 'Connection closed by ')
+    | parse SyslogMessage with * "for user " TargetUsername
+    | parse SyslogMessage with "Connection closed by " SrcIpAddr " port "
+    | parse SyslogMessage with * " message repeated " EventCount " times:" *
     | extend
     EventVendor = 'OpenBSD'
     , EventProduct = 'sshd'
@@ -88,7 +88,6 @@ ParserQuery: |
     , EventType = 'Logoff'
     , DvcHostname = Computer
     , TargetUsernameType = 'Simple'
-    , TargetUsername = extract('for user (.*?)$', 1, SyslogMessage)
     , EventResultDetails = 'Other'
     , EventOriginalRestultDetails = 'User session closed'
   // ************************

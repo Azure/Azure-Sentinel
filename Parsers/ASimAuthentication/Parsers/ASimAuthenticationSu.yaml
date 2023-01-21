@@ -22,8 +22,11 @@ ParserParams:
 ParserQuery: |
   let SuSignInAuthorized=(disabled:bool=false){
   Syslog | where not(disabled)
-    | where ProcessName == "su" and (SyslogMessage has 'pam_unix(su:session): session opened' or SyslogMessage has 'pam_unix(su-l:session): session opened')
-    | parse SyslogMessage with "for user " TargetUsername " by " ActorUsername
+    | where ProcessName == "su" and SyslogMessage has_any ('pam_unix(su:session): session opened', 'pam_unix(su-l:session): session opened')
+    // if ActorUserName is empty, need two parse statements
+    | parse SyslogMessage with * "for user " TargetUsername:string " by "
+    | parse SyslogMessage with * "for user " TargetUsername:string " by " ActorUsername
+    | parse SyslogMessage with * "for user " TargetUsername:string "(uid=" TargetUserId:long ") by " ActorUsername "(uid=" ActorUserId:long ")"
     | extend
     EventVendor = 'su'
     , EventProduct = 'su'
@@ -33,11 +36,10 @@ ParserQuery: |
     , EventResult = 'Success'
     , EventStartTime = TimeGenerated
     , EventEndTime = TimeGenerated
-    , EventType = 'Logon'
+    , EventType = 'Elevation'
     , DvcHostname = Computer
     , ActorUsernameType = 'Simple'
-    , EventResultDetails = 'Other'
-    , EventOriginalRestultDetails = 'Connection authorized'
+    , TargetUsernameType = 'Simple'
   // ************************
   //      <Aliases>
   // ************************
@@ -51,8 +53,8 @@ ParserQuery: |
     };
   let SuDisconnect=(disabled:bool=false){
   Syslog | where not(disabled)
-    | where ProcessName == "su" and (SyslogMessage has 'pam_unix(su:session): session closed' or SyslogMessage has 'pam_unix(su-l:session): session closed')
-    | parse SyslogMessage with "for user " TargetUsername
+    | where ProcessName == "su" and SyslogMessage has_any ('pam_unix(su:session): session closed', 'pam_unix(su-l:session): session closed')
+    | parse SyslogMessage with * "for user " TargetUsername:string
     | extend
     EventVendor = 'su'
     , EventProduct = 'su'
@@ -65,8 +67,6 @@ ParserQuery: |
     , EventType = 'Logoff'
     , DvcHostname = Computer
     , TargetUsernameType = 'Simple'
-    , EventResultDetails = 'Other'
-    , EventOriginalRestultDetails = 'User session closed'
   // ************************
   //      <Aliases>
   // ************************

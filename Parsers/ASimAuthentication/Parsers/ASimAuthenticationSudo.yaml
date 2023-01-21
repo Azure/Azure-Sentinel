@@ -24,6 +24,7 @@ ParserQuery: |
   Syslog | where not(disabled)
     | where ProcessName == "sudo" and SyslogMessage has 'TTY=' and SyslogMessage has 'USER='and SyslogMessage has 'COMMAND='
     | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with (pair_delimiter=' ', kv_delimiter='=')
+    | project-rename TargetUsername = USER
     | extend
     EventVendor = 'sudo'
     , EventProduct = 'sudo'
@@ -37,7 +38,7 @@ ParserQuery: |
     , DvcHostname = Computer
     , ActorUsernameType = 'Simple'
     , ActorUsername = extract(@'^(.*?):', 1, SyslogMessage)
-    , TargetUsername = USER
+    , TargetUsernameType = 'Simple'
     , EventResultDetails = 'Other'
     , EventOriginalRestultDetails = 'Connection authorized'
   // ************************
@@ -55,6 +56,7 @@ ParserQuery: |
   Syslog | where not(disabled)
     | where ProcessName == "sudo" and (SyslogMessage has 'user NOT in sudoers' or SyslogMessage has 'incorrect password attempts')
     | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with  (pair_delimiter=' ', kv_delimiter='=')
+    | project-rename TargetUsername = USER
     | extend
     EventVendor = 'sudo'
     , EventProduct = 'sudo'
@@ -69,7 +71,6 @@ ParserQuery: |
     , ActorUsernameType = 'Simple'
     , ActorUsername = extract(@'^(.*?):', 1, SyslogMessage)
     , TargetUsernameType = 'Simple'
-    , TargetUsername = USER
     , EventResultDetails = 'No such user or password'
     , EventOriginalRestultDetails = 'User authentication failed'
     | project-away Computer, MG, SourceSystem, TenantId
@@ -77,6 +78,7 @@ ParserQuery: |
   let SudoDisconnect=(disabled:bool=false){
   Syslog | where not(disabled)
     | where ProcessName == "sudo" and SyslogMessage has 'session closed for user '
+    | parse SyslogMessage with * "for user " TargetUsername:string
     | extend
     EventVendor = 'sudo'
     , EventProduct = 'sudo'
@@ -89,7 +91,6 @@ ParserQuery: |
     , EventType = 'Logoff'
     , DvcHostname = Computer
     , TargetUsernameType = 'Simple'
-    , TargetUsername = extract('for user (.*?)$', 1, SyslogMessage)
     , EventResultDetails = 'Other'
     , EventOriginalRestultDetails = 'User session closed'
   // ************************
