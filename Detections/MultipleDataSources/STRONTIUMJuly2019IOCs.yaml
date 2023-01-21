@@ -23,6 +23,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWDnsQuery
   - connectorId: Zscaler
     dataTypes:
       - CommonSecurityLog
@@ -72,6 +74,27 @@ query: |
     | extend DNSName = DestinationHost 
     | extend IPAddress = SourceHost
     ),
+    (AzureDiagnostics
+    | where ResourceType == "AZUREFIREWALLS"
+    | where Category == "AzureFirewallDnsProxy"
+    | project TimeGenerated,Resource, msg_s, Type
+    | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+    | where  Request_Name  has_any (DomainNames)
+    | extend DNSName = Request_Name
+    | extend IPAddress = ClientIP
+    ),
+    (AZFWApplicationRule
+    | where isnotempty(Fqdn)
+    | where Fqdn has_any (DomainNames)  
+    | extend DNSName = Fqdn 
+    | extend IPAddress = SourceIp
+    ),
+    (AZFWDnsQuery
+    | where isnotempty(QueryName)
+    | where QueryName has_any (DomainNames)
+    | extend DNSName = QueryName
+    | extend IPAddress = SourceIp
+    ),
     (
       _Im_WebSession(url_has_any=DomainNames)
       | extend IPCustomEntity=IpAddr, HostCustomEntity=Hostname, AccoutCustomEntity=User
@@ -93,5 +116,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.4.1
+version: 1.5.0
 kind: Scheduled

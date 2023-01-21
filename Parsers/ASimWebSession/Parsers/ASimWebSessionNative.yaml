@@ -1,0 +1,53 @@
+Parser:
+  Title: Web Session ASIM parser for Microsoft Sentinel native Network Session table
+  Version: '0.1'
+  LastUpdated: Jan 5 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: WebSession
+  Version: '0.2.5'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Microsoft Sentinel Web Session table (ASimWebSessionLogs) to the ASIM WebSession normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+ParserName: ASimWebSessionNative
+EquivalentBuiltInParser: _ASim_WebSession_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false) 
+  {
+    ASimWebSessionLogs  | where not(disabled)
+      | project-rename
+          EventUid = _ItemId
+      | extend          
+          EventSchema = "WebSession",
+          DvcScopeId = iff(isempty(DvcSubscriptionId), _SubscriptionId, DvcSubscriptionId)
+      //  -- Aliases
+      | extend
+          EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+          EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+          Dvc = iff (isempty(Dvc), coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId), Dvc),
+          Dst = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),
+          Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+          DvcInterface = iff(isempty(DvcInterface), coalesce(DvcInboundInterface, DvcOutboundInterface), DvcInterface),
+          Hostname = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), SrcHostname, DstHostname),
+          IpAddr = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), DstIpAddr, SrcIpAddr),
+          Rule = coalesce(RuleName, tostring(RuleNumber)),
+          Duration = NetworkDuration,
+          SessionId = NetworkSessionId,
+          User = SrcUsername,
+          HttpStatusCode = EventResultDetails,
+          UserAgent = HttpUserAgent
+          //InnerVlanId = SrcVlanId,
+          //OuterVlanId = DstVlanId
+      | project-away
+          TenantId, SourceSystem, DvcSubscriptionId, _SubscriptionId, _ResourceId
+  };
+  parser (disabled=disabled)

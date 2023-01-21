@@ -74,14 +74,14 @@ To get Proofpoint TAP API credentials follow the instructions:
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
 6.	Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.
 #### b. Configurations in Sentinel
-1. In Azure sentinel, analytical rules should be configured to trigger an incident with risky user account. 
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident with risky user account. 
 2. Configure the automation rules to trigger the playbooks.
 
 
