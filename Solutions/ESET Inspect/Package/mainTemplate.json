@@ -1,0 +1,496 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "ESET Netherlands",
+    "comments": "Solution template for ESET Inspect"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "esetresearch1579795941720.eset_enterprise_inspector_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "ESETInspect",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ESETInspect",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.1.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "ESET Inspect data connector with template",
+        "displayName": "ESET Inspect template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ESET Inspect data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "ESET Inspect (using Azure Function)",
+                  "publisher": "ESET Netherlands",
+                  "descriptionMarkdown": "This connector will ingest detections from [ESET Inspect](https://www.eset.com/int/business/solutions/xdr-extended-detection-and-response/) using the provided [REST API](https://help.eset.com/ei_navigate/latest/en-US/api.html). This API is present in ESET Inspect version 1.4 and later.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ESETInspect_CL",
+                      "baseQuery": "ESETInspect_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 rules triggered",
+                      "query": "ESETInspect_CL\n | where type_s == \"RuleActivated\"\n | summarize count() by ruleName_s\n | top 10 by count_"
+                    },
+                    {
+                      "description": "Detection totals by type",
+                      "query": "ESETInspect_CL\n | summarize count() by type_s"
+                    },
+                    {
+                      "description": "Top 10 users with detections",
+                      "query": "ESETInspect_CL\n | extend Username = tolower(processUser_s)\n | where Username !contains \"nt authority\"\n | summarize count() by Username\n | top 10 by count_"
+                    },
+                    {
+                      "description": "Top 10 systems with detections",
+                      "query": "ESETInspect_CL\n | extend System = tolower(computerName_s)\n | summarize count() by System\n | top 10 by count_"
+                    },
+                    {
+                      "description": "High severity detections",
+                      "query": "ESETInspect_CL\n | where severityScore_d >= 80\n | order by id_d desc"
+                    },
+                    {
+                      "description": "Top 10 threats",
+                      "query": "ESETInspect_CL\n | where isnotempty(threatName_s)\n | summarize count() by threatName_s, type_s\n | top 10 by count_"
+                    },
+                    {
+                      "description": "Detections on new executables",
+                      "query": "ESETInspect_CL\n | where moduleLgAge_d <= 7"
+                    },
+                    {
+                      "description": "User login outside regular office hours",
+                      "query": "let startOfDay = datetime_part(\"Hour\", datetime(\"09:00\"));\n let endOfDay = datetime_part(\"Hour\", datetime(\"17:00\"));\n let saturday = time(6);\n let sunday = time(0);\n ESETInspect_CL\n | where tolower(ruleName_s) contains \"remote user login\" or tolower(ruleName_s) contains \"detected rdp communication\"\n | where datetime_part(\"Hour\", creationTime_t) !between(startOfDay .. endOfDay)\n or dayofweek(creationTime_t) == saturday or dayofweek(creationTime_t) == sunday"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ESETInspect_CL",
+                      "lastDataReceivedQuery": "ESETInspect_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ESETInspect_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Access to the ESET PROTECT console",
+                        "description": "Permissions to add users"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions to connect to ESET Inspect to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+                    },
+                    {
+                      "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+                    },
+                    {
+                      "description": "1. Log into the ESET PROTECT console with an administrator account, select the **More** tab and the **Users** subtab. \n2. Click on the **ADD NEW** button and add a **native user**.\n3. Create a new user for the API account. **Optional:** Select a **Home group** other than **All** to limit what detections are ingested. \n4. Under the **Permission Sets** tab, assign the **Inspect reviewer permission set**.\n4. Log out of the administrator account and log into the console with the new API credentials for validation, then log out of the API account. \n5.",
+                      "title": "Step 1 -  Create an API user"
+                    },
+                    {
+                      "description": ">**IMPORTANT:** Before deploying the ESET Inspect connector, have the Workspace ID and Workspace Primary Key (can be copied from the following) readily available.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "Step 2 - Copy Workspace ID and Key"
+                    },
+                    {
+                      "description": "Use this method for automated deployment of the ESET Inspect connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-ESETInspect-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **API Username**, **API Password** , enter the **Inspect base URL** and the **first ID** to start ingesting detections from.\n - The defailt starting ID is **0**. This means that all detections will be ingested. \n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labelled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+                      "title": "Step 3 - Deploy the Azure Resource Manager (ARM) Template"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "c3968094-03b7-43cc-b27e-de8fae820ef0",
+                    "version": "1.1.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "solution",
+                      "name": "ESET Inspect"
+                    },
+                    "author": {
+                      "name": "Donny Maasland | ESET Netherlands"
+                    },
+                    "support": {
+                      "tier": "developer",
+                      "name": "ESET Netherlands",
+                      "link": "https://techcenter.eset.nl/"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ESET Inspect",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "ESET Netherlands"
+                },
+                "support": {
+                  "name": "ESET Enterprise",
+                  "tier": "Partner",
+                  "link": "https://www.eset.com/int/business/solutions/endpoint-detection-and-response/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ESET Inspect",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "ESET Netherlands"
+        },
+        "support": {
+          "name": "ESET Enterprise",
+          "tier": "Partner",
+          "link": "https://www.eset.com/int/business/solutions/endpoint-detection-and-response/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "ESET Inspect (using Azure Function)",
+          "publisher": "ESET Netherlands",
+          "descriptionMarkdown": "This connector will ingest detections from [ESET Inspect](https://www.eset.com/int/business/solutions/xdr-extended-detection-and-response/) using the provided [REST API](https://help.eset.com/ei_navigate/latest/en-US/api.html). This API is present in ESET Inspect version 1.4 and later.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ESETInspect_CL",
+              "baseQuery": "ESETInspect_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ESETInspect_CL",
+              "lastDataReceivedQuery": "ESETInspect_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ESETInspect_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 rules triggered",
+              "query": "ESETInspect_CL\n | where type_s == \"RuleActivated\"\n | summarize count() by ruleName_s\n | top 10 by count_"
+            },
+            {
+              "description": "Detection totals by type",
+              "query": "ESETInspect_CL\n | summarize count() by type_s"
+            },
+            {
+              "description": "Top 10 users with detections",
+              "query": "ESETInspect_CL\n | extend Username = tolower(processUser_s)\n | where Username !contains \"nt authority\"\n | summarize count() by Username\n | top 10 by count_"
+            },
+            {
+              "description": "Top 10 systems with detections",
+              "query": "ESETInspect_CL\n | extend System = tolower(computerName_s)\n | summarize count() by System\n | top 10 by count_"
+            },
+            {
+              "description": "High severity detections",
+              "query": "ESETInspect_CL\n | where severityScore_d >= 80\n | order by id_d desc"
+            },
+            {
+              "description": "Top 10 threats",
+              "query": "ESETInspect_CL\n | where isnotempty(threatName_s)\n | summarize count() by threatName_s, type_s\n | top 10 by count_"
+            },
+            {
+              "description": "Detections on new executables",
+              "query": "ESETInspect_CL\n | where moduleLgAge_d <= 7"
+            },
+            {
+              "description": "User login outside regular office hours",
+              "query": "let startOfDay = datetime_part(\"Hour\", datetime(\"09:00\"));\n let endOfDay = datetime_part(\"Hour\", datetime(\"17:00\"));\n let saturday = time(6);\n let sunday = time(0);\n ESETInspect_CL\n | where tolower(ruleName_s) contains \"remote user login\" or tolower(ruleName_s) contains \"detected rdp communication\"\n | where datetime_part(\"Hour\", creationTime_t) !between(startOfDay .. endOfDay)\n or dayofweek(creationTime_t) == saturday or dayofweek(creationTime_t) == sunday"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Access to the ESET PROTECT console",
+                "description": "Permissions to add users"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions to connect to ESET Inspect to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+            },
+            {
+              "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+            },
+            {
+              "description": "1. Log into the ESET PROTECT console with an administrator account, select the **More** tab and the **Users** subtab. \n2. Click on the **ADD NEW** button and add a **native user**.\n3. Create a new user for the API account. **Optional:** Select a **Home group** other than **All** to limit what detections are ingested. \n4. Under the **Permission Sets** tab, assign the **Inspect reviewer permission set**.\n4. Log out of the administrator account and log into the console with the new API credentials for validation, then log out of the API account. \n5.",
+              "title": "Step 1 -  Create an API user"
+            },
+            {
+              "description": ">**IMPORTANT:** Before deploying the ESET Inspect connector, have the Workspace ID and Workspace Primary Key (can be copied from the following) readily available.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "Step 2 - Copy Workspace ID and Key"
+            },
+            {
+              "description": "Use this method for automated deployment of the ESET Inspect connector using an ARM Tempate.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-ESETInspect-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Workspace ID**, **Workspace Key**, **API Username**, **API Password** , enter the **Inspect base URL** and the **first ID** to start ingesting detections from.\n - The defailt starting ID is **0**. This means that all detections will be ingested. \n - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. \n4. Mark the checkbox labelled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy.",
+              "title": "Step 3 - Deploy the Azure Resource Manager (ARM) Template"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ESET Inspect",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "ESET Netherlands"
+        },
+        "support": {
+          "name": "ESET Enterprise",
+          "tier": "Partner",
+          "link": "https://www.eset.com/int/business/solutions/endpoint-detection-and-response/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-06-01",
+        "providers": [
+          "ESET Enterprise"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

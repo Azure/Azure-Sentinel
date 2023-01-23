@@ -1,0 +1,384 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+     "metadata": {
+        "title": "RecordedFutureIdentity-add-AAD-security-group-user", 
+        "description": "This playbook adds a compromised user to an AAD security group. Triage and remediation should be handled in follow up playbooks or actions.",
+        "lastUpdateTime": "2022-09-09T00:00:00.000Z", 
+        "entities": [], 
+        "tags": ["Identity protection"], 
+        "support": {
+            "tier": "developer" 
+        },
+        "author": {
+            "name": "Dmytro Branitskyi, Recorded Future (support@recordedfuture.com)"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFutureIdentity-add-AAD-security-group-user",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureADConnectionName": "[concat('azuread-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "active_directory_domain": {
+                                            "type": "string"
+                                        },
+                                        "active_directory_security_group_id": {
+                                            "type": "string"
+                                        },
+                                        "risky_user_email": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": {
+                            "runAfter": {
+                                "Response_-_Risky_user_was_not_found_in_Active_Directory": [
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "@@odata.id": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuread']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v1.0/groups/@{encodeURIComponent(triggerBody()?['active_directory_security_group_id'])}/members/$ref"
+                            }
+                        },
+                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": {
+                            "runAfter": {
+                                "If_Active_Directory_domain_parameter_is_not_null_and_not_empty": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuread']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v1.0/users/@{encodeURIComponent(variables('user_principal_name'))}"
+                            }
+                        },
+                        "If_Active_Directory_domain_parameter_is_not_null_and_not_empty": {
+                            "actions": {
+                                "Set_Active_Directory_user_principal_name_to_user_email's_username_+_AD_domain": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "user_principal_name",
+                                        "value": "@{concat(split(triggerBody()?['risky_user_email'], '@')[0], '@', triggerBody()?['active_directory_domain'])}"
+                                    },
+                                    "description": "Use [user email's username + Active Directory domain] as Active Directory user principal name."
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_-_Active_Directory_user_principal_name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_Active_Directory_user_principal_name_to_user's_email": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "user_principal_name",
+                                            "value": "@triggerBody()?['risky_user_email']"
+                                        },
+                                        "description": "Use [user's email] as Active Directory user principal name."
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['active_directory_domain']",
+                                                "@null"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['active_directory_domain']",
+                                                ""
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_-_Active_Directory_user_principal_name": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "user_principal_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response_-_Failed_to_add_risky_user_to_AD_security_group_for_users_at_risk": {
+                            "runAfter": {
+                                "Response_-_Successfully_added_risky_user_to_AD_security_group_for_users_at_risk": [
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "parameters_passed": {
+                                            "active_directory_domain": "@triggerBody()?['active_directory_domain']",
+                                            "active_directory_security_group_id": "@triggerBody()?['active_directory_security_group_id']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        },
+                                        "user_id_in_active_directory": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']",
+                                        "user_principal_name_used": "@variables('user_principal_name')"
+                                    },
+                                    "reason": "Failed to add Active Directory risky user to Active Directory security group for users at risk. Check active_directory_security_group_id parameter.",
+                                    "status": "Error"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "active_directory_domain": {
+                                                            "type": "string"
+                                                        },
+                                                        "active_directory_security_group_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "user_id_in_active_directory": {
+                                                    "type": "string"
+                                                },
+                                                "user_principal_name": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 422
+                            }
+                        },
+                        "Response_-_Risky_user_was_not_found_in_Active_Directory": {
+                            "runAfter": {
+                                "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "parameters_passed": {
+                                            "active_directory_domain": "@triggerBody()?['active_directory_domain']",
+                                            "active_directory_security_group_id": "@triggerBody()?['active_directory_security_group_id']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        },
+                                        "user_principal_name_used": "@variables('user_principal_name')"
+                                    },
+                                    "reason": "Risky user was not found in Active Directory.",
+                                    "status": "Error"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "active_directory_domain": {
+                                                            "type": "string"
+                                                        },
+                                                        "active_directory_security_group_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "user_principal_name_used": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 404
+                            }
+                        },
+                        "Response_-_Successfully_added_risky_user_to_AD_security_group_for_users_at_risk": {
+                            "runAfter": {
+                                "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "parameters_passed": {
+                                            "active_directory_domain": "@triggerBody()?['active_directory_domain']",
+                                            "active_directory_security_group_id": "@triggerBody()?['active_directory_security_group_id']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        },
+                                        "user_id_in_active_directory": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']",
+                                        "user_principal_name_used": "@variables('user_principal_name')"
+                                    },
+                                    "status": "Successfully added risky user to Active Directory security group for users at risk."
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "active_directory_domain": {
+                                                            "type": "string"
+                                                        },
+                                                        "active_directory_security_group_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "user_id_in_active_directory": {
+                                                    "type": "string"
+                                                },
+                                                "user_principal_name": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuread": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureADConnectionName'))]",
+                                "connectionName": "[variables('AzureADConnectionName')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuread')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('AzureADConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuread')]"
+				},
+                "displayName": "[variables('AzureADConnectionName')]"
+			}
+		}
+    ]
+}

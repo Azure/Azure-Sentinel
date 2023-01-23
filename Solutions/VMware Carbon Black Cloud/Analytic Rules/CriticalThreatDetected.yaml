@@ -1,0 +1,37 @@
+id: 2ca4e7fc-c61a-49e5-9736-5da8035c47e0
+name: Critical Threat Detected
+description: |
+  'This creates an incident in the event a critical threat was identified on a Carbon Black managed endpoint.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: VMwareCarbonBlack
+    dataTypes:
+      - CarbonBlackNotifications_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1210
+query: |
+  let threshold = 8;
+  CarbonBlackNotifications_CL
+  | where threatHunterInfo_score_d >= threshold
+  | extend eventTime = datetime(1970-01-01) + tolong(threatHunterInfo_time_d/1000) * 1sec
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by eventTime, Threat_Name = threatHunterInfo_reportName_s, Device_Name = deviceInfo_deviceName_s,  Internal_IP = deviceInfo_internalIpAddress_s, External_IP = deviceInfo_externalIpAddress_s, Threat_Score = threatHunterInfo_score_d
+  | project-away count_
+  | extend timestamp = StartTime, HostCustomEntity = Device_Name, IPCustomEntity = Internal_IP
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

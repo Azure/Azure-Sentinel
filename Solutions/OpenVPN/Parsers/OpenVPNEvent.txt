@@ -1,0 +1,30 @@
+// Usage Instructions: 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name as OpenVpnEvent and specifying Legacy Category.
+// This function maps OpenVPN events to Advanced Security Information Model (ASIM) (https://docs.microsoft.com/azure/sentinel/normalization).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. OpenVpnEvent | take 10).
+// Reference : Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+let EventData = Syslog
+| where ProcessName == "openvpn"
+| extend EventVendor = "OpenVPN"
+        ,EventProduct = "OpenVPN"
+        ,EventCount = int(1)
+| project-rename EventSeverity=SeverityLevel
+;
+let ovpn_t1 = EventData
+| where SyslogMessage matches regex @"\A\w+/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}"
+| extend SrcUsername = extract(@"\A(\w+)/", 1, SyslogMessage)
+        ,SrcIpAddr = extract(@"\A\w+/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", 1, SyslogMessage)
+        ,SrcPortNumber = extract(@"\A\w+/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:(\d{1,5})", 1, SyslogMessage)
+        ,EventType = extract(@"\A\w+/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}\s+(.*?)[:,]", 1, SyslogMessage)
+        ,EventMessage = extract(@"\A\w+/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\:\d{1,5}\s+(.*?)[:,]\s+(.*)", 2, SyslogMessage)
+| project-away SyslogMessage
+;
+let ovpn_t2 = EventData
+| where SyslogMessage matches regex @"\A\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}"
+| extend SrcIpAddr = extract(@"\A(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", 1, SyslogMessage)
+        ,SrcPortNumber = extract(@"\A\w+/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:(\d{1,5})", 1, SyslogMessage)
+        ,EventType = extract(@"\A\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}\s+(.*?)[:,]", 1, SyslogMessage)
+        ,EventMessage = extract(@"\A\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}\s+(.*?)[:,]\s+(.*)", 2, SyslogMessage)
+| project-away SyslogMessage
+;
+union isfuzzy=false ovpn_t1, ovpn_t2

@@ -1,0 +1,148 @@
+{
+    "id": "42CrunchAPIProtection",
+    "title": "API Protection",
+    "publisher": "42Crunch",
+    "descriptionMarkdown": "Connects the 42Crunch API protection to Azure Log Analytics via the REST API interface",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "42Crunch",
+            "baseQuery": "apifirewall_log_1_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description" : "API requests that were rate-limited",
+            "query": "apifirewall_log_1_CL\n| where TimeGenerated >= ago(30d)\n| where Status_d == 429"
+        },
+        {
+            "description" : "API requests generating a server error",
+            "query": "apifirewall_log_1_CL\n| where TimeGenerated >= ago(30d)\n| where Status_d >= 500 and Status_d <= 599"
+        },
+        {
+            "description" : "API requests failing JWT validation",
+            "query": "apifirewall_log_1_CL\n| where TimeGenerated >= ago(30d)\n| where Error_Message_s contains \"missing [\\\"x-access-token\\\"]\""
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "apifirewall_log_1_CL",
+            "lastDataReceivedQuery": "apifirewall_log_1_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "apifirewall_log_1_CL\n| summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(7d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "Step 1 : Read the detailed documentation",
+            "description": "The installation process is documented in great detail in the GitHub repository [Microsoft Sentinel integration](https://github.com/42Crunch/azure-sentinel-integration). The user should consult this repository further to understand installation and debug of the integration."
+        },
+        {
+            "title": "Step 2: Retrieve the workspace access credentials",
+            "description": "The first installation step is to retrieve both your **Workspace ID** and **Primary Key** from the Sentinel platform.\nCopy the values shown below and save them for configuration of the API log forwarder integration.",
+            "instructions": [
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "PrimaryKey"
+                        ],
+                        "label": "Primary Key"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "Step 3: Install the 42Crunch protection and log forwarder",
+            "description": "The next step is to install the 42Crunch protection and log forwarder to protect your API. Both components are availabe as containers from the [42Crunch repository](https://hub.docker.com/u/42crunch). The exact installation will depend on your environment, consult the [42Crunch protection documentation](https://docs.42crunch.com/latest/content/concepts/api_firewall_deployment_architecture.htm) for full details. Two common installation scenarios are described below:\n",
+            "innerSteps": [
+                {
+                    "title": "Installation via Docker Compose",
+                    "description": "The solution can be installed using a [Docker compose file](https://github.com/42Crunch/azure-sentinel-integration/blob/main/sample-deployment/docker-compose.yml)."
+                },
+                {
+                    "title": "Installation via Helm charts",
+                    "description": "The solution can be installed using a [Helm chart](https://github.com/42Crunch/azure-sentinel-integration/tree/main/helm/sentinel)."    
+                }
+            ]
+        },
+        {
+            "title": "Step 4: Test the data ingestion",
+            "description": "In order to test the data ingestion the user should deploy the sample *httpbin* application alongside the 42Crunch protection and log forwarder [described in detail here](https://github.com/42Crunch/azure-sentinel-integration/tree/main/sample-deployment).",
+            "innerSteps": [
+                {
+                    "title": "4.1 Install the sample",
+                    "description": "The sample application can be installed locally using a [Docker compose file](https://github.com/42Crunch/azure-sentinel-integration/blob/main/sample-deployment/docker-compose.yml) which will install the httpbin API server, the 42Crunch API protection and the Sentinel log forwarder. Set the environment variables as required using the values copied from step 2."
+                },
+                {
+                    "title": "4.2 Run the sample",
+                    "description": "Verfify the API protection is connected to the 42Crunch platform, and then exercise the API locally on the *localhost* at port 8080 using Postman, curl, or similar. You should see a mixture of passing and failing API calls. "
+                },
+                {
+                    "title": "4.3 Verify the data ingestion on Log Analytics",
+                    "description": "After approximately 20 minutes access the Log Analytics workspace on your Sentinel installation, and locate the *Custom Logs* section verify that a *apifirewall_log_1_CL* table exists. Use the sample queries to examine the data."
+                }
+            ]
+        }
+    ],
+    "metadata": {
+        "id": "0116a50c-9282-4237-9962-4da1dfcbfb55",
+        "version": "1.0.0",
+        "kind": "dataConnector",
+        "source": {
+            "kind": "community"
+        },
+        "author": {
+            "name": "42Crunch"
+        },
+        "support": {
+            "tier": "community",
+            "name": "42Crunch",
+            "email": "support@42crunch.com",
+            "link": "https://github.com/42Crunch/azure-sentinel-integration"
+        }
+    }
+}

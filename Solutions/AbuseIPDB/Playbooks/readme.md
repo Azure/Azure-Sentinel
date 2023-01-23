@@ -77,7 +77,7 @@ Once deployment is complete, authorize each connection.
 
 1. Open playbook which has been deployed
 2. Click API connection on left side blade
-3. Click the Azure Sentinel connection resource
+3. Click the Microsoft Sentinel connection resource
 4. Click edit API connection
 5. Click Authorize
 6. Sign in

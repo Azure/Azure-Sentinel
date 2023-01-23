@@ -1,0 +1,56 @@
+id: ee55dc85-d2da-48c1-a6c0-3eaee62a8d56
+name: User Account Created Using Incorrect Naming Format
+description: |
+  'This query looks for accounts being created where the name does not match a defined pattern.
+    Attackers may attempt to add accounts as a means of establishing persistant access to an environment, looking for anomalies in created accounts may help identify illegitimately created accounts.
+    Created accounts should be investigated to ensure they were legitimated created.
+    The user_regex field in the query needs to be populated with the expected pattern for the environment before deployment.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#accounts-not-following-naming-policies'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136.003
+tags:
+  - AADSecOpsGuide
+query: |
+  // Add the environments expected username format regex below before deploying
+    let user_regex = "";
+    AuditLogs
+    | where OperationName =~ "Add user"
+    | where Result =~ "success"
+    | extend userAgent = tostring(AdditionalDetails[0].value)
+    | extend addingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend addingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+    | extend AddedBy = iif(isnotempty(addingUser), addingUser, addingApp)
+    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+    | extend AddedUser = tostring(TargetResources[0].userPrincipalName)
+    | where AddedUser matches regex user_regex
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AddedBy
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AddedUser
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

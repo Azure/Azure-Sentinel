@@ -1,0 +1,657 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Cisco ACI"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-ciscoaci",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "CiscoACI",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "CiscoACI",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "CiscoACIEvent-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "CiscoACI Data Parser",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Cisco ACI data connector with template",
+        "displayName": "Cisco ACI template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Cisco ACI data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Cisco Application Centric Infrastructure",
+                  "publisher": "Cisco",
+                  "descriptionMarkdown": "[Cisco Application Centric Infrastructure (ACI)](https://www.cisco.com/c/en/us/solutions/collateral/data-center-virtualization/application-centric-infrastructure/solution-overview-c22-741487.html) data connector provides the capability to ingest [Cisco ACI logs](https://www.cisco.com/c/en/us/td/docs/switches/datacenter/aci/apic/sw/all/syslog/guide/b_ACI_System_Messages_Guide/m-aci-system-messages-reference.html) into Microsoft Sentinel.",
+                  "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**CiscoACIEvent**](https://aka.ms/sentinel-CiscoACI-parser) which is deployed with the Microsoft Sentinel Solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "CiscoACIEvent",
+                      "baseQuery": "CiscoACIEvent"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Resources (DstResourceId)",
+                      "query": "CiscoACIEvent\n | where notempty(DstResourceId)\n | summarize count() by DstResourceId\n | top 10 by count_"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Syslog (CiscoACIEvent)",
+                      "lastDataReceivedQuery": "CiscoACIEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "CiscoACIEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "write permission is required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**CiscoACIEvent**](https://aka.ms/sentinel-CiscoACI-parser) which is deployed with the Microsoft Sentinel Solution."
+                    },
+                    {
+                      "description": ">**NOTE:**  This data connector has been developed using Cisco ACI Release 1.x"
+                    },
+                    {
+                      "description": "[Follow these steps](https://www.cisco.com/c/en/us/td/docs/switches/datacenter/aci/apic/sw/1-x/basic-config/b_ACI_Config_Guide/b_ACI_Config_Guide_chapter_010.html#d2933e4611a1635) to configure Syslog Destination, Destination Group, and Syslog Source.",
+                      "title": "1. Configure Cisco ACI system sending logs via Syslog to remote server where you will install the agent."
+                    },
+                    {
+                      "description": "Install the agent on the Server to which the logs will be forwarded.\n\n> Logs on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Linux agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "2. Install and onboard the agent for Linux or Windows"
+                    },
+                    {
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Windows agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Windows Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Windows Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "Open Log Analytics to check if the logs are received using the Syslog schema.\n\n>**NOTE:** It may take up to 15 minutes before new logs will appear in Syslog table.",
+                      "title": "3. Check logs in Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cisco ACI",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cisco ACI",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Cisco Application Centric Infrastructure",
+          "publisher": "Cisco",
+          "descriptionMarkdown": "[Cisco Application Centric Infrastructure (ACI)](https://www.cisco.com/c/en/us/solutions/collateral/data-center-virtualization/application-centric-infrastructure/solution-overview-c22-741487.html) data connector provides the capability to ingest [Cisco ACI logs](https://www.cisco.com/c/en/us/td/docs/switches/datacenter/aci/apic/sw/all/syslog/guide/b_ACI_System_Messages_Guide/m-aci-system-messages-reference.html) into Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "CiscoACIEvent",
+              "baseQuery": "CiscoACIEvent"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (CiscoACIEvent)",
+              "lastDataReceivedQuery": "CiscoACIEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "CiscoACIEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Resources (DstResourceId)",
+              "query": "CiscoACIEvent\n | where notempty(DstResourceId)\n | summarize count() by DstResourceId\n | top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**CiscoACIEvent**](https://aka.ms/sentinel-CiscoACI-parser) which is deployed with the Microsoft Sentinel Solution."
+            },
+            {
+              "description": ">**NOTE:**  This data connector has been developed using Cisco ACI Release 1.x"
+            },
+            {
+              "description": "[Follow these steps](https://www.cisco.com/c/en/us/td/docs/switches/datacenter/aci/apic/sw/1-x/basic-config/b_ACI_Config_Guide/b_ACI_Config_Guide_chapter_010.html#d2933e4611a1635) to configure Syslog Destination, Destination Group, and Syslog Source.",
+              "title": "1. Configure Cisco ACI system sending logs via Syslog to remote server where you will install the agent."
+            },
+            {
+              "description": "Install the agent on the Server to which the logs will be forwarded.\n\n> Logs on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Linux agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "2. Install and onboard the agent for Linux or Windows"
+            },
+            {
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Windows agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Windows Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Windows Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ]
+            },
+            {
+              "description": "Open Log Analytics to check if the logs are received using the Syslog schema.\n\n>**NOTE:** It may take up to 15 minutes before new logs will appear in Syslog table.",
+              "title": "3. Check logs in Microsoft Sentinel"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**CiscoACIEvent**](https://aka.ms/sentinel-CiscoACI-parser) which is deployed with the Microsoft Sentinel Solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "CiscoACIEvent Data Parser with template",
+        "displayName": "CiscoACIEvent Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CiscoACIEvent Data Parser with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "CiscoACI Data Parser",
+                "category": "Samples",
+                "functionAlias": "CiscoACIEvent",
+                "query": "\nSyslog\r\n| where SyslogMessage contains_cs ('%LOG_LOCAL') and SyslogMessage contains ('SYSTEM_MSG')\r\n| extend EventVendor = 'Cisco'\r\n| extend EventProduct = 'ACI'\r\n| extend EventData = split(SyslogMessage, ' ')\r\n| extend DvcHostname = tostring(EventData[1])\r\n| extend EventProp = split(replace(@'\\]$', '', replace(@'\\A\\[', '', tostring(EventData[3]))), '][')\r\n| extend EventId = case(array_length(EventProp) != 3, tostring(EventProp[0]),\r\n                        \"\")\r\n| extend DstResourceId = tostring(EventProp[-1])\r\n| extend EventSeverity = tostring(EventProp[-2])\r\n| extend EventResultDetails = case(array_length(EventProp) == 5, tostring(EventProp[1]),\r\n                                    \"\")\r\n| extend EventResult = case(array_length(EventProp) == 5, tostring(EventProp[2]),\r\n                            array_length(EventProp) == 4, tostring(EventProp[1]),\r\n                            \"\")\r\n| extend EventMessage = extract(@'.*\\]\\s(.*)', 1, SyslogMessage)\r\n| project-away SyslogMessage, EventData, EventProp",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "CiscoACI Data Parser"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Cisco ACI",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "CiscoACI Data Parser",
+        "category": "Samples",
+        "functionAlias": "CiscoACIEvent",
+        "query": "\nSyslog\r\n| where SyslogMessage contains_cs ('%LOG_LOCAL') and SyslogMessage contains ('SYSTEM_MSG')\r\n| extend EventVendor = 'Cisco'\r\n| extend EventProduct = 'ACI'\r\n| extend EventData = split(SyslogMessage, ' ')\r\n| extend DvcHostname = tostring(EventData[1])\r\n| extend EventProp = split(replace(@'\\]$', '', replace(@'\\A\\[', '', tostring(EventData[3]))), '][')\r\n| extend EventId = case(array_length(EventProp) != 3, tostring(EventProp[0]),\r\n                        \"\")\r\n| extend DstResourceId = tostring(EventProp[-1])\r\n| extend EventSeverity = tostring(EventProp[-2])\r\n| extend EventResultDetails = case(array_length(EventProp) == 5, tostring(EventProp[1]),\r\n                                    \"\")\r\n| extend EventResult = case(array_length(EventProp) == 5, tostring(EventProp[2]),\r\n                            array_length(EventProp) == 4, tostring(EventProp[1]),\r\n                            \"\")\r\n| extend EventMessage = extract(@'.*\\]\\s(.*)', 1, SyslogMessage)\r\n| project-away SyslogMessage, EventData, EventProp",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cisco ACI",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cisco ACI",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-07-03",
+        "providers": [
+          "Cisco"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -10,10 +10,10 @@ There are a number of pre-configuration steps required before deploying the play
 0. "GIBIndicatorProcessor" Playbook<br>
 This playbook is used to send indicators to Microsoft Security Graph API from all other GIB playbooks.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>  
 
@@ -30,10 +30,10 @@ GIB APT Threat Indicator(sha1)<br>
 d. Description:<br>
 Group-IB continuously monitors activities undertaken by hacker groups, investigate, collect, and analyze information about all emerging and ongoing attacks. Based on this information, we provide IOC's related to APT Groups Attacks.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>  
 
@@ -44,10 +44,10 @@ c. Indicators Content: N/A<br>
 d. Description:<br>
 This collection contains APT groups’ info, with detailed descriptions.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>    
 
@@ -59,10 +59,10 @@ GIB DDoS Attack(IPv4)<br>
 d. Description:<br>
 The "DDoS attacks" collection contains a DDoS Attacks targets and C2 indicators.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_ddos.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 

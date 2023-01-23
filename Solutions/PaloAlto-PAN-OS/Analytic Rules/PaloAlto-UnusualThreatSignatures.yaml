@@ -1,0 +1,57 @@
+id: 89a86f70-615f-4a79-9621-6f68c50f365f
+name: Palo Alto Threat signatures from Unusual IP addresses 
+description: |
+  'Identifies Palo Alto Threat signatures from unusual IP addresses which are not historically seen. 
+  This detection is also leveraged and required for MDE and PAN Fusion scenario
+  https://docs.microsoft.com/Azure/sentinel/fusion-scenario-reference#network-request-to-tor-anonymization-service-followed-by-anomalous-traffic-flagged-by-palo-alto-networks-firewall'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1046
+  - T1030
+  - T1071.001
+tags:
+  - Fusion
+query: |
+  let starttime = 7d;
+  let endtime = 1d;
+  let timeframe = 1h;
+  let HistThreshold = 25; 
+  let CurrThreshold = 10; 
+  let HistoricalThreats = CommonSecurityLog
+  | where isnotempty(SourceIP)
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where DeviceVendor =~ "Palo Alto Networks"
+  | where Activity =~ "THREAT" and SimplifiedDeviceAction =~ "alert" 
+  | where DeviceEventClassID in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')
+  | summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceVendor;
+  let CurrentHourThreats =  CommonSecurityLog
+  | where isnotempty(SourceIP)
+  | where TimeGenerated > ago(timeframe)
+  | where DeviceVendor =~ "Palo Alto Networks"
+  | where Activity =~ "THREAT" and SimplifiedDeviceAction =~ "alert" 
+  | where DeviceEventClassID in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')
+  | summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceProduct, DeviceVendor;
+  CurrentHourThreats 
+  | where TotalEvents < CurrThreshold
+  | join kind = leftanti (HistoricalThreats 
+  | where TotalEvents > HistThreshold) on SourceIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0
+kind: Scheduled
