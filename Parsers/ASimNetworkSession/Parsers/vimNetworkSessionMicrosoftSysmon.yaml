@@ -1,0 +1,304 @@
+Parser:
+  Title:  Network Session Event ASIM filtering parser for Sysmon (Event 3)
+  Version: '0.0.2'
+  LastUpdated: Jan 23, 2023
+Product:
+  Name: Windows Sysmon
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.5'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Sysmon network session events (event 3) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
+ParserName: vimNetworkSessionMicrosoftSysmon
+EquivalentBuiltInParser: _Im_NetworkSession_MicrosoftSysmon
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+  let Sysmon3_NetworkEvent =    
+      Event
+      | where Source == "Microsoft-Windows-Sysmon" and EventID==3
+      | where (isnull(starttime) or TimeGenerated>=starttime)
+        and (isnull(endtime) or TimeGenerated<=endtime) 
+      | where not(disabled)
+      | project-away ParameterXml, RenderedDescription
+      // ***************  Prefilterring *****************************************************************
+      | where  
+              (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+          and (array_length(ip_any)==0 
+               or has_any_ipv4_prefix(EventData,ip_any)
+               ) 
+          and (array_length(hostname_has_any)==0 
+               or EventData has_any(hostname_has_any))  
+          and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
+      // ***************  Prefilterring *****************************************************************   
+       | parse-kv EventData as 
+        (
+          SourceIp:string,
+          DestinationIp:string,
+          SourceHostname:string,
+          DestinationHostname:string
+         ) 
+          with (regex=@'<Data Name="(\w+)">{?([^>]*)}?</Data>')    
+      | project-rename
+        SrcHostname = SourceHostname,
+        DstHostname = DestinationHostname
+      | where 
+        (array_length(srcipaddr_has_any_prefix)==0 
+                      or has_any_ipv4_prefix(SourceIp,srcipaddr_has_any_prefix)
+        )
+      | project-away
+                      Source,
+                      EventLog,
+                      EventCategory,
+                      UserName,
+                      Message,
+                      ParameterXml,
+                      RenderedDescription,
+                      MG,
+                      AzureDeploymentID,
+                      Role
+      ;    
+    let Sysmon3_NetworkWindowsEvent =    
+      WindowsEvent
+      | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3 // we want to ensure this only applies to WindowsEvents
+      | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime) 
+      | where not(disabled)
+    // ***************  Prefilterring *****************************************************************
+      | where  (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+            and (array_length(ip_any)==0 
+                  or has_any_ipv4_prefix(EventData,ip_any)
+                ) 
+           and (array_length(hostname_has_any)==0 
+                  or EventData has_any(hostname_has_any))  
+            and (isnull(dstportnumber) or EventData has (tostring(dstportnumber))) 
+    // ***************  Prefilterring *****************************************************************   
+      | extend
+            SourceIp = tostring(EventData.SourceIp),
+            DestinationIp = tostring(EventData.DestinationIp),
+            DstHostname = tostring(EventData.DestinationHostname),
+            SrcHostname = tostring(EventData.SrcHostname)
+      | project-away
+                       Provider,
+                       Channel,
+                       Task,
+                       Data,
+                       RawEventData,
+                       EventOriginId
+    ;
+    let EventParser = (T: (EventData: string)) {
+    T 
+    | parse-kv EventData as 
+          (
+           Initiated:bool,  // Initiated indicates the process initiated a connection (meaning outbound)
+           RuleName:string,
+           UtcTime:datetime,
+           ProcessGuid:string,
+           ProcessId:string,
+           Image:string,
+           User:string,
+           Protocol:string,
+           SourceIsIpv6:bool,
+           SourcePort:int,
+           SourcePortName:string,
+           DestinationIsIpv6:bool,
+           DestinationPort:int,
+           DestinationPortName:string
+          ) 
+          with (regex=@'<Data Name="(\w+)">{?([^>]*?)}?</Data>')
+    | project-away EventData
+    };
+    let NetworkEvents = 
+    Sysmon3_NetworkEvent
+    | invoke EventParser ()
+    | extend 
+             temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any) 
+           , temp_isDstMatch=has_any_ipv4_prefix(DestinationIp,dst_or_any)
+    | extend 
+    ASimMatchingIpAddr = case(
+          array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested, probably most common case
+          , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+          , temp_isSrcMatch, "SourceIp"
+          , temp_isDstMatch, "DestinationIp"
+          , "No match"
+    )
+    | where ASimMatchingIpAddr != "No match"
+    | extend 
+    temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
+            , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
+      | extend ASimMatchingHostname = case(
+            array_length(hostname_has_any) == 0, "-" // match not requested, probably most common case
+            , (temp_isSrcHostMatch and temp_isDstHostMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcHostMatch, "SrcHostname"
+            , temp_isDstHostMatch, "DstHostname"
+            , "No match"
+    )
+    | where ASimMatchingHostname != "No match"
+    | project-away temp_*
+    ;
+    let WindowsEventParser = (T: (EventData: dynamic)) {
+      T       
+    | extend 
+         RuleName = tostring(EventData.RuleName),
+         UtcTime = todatetime(EventData.UtcTime),
+         ProcessId = tostring(EventData.ProcessId),
+         Image = tostring(EventData.Image),
+         User = tostring(EventData.User),
+         Protocol = tostring(EventData.Protocol),
+         Initiated = tobool(EventData.Initiated), // Initiated indicates the process initiated a connection (meaning outbound)
+         SourceIsIpv6 = tobool(EventData.SourceIsIpv6),
+         SourcePort = toint(EventData.SourcePort),
+         SourcePortName = tostring(EventData.SourcePortName),
+         DestinationIsIpv6 = tobool(EventData.DestinationIsIpv6),
+         DestinationPort = toint(EventData.DestinationPort),
+         DestinationPortName = tostring(EventData.DestinationPortName)
+    | parse EventData.ProcessGuid with "{" ProcessGuid "}"
+    | project-away EventData
+         };
+     let WindowsEvents = 
+    Sysmon3_NetworkWindowsEvent
+    | invoke WindowsEventParser ()
+          | extend 
+             temp_isSrcMatch=has_any_ipv4_prefix(SourceIp,src_or_any) 
+           , temp_isDstMatch=has_any_ipv4_prefix(DestinationIp,dst_or_any)
+    | extend ASimMatchingIpAddr = case(
+            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested, probably most common case
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcMatch, "SourceIp"
+            , temp_isDstMatch, "DestinationIp"
+            , "No match"
+    )       
+     | where ASimMatchingIpAddr != "No match"
+     | extend temp_isSrcHostMatch= (SrcHostname has_any (hostname_has_any))
+            , temp_isDstHostMatch = (DstHostname has_any (hostname_has_any))
+     | extend ASimMatchingHostname = case(
+            array_length(hostname_has_any) == 0, "-" // match not requested, probably most common case
+            , (temp_isSrcHostMatch and temp_isDstHostMatch), "Both" // has to be checked before the individual 
+            , temp_isSrcHostMatch, "SrcHostname"
+            , temp_isDstHostMatch, "DstHostname"
+            , "No match"
+    )
+    | where ASimMatchingHostname != "No match"
+    | project-away temp_* 
+      ;
+      let SysmonForWindowsNetworks =
+          union isfuzzy=true NetworkEvents, WindowsEvents
+          |  extend
+                AppName = tostring(split(Image, "\\")[-1])
+          | extend
+                SrcUsernameType = iff(not(Initiated), "Windows", ""),
+                SrcUsername = iff(not(Initiated), tostring(User), ""),
+                SrcProcessId = iff(not(Initiated), tostring(ProcessId), ""),
+                SrcProcessGuid = iff(not(Initiated), ProcessGuid, ""),
+                SrcProcessName = iff(not(Initiated), tostring(Image), ""),
+                SrcAppName = iff(not(Initiated), AppName, ""),
+                SrcAppType = iff(not(Initiated), 'Process', ""),
+                DstUsernameType = iff(Initiated, "Windows", ""),
+                DstUsername = iff(Initiated, tostring(User), ""),
+                DstProcessId = iff(Initiated, tostring(ProcessId), ""),
+                DstProcessGuid = iff(Initiated, ProcessGuid, ""),
+                DstProcessName = iff(Initiated, tostring(Image), ""),
+                DstAppName = iff(Initiated, AppName, ""),
+                DstAppType = iff(Initiated, 'Process', "")
+        | project-away
+                ProcessId,
+                ProcessGuid,
+                Image,
+                AppName
+        | project-rename 
+                EventStartTime = UtcTime,
+                Dvc = Computer,
+                SrcIpAddr = SourceIp,
+                DstIpAddr  = DestinationIp,
+                DstPortNumber = DestinationPort,
+                SrcPortNumber = SourcePort,
+                NetworkRuleName = RuleName 
+          | extend
+                EventEndTime = EventStartTime,
+                Hostname = case(
+                                Initiated, DstHostname,
+                                not(Initiated), SrcHostname,
+                                Dvc),
+                Src = SrcIpAddr,
+                Dst = DstIpAddr,
+                DvcIpAddr = iff(Initiated, SrcIpAddr, DstIpAddr),
+                IpAddr = SrcIpAddr,
+                EventType = 'EndpointNetworkSession',
+                EventCount = int(1),
+                EventVendor = 'Microsoft',
+                EventSchemaVersion = '0.2.5',
+                EventSchema = 'NetworkSession', 
+                EventProduct = 'Sysmon',
+                EventResult = 'Success',
+                EventSeverity = 'Informational',
+                DvcOs = 'Windows',
+                Protocol = toupper(Protocol),
+                EventOriginalType = '3' // Set with a constant value to avoid parsing
+        | extend
+                SrcHostname = iff( SrcHostname == "-", "", SrcHostname),
+                DvcHostname = iff( DvcHostname == "-", "", DvcHostname),
+                DstHostname = iff( DstHostname == "-", "", DstHostname) // let's make empty values actually empty
+      | project-rename
+                TmpSrcHostname = SrcHostname,
+                TmpDvcHostname = DvcHostname,
+                TmpDstHostname = DstHostname
+      | invoke 
+                _ASIM_ResolveSrcFQDN('TmpSrcHostname')
+      | invoke 
+                _ASIM_ResolveDvcFQDN('TmpDvcHostname')
+      | invoke 
+                _ASIM_ResolveDstFQDN('TmpDstHostname')
+      | project-away
+                TmpSrcHostname,
+                TmpDvcHostname,
+                TmpDstHostname
+      | project-rename 
+                NetworkProtocol = toupper(Protocol),
+                NetworkProtocolVersion = iff((DestinationIsIpv6) or (SourceIsIpv6), "IPV6", "IPV4")
+      | project-away
+                Destination*,
+                ManagementGroupName,
+                TenantId,
+                Source*,
+                EventID,
+                EventLevelName,
+                EventLevel,
+                Initiated
+      ;
+      SysmonForWindowsNetworks
