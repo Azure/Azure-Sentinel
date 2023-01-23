@@ -1,8 +1,8 @@
 Id: 678b6e84-0308-461c-ae43-6bb287a9d970
 Parser:
   Title: DNS activity ASIM parser for Infoblox NIOS
-  Version: '0.5'
-  LastUpdated: June 26 2022
+  Version: '0.6'
+  LastUpdated: Dec 11 2022
 Product:
   Name: Infoblox NIOS
 Normalization:
@@ -22,53 +22,46 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+ let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;
  let response = (disabled: boolean=false) {
-    Syslog
+    SyslogProjected
     | where not(disabled)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
-    | parse SyslogMessage with
-        "client "
-        SrcIpAddr:string "#" 
-        SrcPortNumber:int " "
-        NetworkProtocol:string ": query: "
-        DnsQuery:string " "
-        DnsQueryClassName:string " "
-        DnsQueryTypeName:string " "
-        "response: "
-        rest_of_string:string
-    | extend
-        // -- multi-line mode (?m) needed in regex since samples included new lines. Might not exist in real logs
-        extract = extract_all(@"^(\w+) ([\w\+]+?)(?: |$)(?m)(.*?$)?", rest_of_string)[0]
-    | extend 
-        DnsResponseCodeName = tostring(extract[0]),
-        DnsFlags = tostring(extract[1]),
-        DnsResponseName = tostring(extract[2])
-    | extend 
-        EventSubType = "response"
-    | project-away extract, rest_of_string,SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | parse SyslogMessage with *
+        "client " SrcIpAddr: string
+        "#" SrcPortNumber: int
+        " " NetworkProtocol: string
+        ": query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " response: " DnsResponseCodeName: string
+        " " DnsFlags: string
+    | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
+    | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
+    | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
+    | extend EventSubType = "response"
+    | project-away SyslogMessage, ProcessName, DnsResponseNameIndex
   };
   let request = (disabled: boolean=false) {
-    Syslog 
+    SyslogProjected 
     | where not(disabled)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
-    // -- trim_start needed to remove optional @xxxx identifier.
-    | extend SyslogMessage = trim_start (@'^(?:[\w\: ]+)?client (?:@.*? )?', SyslogMessage)
-    // -- trim_end needed to remove optional repetative IP address at the end.
-    | extend SyslogMessage = trim_end (@' \([\d\.]+\)', SyslogMessage)
-    | extend SyslogMessage = replace_string (SyslogMessage, '\\ ', '@@@')
-    | parse SyslogMessage with
-        SrcIpAddr:string "#" 
-        SrcPortNumber:int *
-        "query: "
-        DnsQuery:string " "
-        DnsQueryClassName:string " "
-        DnsQueryTypeName:string " "
-        DnsFlags:string
+    | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
+    | extend SyslogMessage = iif(SyslogMessage startswith "@", (substring(SyslogMessage, indexof(SyslogMessage, " ")+1)), SyslogMessage)
+    | extend SyslogMessage = replace_string(SyslogMessage,"\\ ","@@@")
+    | parse SyslogMessage with 
+        SrcIpAddr: string
+        "#" SrcPortNumber: int *
+        "query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " " DnsFlags: string
     | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
+    | extend DnsFlags= tostring((split(DnsFlags," "))[0])
     | extend 
         EventSubType = "request",
         DnsResponseCodeName = "NA"
-    | project-away SyslogMessage, ProcessName, ProcessID, Facility, SeverityLevel, HostName
+    | project-away SyslogMessage, ProcessName
   };
   let parser = (disabled:boolean=false) {
     union response (disabled), request (disabled)
@@ -92,12 +85,6 @@ ParserQuery: |
         IpAddr=SrcIpAddr,
         Src=SrcIpAddr,
         EventResultDetails = DnsResponseCodeName
-    // -- Backward Compatibility
-    | extend
-        Query=DnsQuery,
-        QueryTypeName=DnsQueryTypeName,
-        ResponseCodeName=DnsResponseCodeName,
-        QueryClassName=DnsQueryClassName,
-        Flags=DnsFlags
+    | project-away HostIP
   };
   parser (disabled)

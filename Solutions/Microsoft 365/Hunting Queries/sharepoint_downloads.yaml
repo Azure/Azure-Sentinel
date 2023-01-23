@@ -1,0 +1,40 @@
+id: e8ae1375-4640-430c-ae8e-2514d09c71eb
+name: SharePointFileOperation via clientIP with previously unseen user agents
+description: |
+  'New user agents associated with a clientIP for sharepoint file uploads/downloads.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let historicalUA=
+  OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated between(lookback..starttime)
+  | summarize by ClientIP, UserAgent;
+  let recentUA = OfficeActivity
+  | where  RecordType == "SharePointFileOperation"
+  | where Operation in ("FileDownloaded", "FileUploaded")
+  | where TimeGenerated between(starttime..endtime)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by ClientIP, UserAgent;
+  recentUA | join kind=leftanti (
+     historicalUA
+  ) on ClientIP, UserAgent
+  // Some OfficeActivity records do not contain ClientIP information - exclude these for fewer results
+  | where not(isempty(ClientIP))
+  | extend timestamp = StartTime, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 2.0.0

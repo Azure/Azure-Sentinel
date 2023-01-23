@@ -1,0 +1,275 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "title": "The Hive - Create alert", 
+        "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. Parses alert extended properties. \n 2. Parses alert custom details.\n 3. Creates alert in TheHive with description, source, sourceRef, title and type passed.",
+        "prerequisites": [
+            "1. TheHive API Connector has to be deployed prior to the deployment of this playbook under the same subscription.",
+			"2. Data gateway should be deployed under the same subscription and resource group as playbooks.",
+            "3. TheHive API credentials are required. Refer to the TheHive API Connector documentation."
+        ],
+	    "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection..",
+            "1.  Click the Microsoft Sentinel connection resource",
+            "2.  Click edit API connection",
+            "3.  Click Authorize",
+            "4.  Sign in",
+			"3.  Click Save",
+            "4.  Repeat steps for other connections",
+            "**b. Configurations in Sentinel**",
+            "1. In Microsoft Sentinel, analytical rules should be configured to trigger an alert. An alert should contain source and sourceRef custom entities. [Docomentation about custom entities values](https://docs.thehive-project.org/thehive/legacy/thehive3/api/alert/)",
+            "2.  Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2022-08-11T12:00:00.000Z", 
+        "entities": [],
+        "tags": ["Incident management"], 
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        },
+	     "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "TheHive-CreateAlert",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "TheHive-CreateAlert",
+            "type": "String"
+        },
+        "ConnectorName": {
+            "defaultValue": "TheHive",
+            "type": "string"
+        },
+        "onPremiseGatewayName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Provide the On-premises data gateway that will be used with The Hive connector. Data gateway should be deployed under the same subscription and resource group as playbook."
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TheHiveConnectionName": "[concat('thehive-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TheHiveConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/', parameters('ConnectorName'))]"
+                },
+                "displayName": "[variables('TheHiveConnectionName')]",
+                "parameterValues": {
+                    "username": "",
+                    "password": "",
+                    "authType": "basic",
+                    "gateway": {
+                        "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connectionGateways/',parameters('onPremiseGatewayName'))]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TheHiveConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Create_alert": {
+                            "runAfter": {
+                                "Parse_custom_details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "description": "@triggerBody()?['Description']",
+                                    "source": "@{body('Parse_custom_details')?['source'][0]}",
+                                    "sourceRef": "@{body('Parse_custom_details')?['sourceRef'][0]}",
+                                    "title": "@triggerBody()?['AlertDisplayName']",
+                                    "type": "@triggerBody()?['AlertType']"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['TheHive']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/alert"
+                            }
+                        },
+                        "Parse_custom_details": {
+                            "runAfter": {
+                                "Parse_extended_properties": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Parse_extended_properties')?['Custom Details']",
+                                "schema": {
+                                    "properties": {
+                                        "source": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "sourceRef": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_extended_properties": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['ExtendedProperties']",
+                                "schema": {
+                                    "properties": {
+                                        "Alert generation status": {
+                                            "type": "string"
+                                        },
+                                        "Analytic Rule Ids": {
+                                            "type": "string"
+                                        },
+                                        "Analytic Rule Name": {
+                                            "type": "string"
+                                        },
+                                        "Correlation Id": {
+                                            "type": "string"
+                                        },
+                                        "Custom Details": {
+                                            "type": "string"
+                                        },
+                                        "Data Sources": {
+                                            "type": "string"
+                                        },
+                                        "Event Grouping": {
+                                            "type": "string"
+                                        },
+                                        "ProcessedBySentinel": {
+                                            "type": "string"
+                                        },
+                                        "Query": {
+                                            "type": "string"
+                                        },
+                                        "Query End Time UTC": {
+                                            "type": "string"
+                                        },
+                                        "Query Period": {
+                                            "type": "string"
+                                        },
+                                        "Query Start Time UTC": {
+                                            "type": "string"
+                                        },
+                                        "Search Query Results Overall Count": {
+                                            "type": "string"
+                                        },
+                                        "Trigger Operator": {
+                                            "type": "string"
+                                        },
+                                        "Trigger Threshold": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+            "outputs": {}
+        },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "TheHive": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TheHiveConnectionName'))]",
+                                "connectionName": "[variables('TheHiveConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('ConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

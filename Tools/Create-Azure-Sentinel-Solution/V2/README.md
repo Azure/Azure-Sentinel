@@ -57,7 +57,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * -- Array of SavedSearch resources
  * -- Raw ARM template
  *
- * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps
+ * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps. Please make sure if there is any CustomConnector in the solution then it's entry should be added prior to any other playbook.
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
  * Version: Version to be used during package creation. We should use any version >= 2.0.0 in case solution needs to be packaged for Template Spec
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
@@ -75,7 +75,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "HuntingQueryBladeDescription": "//Description used in the CreateUiDefinition.json for Hunting Query Blade"
   "PlaybooksBladeDescription": "//Description used in the CreateUiDefinition.json for Playbook Blade"
   "Analytic Rules": [],
-  "Playbooks": [],
+  "Playbooks": [], //Please make sure if there is any CustomConnector in the solution then it's entry should be added prior to any other playbook.
   "PlaybookDescription": ["{Description of playbook}"],
   "Parsers": [],
   "SavedSearches": [],
@@ -140,6 +140,16 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   ],
   "Workbooks": [
     "Solutions/CiscoUmbrella/Workbooks/CiscoUmbrella.json"
+  ],
+  "Playbooks": [
+    "Playbooks/CiscoUmbrellaEnforcementAPIConnector/azuredeploy.json",
+    "Playbooks/CiscoUmbrellaInvestigateAPIConnector/azuredeploy.json",
+    "Playbooks/CiscoUmbrellaManagementAPIConnector/azuredeploy.json",
+    "Playbooks/CiscoUmbrellaNetworkDeviceManagementAPIConnector/azuredeploy.json",
+	"Playbooks/Playbooks/CiscoUmbrella-AddIpToDestinationList/azuredeploy.json",
+    "Playbooks/Playbooks/CiscoUmbrella-AssignPolicyToIdentity/azuredeploy.json",
+    "Playbooks/Playbooks/CiscoUmbrella-BlockDomain/azuredeploy.json",
+    "Playbooks/Playbooks/CiscoUmbrella-GetDomainInfo/azuredeploy.json"
   ],
   "BasePath": "C:\\GitHub\\Azure-Sentinel",
   "Version": "2.0.0",

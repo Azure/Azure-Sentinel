@@ -6,7 +6,7 @@ This playbook enriches the incident with address object and address group.
 ![Fortinet](./Inicdent_Enrichment.PNG)<br>
  ![Fortinet](./Enrichment.PNG)<br>
 
-When a new Azure Sentinel is created, this playbook gets triggered and performs below actions:
+When a new Microsoft Sentinel is created, this playbook gets triggered and performs below actions:
 - It fetches details of the address object.
 - It retrieve the details of address groups which address object is belongs to.
 - Add the Summary of address object and its groups details to an incident.
@@ -33,19 +33,19 @@ When a new Azure Sentinel is created, this playbook gets triggered and performs 
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.  Click the Azure Sentinel connection resource
+1.  Click the Microsoft Sentinel connection resource
 2.  Click edit API connection
 3.  Click Authorize
 4.  Sign in
 5.  Click Save
 
 #### b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
+- In Microsoft sentinel analytical rules should be configured to trigger an incident with IP Entity.
 - Configure the automation rules to trigger this playbook
 
 ## Playbook steps explained
 
-### When Azure Sentinel incident creation rule is triggered
+### When Microsoft Sentinel incident creation rule is triggered
 
 - Capture IP and check for existence and if IP does not exist, create an address object for IP's
 

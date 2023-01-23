@@ -2,7 +2,7 @@
 
 ARM template for ASIM Dns schema parser for Native.
 
-This ASIM parser supports normalizing the native Microsoft Sentinel DNS table (ASimDnsActivityLogs) to the ASIM DNS activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabiliteis, such as aliases, available only at query time. 
+This ASIM parser supports normalizing the native Microsoft Sentinel DNS table (ASimDnsActivityLogs) to the ASIM DNS activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

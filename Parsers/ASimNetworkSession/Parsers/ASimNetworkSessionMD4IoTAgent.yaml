@@ -1,0 +1,122 @@
+Parser:
+  Title:  Network Session ASIM parser for Microsoft Defender for IoT micro agent
+  Version: '0.2.1'
+  LastUpdated: Oct 31, 2022
+Product:
+  Name: Microsoft Defender for IoT
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Microsoft Defender for IoT micro agent logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionMD4IoTAgent
+EquivalentBuiltInParser: _ASim_NetworkSession_MD4IoTAgent
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DirectionNetworkEvents =
+    SecurityIoTRawEvent | where not(disabled)
+    | where RawEventName == "NetworkActivity"
+    | parse EventDetails with * ',"LocalPort":' LocalPort:int ',"RemotePort":' RemotePort:int ',' *
+    | extend outbound = LocalPort > RemotePort
+  ;
+  let parser = (T: (EventDetails: string)) {
+    T 
+     | parse EventDetails with 
+      '{"LocalAddress":"' LocalAddress:string '",'
+      '"RemoteAddress":"' RemoteAddress:string '",'
+      *
+      '"BytesIn":' BytesIn:long ','
+      '"BytesOut":' BytesOut:long ','
+      '"Protocol":"' Protocol:string '",'
+      '"ProcessId":' ProcessId:string ','
+      '"UserId":' UserId:string ','
+      '"ApplicationProtocol":"' ApplicationProtocol:string '",'
+      * // '"AzureResourceId":"' AzureResourceId:string '",'
+      '"DeviceId":"' DeviceId:string '",'
+      '"MessageSource":"' MessageSource:string '",'
+      '"OriginalEventId":"' OriginalEventId:string '",'
+      '"TimestampUTC":"' TimestampUTC:datetime '",'
+      *
+  }
+  ; 
+  let OutboundNetworkEvents = 
+    DirectionNetworkEvents
+    | where outbound
+    | invoke parser ()
+    | project-rename
+       SrcBytes = BytesOut,
+       DstBytes = BytesIn,
+       SrcPortNumber = LocalPort,
+       DstIpAddr = RemoteAddress,
+       DstPortNumber = RemotePort,
+       SrcProcessId = ProcessId
+    | extend
+       SrcIpAddr = LocalAddress,
+       SrcDvcIdType = "MD4IoTid",
+       SrcUserId = UserId,
+       SrcUserIdType = "UID",
+       SrcDvcId = DeviceId,
+       Process = SrcProcessId, // alias
+       SrcDvcOs = iif (MessageSource == "Linux", "Linux", "Windows")
+  ;
+  let InboundNetworkEvents = 
+    DirectionNetworkEvents
+    | where not(outbound)
+    | invoke parser ()
+    | project-rename
+       DstBytes = BytesOut,
+       SrcBytes = BytesIn,
+       DstPortNumber = LocalPort,
+       SrcIpAddr = RemoteAddress,
+       SrcPortNumber = RemotePort,
+       DstProcessId = ProcessId
+     | extend
+        DstIpAddr = LocalAddress,
+       DstDvcIdType = "MD4IoTid",
+       DstUserId = UserId,
+       DstUserIdType = "UID",
+       DstDvcId = DeviceId,
+       Process = DstProcessId, // alias
+       DstDvcOs = iif (MessageSource == "Linux", "Linux", "Windows")
+  ;
+  let NetworkSessionMD4IoT = 
+    union InboundNetworkEvents, OutboundNetworkEvents
+     | extend
+      EventCount = int(1),
+      EventProduct = 'Azure Defender for IoT', 
+      EventVendor = 'Microsoft',
+      EventSchemaVersion = '0.2.0',
+      EventSchema = "NetworkSession", 
+      EventType = 'NetworkSession',
+      EventStartTime = TimeGenerated, // Open question about timestamps
+      EventEndTime = TimeGenerated,  // Open question about timestamps
+      EventResult = 'Success',
+      EventSeverity = 'Informational'
+    | project-rename
+       EventProductVersion = AgentVersion, // Not available in Windows
+       _ResourceId = AssociatedResourceId, 
+       _SubscriptionId = AzureSubscriptionId, 
+      EventOriginalUid = OriginalEventId,  // OK pending question
+      DvcOs = MessageSource,
+      NetworkProtocol = Protocol,
+      NetworkApplicationProtocol = ApplicationProtocol,
+      DvcId = DeviceId,
+      DvcIpAddr = LocalAddress
+    | extend
+      Dvc = DvcId,
+      DvcIdType = "MD4IoTid",
+      User = UserId,
+      IpAddr = SrcIpAddr,
+      Src = SrcIpAddr,
+      Dst = DstIpAddr
+    | project-away outbound
+  ;
+  NetworkSessionMD4IoT

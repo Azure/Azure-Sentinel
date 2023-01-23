@@ -2,7 +2,9 @@
 
 Master playbook is integrated with multiple firewall Endpoint protection products.  
  - CarbonBlack 
- - Crowdstrike.
+ - Crowdstrike
+ - CiscoMeraki
+ - MDE
 
 Endpoint protection products are deployed as child/nested playbooks.
 
@@ -16,16 +18,15 @@ If a malicious host is detected from the Azure sentinel, master playbook calls a
 
 ![Master](./Images/PlaybookDesignerLight.png)
 
-![Master](./Images/PlaybookDesignerDark.png)
-
 
  ## Pre-requisites for deployment
-Atlease one of the below mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
+At least one of the below-mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
 
 - [CarbonBlack-Remediation-Host](/MasterPlaybook-Host-Remediation/CarbonBlack-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for CarbonBlack.  
-- [Crowdstrike-Remediation-Host](/MasterPlaybook-Host-Remediation/Crowdstrike-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for Crowdstrike.  
-
-If any one of the above mentioned playbooks are not deployed then default playbook will deploy in its place.
+- [Crowdstrike-Remediation-Host](/MasterPlaybook-Host-Remediation/Crowdstrike-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for Crowdstrike.
+- [CiscoMeraki-Remediation-Host](/MasterPlaybook-Host-Remediation/CiscoMeraki-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for CiscoMeraki.
+- [MDEIsolate-Remediation-Host](/MasterPlaybook-Host-Remediation/MDEIsolate-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for MDE.
+If any one of the above-mentioned playbooks are not deployed then default playbook will deploy in its place.
 
 ## Nested Playbook Structure
 
@@ -76,11 +77,13 @@ To add new nested playbook to master playbook:
 
  2. Fill in the required parameters for deploying the playbook.
 
- | Parameter  | Description |
-| ------------- | ------------- |
-| **Playbook Name** | Enter the master playbook name here without spaces. |
-| **CarbonBlack Playbook Name**|Enter the name of CarbonBlack Nested playbook without spaces. |
+ | Parameter                     | Description                                                   |
+|-------------------------------|---------------------------------------------------------------|
+| **Playbook Name**             | Enter the master playbook name here without spaces.           |
+| **CarbonBlack Playbook Name** | Enter the name of CarbonBlack Nested playbook without spaces. |
 | **Crowdstrike Playbook Name** | Enter the name of Crowdstrike Nested playbook without spaces. |
+| **CiscoMeraki Playbook Name** | Enter the name of CiscoMeraki Nested playbook without spaces. |
+| **MDEIsolate Playbook Name**  | Enter the name of MDEIsolate Nested playbook without spaces.  |
 
 
 # Post-Deployment Instructions

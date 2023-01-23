@@ -1,0 +1,25 @@
+
+id: 0F2179FB-BACC-4B71-80B3-29DE436E965C
+name: Microsoft Defender AV Security Intelligence up to date information
+description: |
+  'Provides the Security Intelligence version and total count of up to date devices, not up to date devices and count of devices whose status is not available relevant to the security intelligence version.'
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+    let expiringPublishdate = ago(8d);
+    DeviceTvmInfoGathering
+    | extend DataRefreshTimestamp = Timestamp, 
+    AvIsSignatureUpToDateTemp = tostring(AdditionalFields.AvIsSignatureUptoDate),
+    AvSignatureDataRefreshTime = todatetime(AdditionalFields.AvSignatureDataRefreshTime), 
+    AvSignaturePublishTime = todatetime(AdditionalFields.AvSignaturePublishTime),
+    AvSignatureVersion =  tostring(AdditionalFields.AvSignatureVersion)  
+    | extend AvIsSignatureUpToDate = iif(((((isempty(AvIsSignatureUpToDateTemp)
+    or (isnull(AvSignatureDataRefreshTime)))
+    or (isnull(AvSignaturePublishTime)))
+    or (AvSignaturePublishTime < expiringPublishdate))
+    or (AvIsSignatureUpToDateTemp == True
+    and AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsSignatureUpToDateTemp))
+    | extend AvSecurityIntelVersion = iif(AvSignatureVersion == "", "Unknown", AvSignatureVersion)
+    | project DeviceId, DeviceName, OSPlatform, AvSecurityIntelVersion,  DataRefreshTimestamp, AvIsSignatureUpToDate, AvSignaturePublishTime, AvSignatureDataRefreshTime
+    | summarize DeviceCount = count(), DataRefreshTimestamp = max(DataRefreshTimestamp), SecurityIntelUpToDateDeviceCount = countif(AvIsSignatureUpToDate == "true"), SecurityIntelNotUpToDateDeviceCount = countif(AvIsSignatureUpToDate == "false"), SecurityIntelNotAvailableDeviceCount = countif(AvIsSignatureUpToDate == "Unknown") by OSPlatform,AvSecurityIntelVersion
