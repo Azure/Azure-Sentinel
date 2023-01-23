@@ -162,7 +162,7 @@ namespace Kqlvalidations.Tests
             
             var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
             var parserName = (string)yaml["ParserName"];
-            ValidateKql(parserName, queryStr);
+            ValidateKql(parserName, queryStr, false);
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -180,13 +180,20 @@ namespace Kqlvalidations.Tests
                 return;
             }
 
-            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
+            var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];            
             var parserName = (string)yaml["EquivalentBuiltInFunction"];
-            ValidateKql(parserName, queryStr);
+            ValidateKql(parserName, queryStr, false);
         }
 
-        private void ValidateKql(string id, string queryStr)
+        private void ValidateKql(string id, string queryStr, bool ignoreNoTabularExpressionError = true)
         {
+            
+            // The KQL validation ignores no tabular expression error. For instance, "let x = table;" is considered a valid query.
+            // Add "| count" at the end of the query, to fail queries without tabular expressions.
+            if (!ignoreNoTabularExpressionError) {
+                queryStr += " | count";
+            }
+
             var validationResult = _queryValidator.ValidateSyntax(queryStr);
             var firstErrorLocation = (Line: 0, Col: 0);
             if (!validationResult.IsValid)
