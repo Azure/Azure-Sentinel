@@ -65,7 +65,7 @@ class LookOut:
         self.jwt_token = self.get_new_token()          
 
     def get_new_token(self):
-        url = "https://usw2pmm01-ms.usw2.lkt.cloud/apigw/v1/authenticate"
+        url = Authurl
         payload = json.dumps({
                 "clientId": self.api_key,
                 "clientSecret": self.api_secret,
