@@ -1,0 +1,225 @@
+import sys
+import azure.functions as func
+import datetime
+import json
+import base64
+import hashlib
+import hmac
+import requests
+import re
+import os
+import logging
+from azure.storage.fileshare import ShareClient
+from azure.storage.fileshare import ShareFileClient
+from azure.core.exceptions import ResourceNotFoundError
+
+jwt_api_key = os.environ['LookoutClientId']
+logging.info(jwt_api_key)
+jwt_api_secret = os.environ['LookoutApiSecret']
+logging.info(jwt_api_secret)
+customer_id = os.environ['WorkspaceID']
+logging.info(customer_id)
+shared_key = os.environ['WorkspaceKey']
+logging.info(shared_key)
+connection_string = os.environ['AzureWebJobsStorage']
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
+baseurl =  os.environ['Baseurl'] 
+Authurl = baseurl+"/apigw/v1/authenticate"
+table_name = "Lookoutlogs"
+chunksize = 500
+token = ""
+
+logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern, str(logAnalyticsUri))
+if (not match):
+    raise Exception("Lookout: Invalid Log Analytics Uri.")
+
+class StateManager:
+    def __init__(self, connection_string, share_name='funcstatemarkershare', file_path='funcstatemarkerfile'):
+        self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
+        self.file_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=file_path)
+
+    def post(self, marker_text: str):
+        try:
+            self.file_cli.upload_file(marker_text)
+        except ResourceNotFoundError:
+            self.share_cli.create_share()
+            self.file_cli.upload_file(marker_text)
+
+    def get(self):
+        try:
+            return self.file_cli.download_file().readall().decode()
+        except ResourceNotFoundError:
+            return None
+
+
+class LookOut:
+
+    def __init__(self):
+        self.api_key = jwt_api_key
+        self.api_secret = jwt_api_secret
+        self.base_url = baseurl
+        self.jwt_token_exp_hours = 1
+        self.jwt_token = self.get_new_token()          
+
+    def get_new_token(self):
+        url = "https://usw2pmm01-ms.usw2.lkt.cloud/apigw/v1/authenticate"
+        payload = json.dumps({
+                "clientId": self.api_key,
+                "clientSecret": self.api_secret,
+                "grant_type": "refresh_token"
+                })
+        headers = {
+                'Content-Type': 'application/json'
+                }
+        response = requests.request("POST", url, headers=headers, data=payload)
+        tokens = json.loads(response.text) 
+        logging.info("id token"+ tokens['id_token'] ) 
+        return tokens['id_token']        
+	    
+    def generate_date(self):
+        current_time_day = datetime.datetime.utcnow().replace(second=0, microsecond=0)
+        state = StateManager(connection_string)
+        past_time = state.get()
+        if past_time is not None:
+            logging.info("The last time point is: {}".format(past_time))
+        else:
+            logging.info("There is no last time point, trying to get events for last week.")
+            past_time = (current_time_day - datetime.timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
+        state.post(current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
+        return (past_time, current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
+
+    def get_Data(self,report_type_suffix,startTime,endTime):
+            
+        try:
+            headers = {
+                    'Authorization':'Bearer'+' '+ self.jwt_token
+                     }
+            payload = {}
+            response = requests.request("GET", baseurl + report_type_suffix+"&startTime="+startTime+"&endTime="+endTime+'&maxResults=500', headers=headers, data=payload)
+            if response.status_code == 200:
+                jsondata = json.loads(response.text)
+                try:
+                  return jsondata['data']
+                except KeyError:
+                    return []
+            elif response.status_code == 400:
+                logging.error("The requested report cannot be generated for this account because"
+                      " this account has not subscribed to toll-free audio conference plan."
+                      " Error code: {}".format(response.status_code))
+            elif response.status_code == 401:
+                logging.error("Invalid access token. Error code: {}".format(response.status_code))            
+            else:
+                logging.error("Something wrong. Error code: {}".format(response.status_code))
+        except Exception as err:
+            logging.error("Something wrong. Exception error text: {}".format(err))
+
+class Sentinel:
+
+    def __init__(self):
+        self.logAnalyticsUri = logAnalyticsUri
+        self.success_processed = 0
+        self.fail_processed = 0
+        self.table_name = table_name
+        self.chunksize = chunksize 
+        self.sharedkey = shared_key       
+        
+    def gen_chunks_to_object(self, data, chunksize=500):
+        chunk = []
+        for index, line in enumerate(data):
+            if (index % chunksize == 0 and index > 0):
+                yield chunk
+                del chunk[:]
+            chunk.append(line)
+        yield chunk
+
+    def gen_chunks(self, data):
+        for chunk in self.gen_chunks_to_object(data, chunksize=self.chunksize):
+            obj_array = []
+            for row in chunk:
+                if row != None and row != '':
+                    obj_array.append(row)
+            body = json.dumps(obj_array)
+            self.post_data(body, len(obj_array))
+
+
+    def build_signature(self, date, content_length, method, content_type, resource):
+        x_headers = 'x-ms-date:' + date
+        string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
+        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
+        decoded_key = base64.b64decode(self.sharedkey)
+        encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
+        authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
+        return authorization
+
+    def post_data(self, body, chunk_count):
+        method = 'POST'
+        content_type = 'application/json'
+        resource = '/api/logs'
+        rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
+        content_length = len(body)
+        signature = self.build_signature(rfc1123date, content_length, method, content_type,
+                                         resource)
+        uri = self.logAnalyticsUri + resource + '?api-version=2016-04-01'
+        headers = {
+            'content-type': content_type,
+            'Authorization': signature,
+            'Log-Type': self.table_name,
+            'x-ms-date': rfc1123date
+        }
+        response = requests.post(uri, data=body, headers=headers)
+        if (response.status_code >= 200 and response.status_code <= 299):
+            logging.info("Chunk was processed({} events)".format(chunk_count))
+            self.success_processed = self.success_processed + chunk_count
+        else:
+            logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
+            self.fail_processed = self.fail_processed + chunk_count    
+
+def main(mytimer: func.TimerRequest) -> None:
+#if __name__ == '__main__':
+    utc_timestamp = datetime.datetime.utcnow().replace(
+        tzinfo=datetime.timezone.utc).isoformat()
+    if mytimer.past_due:
+     logging.info('The timer is past due!')
+    logging.info('Python timer trigger function ran at %s', utc_timestamp)
+    logging.info('Starting program')
+   
+    results_Anamolies = []
+    results_events = []
+    results_Violations = []
+    finalresult = []
+    Lookout = LookOut()
+    sentinel = Sentinel()
+    sentinel.sharedkey = shared_key
+    sentinel.table_name= table_name    
+    startTime,endTime = Lookout.generate_date()   
+    logging.info('Trying to get events for period: {} - {}'.format(startTime, endTime))
+
+    results_Anamolies = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+    results_events = Lookout.get_Data("/apigw/v1/events?eventType=Activity",startTime,endTime)
+    results_Violations=Lookout.get_Data("/apigw/v1/events?eventType=Violation",startTime,endTime)
+    
+    if(results_Anamolies is not None):
+       finalresult = results_Anamolies
+    if(results_events is not None):
+      finalresult += results_events
+    if(results_Violations is not None):
+        finalresult += results_Violations
+    
+    if(len(finalresult) > 0):
+     body = json.dumps(finalresult)
+    if(len(finalresult) > 2000):   
+     sentinel.gen_chunks(body)
+    else:
+     sentinel.post_data(body,len(finalresult))
+
+    sentinel_class_vars = vars(sentinel)
+    success_processed, fail_processed = sentinel_class_vars["success_processed"],\
+                                        sentinel_class_vars["fail_processed"]
+    logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
+          .format(success_processed, fail_processed, startTime, endTime))
+    
+          
+    
