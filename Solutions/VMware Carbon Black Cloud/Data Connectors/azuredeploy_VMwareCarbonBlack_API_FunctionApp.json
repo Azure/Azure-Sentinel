@@ -1,0 +1,322 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+      "parameters": {
+          "FunctionName": {
+              "defaultValue": "CarbonBlack",
+              "minLength": 1,
+              "maxLength": 11,
+              "type": "string"
+          },
+          "WorkspaceId": {
+              "type": "string",
+              "defaultValue": "<workspaceId>"
+          },
+          "WorkspaceKey": {
+              "type": "string",
+              "defaultValue": "<workspaceKey>"
+          },
+          "CarbonBlackLogTypes": {
+            "type": "array",
+            "defaultValue": "event",
+            "allowedValues": [
+                "event",
+                "audit",
+                "alertSIEMAPI",
+                "alertAWSS3"
+              ],
+              "metadata": {
+                "description": "Event logs are supported with AWS S3 , Notification (alerts) logs are supported with SIEM API or AWS S3, Audit logs are supported with API."
+              }
+          },
+          "APIKey": {
+              "type": "string",
+              "defaultValue": "<apiKey>",
+              "metadata": {
+                "description": "API Key is a required parameter if you have selected audit as one of the option for Log Types."
+              }
+          },
+          "APIId": {
+              "type": "string",
+              "defaultValue": "<apiId>",
+              "metadata": {
+                "description": "API Id is a required parameter if you have selected audit as one of the option for Log Types."
+              }
+          },
+          "Uri": {
+              "type": "string",
+              "defaultValue": "https://<API URL>",
+              "metadata": {
+                "description": "Uri is a required parameter if you have selected audit as one of the option for Log Types."
+              }
+          },
+          "SIEMApiKey": {
+              "type": "string",
+              "defaultValue": "<Optional>",
+              "metadata": {
+                "description": "SIEMApiKey is a required parameter if you have selected [alert with SIEM API] as one of the option for Log Types."
+              }
+          },
+          "SIEMApiID": {
+              "type": "string",
+              "defaultValue": "<Optional>",
+              "metadata": {
+                "description": "SIEMApiId is a required parameter if you have selected [alert with SIEM API] as one of the option for Log Types."
+              }
+          },
+          "TimeInterval": {
+              "type": "string",
+              "defaultValue": "5"
+          },
+          "CarbonBlackOrgKey": {
+              "type": "string",
+              "defaultValue": "<CarbonBlackOrgKey>",
+              "metadata": {
+                "description": "CarbonBlackOrgKey is a required parameter if you have selected event or [alert with AWS S3] as one of the Log Types."
+              }
+          },
+          "s3BucketName": {
+              "type": "string",
+              "defaultValue": "<s3BucketName>",
+              "metadata": {
+                "description": "s3BucketName is a required parameter if you have selected event or [alert with AWS S3] as one of the Log Types."
+              }
+          },
+           "AWSAccessKeyId": {
+              "type": "string",
+              "defaultValue": "<Folder Name in AWS S3>",
+              "metadata": {
+                "description": "AWSAccessKeyId is a required parameter if you have selected event or [alert with AWS S3] as one of the Log Types."
+              }
+          },
+           "AWSSecretAccessKey": {
+              "type": "string",
+              "defaultValue": "<AWSAccessKeyId>",
+              "metadata": {
+                "description": "AWSSecretAccessKey is a required parameter if you have selected event or [alert with AWS S3] as one of the Log Types."
+              }
+          },
+          "EventPrefixFolderName": {
+            "type": "string",
+            "defaultValue": "<EventPrefixFolderName>",
+            "metadata": {
+              "description": "S3 bucket prefix folder name for event logs"
+            }
+          },
+          "AlertPrefixFolderName": {
+            "type": "string",
+            "defaultValue": "<AlertPrefixFolderName>",
+            "metadata": {
+              "description": "S3 bucket prefix folder name for alert logs"
+            }
+        }
+      },
+      "variables": {
+           "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+           "StorageSuffix":"[environment().suffixes.storage]",
+           "logTypes": "[substring(string(parameters('CarbonBlackLogTypes')),1,sub(length(parameters('CarbonBlackLogTypes')), 1))]",
+           "LogAnaltyicsUri":"[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+      },
+      "resources": [
+          {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2015-05-01",
+              "name": "[variables('FunctionName')]",
+              "location": "[resourceGroup().location]",
+              "kind": "web",
+              "properties": {
+                  "Application_Type": "web",
+                  "ApplicationId": "[variables('FunctionName')]"
+              }
+          },
+
+          {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2019-06-01",
+              "name": "[tolower(variables('FunctionName'))]",
+              "location": "[resourceGroup().location]",
+              "sku": {
+                  "name": "Standard_LRS",
+                  "tier": "Standard"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                  "networkAcls": {
+                      "bypass": "AzureServices",
+                      "virtualNetworkRules": [
+                      ],
+                      "ipRules": [
+                      ],
+                      "defaultAction": "Allow"
+                  },
+                  "supportsHttpsTrafficOnly": true,
+                  "encryption": {
+                      "services": {
+                          "file": {
+                              "keyType": "Account",
+                              "enabled": true
+                          },
+                          "blob": {
+                              "keyType": "Account",
+                              "enabled": true
+                          }
+                      },
+                      "keySource": "Microsoft.Storage"
+                  }
+              }
+          },
+          {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2018-02-01",
+              "name": "[variables('FunctionName')]",
+              "location": "[resourceGroup().location]",
+              "sku": {
+                  "name": "Y1",
+                  "tier": "Dynamic"
+              },
+              "kind": "functionapp",
+              "properties": {
+                  "name": "[variables('FunctionName')]",
+                  "workerSize": "0",
+                  "workerSizeId": "0",
+                  "numberOfWorkers": "1"
+              }
+          },
+          {
+              "type": "Microsoft.Storage/storageAccounts/blobServices",
+              "apiVersion": "2019-06-01",
+              "name": "[concat(variables('FunctionName'), '/default')]",
+              "dependsOn": [
+                  "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+              ],
+              "sku": {
+                  "name": "Standard_LRS",
+                  "tier": "Standard"
+              },
+              "properties": {
+                  "cors": {
+                      "corsRules": [
+                      ]
+                  },
+                  "deleteRetentionPolicy": {
+                      "enabled": false
+                  }
+              }
+          },
+          {
+              "type": "Microsoft.Storage/storageAccounts/fileServices",
+              "apiVersion": "2019-06-01",
+              "name": "[concat(variables('FunctionName'), '/default')]",
+              "dependsOn": [
+                  "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+              ],
+              "sku": {
+                  "name": "Standard_LRS",
+                  "tier": "Standard"
+              },
+              "properties": {
+                  "cors": {
+                      "corsRules": [
+                      ]
+                  }
+              }
+          },
+          {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2018-11-01",
+              "name": "[variables('FunctionName')]",
+              "location": "[resourceGroup().location]",
+              "dependsOn": [
+                  "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]",
+                  "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                  "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+              ],
+              "kind": "functionapp",
+              "identity": {
+                  "type": "SystemAssigned"
+              },
+              "properties": {
+                  "name": "[variables('FunctionName')]",
+                  "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                  "httpsOnly": true,
+                  "clientAffinityEnabled": true,
+                   "alwaysOn": true,
+					"siteConfig": {
+                        "powerShellVersion": "~7"
+                    }
+              },
+              "resources": [
+                  {
+                      "apiVersion": "2018-11-01",
+                      "type": "config",
+                      "name": "appsettings",
+                      "dependsOn": [
+                          "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                      ],
+                      "properties": {
+                          "FUNCTIONS_EXTENSION_VERSION": "~4",
+                          "FUNCTIONS_WORKER_RUNTIME": "powershell",
+                          "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                          "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+                          "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                          "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                          "WEBSITE_CONTENTSHARE": "[toLower(variables('FunctionName'))]",
+                          "workspaceId": "[parameters('WorkspaceId')]",
+                          "workspaceKey": "[parameters('WorkspaceKey')]",
+                          "apiKey": "[parameters('APIKey')]",
+                          "apiId": "[parameters('APIId')]",
+                          "uri": "[parameters('Uri')]",
+                          "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
+                          "timeInterval": "[parameters('TimeInterval')]",
+                          "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinelcarbonblackazurefunctionzip",
+                          "SIEMapiKey":"[parameters('SIEMapiKey')]",
+                          "SIEMapiId":"[parameters('SIEMapiId')]",
+                          "CarbonBlackOrgKey":"[parameters('CarbonBlackOrgKey')]",
+                          "s3BucketName":"[parameters('s3BucketName')]",
+                          "AWSAccessKeyId":"[parameters('AWSAccessKeyId')]",
+                          "AWSSecretAccessKey":"[parameters('AWSSecretAccessKey')]",
+                          "CarbonBlackLogTypes": "[string(parameters('CarbonBlackLogTypes'))]",
+                          "EventPrefixFolderName": "[string(parameters('EventPrefixFolderName'))]",
+                          "AlertPrefixFolderName": "[string(parameters('AlertPrefixFolderName'))]"
+                        } 
+                  }
+              ]
+          },
+          {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2019-06-01",
+              "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
+              "dependsOn": [
+                  "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                  "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+              ],
+              "properties": {
+                  "publicAccess": "None"
+              }
+          },
+          {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2019-06-01",
+              "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-secrets')]",
+              "dependsOn": [
+                  "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                  "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+              ],
+              "properties": {
+                  "publicAccess": "None"
+              }
+          },
+          {
+              "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+              "apiVersion": "2019-06-01",
+              "name": "[concat(variables('FunctionName'), '/default/', tolower(variables('FunctionName')))]",
+              "dependsOn": [
+                  "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionName'), 'default')]",
+                  "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+              ],
+              "properties": {
+                  "shareQuota": 5120
+              }
+          }
+      ]
+  }

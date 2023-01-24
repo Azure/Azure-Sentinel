@@ -41,74 +41,132 @@ ParserParams:
   - Name: parentprocess_has_any
     Type: dynamic
     Default: dynamic([])
-  - Name: actorusername
+  - Name: actorusername_has
     Type: string
     Default: '*'
   - Name: dvcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: dvcname_has_any
+  - Name: dvchostname_has_any
     Type: dynamic
     Default: dynamic([])
   - Name: eventtype
     Type: string
     Default: '*'
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |    
-    let ProcessEvents=(){
-    WindowsEvent | where EventID == 4689
-    // --------------------------------------------------------------------------------------
-    | where
-    (isnull(starttime)   or TimeGenerated >= starttime )
-    and (isnull(endtime) or TimeGenerated <= endtime )
-    and not(disabled)
-    and (array_length(actingprocess_has_any)==0) 
-    and (array_length(parentprocess_has_any)==0) 
-    and (array_length(dvcipaddr_has_any_prefix)==0)
-    and (eventtype=='*' or eventtype=='ProcessTerminated')
-    and (array_length(commandline_has_all)==0 or EventData.CommandLine has_all (commandline_has_all)) 
-    and (array_length(commandline_has_any)==0 or EventData.CommandLine has_any (commandline_has_any)) 
-    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventData.CommandLine, commandline_has_any_ip_prefix) ) 
-    and (array_length(targetprocess_has_any)==0 or EventData.ProcessName has_any (targetprocess_has_any)) 
-    and (actorusername=='*' or EventData.SubjectUserName has actorusername)  
-    and (array_length(dvcname_has_any)==0 or Computer has_any (dvcname_has_any))   
-    // --------------------------------------------------------------------------------------
-    | extend
-        // Event
-      EventCount = int(1),
-      EventVendor = "Microsoft",
-      EventProduct = "Security Events",
-      EventSchemaVersion = "0.1.0",
-      EventSchema = 'ProcessEvent',
-      EventStartTime = todatetime(TimeGenerated),
-      EventEndTime = todatetime(TimeGenerated),
-      EventType = "ProcessTerminated",
-      EventResult = 'Success',
-      EventOriginalType = tostring(EventID),
-      EventOriginalUid = EventOriginId,
-      EventResultDetails = tostring(EventData.Status),
-      EventOriginalResultDetails = tostring(EventData.Status), 
-    // Device
-      DvcId = tostring(EventData.SourceComputerId),
-      DvcHostname = Computer,
-      DvcOs = "Windows",
-    // Users
-      ActorUserId = tostring(EventData.SubjectUserSid),
-      ActorUserIdType = "SID",
-      ActorUsername = tostring(iff (EventData.SubjectDomainName in ('', '-'), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
-      ActorUsernameType = iff(EventData.SubjectDomainName in ('', '-'),'Simple', 'Windows'),
-      ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
-    // Processes 
-      TargetProcessId = tostring(toint(tostring(EventData.ProcessId))),
-      TargetProcessName = tostring(EventData.ProcessName),
-      TargetProcessCommandLine = tostring(EventData.CommandLine),
-      TargetProcessTokenElevation = tostring(EventData.TokenElevationType)
-    // Aliases
+    let ASIM_GetWindowsUserType = (username:string, sid:string) { 
+        case ( 
+            username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", 
+            isempty(username) or sid in ("S-1-0-0"), "", 
+            "Regular"
+        )
+    };
+    let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\')[-1]) };
+    let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
+        T 
         | extend 
-      User = ActorUsername,
-      Dvc = DvcHostname,
-      Process = TargetProcessName
-        | project-away EventData
-      }; ProcessEvents
+             type = case (
+                username == "-", "",
+                domain == "-", "Simple",
+                "Windows"
+            ),
+            username = case (
+              username == "-", "",
+              domain == '-', username,
+              strcat(domain, @"\" , username)
+            )
+    };
+    let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      actorusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      hashes_has_any:dynamic=dynamic([]),
+      disabled:bool=false
+    ) {
+    WindowsEvent
+    | where
+        (isnull(starttime)   or TimeGenerated >= starttime )
+        and (isnull(endtime) or TimeGenerated <= endtime )
+        and not(disabled)
+        and EventID == 4689
+        and (array_length(actingprocess_has_any)==0) 
+        and (array_length(parentprocess_has_any)==0) 
+        and (array_length(dvcipaddr_has_any_prefix)==0)
+        and (eventtype=='*' or eventtype=='ProcessTerminated')
+        and (array_length(commandline_has_all)==0) 
+        and (array_length(commandline_has_any)==0) 
+        and (array_length(commandline_has_any_ip_prefix)==0) 
+        and (array_length(hashes_has_any)==0) 
+        and (array_length(targetprocess_has_any)==0 or EventData.ProcessName has_any (targetprocess_has_any)) 
+        and (actorusername_has=='*' or EventData has actorusername_has)  
+        and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))   
+    | project-rename
+        DvcHostname = Computer
+    | extend
+        EventCount = int(1),
+        EventVendor = 'Microsoft',
+        EventProduct = 'Security Events',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'ProcessEvent',
+        EventResult = 'Success',
+        EventStartTime = todatetime(TimeGenerated),
+        EventEndTime = todatetime(TimeGenerated),
+        EventType = 'ProcessTerminated',
+        EventOriginalType = tostring(EventID),
+        DvcOs = 'Windows'
+    | extend 
+        ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
+        ActorUserId = tostring(EventData.SubjectUserSid),
+        ActorUserIdType = "SID",
+        ActorUsernameType = "Windows"
+    | where // -- post filtering
+        (actorusername_has=='*' or ActorUsername has actorusername_has)  
+    | extend 
+        ActorUserSid = ActorUserId,
+        ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
+    | extend
+        ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
+        // Processes 
+        TargetProcessId = tostring(toint(tolong(EventData.ProcessId))),
+        TargetProcessName = tostring(EventData.ProcessName),
+        TargetProcessStatusCode = tostring(EventData.Status)
+    | extend 
+        TargetProcessFilename = ASIM_GetFilenamePart(TargetProcessName)
+    // -- Aliases
+    | extend
+        User = ActorUsername,
+        Dvc = DvcHostname,
+        Process = TargetProcessName
+    | project-away Channel, EventData, Data, EventID, EventLevelName, EventLevel, Provider, RawEventData, Task, TenantId, ManagementGroupName, SourceSystem, EventOriginId
+    }; 
+    parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      actorusername_has=actorusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      hashes_has_any=hashes_has_any,
+      disabled=disabled
+    )

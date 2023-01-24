@@ -1,0 +1,534 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Neustar IP GeoPoint"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-neustaripgeopoint",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "Neustar-GetIPGeoInfo": "Neustar-GetIPGeoInfo",
+    "_Neustar-GetIPGeoInfo": "[variables('Neustar-GetIPGeoInfo')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Neustar-GetIPGeoInfo",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1')))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "properties": {
+        "description": "EnrichIP-GetIPGeoInfo-Neustar playbook",
+        "displayName": "EnrichIP-GetIPGeoInfo-Neustar playbook"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('playbookTemplateSpecName1'),'/',variables('playbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "EnrichIP-GetIPGeoInfo-Neustar Playbook with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "EnrichIP-GetIPGeoInfo-Neustar",
+              "type": "string"
+            },
+            "FunctionAppName": {
+              "defaultValue": "neuipgp",
+              "type": "string"
+            }
+          },
+          "variables": {
+            "functionAppName": "[[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]",
+            "MicrosoftSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "NeustarIPGeoPointFuntionAppId": "[[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionAppName'))]",
+            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+            "_connection-2": "[[variables('connection-2')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Add_comment_to_incident_(V3)": {
+                      "runAfter": {
+                        "Create_HTML_table": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{body('Create_HTML_table')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      }
+                    },
+                    "Create_HTML_table": {
+                      "runAfter": {
+                        "For_each_IP_Address": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Table",
+                      "inputs": {
+                        "format": "HTML",
+                        "from": "@variables('GeoData')"
+                      }
+                    },
+                    "Entities_-_Get_IPs": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/entities/ip"
+                      }
+                    },
+                    "For_each_IP_Address": {
+                      "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                      "actions": {
+                        "Append_to_GeoData_Array": {
+                          "runAfter": {
+                            "Compose": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "GeoData",
+                            "value": "@outputs('Compose')"
+                          }
+                        },
+                        "Compose": {
+                          "runAfter": {
+                            "Parse_Geo_Info_JSON": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Compose",
+                          "inputs": {
+                            "City": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['CityData']?['city']",
+                            "Country": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['CountryData']?['country']",
+                            "IPAddress": "@items('For_each_IP_Address')?['Address']",
+                            "IPRoutingType": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Network']?['ip_routing_type']",
+                            "Orgnization": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Network']?['organization']",
+                            "PostalCode": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['CityData']?['postal_code']",
+                            "State": "@body('Parse_Geo_Info_JSON')?['ipinfo']?['Location']?['StateData']?['state']"
+                          }
+                        },
+                        "GetIPGeoInfo": {
+                          "type": "Function",
+                          "inputs": {
+                            "function": {
+                              "id": "[[concat(variables('NeustarIPGeoPointFuntionAppId'), '/functions/GetIPGeoInfo')]"
+                            },
+                            "method": "GET",
+                            "queries": {
+                              "IPAddress": "@items('For_each_IP_Address')?['Address']"
+                            },
+                            "retryPolicy": {
+                              "type": "none"
+                            }
+                          }
+                        },
+                        "Parse_Geo_Info_JSON": {
+                          "runAfter": {
+                            "GetIPGeoInfo": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@body('GetIPGeoInfo')",
+                            "schema": {
+                              "properties": {
+                                "ipinfo": {
+                                  "properties": {
+                                    "Location": {
+                                      "properties": {
+                                        "CityData": {
+                                          "properties": {
+                                            "city": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            },
+                                            "postal_code": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            }
+                                          },
+                                          "type": "object"
+                                        },
+                                        "CountryData": {
+                                          "properties": {
+                                            "country": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            }
+                                          },
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ]
+                                        },
+                                        "StateData": {
+                                          "properties": {
+                                            "state": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            }
+                                          },
+                                          "type": [
+                                            "object",
+                                            "null"
+                                          ]
+                                        }
+                                      },
+                                      "type": [
+                                        "object",
+                                        "null"
+                                      ]
+                                    },
+                                    "Network": {
+                                      "properties": {
+                                        "ip_routing_type": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "organization": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
+                                      },
+                                      "type": [
+                                        "object",
+                                        "null"
+                                      ]
+                                    },
+                                    "ip_address": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "ip_type": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "type": [
+                                "object",
+                                "null"
+                              ]
+                            }
+                          }
+                        },
+                        "Sleep_for_2_seconds_to_avoid_throttling_": {
+                          "runAfter": {
+                            "Append_to_GeoData_Array": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Wait",
+                          "inputs": {
+                            "interval": {
+                              "count": 2,
+                              "unit": "Second"
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Initialize_Array_-_GeoData": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Foreach",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 1
+                        }
+                      }
+                    },
+                    "Initialize_Array_-_GeoData": {
+                      "runAfter": {
+                        "Entities_-_Get_IPs": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "GeoData",
+                            "type": "array"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                        "connectionName": "[[variables('MicrosoftSentinelConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "name": "[[parameters('PlaybookName')]",
+              "type": "Microsoft.Logic/workflows",
+              "location": "[[variables('workspace-location-inline')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "tags": {
+                "hidden-SentinelTemplateName": "Neustar-GetIPGeoInfo",
+                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              },
+              "apiVersion": "2019-05-01",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('MicrosoftSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "[[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-2')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Neustar IP GeoPoint",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "EnrichIP-GetIPGeoInfo-Neustar",
+            "description": "When a new sentinel incident is created, this playbook gets triggered and performs the following actions: \n 1. Gets IP Addresses from incident. \n 2. Gets Geographical location information from Neustart IP GeoPoint API. \n 3. Summarize the details and add as a comment to the incident.",
+            "prerequisites": [
+              "1. Prior to the deployment of this playbook, Neustar IP GeoPoint API Function App Connector needs to be deployed under the same subscription. \n Use https://aka.ms/sentinel-neustar-functionapp-connector to deploy (for public cloud) \n Use https://aka.ms/sentinel-neustar-functionapp-connector-gov to deploy (for FFX env)",
+              "2. Refer to Neustar IP GeoPoint API Function App Connector documentation to obtain Neustar IP GeoPoint API Key and Shared Secret."
+            ],
+            "postDeployment": [
+              "None"
+            ],
+            "lastUpdateTime": "2022-08-29T05:32:46Z",
+            "entities": [
+              "IP"
+            ],
+            "tags": [
+              "Neustar",
+              "GeoPoint",
+              "Enrichment"
+            ],
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Neustar IP GeoPoint",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Neustar-GetIPGeoInfo')]",
+              "version": "[variables('playbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-09-30",
+        "lastPublishDate": "2022-09-30",
+        "providers": [
+          "Neustar"
+        ],
+        "categories": {
+          "domains": [
+            "Security – Automation (SOAR)",
+            "Security – Others"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

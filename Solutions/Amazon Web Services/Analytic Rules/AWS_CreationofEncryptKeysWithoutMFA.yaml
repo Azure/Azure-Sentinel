@@ -1,0 +1,44 @@
+id: 454133a7-5427-4a7c-bdc4-0adfa84dda16
+name: Creating keys with encrypt policy without MFA
+description: |
+  'Detection of KMS keys where action kms:Encrypt is accessible for everyone (also outside of your organization). This is an idicator that your account is compromised and the attacker uses the encryption key to compromise another company.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+    let check_actions = AWSCloudTrail
+    | where (EventName == "CreateKey" or EventName == "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+    | extend state=parse_json(parse_json(replace_string(tostring(parse_json(RequestParameters)['policy']),'\\"','"')).['Statement'])
+    | mv-expand state
+    | extend Action= tostring(parse_json(state.['Action'][0])), Effect=tostring(parse_json(state.['Effect'])),
+             Principal=tostring(parse_json(state.['Principal']))
+    | where (Action == "kms:Encrypt" or Action == "kms:*") and (Effect == 'Allow') and (Principal has "*")
+    | distinct AwsEventId;
+    AWSCloudTrail
+    | where (EventName == "CreateKey" or EventName == "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+    | join kind=inner (check_actions) on AwsEventId
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+    | project-away AwsEventId1
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

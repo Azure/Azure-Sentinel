@@ -1,0 +1,447 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AWS Athena - Execute Query and Get Results",
+        "description": "When a new sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. It executes the query specified during playbook setup on given database.\n 2. Downloads the query result and adds as a comment to the incident.",
+        "prerequisites": ["Obtain AWS Access Key ID, Secret Access Key and Region."],
+        "postDeployment": [
+            "Follow Post deployment steps from playbook readme file."
+        ],
+        "prerequisitesDeployTemplateFile": "../../CustomConnector/AWSAthena_FunctionAppConnector/azuredeploy.json",
+        "lastUpdateTime": "2022-11-14T12:00:00.000Z",
+        "entities": [
+        ],
+        "tags": [
+            "Enrichment",
+            "AWS"
+        ],
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AWSAthena-GetQueryResults",
+            "type": "string"
+        },
+        "DataCatalog": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter DataCatalog Name"
+            }
+        },
+        "Database": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Database Name"
+            }
+        },
+        "OutputLocation": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Output bucket location"
+            }
+        },
+        "QueryString": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Query String to execute"
+            }
+        },
+        "FunctionAppName": {
+            "defaultValue": "awsathena",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "functionAppName": "[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]",
+        "AWSAthenaFuntionAppId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionAppName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        },
+                        "DataCatalog": {
+                            "defaultValue": "[parameters('DataCatalog')]",
+                            "type": "string"
+                        },
+                        "Database": {
+                            "defaultValue": "[parameters('Database')]",
+                            "type": "string"
+                        },
+                        "OutputLocation": {
+                            "defaultValue": "[parameters('OutputLocation')]",
+                            "type": "string"
+                        },
+                        "QueryString": {
+                            "defaultValue": "[parameters('QueryString')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Check_Condition_if_Query_execution_failed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "\u003cp\u003e@{body('Create_HTML_table')}@{variables('OutputMessage')}\u003c/p\u003e"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Check_Condition_if_Query_execution_failed": {
+                            "actions": {
+                                "Create_HTML_table": {
+                                    "runAfter": {
+                                        "GetQueryResults": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "format": "HTML",
+                                        "from": "@array(body('GetQueryResults'))"
+                                    }
+                                },
+                                "GetQueryResults": {
+                                    "runAfter": {
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "QueryExecutionId": "@body('StartQueryExecution')"
+                                        },
+                                        "function": {
+                                            "id": "[concat(variables('AWSAthenaFuntionAppId'), '/functions/GetQueryResults')]"
+                                        },
+                                        "method": "POST"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Wait_Until_query_execution_is_succeeded": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_-_OutputMessage": {
+                                        "runAfter": {
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "OutputMessage",
+                                            "value": "\u003cstrong\u003e Query (QueryExecutionId: ) failed or cancelled or timedout. \u003c/strong\u003e"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('IsQueryExecutionFailed')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "GetQueryExecution": {
+                            "runAfter": {
+                                "StartQueryExecution": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": {
+                                    "QueryExecutionId": "@body('StartQueryExecution')"
+                                },
+                                "function": {
+                                    "id": "[concat(variables('AWSAthenaFuntionAppId'), '/functions/GetQueryExecution')]"
+                                },
+                                "method": "POST"
+                            }
+                        },
+                        "Initialize_variable_-_IsQueryExecutionFailed": {
+                            "runAfter": {
+                                "Initialize_variable_-_QueryStatus": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IsQueryExecutionFailed",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_OutputMessage": {
+                            "runAfter": {
+                                "Initialize_variable_-_IsQueryExecutionFailed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "OutputMessage",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_QueryStatus": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "QueryStatus",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Set_variable_-_QueryStatus": {
+                            "runAfter": {
+                                "GetQueryExecution": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "QueryStatus",
+                                "value": "@{body('GetQueryExecution')}"
+                            }
+                        },
+                        "StartQueryExecution": {
+                            "runAfter": {
+                                "Initialize_variable_-_OutputMessage": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": {
+                                    "Catalog": "@parameters('DataCatalog')",
+                                    "Database": "@parameters('Database')",
+                                    "OutputLocation": "@parameters('OutputLocation')",
+                                    "QueryString": "@parameters('QueryString')"
+                                },
+                                "function": {
+                                    "id": "[concat(variables('AWSAthenaFuntionAppId'), '/functions/StartQueryExecution')]"
+                                },
+                                "method": "POST"
+                            }
+                        },
+                        "Wait_Until_query_execution_is_succeeded": {
+                            "actions": {
+                                "Check_if_Query_failed_or_cancelled": {
+                                    "actions": {
+                                        "Set_variable_-_IsQueryExecutionFailed_to_1": {
+                                            "runAfter": {
+                                                "Set_variable_QueryStaus_to_SUCCEEDED_to_break_until_loop_": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "IsQueryExecutionFailed",
+                                                "value": 1
+                                            }
+                                        },
+                                        "Set_variable_QueryStaus_to_SUCCEEDED_to_break_until_loop_": {
+                                            "runAfter": {
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "QueryStatus",
+                                                "value": "SUCCEEDED"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Update_variable_-_QueryStatus_": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "equals": [
+                                                    "@variables('QueryStatus')",
+                                                    "FAILED"
+                                                ]
+                                            },
+                                            {
+                                                "equals": [
+                                                    "@variables('QueryStatus')",
+                                                    "CANCELLED"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Delay_for_10_seconds": {
+                                    "runAfter": {
+                                    },
+                                    "type": "Wait",
+                                    "inputs": {
+                                        "interval": {
+                                            "count": 10,
+                                            "unit": "Second"
+                                        }
+                                    }
+                                },
+                                "GetQueryExecution_again": {
+                                    "runAfter": {
+                                        "Delay_for_10_seconds": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "QueryExecutionId": "@body('StartQueryExecution')"
+                                        },
+                                        "function": {
+                                            "id": "[concat(variables('AWSAthenaFuntionAppId'), '/functions/GetQueryExecution')]"
+                                        },
+                                        "method": "POST"
+                                    }
+                                },
+                                "Update_variable_-_QueryStatus_": {
+                                    "runAfter": {
+                                        "GetQueryExecution_again": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "QueryStatus",
+                                        "value": "@{body('GetQueryExecution_again')}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Set_variable_-_QueryStatus": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('QueryStatus'), 'SUCCEEDED')",
+                            "limit": {
+                                "count": 50,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "AWSAthena-GetQueryResults",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

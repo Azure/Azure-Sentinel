@@ -1,0 +1,34 @@
+id: 77d0aadc-aaea-4346-b61a-bf7ac6b71bba
+name: Lambda layer imported from external account
+description: |
+  'Detected an external account adding lambda layer, which attackers could use to inject a backdoor inside the lambda function. If this is the case, make sure to remove the layer from the function.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1525
+query: |
+  AWSCloudTrail
+  | where (EventName startswith "UpdateFunctionConfiguration" or EventName startswith "CreateFunction") and isempty(ErrorCode) and isempty(ErrorMessage)
+  | extend layers = parse_json(tostring((parse_json(RequestParameters)))).layers
+  | extend accId = split(parse_json(tostring((parse_json(RequestParameters)))).layers,":",4)
+  | mv-expand accId
+  | where layers <> "" and layers !has RecipientAccountId
+  // Exclude AWS Owned AccIds (built-in layers)
+  | where accId !in ("249908578461","668099181075","468957933125","399891621064","325793726646","118857876118","296580773974","961244031340","631267018583","817496625479","778625758767","292169987271","642425348156","142628438157","959311844005","640010853179","259788987135","420165488524","683298794825","382066503313","556739011827","138526772879","027255383542","728743619870","958113053741","359756378197","039592058896","066940009817","434848589818","282860088358","493207061005","646970417810","203683718741","615057806174","615084187847","630222743974","980059726660","706869817123","826293736237","421114256042","080788657173","418787028745","554480029851","000010852771","574348263942","559955524753","946561847325","946746059096","580247275435","012438385374","519774774795","488211338238","339249233099","285320876703")
+  | distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, tostring(layers)
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

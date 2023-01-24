@@ -1,0 +1,49 @@
+id: c6258d51-7b82-4942-8293-94c1dcf91595
+name: API - Rate limiting
+description: |
+  '42Crunch API protection against first-time access'
+severity: Low
+requiredDataConnectors:
+  - connectorId: 42CrunchAPIProtection
+    dataTypes:
+      - apifirewall_log_1_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - Discovery
+  - InitialAccess
+relevantTechniques:
+query: |
+  let firstRec = apifirewall_log_1_CL
+  | where TimeGenerated >= ago(5m) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_9" and URI_Path_s has "/api/login" |
+  top 1 by Timestamp_t desc;
+  let ipAddress = toscalar(firstRec | summarize by Source_IP_s);
+  let secondRec = apifirewall_log_1_CL
+  | where TimeGenerated >= ago(7d) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_9" and URI_Path_s has "/api/login" and Source_IP_s == ipAddress;
+  let recCount = iff((toscalar(secondRec | count) > 1), 0, 1);
+  secondRec | take recCount
+customDetails:
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_IP_s
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname_s
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Instance_Name_s
+version: 1.0.0
+kind: Scheduled

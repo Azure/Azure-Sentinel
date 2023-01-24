@@ -1,0 +1,78 @@
+id: 7bce901b-9bc8-4948-8dfc-8f68878092d5
+name: Server Oriented Cmdlet And User Oriented Cmdlet used
+description: |
+  'Detect if a server oriented Cmdlet and a user oriented cmdlet that are monitored are launched by a same user in a same server in a 10 minutes timeframe'
+requiredDataConnectors:
+  - connectorId: ESI-ExchangeAdminAuditLogEvents
+    dataTypes:
+      - Event
+severity: High
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Exfiltration
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1020
+  - T1098
+  - T1114
+query: |
+  let timeframe = 1d;
+  let spanoftime = 10m;
+  let threshold = 0;
+  ExchangeAdminAuditLogs 
+    | where TimeGenerated > ago(2 * timeframe)
+    | where isempty(UserOriented)
+    | project serverExecutedTime = TimeGenerated,
+      ServerCmdlet = CmdletName,
+      ServerCmdletParams = CmdletParameters,
+      Computer,
+      Caller,
+      ServerCmdletTargetObject = TargetObject
+    | join kind= inner (
+        ExchangeAdminAuditLogs
+        | where TimeGenerated > ago(timeframe)
+        | where UserOriented =~ 'Yes'
+        | lookup kind=leftouter _GetWatchlist('ExchangeVIP') on $left.TargetObject == $right.canonicalName
+        | project userExecutedTime = TimeGenerated,
+          UserCmdlet = CmdletName,
+          UserCmdletParams = CmdletParameters,
+          Computer,
+          Caller,
+          UserCmdletTargetObject = TargetObject,
+          userPrincipalName,
+          objectGUID,
+          sAMAccountName,
+          IsVIP)
+      on Computer, Caller
+    | where userExecutedTime - serverExecutedTime < spanoftime
+    | extend TimeDelta = userExecutedTime - serverExecutedTime
+    | extend TimeDeltaInverse = serverExecutedTime - userExecutedTime
+    | where tolong(TimeDelta) >= threshold or tolong(TimeDeltaInverse) >= threshold
+entityMappings:
+- entityType: Mailbox
+  fieldMappings:
+    - identifier: MailboxPrimaryAddress
+      columnName: userPrincipalName
+    - identifier: Upn
+      columnName: userPrincipalName
+- entityType: Host
+  fieldMappings:
+    - identifier: FullName
+      columnName: Computer
+- entityType: Host
+  fieldMappings:
+    - identifier: HostName
+      columnName: ServerCmdletTargetObject
+- entityType: Account
+  fieldMappings:
+    - identifier: Name
+      columnName: Caller
+    - identifier: ObjectGuid
+      columnName: TargetObject
+version: 1.0.0
+kind: Scheduled

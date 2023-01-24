@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function to returns the DNS response code name based on a numerical response code
+# Log Analytics KQL function An ASIM function to returns the DNS response code name based on a numerical response code
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function to returns the DNS response code name based on a numerical response code
+ARM template for deploying the Log Analytics KQL function An ASIM function to returns the DNS response code name based on a numerical response code
 
 This ASIM function returns the DNS response code(RCode) name associated with the response code numerical value provided as a parameter. For example, for the RCode 3, the function returns NXDOMAIN.  
 

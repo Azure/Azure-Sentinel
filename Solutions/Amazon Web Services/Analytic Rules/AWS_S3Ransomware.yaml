@@ -1,0 +1,55 @@
+id: b442b9e2-5cc4-4129-a85b-a5ef38a9e5f0
+name: S3 bucket suspicious ransomware activity
+description: |
+  'Suspicious S3 bucket activity indicating ransomware was detected.
+  An attacker might download all the objects in a compromised S3 bucket, encrypt them with his own key, then upload them back to the same bucket, overwriting the existing ones.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1486
+query: |
+  let timeframe = 1h;
+  let lookback = 2h;
+  // The attacker downloads the object(s) from the compromised bucket
+  let GetObject = AWSCloudTrail
+  | where TimeGenerated >= ago(lookback)
+  | where EventName == "GetObject" and isempty(ErrorCode) and isempty(ErrorMessage)
+  | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+  | project-rename StartTime = TimeGenerated;
+  // Then, the attacker overwrites the same object(s) but encrypted with his own key
+  let PutObject = AWSCloudTrail
+  | where TimeGenerated >= ago(timeframe)
+  | where EventName == "PutObject" and isempty(ErrorCode) and isempty(ErrorMessage)
+  | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+  | extend kmsId = tostring(parse_json(RequestParameters).["x-amz-server-side-encryption-aws-kms-key-id"])
+  | where tostring(kmsId) !has tostring(RecipientAccountId) and kmsId <> "";
+  PutObject
+  | join kind=inner 
+  (
+     GetObject
+  )
+  on $left.bucketName == $right.bucketName, $left.keyName == $right.keyName
+  | where TimeGenerated > StartTime
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

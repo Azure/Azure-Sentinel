@@ -1,4 +1,4 @@
-""" polls data from azure sentinel incidents to DS """
+""" polls data from Microsoft Sentinel incidents to DS """
 
 class poller:
     pass

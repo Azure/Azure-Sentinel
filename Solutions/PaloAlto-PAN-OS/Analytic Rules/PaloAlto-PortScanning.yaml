@@ -1,0 +1,68 @@
+id: 5b72f527-e3f6-4a00-9908-8e4fee14da9f
+name: Palo Alto - possible internal to external port scanning
+description: |
+  'Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which
+  results in an "ApplicationProtocol = incomplete" designation. The server resets coupled with an "Incomplete" ApplicationProtocol designation can be an indication
+  of internal to external port scanning or probing attack.
+  References: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK and
+  https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1046
+query: |
+  CommonSecurityLog
+  | where isnotempty(DestinationPort) and DeviceAction !in ("reset-both", "deny")
+  // filter out common usage ports. Add ports that are legitimate for your environment
+  | where DestinationPort !in ("443", "53", "389", "80", "0", "880", "8888", "8080")
+  | where ApplicationProtocol == "incomplete"
+  // filter out IANA ephemeral or negotiated ports as per https://en.wikipedia.org/wiki/Ephemeral_port
+  | where DestinationPort !between (toint(49512) .. toint(65535))
+  | where Computer != ""
+  | where DestinationIP !startswith "10."
+  | extend Reason = coalesce(
+                                column_ifexists("Reason", ""),
+                                extract("reason=(.+?)(;|$)", 1, AdditionalExtensions),
+                                ""
+                            )
+  // Filter out any graceful reset reasons of AGED OUT which occurs when a TCP session closes with a FIN due to aging out.
+  | where Reason !has "aged-out"
+  // Filter out any TCP FIN which occurs when a TCP FIN is used to gracefully close half or both sides of a connection.
+  | where Reason !has "tcp-fin"
+  // Uncomment one of the following where clauses to trigger on specific TCP reset reasons
+  // See Palo Alto article for details - https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK
+  // TCP RST-server - Occurs when the server sends a TCP reset to the client
+  // | where AdditionalExtensions has "reason=tcp-rst-from-server"
+  // TCP RST-client - Occurs when the client sends a TCP reset to the server
+  // | where AdditionalExtensions has "reason=tcp-rst-from-client"
+  // Already performed
+  //| extend reason = tostring(split(AdditionalExtensions, ";")[3])
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction, DestinationIP
+  | where count_ >= 10
+  | summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), makeset(DestinationIP), totalcount = sum(count_) by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction
+  | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIP, AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled

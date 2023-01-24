@@ -7,9 +7,6 @@ import azure.functions as func
 import re
 import time
 import aiohttp
-from typing import AsyncIterable, Optional
-from io import BytesIO
-import gzip
 
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 
@@ -25,7 +22,7 @@ CONTAINER_NAME = os.environ['CONTAINER_NAME']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
-LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+(?=\{)')
+LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
     
 # Defines how many files can be processed simultaneously
 MAX_CONCURRENT_PROCESSING_FILES = int(os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
@@ -105,10 +102,11 @@ class AzureBlobStorageConnector:
         async with self.semaphore:
             logging.info("Start processing {}".format(blob['name']))
             sentinel = AzureSentinelConnectorAsync(session, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
+            blob_cor = await container_client.download_blob(blob['name'])
             s = ''
-            async for chunk in self._get_chunks(blob, container_client):
-                s += chunk
-                lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
+            async for chunk in blob_cor.chunks():
+                s += chunk.decode()
+                lines =  re.split(r'{0}'.format(LINE_SEPARATOR), s)
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
@@ -120,7 +118,7 @@ class AzureBlobStorageConnector:
                             await sentinel.send(event)
                 s = line
             if s:
-                try:
+                try :
                     event = json.loads(s)
                 except ValueError as e:
                     logging.error('Error while loading json Event at s value {}. blob name: {}. Error: {}'.format(line, blob['name'],str(e)))
@@ -133,37 +131,3 @@ class AzureBlobStorageConnector:
             logging.info("Finish processing {}. Sent events: {}".format(blob['name'], sentinel.successfull_sent_events_number))
             if self.total_blobs % 100 == 0:
                 logging.info('Processed {} files with {} events.'.format(self.total_blobs, self.total_events))
-
-    @classmethod
-    async def _get_chunks(cls, blob, container_client: ContainerClient) -> AsyncIterable[str]:
-        blob.content_settings.content_encoding = None
-        await container_client.get_blob_client(blob).set_http_headers(blob.content_settings)
-        blob_cor = await container_client.download_blob(blob['name'])
-        is_gz = None
-        full_gz_file = b''
-        async for chunk in blob_cor.chunks():
-            if is_gz is None:
-                if cls._check_if_gzipped(chunk):
-                    is_gz = True
-                else:
-                    is_gz = False
-            
-            if is_gz is False:
-                yield chunk.decode()
-            elif is_gz is True:
-                full_gz_file += chunk
-
-        if is_gz and full_gz_file:
-            full_gz_file = BytesIO(full_gz_file)
-            f = gzip.GzipFile(fileobj=full_gz_file)
-            while True:
-                line = f.readline()
-                if line:
-                    yield line.decode()
-                else:
-                    break
-
-    @staticmethod
-    def _check_if_gzipped(b: bytes) -> Optional[bool]:
-        if b:
-            return b[:2] == b'\x1f\x8b'
