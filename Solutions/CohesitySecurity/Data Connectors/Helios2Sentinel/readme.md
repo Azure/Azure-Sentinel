@@ -1,5 +1,5 @@
 # Azure Functions
-This solution requires deploying two Azure functions - one for receiving alerts and another one for creating Sentinel incidents.
+This solution uses Microsoft Azure functions requires to receive alerts and create Microsoft Sentinel incidents. You have to deploy the Azure functions.
 Before deployment, please make sure that all prerequisites are done correctly.
 
 ## Prerequisites
@@ -9,4 +9,4 @@ Before deployment, please make sure that all prerequisites are done correctly.
 * Install [azure-functions-core-tools](https://docs.microsoft.com/azure/azure-functions/functions-run-local).
 
 ## Deployment
-* Run [this](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/azuredeploy.json.sh) script to create configuration and deploy the function apps to Azure.
+* Run [this](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/azuredeploy.json.sh) script to create configuration nd deploy the function applications to Azure.

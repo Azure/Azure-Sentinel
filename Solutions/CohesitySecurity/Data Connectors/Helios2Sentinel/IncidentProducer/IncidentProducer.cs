@@ -181,7 +181,7 @@ namespace Helios2Sentinel
                     log.LogError("Exception --> 2 " + ex.Message);
                 }
 
-                if (startDateUsecs == 0 || hasException)
+                if (startDateUsecs == 0)
                 {
                     TestAlertToQueue(outputQueueItem);
                     startDateUsecs = GetPreviousUnixTime(log);
