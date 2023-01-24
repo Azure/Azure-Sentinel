@@ -30,7 +30,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         [JsonProperty("alertDetailsOverride", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
         public AlertDetailsOverride AlertDetailsOverride { get; set; }
 
-        [JsonProperty("version", Required = Required.Default)]
+        [JsonProperty("version", Required = Required.Always)]
         [StringLength(20)] //Version should be quite short (for example "1.2.2")
         [QueryBasedTemplateVersionValidator]
         public string Version { get; set; }
