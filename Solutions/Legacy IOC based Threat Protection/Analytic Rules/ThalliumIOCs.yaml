@@ -24,6 +24,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWDnsQuery
   - connectorId: Zscaler
     dataTypes:
       - CommonSecurityLog
@@ -76,7 +78,40 @@ query: |
   | where isnotempty(DestinationHost)
   | where DestinationHost has_any (DomainNames)  
   | extend DNSName = DestinationHost 
-  | extend IPAddress = SourceHost 
+  | extend IPCustomEntity = SourceHost 
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallNetworkRule"
+  | where msg_s has_any (DomainNames)
+  | parse msg_s with Protocol " request from " SourceIP ":" SourcePortInt:int " to " TargetIP ":" TargetPortInt:int *
+  | parse kind=regex flags=U msg_s with * ". Action\\: " Action1a "\\."
+  | parse msg_s with * ". Policy: " Policy ". Rule Collection Group: " RuleCollectionGroup "." *
+  | parse msg_s with * " Rule Collection: "  RuleCollection ". Rule: " Rule
+  | extend IPCustomEntity = SourceIP
+  ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | where msg_s has_any (DomainNames)
+  | parse msg_s with "DNS Request: " SourceIP ":" SourcePortInt:int " - " QueryID:int " " RequestType " " RequestClass " " hostname ". " protocol " " details
+  | extend
+      ResponseDuration = extract("[0-9]*.?[0-9]+s$", 0, msg_s),
+      SourcePort = tostring(SourcePortInt),
+      QueryID =  tostring(QueryID)
+  | extend IPCustomEntity = SourceIP
+  | project TimeGenerated,SourceIP,hostname,RequestType,ResponseDuration,details,msg_s
+  | order by TimeGenerated
+  ),
+  (AZFWApplicationRule
+  | where Fqdn has_any (DomainNames)
+  | extend IPCustomEntity = SourceIp
+  ),
+  (AZFWDnsQuery
+  | where isnotempty(QueryName)
+  | where QueryName has_any (DomainNames)
+  | extend DNSName = QueryName
+  | extend IPCustomEntity = SourceIp
   )
   )
   | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress 
@@ -93,5 +128,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.4.1
+version: 1.5.0
 kind: Scheduled
