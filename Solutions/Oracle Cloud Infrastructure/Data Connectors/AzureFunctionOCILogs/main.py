@@ -133,7 +133,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                     event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])
                 if "stateChange" in event["data"]:
                     logging.info("In data.stateChange : {}".format(event["data"]["stateChange"]))
-                    if "current" in event["data"]["stateChange"] and event["data"]["stateChange"] is not None :
+                    if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
                         event["data"]["stateChange"]["current"] = json.dumps(
                             event["data"]["stateChange"]["current"])
             sentinel.send(event)
