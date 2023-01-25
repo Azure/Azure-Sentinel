@@ -1,0 +1,98 @@
+Parser:
+  Title: Web Session ASIM parser for Palo Alto Networks URL Filtering
+  Version: '0.1'
+  LastUpdated: Jan 25 2023
+Product:
+  Name: Palo Alto Networks
+Normalization:
+  Schema: WebSession
+  Version: '0.2.5'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: URL Filter fields
+  Link: https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions/url-filtering-log-fields.html
+- Title: Palo Alto Common Event Format Integration Guide [pdf]
+  Link: https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/cef/pan-os-10-0-cef-configuration-guide.pdf
+Description: |
+  This ASIM parser supports normalizing the Palo Alto Networks CEF log to the ASIM WebSession normalized schema.
+ParserName: ASimWebSessionPaloAltoNetworks
+EquivalentBuiltInParser: _ASim_WebSession_PaloAltoNetworks
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false){
+      let EventLookup=datatable(DeviceAction:string,EventResult:string,HttpStatusCode:string)
+      [
+          "alert", "Success","200"
+          , "allow", "Success","200"
+          , "continue", "Success","200"
+          , "override", "Success","200"
+          , "block-continue", "Partial","200"
+          , "block-url", "Failure","503"
+          , "block-override", "Failure","302"
+          , "override-lockout", "Failure","503"
+      ];
+      let SeverityLookup=datatable(LogSeverity:string,EventSeverity:string)
+      [   1, "Informational" 
+          , 2, "Low" 
+          , 3, "Medium"
+          , 4, "Medium" 
+          , 5, "High"
+      ];
+      CommonSecurityLog
+      | where DeviceVendor == "Palo Alto Networks"
+          and DeviceProduct == "PAN-OS"
+          and Activity == "THREAT"
+          and DeviceEventClassID == "url"
+      | parse AdditionalExtensions with URL ";PanOSActionFlags=" *
+      | extend 
+          Url                         = coalesce(RequestURL,URL)
+      | lookup EventLookup on DeviceAction
+      | lookup SeverityLookup on LogSeverity
+      | project Url, EventResult, HttpStatusCode, Computer, DeviceCustomString4, DeviceCustomString2, DeviceAction, _ItemId, LogSeverity,DeviceVendor, DeviceVersion, DeviceInboundInterface, DestinationIP, DestinationPort, SourceIP, SourcePort,SourceUserName,DestinationUserName, RequestMethod, RequestContext, ThreatConfidence, Protocol, DeviceCustomNumber1, TimeGenerated
+      | project-rename 
+          Dvc                         = Computer
+          , DvcZone                   = DeviceCustomString4
+          , UrlCategory               = DeviceCustomString2
+          , EventResultDetails        = DeviceAction
+          , EventUid                  = _ItemId
+          , EventOriginalSeverity     = LogSeverity
+          , EventProductVersion       = DeviceVersion
+          , DvcInterface              = DeviceInboundInterface
+          , DstIpAddr                 = DestinationIP
+          , DstPortNumber             = DestinationPort
+          , SrcIpAddr                 = SourceIP
+          , SrcPortNumber             = SourcePort
+          , SrcUsername               = SourceUserName
+          , DstUsername               = DestinationUserName
+      | extend 
+          EventType                   = "HTTPsession"
+          , EventSchema               = "WebSession"
+          , EventSchemaVersion        = "0.2.5"
+          , EventProduct              = "Palo Alto Networks"
+          , EventVendor               = "PAN-OS"
+          , EventStartTime            = TimeGenerated
+          , EventEndTime              = TimeGenerated
+          , HttpRequestMethod         = toupper(RequestMethod)
+          , HttpContentFormat         = RequestContext
+          , Dst                       = DstIpAddr
+          , Src                       = SrcIpAddr
+          , NetworkProtocolVersion    = case(
+              DstIpAddr contains "."  , "IPv4"
+              , DstIpAddr contains ":", "IPv6"
+              , "")
+          , IpAddr                    = SrcIpAddr
+          , ThreatConfidence          = toint(ThreatConfidence)
+          , NetworkProtocol           = toupper(Protocol)
+          , NetworkSessionId          = tostring(DeviceCustomNumber1)
+          , User                      = SrcUsername
+      | extend DvcOs                  = EventVendor
+          , DvcOsVersion              = EventProductVersion
+          , SessionId                 = NetworkSessionId
+  };
+  parser (disabled)
