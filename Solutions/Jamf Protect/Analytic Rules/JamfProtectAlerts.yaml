@@ -11,24 +11,26 @@ requiredDataConnectors:
 suppressionDuration: PT5H
 suppressionEnabled: false
 tactics:
-techniques:
-alertRuleTemplateName:
+relevantTechniques:
 query: |
   jamfprotect_CL
   | where topicType_s == "alert"
-  | where input_eventType_s <> "GPUnifiedLogEvent"
+    and input_eventType_s <> "GPUnifiedLogEvent"
+    and isnotempty(input_match_severity_d)
   | extend severity = case(input_match_severity_d == 0, "Informational", input_match_severity_d == 1, "Low", input_match_severity_d == 2, "Medium", input_match_severity_d == 3, "High", "True")
-  | extend Analytic_description =  parse_json(input_match_facts_s)[0].human
-  | extend Analytic_name =  parse_json(input_match_facts_s)[0].name
+  | extend Match_facts = parse_json(input_match_facts_s)
+  | extend Analytic_description =  parse_json(Match_facts)[0].human
+  | extend Analytic_name =  parse_json(Match_facts)[0].name
   | extend AlertURL = strcat("https://", org_hd_s, ".jamfcloud.com/Alerts/", input_match_uuid_g)
   | extend Input_Match = parse_json(input_match_actions_s)[0].name
   | extend sha256hex = tostring(parse_json(input_related_binaries_s)[0].sha256hex)
   | extend algorithm = "SHA256"
   | extend Matched_Users = tostring(parse_json(input_related_users_s)[0].name)
   | extend Host_IPs = tostring(parse_json(input_host_ips_s)[0])
-  | extend Tags = tostring(parse_json(input_match_facts_s)[0].tags)
-  | extend JamfPro = case(Input_Match contains "SmartGroup", "Workflow with Jamf Pro", Input_Match == "Prevented", "No workflow, Prevented by Protect", Input_Match == "", "No workflow", "No workflow")
-  | where isnotempty(severity)
+  | extend Tags = tostring(parse_json(Match_facts)[0].tags)
+  | extend JamfPro = case(Input_Match has "SmartGroup", "Workflow with Jamf Pro", Input_Match has "Prevented", "No workflow, Prevented by Protect", isnotempty(Input_Match), "No workflow", "No workflow")
+  | extend ProviderName = "Jamf"
+  | extend ProductName = "Jamf Protect"
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -37,18 +39,19 @@ incidentConfiguration:
     lookbackDuration: PT5H
     matchingMethod: AllEntities
 alertDetailsOverride:
-  alertDisplayNameFormat: "{{Analytic_name}} - {{Analytic_description}} on {{input_host_hostname_s}}"
-  alertDescriptionFormat: "Please navigate to the following link for more information {{AlertURL}}"
-  Description: "{{Analytic_description}}"
-  alertTacticsColumnName: Tags
+  alertDisplayNameFormat: "{{Analytic_name}} detected on {{input_host_hostname_s}}"
+  alertDescriptionFormat: "{{Analytic_description}} - Please investigate"
   alertSeverityColumnName: severity
   alertDynamicProperties:
     - alertProperty: AlertLink
       value: AlertURL
+    - alertProperty: ProviderName
+      value: ProviderName
+    - alertProperty: ProductName
+      value: ProductName
 customDetails:
   Protect_Event_Type: input_eventType_s
   Protect_Analytic: input_match_event_name_s
-  Protect_URL: AlertURL
   Related_File_hash: sha256hex
   Related_Binaries: input_related_binaries_s
   JamfPro_Status: JamfPro
@@ -76,6 +79,5 @@ entityMappings:
         columnName: algorithm
       - identifier: Value
         columnName: sha256hex
-sentinelEntitiesMappings:
 version: 1.0.0
 kind: NRT
