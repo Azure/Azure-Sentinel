@@ -162,6 +162,7 @@ namespace Helios2Sentinel
         {
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
             long startDateUsecs = 0;
+            long endDateUsecs = GetCurrentUnixTime();
 
             try
             {
@@ -176,12 +177,13 @@ namespace Helios2Sentinel
                 catch (Exception ex)
                 {
                     hasException = true;
+                    WriteData(blobKey, endDateUsecs.ToString(), log);
                     log.LogError("apiKey Exception --> 2 " + apiKey);
                     log.LogError("blobKey Exception --> 2 " + blobKey);
                     log.LogError("Exception --> 2 " + ex.Message);
                 }
 
-                if (startDateUsecs == 0)
+                if (startDateUsecs == 0 || hasException)
                 {
                     TestAlertToQueue(outputQueueItem);
                     startDateUsecs = GetPreviousUnixTime(log);
@@ -189,7 +191,6 @@ namespace Helios2Sentinel
 
                 log.LogInformation("startDateUsecs --> " + startDateUsecs);
 
-                long endDateUsecs = GetCurrentUnixTime();
                 log.LogInformation("endDateUsecs --> " + endDateUsecs.ToString());
 
                 string requestUriString = $"https://helios.cohesity.com/mcm/alerts?alertCategoryList=kSecurity&alertStateList=kOpen&startDateUsecs={startDateUsecs}&endDateUsecs={endDateUsecs}";

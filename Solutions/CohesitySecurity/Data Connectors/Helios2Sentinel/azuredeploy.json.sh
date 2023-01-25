@@ -4,7 +4,7 @@ SCRIPTPATH=$(dirname "$SCRIPT")
 cd "$SCRIPTPATH"
 
 resourcegroup="ying-test-resource-group"
-workspacename="auto-deploy-workspace-01-24-23-v2"
+workspacename="auto-deploy-workspace-01-24-23-v3"
 producer_fun_prefix="cohesitypro"
 producer_context="IncidentProducer"
 consumer_fun_prefix="cohesitycon"
