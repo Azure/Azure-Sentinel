@@ -12,13 +12,17 @@ This playbook creates a ticket in ServiceNow. It can be also used for updating t
 * __Playbook Name:__ Enter the playbook name here.
 
 ## Post-Deployment instructions
-1. Enter and authorize ServiceNow credentials in the playbook (read more about editing connections [here](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/understanding-api-connections-for-your-microsoft-sentinel/ba-p/2593973))
-* Go to _Logic Apps_.
-* Choose your app (playbook).
+1. Make sure the user that runs the playbook has the role _Microsoft Sentinel Playbook Operator_ assigned. To assign the role,
+* Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
+* Choose the _Access Control (IAM)_ option from the left pane.
+* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Playbook_Operator_ to the user.
+
+2. Enter and authorize ServiceNow credentials in the playbook (read more about editing connections [here](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/understanding-api-connections-for-your-microsoft-sentinel/ba-p/2593973))
+* Go to _Logic Apps_ and choose your app (playbook).
 * Select _Development Tools\API Connections_.
 * Select a connection you'd like to authorize.
 * Click on General\Edit API Connection.
-* Enter path to your instance, e.g. dev12345
+* Enter path to your ServiceNow instance, e.g. dev12345.service-now.com
 * Enter username.
 * Enter password.
 * Click Save.
@@ -31,18 +35,19 @@ Alternatively, you can follow these steps to achieve the same goal. This would b
 * Choose _ServiceNow_ block.
 * Click on _Change Connection_.
 * Click on the "!" icon to enter ServiceNow credentials or choose a different, previously authorized, connection with the correct credentials.
-* Press _Save_ button to save changes in your playbook. 
+* Press _Save_ button to save changes in your playbook.
 * If it doesn't work, repeat the steps but either choose a different connection or fix possible authorization errors, e.g. wrong user/password or incorrect path to the instance, for the chosen one.
 
-2. For the playbook to run, there is a need to assign the Microsoft Sentinel Responder role to the playbook's managed identity.
+3. For the playbook to run, there is a need to assign the Microsoft Sentinel Responder role to the playbook's managed identity.
 * Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
 * Choose the _Access Control (IAM)_ option from the left pane.
 * Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Responder_ managed identity role to the playbook.
 
-3. (Recommendation) You can create an automation rule to close the corresponding ServiceNow ticket when the corresponding Sentinel ticket is closed.
+4. (Recommendation) You can create an automation rule to close the corresponding ServiceNow ticket when the corresponding Sentinel ticket is closed.
 * In _Microsoft Sentinel | Automation_ press _+Create\Automation Rule_.
 * Enter an automation rule name of your choice.
-* Set the following conditions
+* In _Trigger_ choose __When incident is updated__.
+* Set the following conditions using _AND_ rule
   * _Analytic rule name_ contains **All**.
   * _Tag_ contains **SNOW System ID**.
   * _Status_ changed to **Closed**.
