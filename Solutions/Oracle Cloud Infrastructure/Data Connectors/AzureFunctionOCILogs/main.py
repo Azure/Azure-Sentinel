@@ -18,8 +18,9 @@ StreamOcid = os.environ['StreamOcid']
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'
-
+CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
+PARTITIONS = os.getenv('Partition',"0")
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -42,7 +43,10 @@ def main(mytimer: func.TimerRequest):
 
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
-    cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
+    if CURSOR_TYPE.lower() == 'group' :
+        cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
+    else :
+        cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
     process_events(stream_client, StreamOcid, cursor, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
 
@@ -95,18 +99,28 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
     response = sc.create_group_cursor(sid, cursor_details)
     return response.data.value
 
+def get_cursor_by_partition(client, stream_id, partition):
+    print("Creating a cursor for partition {}".format(partition))
+    cursor_details = oci.streaming.models.CreateCursorDetails(
+        partition=partition,
+        type=oci.streaming.models.CreateCursorDetails.TYPE_TRIM_HORIZON)
+    response = client.create_cursor(stream_id, cursor_details)
+    cursor = response.data.value
+    return cursor
 
 def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
     while True:
         get_response = client.get_messages(stream_id, cursor, limit=1000)
+        logging.info(get_response)
         if not get_response.data:
             return
 
         for message in get_response.data:
             event = b64decode(message.value.encode()).decode()
             event = json.loads(event)
-            sentinel.send(event)
+            logging.info(event)
+            sentinel.send(customizedJson(event))
 
         sentinel.flush()
         if check_if_script_runs_too_long(start_ts):
@@ -114,6 +128,18 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             break
         cursor = get_response.headers["opc-next-cursor"]
 
+def customizedJson(eventData):
+    required_fields_data = {}
+    for key, value in eventData["data"].items():
+        if(type(value) == type({})):
+            for k, v in value.items():
+                if(type(v) == str):                    
+                    required_fields_data['data_' + key + '_' + k] = v
+                else:
+                    required_fields_data['data_' + key + '_' + k] = json.dumps(v, indent = 4)
+        else:
+            required_fields_data['data_' + key] = value
+    return required_fields_data
 
 def check_if_script_runs_too_long(start_ts):
     now = int(time.time())
