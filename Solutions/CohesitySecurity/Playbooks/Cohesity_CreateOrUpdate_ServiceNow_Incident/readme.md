@@ -15,7 +15,7 @@ This playbook creates a ticket in ServiceNow. It can be also used for updating t
 1. Make sure the user that runs the playbook has the role _Microsoft Sentinel Playbook Operator_ assigned. To assign the role,
 * Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
 * Choose the _Access Control (IAM)_ option from the left pane.
-* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Playbook_Operator_ to the user.
+* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Playbook Operator_ to the user.
 
 2. Enter and authorize ServiceNow credentials in the playbook (read more about editing connections [here](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/understanding-api-connections-for-your-microsoft-sentinel/ba-p/2593973))
 * Go to _Logic Apps_ and choose your app (playbook).

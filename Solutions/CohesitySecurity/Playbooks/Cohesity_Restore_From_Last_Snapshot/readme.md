@@ -2,12 +2,6 @@
 ## Summary
 This playbook restores the latest good Data Hawk (Helios) snapshot. It’s recommended for running by Backup Admins _only_ after they make sure that the existing data is compromised, and rollback to the previous snapshot, even at the expense of data loss, is _really required_. __Please beware__: It's operable only if you have installed the [Function Apps](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) and received some incidents that need an action on affected data.
 
-## Prerequisites
-1. Deploy the Cohesity configuration [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FData%2520Connectors%2FHelios2Sentinel%2Fazuredeploy.json)
-2. Deploy the [Cohesty Function Apps](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) to Azure.
-
-**Note:** If you've already done the steps above for another playbook, please proceed straight to the deployment steps.
-
 ## Deployment instructions
 1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Restore_From_Last_Snapshot%2Fazuredeploy.json)
@@ -18,7 +12,7 @@ This playbook restores the latest good Data Hawk (Helios) snapshot. It’s recom
 1. Make sure the user that runs the playbook has the role _Microsoft Sentinel Playbook Operator_ assigned. To assign the role,
 * Under the _Subscriptions_ tab from the _Home_ page, choose your subscription name.
 * Choose the _Access Control (IAM)_ option from the left pane.
-* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Playbook_Operator_ to the user.
+* Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Playbook Operator_ to the user.
 
 2. Authorize all connections
 * Go to _Logic Apps_ and choose your playbook
