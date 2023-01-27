@@ -42,5 +42,11 @@ Step 2: Incident created in Sentinel
 ![image](https://user-images.githubusercontent.com/20562985/196183706-02062a9c-eea2-4fd1-9d57-4bf540456341.png)
 
 
+### Use cases
+
+SOC - In a organization there might be Security Incident / Suspecious activity occurring to the resources where Security is not tightened up yet. 
+So an email address can be whistle blower here. A suspicious activity can be reported over a dedicated email address to create an incident and address the incident.
+
+
 Thank you for using the tool.
 
