@@ -2,7 +2,7 @@
 
  ## Summary
 
-This playbook allows the SOC users to automatically response to Azure Sentinel incidents which includes IPs, by adding/removing the IPs to the Sentinel IP blocked group.
+This playbook allows the SOC users to automatically response to Microsoft Sentinel incidents which includes IPs, by adding/removing the IPs to the Sentinel IP blocked group.
  [Learn more about Threat Intelligence in Fortinet policy](https://www.fortinet.com/fortiguard/threat-intelligence/threat-research)
 
 ![Fortinet](./images/DesginerIPResponse.png)<br>
@@ -27,7 +27,7 @@ This playbook allows the SOC users to automatically response to Azure Sentinel i
 Before playbook deployment you need to have configured KeyVault and store key as a secret in Key vault.
 ####Steps to configure Key vault:
 #### a. KeyVault creation
-1. In Azure Sentinel navigate to Key vaults.
+1. In Microsoft Sentinel navigate to Key vaults.
 2. Create new Key Vault and remember Key vault name.
 
 #### b. Secret creation
@@ -57,24 +57,24 @@ Before playbook deployment you need to have configured KeyVault and store key as
 * For each one of the above function call actions and perform the below mentioned steps:
   - Go to "Managed identity" dropdown and select user identity.
   - Save playbook.
-* Go to Azure Sentinel, hook playbook to azure sentinel rules.
+* Go to Microsoft Sentinel, hook playbook to Microsoft Sentinel rules.
 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.  Click the Azure Sentinel connection resource.
+1.  Click the Microsoft Sentinel connection resource.
 2.  Click edit API connection.
 3.  Click Authorize
 4.  Sign in.
 5.  Click Save
 6.  Repeat steps for other connection such as Team's connection
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
+1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
 
 ## Playbook steps explained
 
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
+1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook.
 
 #### c. Configuration of Azure Key Vault
@@ -85,9 +85,9 @@ Once deployment is complete, you will need to authorize each connection.
 3. Find principal by playbook name and select it
 4. Click Create
 
-### When Azure Sentinel incident creation rule is triggered
+### When Microsoft Sentinel incident creation rule is triggered
 
-- Azure Sentinel incident is created. The playbook receives the incident as the input.
+- Microsoft Sentinel incident is created. The playbook receives the incident as the input.
 
 ### Get Entities as IP's
 
