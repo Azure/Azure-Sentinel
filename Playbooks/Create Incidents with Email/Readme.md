@@ -8,7 +8,7 @@ Please use the below button to deploy
 
 ### Deployment
 
-Once deployed you can configure the connetions as below
+Once deployed you can configure the connections as below
 
 ![image](https://user-images.githubusercontent.com/20562985/196198346-2dbde9ca-9812-4c49-a0e6-d3ebca777bb3.png)
 
