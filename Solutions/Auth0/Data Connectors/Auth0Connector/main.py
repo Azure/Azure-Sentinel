@@ -82,6 +82,7 @@ class Auth0Connector:
         logging.info(f'Token provided.')
         self.header = self._get_header()
         last_log_id = self._get_last_log_id(config)
+        #last_log_id = "90020230126121002244690048186607762971591195832157732866"
         logging.info(f'\tLast log id extracted: {last_log_id}.')
         if last_log_id is None:
             return '', []
@@ -99,13 +100,18 @@ class Auth0Connector:
             page_num = 1
             while resp.json():
                 resp = requests.get(next_uri, headers=self.header)
-                next_link = resp.headers['Link']
-                next_uri = next_link[next_link.index('<') + 1:next_link.index('>')]
-                events.extend(resp.json())
-                logging.info(f'\t#{page_num} extracted')
-                page_num += 1
-                if page_num % 9 == 0:
-                    time.sleep(1)
+                #logging.info(f'\t Response message {resp.headers}')
+                try:
+                    next_link = resp.headers['Link']
+                    next_uri = next_link[next_link.index('<') + 1:next_link.index('>')]
+                    events.extend(resp.json())
+                    logging.info(f'\t#{page_num} extracted')
+                    page_num += 1
+                    if page_num % 9 == 0:
+                        time.sleep(1)
+                except:
+                    logging.info(f'Next link is not available, exiting')
+                    break            
         events.sort(key=lambda item: item['date'], reverse=True)
         last_log_id = events[0]['log_id']
         logging.info(f'\t New last log id: {last_log_id}\n at date {events[0]["date"]}. Events extracted.')
