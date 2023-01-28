@@ -1955,6 +1955,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                                 $alertRule | Add-Member -NotePropertyName tactics -NotePropertyValue $yaml.tactics # Add Tactics property if exists
                             }
+                            if ($yaml.relevantTechniques -and ($yaml.relevantTechniques.Count -gt 0) ) {
+                                if ($yaml.relevantTechniques -match ' ') {
+                                    $yaml.relevantTechniques = $yaml.relevantTechniques -replace ' ', ''
+                                }
+                                $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue $yaml.relevantTechniques # Add relevantTechniques property if exists
+                            }
                             $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any.
                             if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')) {
                                 # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.
