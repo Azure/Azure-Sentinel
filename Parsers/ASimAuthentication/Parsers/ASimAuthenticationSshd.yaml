@@ -1,0 +1,104 @@
+Parser:
+  Title: Authentication ASIM parser for Syslog sshd
+  Version: '0.1.1'
+  LastUpdated: November 21, 2022
+Product:
+  Name: sshd
+Normalization:
+  Schema: Authentication
+  Version: '0.1.1'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Syslog opensshd sign in logs to the ASIM Authentication schema.
+ParserName: ASimAuthenticationSshd
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SSHDSignInAuthorized=(disabled:bool=false){
+  Syslog | where not(disabled)
+    | where ProcessName == "sshd" and SyslogMessage has 'Accepted '
+    | parse SyslogMessage with * "for " TargetUsername " from " SrcIpAddr " port"
+    | parse SyslogMessage with * " message repeated " EventCount " times:" *
+    | extend
+    EventVendor = 'OpenBSD'
+    , EventProduct = 'sshd'
+    , EventCount = int(1)
+    , EventSchema = 'Authentication'
+    , EventSchemaVersion = '0.1.1'
+    , EventResult = 'Success'
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , EventType = 'Logon'
+    , DvcHostname = Computer
+    , TargetUsernameType = 'Simple'
+  // ************************
+  //      <Aliases>
+  // ************************
+  | extend
+          User=TargetUsername
+        , Dvc=Computer
+  // ************************
+  //      </Aliases>
+  // ************************
+    | project-away Computer, MG, SourceSystem, TenantId
+    };
+  let SSHDAuthFailure1=(disabled:bool=false){
+  Syslog | where not(disabled)
+    | where ProcessName == "sshd" and SyslogMessage has_any ('Failed password ', 'Failed publickey ', 'Invalid user ')
+    | parse SyslogMessage with * " from " SrcIpAddr " port"
+    | parse SyslogMessage with * " message repeated " EventCount " times:" *
+    | extend
+    EventVendor = 'OpenBSD'
+    , EventProduct = 'sshd'
+    , EventCount = int(1)
+    , EventSchema = 'Authentication'
+    , EventSchemaVersion = '0.1.1'
+    , EventResult = 'Failure'
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , EventType = 'Logon'
+    , DvcHostname = Computer
+    , TargetUsernameType = 'Simple'
+    , TargetUsername = extract(@'for (invalid user )?(.*?) from', 2, SyslogMessage)
+    , EventResultDetails = 'No such user or password'
+    , EventOriginalRestultDetails = 'User authentication failed'
+    | project-away Computer, MG, SourceSystem, TenantId
+    };
+  let SSHDDisconnect=(disabled:bool=false){
+  Syslog | where not(disabled)
+    | where ProcessName == "sshd" and SyslogMessage has_any ('session closed for user ', 'Connection closed by ')
+    | parse SyslogMessage with * "for user " TargetUsername
+    | parse SyslogMessage with "Connection closed by " SrcIpAddr " port "
+    | parse SyslogMessage with * " message repeated " EventCount " times:" *
+    | extend
+    EventVendor = 'OpenBSD'
+    , EventProduct = 'sshd'
+    , EventCount = int(1)
+    , EventSchema = 'Authentication'
+    , EventSchemaVersion = '0.1.1'
+    , EventResult = 'Success'
+    , EventStartTime = TimeGenerated
+    , EventEndTime = TimeGenerated
+    , EventType = 'Logoff'
+    , DvcHostname = Computer
+    , TargetUsernameType = 'Simple'
+    , EventResultDetails = 'Other'
+    , EventOriginalRestultDetails = 'User session closed'
+  // ************************
+  //      <Aliases>
+  // ************************
+  | extend
+          User=TargetUsername
+        , Dvc=Computer
+  // ************************
+  //      </Aliases>
+  // ************************
+    | project-away Computer, MG, SourceSystem, TenantId
+    };
+  union isfuzzy=false SSHDSignInAuthorized(disabled), SSHDAuthFailure1(disabled), SSHDDisconnect(disabled)
