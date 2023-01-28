@@ -218,7 +218,7 @@ namespace Helios2Sentinel
                 }
                 catch { }
 
-                if (t.Status == TaskStatus.RanToCompletion)
+                if (!hasException && t.Status == TaskStatus.RanToCompletion)
                 {
                     WriteData(blobKey, endDateUsecs.ToString(), log);
                 }
