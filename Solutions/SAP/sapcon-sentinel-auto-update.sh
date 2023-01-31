@@ -93,6 +93,7 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 	sudo chmod --reference "$0" "/tmp/$AUTOUPDATESCRIPT"
 	sudo chown --reference "$0" "/tmp/$AUTOUPDATESCRIPT"
 	sudo sync "/tmp/$AUTOUPDATESCRIPT"
+	mkdir -p /opt/sapcon/
 	sudo mv "/tmp/$AUTOUPDATESCRIPT" "/opt/sapcon/$AUTOUPDATESCRIPT"
 	sudo chmod +x "/opt/sapcon/$AUTOUPDATESCRIPT"
 
@@ -149,8 +150,9 @@ function update_agents() {
 				tagver=':mc-latest'
 				az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 			else
-				log_update "Skipping container $contname as its Cloud label is not supported: $CLOUD"
-				continue
+				tagver=':latest'
+				# log_update "Skipping container $contname as its Cloud label is not supported: $CLOUD"
+				# continue
 			fi
 
 			log_update 'Starting Docker image Pull'
