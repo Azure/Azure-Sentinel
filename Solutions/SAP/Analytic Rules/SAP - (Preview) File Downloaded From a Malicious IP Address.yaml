@@ -1,0 +1,98 @@
+id: 5f152aa1-f82c-4789-8dea-d63d7d6bf96b
+name: SAP - (Preview) File Downloaded From a Malicious IP Address
+description: |
+    User has downloaded a file from an SAP system using an IP address known to be malicious.
+    Malicious IP addresses are obtained from threat intelligence services. For additional information visit the [Connect your threat intelligence platform to Microsoft Sentinel]( https://learn.microsoft.com/Azure/sentinel/connect-threat-intelligence-tip) how-to page.
+    This Alert rule allows for a cross-workspace query to accommodate an architecture where the threat intelligence data resides in a different workspace than the one which holds the SAP data.
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPSystems
+    - SAPAuditLog
+queryFrequency: 2h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Exfiltration
+relevantTechniques: ''
+query: |
+    let TimeAgo = 65m;
+    let ioc_lookBack = 14d;
+    // CONFIGURATION OPTION- determine which system roles are relevant for this alert
+    let SelectedSystemRoles=  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    // let SelectedSystemRoles= dynamic(["All System Roles"]);
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey;
+    let MaliciousIPs= SAPThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | summarize ConfidenceScore= any(ConfidenceScore) by NetworkIP, EmailSourceIpAddress, NetworkDestinationIP, NetworkSourceIP, Active, Description, ThreatType
+    | where Active == true
+    // Picking up only IOC's that contain the entities we want
+    | where isnotempty(NetworkIP)
+        or isnotempty(EmailSourceIpAddress)
+        or isnotempty(NetworkDestinationIP)
+        or isnotempty(NetworkSourceIP)
+    // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+    // Taking the first non-empty value based on potential IOC match availability
+    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+    //Exclude local addresses, using the ipv4_is_private operator
+    | where TI_ipEntity !startswith "fe80"
+        and TI_ipEntity !startswith "::"
+        and TI_ipEntity !startswith "127."
+    | summarize by TI_ipEntity, TIDescription= Description, ThreatType, ConfidenceScore
+    | extend IsPrivate= ipv4_is_private(TI_ipEntity);
+    // Get all downloads
+    let FileDownloads= SAPAuditLog
+        | where MessageID == "AUY"
+        | where TimeGenerated > ago (TimeAgo*2) and ingestion_time() > ago(TimeAgo)
+        | where SystemID in (SelectedSystems)
+        | join kind=inner (MaliciousIPs) on $left.TerminalIPv6 == $right.TI_ipEntity
+        | extend ByteCount= toint(replace_string(replace_string(Variable1, ".",""), ",","")), Code=Variable2, Path= Variable3
+        | summarize ConfidenceScore= any(ConfidenceScore), IsPrivate=any(IsPrivate), TIDescription=any(TIDescription), ThreatType= any(ThreatType), DownloadsByUser = count(), Paths= make_set(Variable3, 10), ByteCount=sum(ByteCount) by SystemID, ClientID, User, TerminalIPv6, Email, Host, TransactionCode, Instance;
+        FileDownloads
+        | extend PackedDetails= pack_all()
+        | extend Details= strcat("User ", User, " has downloaded ", ByteCount, " bytes data from a malicious ", iff(IsPrivate, "private","public")," IP address ")
+        | extend AlertDetails= strcat("Threat Type: ", ThreatType, ", Threat Description: ", TIDescription), Dummy= ''
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{Details}}'
+    alertDescriptionFormat: |
+        {{AlertDetails}}
+
+        User has downloaded a file from an SAP system using an IP address known to be malicious.
+        Malicious IP addresses are obtained from threat intelligence services. For additional information visit the [Connect your threat intelligence platform to Microsoft Sentinel]( https://learn.microsoft.com/Azure/sentinel/connect-threat-intelligence-tip) how-to page.
+        This Alert rule allows for a cross-workspace query to accommodate an architecture where the threat intelligence data resides in a different workspace than the one which holds the SAP data.
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+    PackedDetails: PackedDetails
+    ThreatType: ThreatType
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: HostName
+        columnName: Host
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.37

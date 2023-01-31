@@ -1,0 +1,131 @@
+id: 6e60e742-aef0-47aa-95e5-36a100a4272d
+name: SAP - (Preview) Critical authorizations assignment - New Authorization Value
+description: |
+    Identifies assignment of a critical authorization object value to a new user.
+    Source Action: Assign a new authorization object / update existing one in a role using PFCG.
+
+    Critical authorization objects should be maintained in watchlist ""SAP - Critical Authorization Objects""
+
+    *Data Sources: SAPcon -  Change Documents Log*
+    *Data Sources: SAPcon -  User MD*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersHeader
+    - SAPAuditLog
+queryFrequency: 6h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- PrivilegeEscalation
+relevantTechniques: ''
+query: |
+    // SAP - Medium - Critical authorizations assignment - New Authorization Value
+    // time span for audit events
+    let TimeAgo= 6h;
+    // New Assigned Objects
+    let ObjectClassRoles = 'PFCG';
+    let TableName = 'CD1251';
+    let UsersRoles = 'AGR_USERS';
+    let Insert = "I";
+    let NotInUse = 'NOT_IN_USE';
+    let logsThreshold = 3600; // 3600 seconds
+    // Audit Log Classes - Authorizations for user changed
+    let AuditClasses = dynamic(['AUR','AUT']); // Authorization/Authorization Profile &B created / changed.
+    // Roles Change Documents - Extract Auth Object and Obj Field
+    let allHistory = ago(0d);
+    let alertSched = ago(6h); // Please maintain according to schedule
+    let ChangeDocs = SAPChangeDocsLog;
+    let UsersEmails = SAPUsersHeader()| summarize by User, Email, SystemID, Client | project-rename ClientID = Client;
+    let RolesAuthObject = ChangeDocs
+        | where TimeGenerated > ago(TimeAgo)
+        | where TimeGenerated >= alertSched
+        | where ObjectClass == ObjectClassRoles and TableName == TableName // Role-Obj-Profile-ObjField
+        | where TypeofChange_Item in ('J', 'I', 'U') //  Insert
+        | extend RoleObjProfileObjFieldVer = ChangedTableKey, Role = ObjectID
+        | extend ObjFieldValue = ValueNew
+        | extend ObjField = trim(@"\s*?", extract(@"(^.{1,30})\s*?(.{1,10})\s*?(.{1,12})\s*?(.{1,10})\s*?\d{6}", 4, RoleObjProfileObjFieldVer, typeof(string)))
+        | extend AuthObject = trim(@"\s*?", extract(@"(^.{1,30})\s*?(.{1,10})\s*?(.{1,12})\s*?(.{1,10})\s*?\d{6}", 2, RoleObjProfileObjFieldVer, typeof(string)))
+        | extend TimeGenRoleAuth = TimeGenerated;
+    let ComplexAuth = _GetWatchlist('SAP - Critical Authorizations');
+    let SimpleAuth = _GetWatchlist('SAP - Critical Authorizations');
+    let usersinRole =
+        ChangeDocs
+        | where TimeGenerated > ago(TimeAgo)
+        | where TimeGenerated <= allHistory
+        | where ObjectClass == ObjectClassRoles // Roles
+            and TableName == UsersRoles // Users Roles
+            and TypeofChange_Item == Insert // Insert
+        | extend UserAssigned = extract(@"^.{1,33}\s*?(.{1,12})\s*?\d{16}", 1, ChangedTableKey)
+        | extend Role = ObjectID
+        | summarize by SystemID, Role, UserAssigned;
+    let RolesAuthObjectCheck =
+            RolesAuthObject
+            | extend ObjFieldVal = ObjFieldValue
+            | lookup kind = leftouter
+                (RolesAuthObject
+                | extend ActivityVal = ObjFieldValue)
+                on Role, AuthObject;
+    let complexScenario = ComplexAuth
+        | where ActivityField != NotInUse
+        | summarize by AuthorizationObject, AuthorizationField, AuthorizationValue, ActivityField, Activity
+        | lookup kind = inner (RolesAuthObjectCheck)
+            on $left.AuthorizationObject == $right.AuthObject
+            and $left.AuthorizationField == $right.ObjField
+            and $left.AuthorizationValue == $right.ObjFieldValue
+            and $left.ActivityField == $right.ObjField1
+            and $left.Activity == $right.ActivityVal;
+    let simpleScenario = SimpleAuth
+        | where ActivityField == NotInUse
+        | summarize by AuthorizationObject, AuthorizationField, AuthorizationValue, ActivityField, Activity
+        | lookup  kind = inner (RolesAuthObject)
+            on $left.AuthorizationObject == $right.AuthObject
+            and $left.AuthorizationField == $right.ObjField
+            and $left.AuthorizationValue == $right.ObjFieldValue;
+    let GetEntities =
+        SAPAuditLog
+        | where MessageID in (AuditClasses)
+        | where TimeGenerated > ago(TimeAgo)
+        | summarize by TimeGenerated, ClientID, TerminalIPv6, User, Host, Email
+        | extend TimeGenAudit = TimeGenerated;
+    union complexScenario, simpleScenario
+    | lookup kind = inner (usersinRole) on SystemID, Role
+    | lookup kind = leftouter (GetEntities) on User
+    | where abs(datetime_diff('second', TimeGenRoleAuth, TimeGenAudit)) <= logsThreshold or
+    isnull(TimeGenAudit)
+    | lookup UsersEmails on SystemID, ClientID, User
+    | project
+    TimeGenRoleAuth, SystemID, ClientID, Role, User, UserAssigned, AuthorizationObject, AuthorizationField, AuthorizationValue, ActivityField, Activity, Email, TerminalIPv6, Host, UserAssignedEmail=Email1
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+    SAP_UserAssigned: UserAssigned
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: UserAssignedEmail
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.19

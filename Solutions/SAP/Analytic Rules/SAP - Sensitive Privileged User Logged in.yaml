@@ -1,0 +1,110 @@
+id: 97d13311-748b-4016-b095-9100ab00e4db
+name: SAP - Sensitive Privileged User Logged in
+description: |
+    Identifies Dialog logon of a sensitive privileged user.
+    Source Action: Logon to the backend system using SAP* or anoter privileged user.
+
+    Priveleged users should be maintained in "SAP - Privileged Users" Watchlist
+
+    This rule requires a fresh full reload of the SAP user master data to be performed daily.
+    *Data Sources: SAPcon -  Audit Log*
+    *Data Sources: SAPcon -  User MD*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPGetDataTypes
+    - SAPUsersGetVIP
+    - SAPSystems
+    - SAPUsersGetPrivileged
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+- CredentialAccess
+relevantTechniques: ''
+query: |
+    // SAP - Sensitive Privileged User Logged in
+    // !!!IMPORTANT!!!
+    // please make sure "Lookup data from the last" parameter is greater than a full user master data update cycle
+    // please keep "Lookup data from the last" to be 7 days to allow coverage of user master data required
+    // actual lookback is set by setting TimeAgo
+    // time span for audit events
+    let AuditTimeAgo= 75m;
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey, SystemRole;
+    // here you can exclude system users which are OK to execute a Sensitive Transaction Code
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'SensitiveLogOnOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['SensitiveLogOnOK']);// dynamic(['SensitiveLogOnOK','SAP_ALL']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    // Audit Log Classes - Dialog Logon Successful
+    let AuditClassesSuccess = dynamic(['AU1']);
+    let AuditClassesFail = dynamic(['AU2']);
+    let LogonTypes = dynamic(['A','H', 'R', 'S']); // Dialog / HTTP
+    let DataTypes = materialize(SAPGetDataTypes());
+    // Query logic
+    SAPAuditLog
+    | where TimeGenerated > ago(AuditTimeAgo)
+    | join kind= inner SelectedSystems on SystemID
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | where (MessageID in (AuditClassesSuccess) and Variable1 in (LogonTypes)) or // Success login
+    MessageID in (AuditClassesFail)
+    |join kind = inner (SAPUsersGetPrivileged())
+    on $left.ClientID == $right.Client
+    , $left.SystemID == $right.SystemID
+    , $left.User == $right.User
+    | project-rename LogonTypeKey = Variable1, ReasonKey= Variable2, LogonMethodKey= Variable3
+    | lookup (DataTypes | where DataType == "LogonFailureCause"| project Key, LogonFailureCause= Value) on $left.ReasonKey == $right.Key
+    | lookup (DataTypes | where DataType == "LogonType"| project Key, LogonType= Value) on $left.LogonTypeKey == $right.Key
+    | lookup (DataTypes | where DataType == "LogonMethod"| project Key, LogonMethod= Value) on $left.LogonMethodKey == $right.Key
+    | project TimeGenerated, Instance ,SystemID, ClientID, LogonType, User, MessageText,
+    Email, TerminalIPv6, Host, SystemRole, LogonFailureCause, LogonMethod, MessageID
+    | extend PackedDetails= pack_all()
+    | extend AlertName= strcat("SAP - Privileged User ", User, iff(MessageID=="AU1"," Has Logged into a ", " Has Failed to Log into a "), SystemRole, " System" )
+    | extend AlertDescription= strcat(" LogonType: ", LogonType, ". LogonFailureCause: ", LogonFailureCause, ". LogonMethod: ", LogonMethod), Dummy= ''
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{AlertName}}'
+    alertDescriptionFormat: |
+        {{AlertDescription}}
+        Identifies Dialog logon of a sensitive privileged user.
+        Source Action: Logon to the backend system using SAP* or anoter privileged user.
+        Priveleged users should be maintained in "SAP - Privileged Users" Watchlist
+        This rule requires a fresh full reload of the SAP user master data to be performed daily.
+        *Data Sources: SAPcon -  Audit Log*
+        *Data Sources: SAPcon -  User MD*
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+    PackedDetails: PackedDetails
+    LogonFailureCause: LogonFailureCause
+    LogonMethod: LogonMethod
+    LogonType: LogonType
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.33

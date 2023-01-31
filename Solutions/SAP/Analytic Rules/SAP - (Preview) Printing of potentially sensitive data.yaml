@@ -1,0 +1,202 @@
+id: 49f11dc5-03c9-4ea3-83ee-33434b42e699
+name: SAP - (Preview) Printing of potentially sensitive data
+description: |
+    The alert rule was disabled due to too many consecutive failures. Reason: Server is failing to execute the query of this rule, please verify the query. User has requested printing or has printed data which is potentially sensitive.
+    Data is considered sensitive if it is obtained by using a sensitive transaction, by executing a sensitive program or by directly accessing a sensitive table.
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+    - SAPSystems
+    - SAPAuditLog
+queryFrequency: 4h
+queryPeriod: 5h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Exfiltration
+relevantTechniques: ''
+query: |
+    // SAP - Potentially sensitive data exported via spool request
+    // Spool requests made by users who were obsereved accessing sensitive data
+    // or sensitive programs/ transactions
+    // actual lookback is set by setting TimeAgo
+    let TimeAgo= 4h;
+    let TimeBetweenAccessAndDownload= 30m;
+    // CONFIGURATION OPTION- determine which system roles are relevant for this alert
+    let SelectedSystemRoles=  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    // let SelectedSystemRoles= dynamic(["All System Roles"]);
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+        | project SystemID= SearchKey;
+    // Get sensitive Tables
+    // CONFIGURATION OPTION- list sensitive tables in the 'SAP - Sensitive Tables' watchlist
+    let SensitiveTables = _GetWatchlist('SAP - Sensitive Tables')
+        | summarize by Table;
+    let TableAccessTcodes= dynamic(["SE16", "SE16N", "SE11", "SE16H", "SM30", "SE12", "SM31", "SE16H", "SE14", "SE54", "SE17", "SE16T", "DB01", "DB02"]);
+    // CONFIGURATION OPTION- list sensitive transactions in the 'SAP - Sensitive Transactions' watchlist
+    let SensitiveTransWL= toscalar(_GetWatchlist('SAP - Sensitive Transactions')
+        | summarize TransactionCodes= make_set(TransactionCode));
+    // CONFIGURATION OPTION- exclude TCODEs which are not to be considered
+    let ExcludedTcodes= dynamic(["S000", ""]);
+    let SensitiveTcodes= (set_difference(set_union(SensitiveTransWL, TableAccessTcodes), ExcludedTcodes));
+    // CONFIGURATION OPTION- list sensitive programs in the 'SAP - Sensitive ABAP Programs' watchlist
+    let SensitiveABAPReports = _GetWatchlist('SAP - Sensitive ABAP Programs');
+    let fixedABAPReports = datatable(ABAPProgram: string) ["RSPFLDOC"];
+    let UnionABAP = union isfuzzy=true SensitiveABAPReports, fixedABAPReports
+        | summarize by ABAPProgram;
+    // CONFIGURATION OPTION- exclude system users which are OK to print sensitive data
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'PrintSensitivesOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['PrintSensitivesOK', 'SAP_ROLE1', 'SAP_PROFILE1']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)
+        | summarize by User2Exclude=SAPUser;
+    // Get direct sensitive table access
+    let SensitiveTableAccess= SAPAuditLog
+        | where TimeGenerated > ago (TimeAgo * 2) and ingestion_time() > ago(TimeAgo)
+        | where MessageID == "DU9"
+        | where SystemID in (SelectedSystems)
+        | where Variable1 in (SensitiveTables)
+        | project-rename Table = Variable1, Activity = Variable2
+        | summarize Activities= make_set(Activity, 3)
+            by TimeAccessed= bin(TimeGenerated, TimeBetweenAccessAndDownload), SystemID, ClientID, User, ABAPProgramName, Email, Host, TerminalIPv6
+            , Table, SourceAction= strcat("after visiting transaction ", TransactionCode, " and viewing sensitive table ", Table), TransactionCode, TableOrProgram= Table, Instance;
+    // get sensitive program execution
+    let SensitiveProgramExec= SAPAuditLog
+        | where TimeGenerated > ago (TimeAgo * 2) and ingestion_time() > ago(TimeAgo)
+        | where MessageID == "AUW"
+        | where SystemID in (SelectedSystems)
+        | where ABAPProgramName in (UnionABAP)
+        | summarize
+            by
+            TimeAccessed= bin(TimeGenerated, TimeBetweenAccessAndDownload),
+            SystemID,
+            ClientID,
+            User,
+            ABAPProgramName,
+            Email,
+            Host,
+            TerminalIPv6,
+            SourceAction= strcat("after executing sensitive program ", ABAPProgramName),
+            TransactionCode,
+            TableOrProgram= ABAPProgramName,
+            Instance;
+    // get sensitive transaction execution
+    let SensitiveTcodeExec= SAPAuditLog
+        | where TimeGenerated > ago (TimeAgo * 2) and ingestion_time() > ago(TimeAgo)
+        | where MessageID == "AU3"
+        | where SystemID in (SelectedSystems)
+        // make sure sensitive transactions do not contain the TableAccessTcodes which are checked for the specific table name
+        | where TransactionCode in (set_difference(SensitiveTcodes, TableAccessTcodes))
+        | summarize
+            by
+            TimeAccessed= bin(TimeGenerated, TimeBetweenAccessAndDownload),
+            SystemID,
+            ClientID,
+            User,
+            ABAPProgramName,
+            SourceAction= strcat("after executing sensitive transaction ", TransactionCode),
+            TransactionCode,
+            TableOrProgram= TransactionCode,
+            Email,
+            Host,
+            TerminalIPv6,
+            Instance;
+    // Get all spool requests
+    let SpoolRequests= SAPSpoolLog
+        | where TimeGenerated > ago (TimeAgo * 2) and ingestion_time() > ago(TimeAgo)
+        | summarize
+            by
+            SpoolRequestNumber,
+            ClientID,
+            User,
+            RecipientofSpoolRequest,
+            SpoolRequestSuffix2,
+            SpoolRequestTitle,
+            SystemID,
+            OutputDevice,
+            DeleteSpoolRequestAuto,
+            TimeRequested= TimeGenerated,
+            ValueAuthCheck;
+    let SpoolOutputs= SAPSpoolOutputLog
+        | where TimeGenerated > ago (TimeAgo * 2) and ingestion_time() > ago(TimeAgo)
+        | summarize
+            by
+            SpoolRequestNumber,
+            User,
+            RecipientofSpoolRequest,
+            PhysicalFormatType,
+            SystemID,
+            ClientID,
+            TimePrinted= TimeGenerated
+        | lookup (SAP_USR02
+            | summarize by SystemID, RecipientofSpoolRequest= BNAME, USTYP, ClientID= MANDT)
+            on RecipientofSpoolRequest, SystemID, ClientID
+        | extend
+            HasPrinted= true,
+            PrintRecievedByAnother= iff(User == RecipientofSpoolRequest, false, iff(isempty(USTYP), false, true));
+    SpoolRequests
+    | join kind=inner (SensitiveTableAccess
+        | union SensitiveProgramExec, SensitiveTcodeExec)
+        on User, SystemID
+    | where (TimeAccessed - TimeRequested) between (-(TimeBetweenAccessAndDownload * 2) .. 0h)
+    | lookup SpoolOutputs on SpoolRequestNumber, SystemID, ClientID
+    | summarize Activities= tostring(make_set_if(Activities, tostring(Activities) != ""))
+        , TablesOrPrograms=make_set(TableOrProgram, 10), SourceActions= make_set(SourceAction, 10)
+        , TimeAccessed= min(TimeAccessed), TimeRequested= min(TimeRequested), HasPrinted=max(HasPrinted)
+        , PrintRecievedByAnother=max(PrintRecievedByAnother), RecipientofSpoolRequest= max(RecipientofSpoolRequest)
+        by
+        User,
+        SystemID,
+        Email,
+        Host,
+        TerminalIPv6,
+        ClientID,
+        Instance
+    | extend PackedDetails= pack_all()
+    | extend Details= strcat("User ", User, " has ", iff(HasPrinted, "printed", "requested printing of"), " potentially sensitive data ")
+    | extend AlertDetails= strcat(Details, tostring(SourceActions), iff(PrintRecievedByAnother, strcat("<br/> Print has been pulled by another User ", RecipientofSpoolRequest), "")), Dummy= ''
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{Details}}'
+    alertDescriptionFormat: |
+        Printing requested in proximity to an execution of a sensitive transaction, a sensitive program or direct access to sensitive table.
+        Actions that triggered this alert:
+        {{SourceActions}}
+        There are a few ways to exclude users, transactions and tables listed in the alert's KQL body.
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+    PackedDetails: PackedDetails
+    TablesOrPrograms: TablesOrPrograms
+    Activities: Activities
+    SourceActions: SourceActions
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: HostName
+        columnName: Host
+-   entityType: Process
+    fieldMappings:
+    -   identifier: ProcessId
+        columnName: TablesOrPrograms
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.37

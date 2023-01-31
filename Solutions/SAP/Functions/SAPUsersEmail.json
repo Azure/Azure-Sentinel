@@ -1,0 +1,13 @@
+{
+    "properties": {
+        "category": "SAPFunctions",
+        "displayName": "SAPUsersEmail",
+        "query": "let UserMDLookBack = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep ValueLow));\r\n// older agents have to use USR21 to get the ADDRNUMBER, PERSNUMBER before getting the email address from ADR6\r\nlet AgentEmailsV1= SAP_USR21 | where TimeGenerated > ago(UserMDLookBack)\r\n| summarize arg_max(TimeGenerated, ADDRNUMBER, PERSNUMBER) by BNAME, MANDT, SystemID\r\n| project-rename CLIENT= MANDT\r\n| join kind= leftouter hint.strategy=shuffle \r\n(SAP_ADR6 | where TimeGenerated > ago(UserMDLookBack) \r\n| summarize arg_max(TimeGenerated, CONSNUMBER ) by CLIENT, DATE_FROM, ADDRNUMBER, PERSNUMBER, SystemID, SMTP_ADDR)\r\n on ADDRNUMBER, PERSNUMBER, SystemID, CLIENT\r\n| project SystemID, ClientID= CLIENT, User= BNAME, Email= iff(isempty(SMTP_ADDR), BNAME, SMTP_ADDR)\r\n| summarize Email= anyif(Email, isnotempty(Email) ) by ClientID, SystemID, User;\r\n\r\n// agents from version 60075287 have the join of USR21 and ADR6 performed \r\nlet AgentEmailsV2= SAP_ADR6 | where TimeGenerated > ago(UserMDLookBack)\r\n| summarize arg_max(TimeGenerated, SMTP_ADDR) by BNAME, ClientID= CLIENT, SystemID\r\n| project SystemID, ClientID, User= BNAME, Email= iff(isempty(SMTP_ADDR), BNAME, SMTP_ADDR)\r\n| summarize Email= anyif(Email, isnotempty(Email) ) by ClientID, SystemID, User;\r\n\r\nAgentEmailsV1 | union AgentEmailsV2\r\n",
+        "functionAlias": "SAPUsersEmail",
+        "version": 2,
+        "etag": "*"
+    },
+    "name": "SAPUsersEmail",
+    "type": "savedSearches",
+    "apiVersion": "2022-10-01"
+}

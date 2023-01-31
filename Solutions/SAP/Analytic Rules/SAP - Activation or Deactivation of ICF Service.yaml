@@ -1,0 +1,74 @@
+id: e704b794-2f22-417a-b3ac-25e6037e2717
+name: SAP - Activation or Deactivation of ICF Service
+description: |
+    Identifies activation or deactivation of ICF Services.
+    Source Action: Activate or deactivate a service using SICF.
+    *Data Sources: SAPcon - Table Data Log*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersHeader
+    - SAPTableDataLog
+queryFrequency: 2h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CommandAndControl
+- LateralMovement
+- Persistence
+relevantTechniques: ''
+query: |
+    // Activation or Deactivation of ICF Service
+    // Materialize the data for self join to be esier
+    let TimeAgo= 2h;
+    let ICFDataChanges = materialize(SAPTableDataLog
+    | where TimeGenerated > TimeAgo
+    | where TableName == "ICFSERVLOC"
+    | where NewValue == "X" or NewValue =="" or isempty( NewValue)// X - Status is activated, "" Not activated now
+    | where TableField == "ICF_NAME" or TableField == "ICFACTIVE"// Service name// Active status
+    | project OldValue, NewValue, LogKey, DBLogID, SystemID, TimeGenerated, UserName, Host, Instance);
+    let ActDeactICF =
+    ICFDataChanges
+    | where OldValue == NewValue and OldValue != ""
+    | lookup ICFDataChanges on
+    LogKey, DBLogID // Lookup for combining the data
+    | extend ICFServiceStatus = iff(NewValue1 == "X", "Activated", iff(NewValue1 == "" or isempty( NewValue1) and OldValue1 == "X" ,"Deactivated","No Activity"))
+    | extend Service = split(LogKey," ")[0];
+    ActDeactICF
+    | lookup SAPUsersHeader() on SystemID, $left.UserName== $right.User
+    | extend AlertText= strcat("Service ", Service, " ", ICFServiceStatus, " by User ", UserName, " in System ", SystemID)//{{Service}} {{ICFServiceStatus}} by User {{User}} in System {{SystemID}}
+    | project TimeGenerated, Service, PrimaryIP, PrimaryEmail, KnownIPs, KnownEmails, LastKnownIP, User= UserName, Host, SystemID, Client, Instance, ICFServiceStatus, AlertText
+    | extend Dummy = ''
+alertDetailsOverride:
+    alertDisplayNameFormat: SAP - High - {{AlertText}}
+    alertDescriptionFormat: |
+        Identifies activation or deactivation of ICF Services.
+        Source Action: Activate or deactivate a service using SICF.
+        *Data Sources: SAPcon - Table Data Log*
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: PrimaryEmail
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: Client
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: LastKnownIP
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.19

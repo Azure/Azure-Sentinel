@@ -1,0 +1,107 @@
+id: 45e784d5-0414-4029-8fc6-5f6722abdb5c
+name: SAP - Execution of an Obsolete or an Insecure Function Module
+description: |
+    Identifies execution of an obsolete/insecure ABAP Function Module.
+
+    Source Action: Execute an obsolete/insecure function module directly using SE37.
+
+    **Recommended for Production only**
+
+    Obsolete functions should be maintained in "SAP - Obsolete Function Modules" Watchlist.
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPSystems
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+- CommandAndControl
+relevantTechniques: ''
+query: |
+    // Execution of Obsolete or Insecure Function Module
+    // AUK - Successful RFC call &C (function group = A) (C)
+    // AUL - Failed RFC call &C (function group = &A)  (C)
+    // DUI - RFC callback executed (destination &A, called &B, callback &C) (B)
+    // DUJ - RFC callback rejected (destination &A, called &B, callback &C) (B)
+    // DUK - RFC callback rejected (destination &A, called &B, callback &C) (B)
+    // DUR - JSON RPC call of function module &A succeeded  (A)
+    // DUS - SON RPC call of function module &A failed  (A)
+    // DUT - Critical JSON RPC call of function module &A (S_RFC * authorization) (A)
+    // EUE - RFC function module &A called successfully (A)
+    // EUF - Could not call RFC function module &A  (A)
+    // EUG - User does not have authorization to run RFC function module &A (A)
+    // FU1 - FC function &B with dynamic destination &C was called in program &A (B)
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey;
+    // here you can exclude system users which are OK to run obolete/ sensitive function modules
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'RunObsoleteFMOK'
+    let excludeUsersTags= dynamic(['RunObsoleteFMOK']);
+    let excludedUsers= _GetWatchlist('SAP_User_Config')| where Tags has_any (excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    let AuditClassesA= dynamic(['DUR', 'DUS', 'DUT', 'EUE', 'EUF', 'EUG']);
+    let AuditClassesB= dynamic(['DUI', 'DUJ', 'DUK', 'FU1']);
+    let AuditClassesC= dynamic(['AUK', 'AUL']);
+    let ObsoleteModules =  _GetWatchlist('SAP - Obsolete Function Modules');
+    // Maintain if watchlist is not available
+    let fixedModules = datatable(FunctionModule:string)['TH_SAPREL','TH_SAPREL2', 'TH_SAPREL3','SUSR_RFC_USER_INTERFACE','RFC_ABAP_INSTALL_AND_RUN'];
+    let UnitedModules =
+    toscalar(union fixedModules, ObsoleteModules
+    | summarize FunctionModules =  make_set(FunctionModule));
+    // Query logic
+    let FunctionRuns =
+    SAPAuditLog
+    | where MessageID in (array_concat(AuditClassesA, AuditClassesB, AuditClassesC))
+    | join kind= inner SelectedSystems on SystemID
+    | extend Module = case(MessageID in (AuditClassesA), Variable1, MessageID in (AuditClassesB), Variable2, MessageID in (AuditClassesC), Variable3, 'Could Not find function module')
+    | where Module in (UnitedModules);
+    FunctionRuns
+    | project TimeGenerated, SystemID, ClientID, User, Email= iff(isempty(Email),User, Email), TerminalIPv6, Host= iff(isempty(Host), TerminalIPv6, Host), Module
+    | extend UserName= User
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | extend AlertDescription= strcat('Sensitive Function Module ' , Module, ' was executed by ', UserName), Dummy=' '
+    | extend PackedDetails= pack_all()
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{AlertDescription}}'
+    alertDescriptionFormat: |
+        Identifies execution of an obsolete/insecure ABAP Function Module.
+
+        Source Action: Execute an obsolete/insecure function module directly using SE37.
+
+        **Recommended for Production only**
+
+        Obsolete functions should be maintained in "SAP - Obsolete Function Modules" Watchlist.
+        {{PackedDetails}}
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: UserName
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+-   entityType: Process
+    fieldMappings:
+    -   identifier: ProcessId
+        columnName: Module
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19

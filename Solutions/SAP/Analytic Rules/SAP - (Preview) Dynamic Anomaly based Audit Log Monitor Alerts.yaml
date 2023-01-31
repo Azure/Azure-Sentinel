@@ -1,0 +1,97 @@
+id: 49fd3399-67c5-47bf-bb61-8b6efa27a5fe
+name: SAP - (Preview) Dynamic Anomaly based Audit Log Monitor Alerts
+description: |
+    SAP Audit log events with message IDs preconfigured in Watchlist SAP_Dynamic_Audit_Log_Monitor_Configuration and with RuleType  = "AnomaliesOnly" will be shown here.
+    <br/>
+    See  [Sentinel4SAP Dcoumentation](https://aka.ms/sapsecdocs) for further information
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+    - SAPAuditLogAnomalies
+    - SAPUsersGetPrivileged
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: ''
+query: |
+    // SAP - (Preview) Dynamic Anomaly based Audit Log Monitor Alerts
+    let SelectedSystems =  dynamic(["All Systems"]);//can also do// let SelectedSystems =  dynamic(["S4P", "B4X", "ODT"]);
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]);
+    let SelectedSeverities=  dynamic(["High", "Medium"]);//can also do//let SelectedSeverities =  dynamic(["All Severities"])
+    // get special users for exclusion and in-focus analysis
+    let SAPUsersGottenVIP = (SAPUsersGetVIP | project-rename User = SAPUser);
+    // let SelectedRuleTypes = dynamic(["All RuleTypes"]);
+    let SelectedRuleTypes= dynamic(["AnomaliesOnly"]);
+    let SAPAuditAnomal = SAPAuditLogAnomalies(LearningTime = 14d, DetectingTime=1h, SelectedSystems= SelectedSystems,
+    SelectedSystemRoles= SelectedSystemRoles, SelectedSeverities= SelectedSeverities, SelectedRuleTypes= SelectedRuleTypes);
+    // Query
+    // get the anomalies
+    SAPAuditAnomal
+    // get the user privleged status
+    | lookup (SAPUsersGetPrivileged() | extend IsPrivilegedUser = true) on
+    $left.SystemID == $right.SystemID
+    ,$left.User == $right.User
+    ,$left.ClientID == $right.Client
+    | extend DetailedDescription = iff(IsPrivilegedUser, strcat('User ', User,  ' is a privileged user! <br/>', DetailedDescription), DetailedDescription)
+    | extend TimeGenerated = MaxTime
+    // handle threshold per system (configurable via the SAPAuditLogConfigurator watchlist)
+    //  apply the threshold criteria, consider that the watchlist describes hourly thresholds
+    | extend MinutesSpan = datetime_diff('Minute', MaxTime, MinTime )
+    | where EventCount > (Threshold * max_of(MinutesSpan, 10) / 60)
+    | extend DetailedDescription = iff(EventCount > 1, strcat(' Event occured ', EventCount, ' times within ', MinutesSpan + 1, ' minutes.<br/> ', 'The predefined threshold of ', Threshold,  ' Events per hour was exceeded! <br/>', DetailedDescription), DetailedDescription)
+    | extend MessageText = iff(MessageText endswith_cs ".", substring(MessageText, 0, strlen(MessageText)-1), MessageText)
+    | project-keep SystemID, Instance, MessageText, MessageClass, MessageID, ClientID, User, TerminalIPv6, TransactionCode, ABAPProgramName, SAPProcesType, SAPWPName, Email, Host, CategoryName, DestinationEmail, DetailedDescription, Tactics, TeamsChannelID, SystemRole, SystemUsage, IsProd, Severity, BagOfDetails, IsPrivilegedUser, EventCount, Threshold, TimeGenerated
+    | extend Source= 'SAPAuditAnom1 '
+alertDetailsOverride:
+    alertDisplayNameFormat: SAP - Anomaly Detected- {{MessageText}} in system {{SystemID}}
+    alertDescriptionFormat: |
+        #### Detailed information
+        {{DetailedDescription}}
+        #### Additional information
+        {{BagOfDetails}}<br/>
+        Alerts of this type can be configured using watch list SAPAuditLogConfigurator . <br/>
+        See  [Sentinel4SAP Dcoumentation](https://aka.ms/sapsecdocs) for further information
+    alertTacticsColumnName: Tactics
+    alertSeverityColumnName: Severity
+customDetails:
+    SAPAuditLogMessageID: MessageID
+    SystemRole: SystemRole
+    SystemUsage: SystemUsage
+    SAPProcessType: SAPProcesType
+    IsProductionEnv: IsProd
+    DestinationEmail: DestinationEmail
+    TeamsChannelID: TeamsChannelID
+    BagOfDetails: BagOfDetails
+    SAP_User: User
+    Source: Source
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Process
+    fieldMappings:
+    -   identifier: ProcessId
+        columnName: TransactionCode
+    -   identifier: CommandLine
+        columnName: ABAPProgramName
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.29

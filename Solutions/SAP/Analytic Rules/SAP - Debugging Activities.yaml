@@ -1,0 +1,80 @@
+id: a7babb63-a466-4ec7-a056-a213555f18df
+name: SAP - Debugging Activities
+description: |
+    Identifies all debugging related activities.
+
+    Source Action: Activate Debug ("/h") in system, debug an active process, add breakpoint to source code etc.
+
+    **Recommended for Production only**
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+queryFrequency: 3h
+queryPeriod: 3h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+relevantTechniques: ''
+query: |
+    let Role = 'Production';
+    let DebuggerProgram = 'RSTPDAMAIN';
+    let AuditClasses = dynamic(['CUK','CUL','CUM','CUN','CUO','CUP']); // Audit Log Classes - Debug Activities
+    let allSystemRoles = dynamic(['Sandbox','Developement','QualityAssurance','Training','Production']); // Available System Roles
+    let allSystemUsage = dynamic (['ERP','CRM','BW','Solman','Gateway','Enterprise Portal']); // Available System Usages
+    // Get Relevant Systems from WatchList
+    let systemID = _GetWatchlist('SAP - Systems')
+    | where SystemRole == Role; // Reccommended is Production only
+    let fixedSID = datatable(SystemID:string, SystemRole:string, SystemUsage:string)
+    // Maintain these if WatchList is not available
+        ["S4H","Production","ERP",
+        "XXX","Sandbox","BW"]
+        | where SystemRole == Role // Reccommended is Production only
+    ;
+    let SystemUnited = union systemID, fixedSID
+    | summarize by SystemID, SystemRole, SystemUsage;
+    //| where SystemRole in (allSystemRoles); // Use this for all system roles
+    SAPAuditLog
+        | where MessageID in (AuditClasses) or ABAPProgramName == DebuggerProgram // Get logs by messege ID or program name
+        | extend Object = extract(@":\s\(?(\w{1,}\s?-?\w{1,})", 1, MessageText, typeof(string)) // Extract Object
+        | extend Action = extract(@":\s\(?(\w{1,}\s?-?\w{1,}.{1,}?)\)?\(", 1, MessageText, typeof(string)) // Extract Action
+        | extend Program = extract(@"Prgm:(\w{1,})", 1, MessageText, typeof(string)) // Extract Program
+        | extend Function = extract(@"Funct:(\w{1,})", 1, MessageText, typeof(string)) // Extract Function
+        | extend Include = extract(@"Incl:(\w{1,})", 1, MessageText, typeof(string)) // Extract Include
+        | extend Line = extract(@"Line:(\w{1,})", 1, MessageText, typeof(string)) // Extract Line
+        | project-rename SystemIDTemp = SystemID
+    | project-rename SystemID= SystemIDTemp
+    | project-rename SystemID= SystemID
+        | lookup kind=inner (SystemUnited) on SystemID
+        | order by TimeGenerated asc
+        | project TimeGenerated, Instance, ClientID ,User, MessageText, ABAPProgramName, TransactionCode, SystemID, SystemRole, SystemUsage,MessageID, Email, TerminalIPv6, Host, Object , Action, Program, Function, Include, Line
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.19

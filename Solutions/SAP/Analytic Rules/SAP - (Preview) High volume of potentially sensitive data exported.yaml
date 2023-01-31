@@ -1,0 +1,142 @@
+id: a4dee43c-f06e-4f6f-8735-db6dec4c5aa3
+name: SAP - (Preview) High volume of potentially sensitive data exported
+description: 'High volume of data exported via files in proximity to an execution
+    of a sensitive transaction, a sensitive program or direct access to sensitive
+    table.
+
+    '
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+    - SAPSystems
+    - SAPAuditLog
+queryFrequency: 4h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Exfiltration
+relevantTechniques: ''
+query: |
+    // SAP - High volume of potentially sensitive data exported
+    // high volume of file downloads by users who were obsereved accessing sensitive data
+    // or sensitive programs/ transactions
+    // !!!IMPORTANT!!!
+    // please make sure "Lookup data from the last" parameter is greater than a full user master data update cycle
+    // please keep "Lookup data from the last" to be 7 days to allow coverage of user master data required
+    // actual lookback is set by setting TimeAgo
+    let TimeAgo= 4h;
+    let TimeBetweenAccessAndDownload= 60m;
+    let ByteCountThreshold= 800000; //  Threshold in Bytes for entire lookback period
+    // CONFIGURATION OPTION- determine which system roles are relevant for this alert
+    let SelectedSystemRoles=  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    // let SelectedSystemRoles= dynamic(["All System Roles"]);
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey;
+    // Get sensitive Tables
+    // CONFIGURATION OPTION- list sensitive tables in the 'SAP - Sensitive Tables' watchlist
+    let SensitiveTables = _GetWatchlist('SAP - Sensitive Tables') | summarize by Table;
+    let TableAccessTcodes= dynamic(["SE16", "SE16N", "SE11", "SE16H", "SM30", "SE12", "SM31", "SE16H", "SE14", "SE54","SE17", "SE16T", "DB01", "DB02"]);
+    // CONFIGURATION OPTION- list sensitive transactions in the 'SAP - Sensitive Transactions' watchlist
+    let SensitiveTransWL= toscalar(_GetWatchlist('SAP - Sensitive Transactions') | summarize TransactionCodes= make_set(TransactionCode));
+    // CONFIGURATION OPTION- exclude TCODEs which are not to be considered
+    let ExcludedTcodes= dynamic(["S000", ""]);
+    let SensitiveTcodes= (set_difference(set_union(SensitiveTransWL, TableAccessTcodes), ExcludedTcodes));
+    // CONFIGURATION OPTION- list sensitive programs in the 'SAP - Sensitive ABAP Programs' watchlist
+    let SensitiveABAPReports = _GetWatchlist('SAP - Sensitive ABAP Programs');
+    let fixedABAPReports = datatable(ABAPProgram:string) ["RSPFLDOC"];
+    let UnionABAP = union isfuzzy=true SensitiveABAPReports, fixedABAPReports| summarize by ABAPProgram;
+    // CONFIGURATION OPTION- exclude system users which are OK to download massive amounts of sensitive data
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'MassiveDownloadsOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['MassiveDownloadsOK','SAP_ROLE1', 'SAP_PROFILE1']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    // Get direct sensitive table access
+    let SensitiveTableAccess= SAPAuditLog
+        | where TimeGenerated > ago (TimeAgo*2) and ingestion_time() > ago(TimeAgo)
+        | where MessageID == "DU9"
+        | where SystemID in (SelectedSystems)
+        | where Variable1 in (SensitiveTables)
+        | project-rename Table = Variable1, Activity = Variable2
+        | summarize Activities= make_set(Activity, 3) by TimeAccessed= bin(TimeGenerated, TimeBetweenAccessAndDownload), SystemID, ClientID, User, ABAPProgramName
+        , Table, SourceAction= strcat("after visiting transaction ", TransactionCode, " and viewing sensitive table ", Table), TransactionCode, TableOrProgram= Table;
+    // get sensitive program execution
+    let SensitiveProgramExec= SAPAuditLog
+        | where TimeGenerated > ago (TimeAgo*2) and ingestion_time() > ago(TimeAgo)
+        | where MessageID == "AUW"
+        | where SystemID in (SelectedSystems)
+        | where ABAPProgramName in (UnionABAP)
+        | summarize by TimeAccessed= bin(TimeGenerated, TimeBetweenAccessAndDownload), SystemID, ClientID, User, ABAPProgramName
+        , SourceAction= strcat("after executing sensitive program ", ABAPProgramName), TransactionCode, TableOrProgram= ABAPProgramName ;
+    // get sensitive transaction execution
+    let SensitiveTcodeExec= SAPAuditLog
+        | where TimeGenerated > ago (TimeAgo*2) and ingestion_time() > ago(TimeAgo)
+        | where MessageID == "AU3"
+        | where SystemID in (SelectedSystems)
+        // make sure sensitive transactions do not contain the TableAccessTcodes which are checked for the specific table name
+        | where TransactionCode in (set_difference(SensitiveTcodes,TableAccessTcodes))
+        | summarize by TimeAccessed= bin(TimeGenerated, TimeBetweenAccessAndDownload), SystemID, ClientID, User, ABAPProgramName, SourceAction= strcat("after executing sensitive transaction ", TransactionCode), TransactionCode, TableOrProgram= TransactionCode;
+    // Get all downloads
+    let FileDownloads= SAPAuditLog
+        | where MessageID == "AUY"
+        | where TimeGenerated > ago (TimeAgo*2) and ingestion_time() > ago(TimeAgo)
+        | where SystemID in (SelectedSystems)
+        | where TransactionCode in (SensitiveTcodes) or ABAPProgramName in (UnionABAP)
+        | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude // exclude specific users
+        | extend ByteCount= toint(replace_string(replace_string(Variable1, ".",""), ",","")), Code=Variable2, Path= Variable3
+        | summarize DownloadsByUser = count(), Paths= make_set(Variable3, 10), ByteCount=sum(ByteCount) by TimeDownloaded= bin(TimeGenerated, TimeBetweenAccessAndDownload), SystemID, ClientID, User, TerminalIPv6, Email, Host, TransactionCode, Instance;
+    // Time window join to find dowloads after table access
+    FileDownloads | join kind=inner (SensitiveTableAccess | union SensitiveProgramExec, SensitiveTcodeExec) on User, SystemID
+        | where (TimeAccessed- TimeDownloaded) between (-(TimeBetweenAccessAndDownload*2) .. 0h)
+        | summarize Activities= tostring( make_set_if(Activities, tostring(Activities) != "")), DownloadsByUser= max(DownloadsByUser), ByteCount=max(ByteCount), TablesOrPrograms=make_set(TableOrProgram,10), SourceActions= make_set(SourceAction,10), TimeAccessed= any(TimeAccessed) by TimeDownloaded, User, SystemID, ClientID, Email, Host , TerminalIPv6, Paths= tostring(Paths), Instance
+        | where ByteCount > ByteCountThreshold
+        | extend PackedDetails= pack_all()
+        | extend Details= strcat("User ", User, " has downloaded ", ByteCount, " bytes of potentially sensitive data ")
+        | extend AlertDetails= strcat(Details , tostring(SourceActions)), Dummy= ''
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{Details}}'
+    alertDescriptionFormat: |
+        High volume of data exported via files in proximity to an execution of a sensitive transaction, a sensitive program or direct access to sensitive table.
+        Actions that triggered this alert:
+        {{SourceActions}}
+
+        There are a few ways to exclude users, transactions and tables listed in the alert's KQL body.
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+    PackedDetails: PackedDetails
+    TablesOrPrograms: TablesOrPrograms
+    Paths: Paths
+    Activities: Activities
+    SourceActions: SourceActions
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: HostName
+        columnName: Host
+-   entityType: Process
+    fieldMappings:
+    -   identifier: ProcessId
+        columnName: TablesOrPrograms
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.33

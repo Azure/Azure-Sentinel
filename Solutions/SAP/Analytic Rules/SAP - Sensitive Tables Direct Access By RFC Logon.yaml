@@ -1,0 +1,95 @@
+id: 2521fd74-79f3-4adc-8350-edf4036913b3
+name: SAP - Sensitive Tables Direct Access By RFC Logon
+description: |
+    Identifies generic table access by RFC logon
+
+    Source Action: Open table contents using SE11/SE16/SE16N.
+
+    **Recommended for Production only**
+
+    Tables should be maintained in "SAP - Sensitive Tables" Watchlist.
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+    - SAPSystems
+queryFrequency: 12h
+queryPeriod: 13h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Collection
+- Exfiltration
+- CredentialAccess
+relevantTechniques: ''
+query: |
+    // SAP - Sensitive Tables Direct Access By RFC Logon
+    // CONFIGURATION OPTION- determine which system roles are relevant for this alert
+    let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+    let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey;
+    // Get Relevant Tables
+    let SensitiveTables = _GetWatchlist('SAP - Sensitive Tables')| project Table;
+    // here you can exclude system users which are OK to access sensitive tables via RFC
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'SensitiveTablebyRFCOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['SensitiveTablebyRFCOK','SAP_ALL']);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    // Query logic
+    SAPAuditLog
+        | where SystemID in (SelectedSystems)
+        | where MessageID == 'CUZ'
+        | where Variable1 in (SensitiveTables)
+        | project-rename Table = Variable1, Activity = Variable2
+        | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+        | order by TimeGenerated asc
+        | project TimeGenerated,Instance, SystemID, ClientID, User, TransactionCode, ABAPProgramName, Table, Activity, MessageText, MessageID,
+    Email, TerminalIPv6, Host
+        | extend PackedDetails= pack_all()
+        | extend AlertDescription= strcat('SAP - User ', User, ' has accessed sensitive table ', Table, ' using RFC'), Dummy=''
+        | extend RemediationSteps= strcat("Consult with the SAP security team to determine if user ", User, " is OK to perform this action. If the activity is benign, assign the user with the SensitiveTablebyRFCOK tag in SAP_User_Config watchlist. Otherwise, lock the SAP user in system ", SystemID), Dummy= ''
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{AlertDescription}}'
+    alertDescriptionFormat: |
+        Identifies generic table access by RFC logon
+
+        Source Action: Open table contents using SE11/SE16/SE16N.
+        RFC is a Remote Function Call protocol used in SAP to transfer data between systems. This analytics rule alerts on  calls made to retrieve sensite table data.
+        There are a few configuration options here:
+        *Configure sensitive tables* using the "SAP - Sensitive Tables" watchlist <br\>
+        *Exclude system users* - you can exclude system users which are OK to access sensitive tables via RFC by adding those users in the SAP_User_Config watchlist with a tag of 'SensitiveTablebyRFCOK'. Yoy can also specify SAP Roles or Profiles- this will prevented alerts from being raised on any user carrying these roles or profiles.
+
+        {{PackedDetails}}
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+    PackedDetails: PackedDetails
+    Table: Table
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19

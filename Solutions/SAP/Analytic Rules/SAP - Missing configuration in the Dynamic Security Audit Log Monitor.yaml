@@ -1,0 +1,56 @@
+id: b0594a30-5da4-4eca-89af-cb8ad111d697
+name: SAP - Missing configuration in the Dynamic Security Audit Log Monitor
+description: |
+    An SAP audit log event has occurred bearing a message ID which was not maintained in the SAP_Dynamic_Audit_Log_Monitor_Configuration watchlist.
+    The SAP_Dynamic_Audit_Log_Monitor_Configuration watchlist allows for dynamically alerting on SAP audit log events.
+    Recommended solution - go to the SAP_Dynamic_Audit_Log_Monitor_Configuration and add the missing SAP audit log message ID.  Specify a severity level of medium or high to have this message ID covered by the alerts based on rule "Dynamic Security Audit Log Monitor".
+severity: Informational
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLogConfiguration
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics: []
+relevantTechniques: ''
+query: |
+    let MissingMessagesinSystems = SAPAuditLog
+    | summarize LastSeenMessageOn = arg_max(TimeGenerated, MessageID) by MessageID, SystemID, ClientID
+    | join kind = leftanti (SAPAuditLogConfiguration(SelectedSeverities =  dynamic(["All Severities"])) | summarize by MessageID) on MessageID
+    | project-keep LastSeenMessageOn, MessageID, SystemID, ClientID
+    | project-rename MissingMessageID = MessageID, ComingFromSystemID = SystemID
+    | extend Dummy = 1;
+    let MissingSummary = MissingMessagesinSystems
+    | summarize
+      ComingFromSystemIDs =  make_set(ComingFromSystemID)
+    , MissingMessageIDs = make_set(MissingMessageID)
+    | extend ComingFromSystemIDs = iff(array_length(ComingFromSystemIDs) > 1, strcat('Systems ', strcat_array(ComingFromSystemIDs,", ")), strcat('System ',strcat_array(ComingFromSystemIDs,", ")))
+    | extend MissingMessageIDs = iff(array_length(MissingMessageIDs) > 1, strcat('Message IDs ', strcat_array(MissingMessageIDs,", "), " have occured in "), strcat('Message ID ',strcat_array(MissingMessageIDs,", "), " has occured in "))
+    | extend Dummy = 1;
+    MissingMessagesinSystems | join kind= inner MissingSummary on Dummy
+    | project-away Dummy, Dummy1
+alertDetailsOverride:
+    alertDisplayNameFormat: SAP - Missing configuration for SAP's audit log, {{ComingFromSystemIDs}}
+    alertDescriptionFormat: |+
+        An SAP audit log event with {{MissingMessageIDs}}{{ComingFromSystemIDs}}, for which a configuration in the SAPAuditLogConfigurator watchlist could not be found.</br>
+        The SAPAuditLogConfigurator watchlist allows for dynamically alerting on SAP audit log events. </br>
+        Recommended solution - go to the SAPAuditLogConfigurator and add the missing SAP audit log message ID.
+        Specify a severity level of medium or high to have this message ID covered by the alerts based on rule "SAP - Dynamic Alerts for Configured Audit Log Events".
+
+    alertTacticsColumnName: ClientID
+    alertSeverityColumnName: ClientID
+customDetails:
+    SAPAuditLogMessageID: MissingMessageID
+entityMappings:
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: ComingFromSystemID
+    -   identifier: AppId
+        columnName: ClientID
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.19

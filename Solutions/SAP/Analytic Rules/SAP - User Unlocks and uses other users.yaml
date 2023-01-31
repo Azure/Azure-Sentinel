@@ -1,0 +1,76 @@
+id: 7224ad22-e2cf-459d-9359-62310555e716
+name: SAP - User Unlocks and uses other users
+description: |
+    A user unlocked another, and then used the other's user credentials.
+
+    Source Action: Unlock a user using SU01. Login using the unlocked user from the same IP.
+
+    *Data Sources: SAPcon -  Audit Log*
+    *Data Sources: SAPcon -  Change Documents Log*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPAuditLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+- Discovery
+- LateralMovement
+relevantTechniques: ''
+query: |
+    // Define variables
+    let MinutesThreshold = 30; // Difference by minutes between Unlock and Connect
+    let AuditUserUnlocked = dynamic(['AUA']); // Message of unlock user
+    let AuditLogIn = dynamic(['AU1', 'AU5']); // Messages of connect with user
+    // Get users which were unlocked
+    let UsersUnlocked = SAPAuditLog
+    | where MessageID in (AuditUserUnlocked)
+    | project-rename UserUnlockTimeGenerated = TimeGenerated, UserThatWasUnlocked = Variable1, EmailWhoUnlocked = Email, UserWhoUnlocked= User
+    | project-keep UserUnlockTimeGenerated, UserThatWasUnlocked, EmailWhoUnlocked, SystemID, ClientID, TerminalIPv6, Instance, Host, UserWhoUnlocked;
+    // Query Logic
+    let ActionUsers = SAPAuditLog | project-keep MessageID, User, Email, SystemID, TimeGenerated, ClientID, TerminalIPv6// Get users connections
+    | project-rename UserAction = User, EmailAction= Email
+    | where MessageID in (AuditLogIn);
+     // check if the locked was user was unlocked and then used from the same IP address
+    //  as the unlocker
+    UsersUnlocked | join kind=inner ActionUsers on
+    TerminalIPv6, SystemID, ClientID, $left.UserThatWasUnlocked==$right.UserAction
+    | where abs(datetime_diff('Minute', TimeGenerated, UserUnlockTimeGenerated)) <= MinutesThreshold // Connect after unlock
+    | summarize Count=count(), TimeGenerated= max(TimeGenerated) by Instance ,SystemID, ClientID, UserWhoUnlocked , UserThatWasUnlocked, EmailWhoUnlocked, EmailThatWasUnLocked= EmailAction, TerminalIPv6, Host
+alertDetailsOverride: null
+customDetails:
+    UserThatWasUnlocked: UserThatWasUnlocked
+    UserWhoUnlocked: UserWhoUnlocked
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: EmailWhoUnlocked
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: EmailThatWasUnLocked
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.19

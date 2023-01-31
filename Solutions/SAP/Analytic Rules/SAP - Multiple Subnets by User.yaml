@@ -1,0 +1,130 @@
+id: 0079fee8-1ebf-4721-92c2-ac1861a79626
+name: SAP - Multiple Subnets by User
+description: |
+    Identifies logon of the same user from several subnets within scheduled time interval.
+    Multiple configuration options available within the query.
+
+    Source Action: Logon using the same user thorugh different IP's.
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: Medium
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersGetVIP
+    - SAP_USR02
+    - SAPAuditLog
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+- InitialAccess
+- Collection
+relevantTechniques: ''
+query: |
+    // SAP - Multiple Subnets by User (previously named as SAP - Multiple Logons by User)
+    // !!!IMPORTANT!!!
+    // please make sure "Lookup data from the last" parameter is greater than a full user master data update cycle
+    // please keep "Lookup data from the last" to be 7 days to allow coverage of user master data required
+    // actual lookback is set by setting TimeAgo
+    // Define variables
+    // CONFIG OPTION time ago is same as lookback
+    let TimeAgo= 1h;
+    // CONFIG OPTION Mask is a number between 0 and 32 representing sensitivity to network changes
+    // Mask= 32 means '192.168.1.255' and '192.168.1.254' are different addresses.
+    // Mask= 24 means '255.255.255.0' and '255.255.255.255' are considered as same address.
+    let Mask= 24;
+    let AuditClasses = dynamic(['AU1', 'AU5']); // Logon successful, RFC/CPIC logon successful
+    // CONFIG OPTION - include users by types (["A", "Dialog", "B", "System", "C", "Communications Data", "L", "Reference (Logon not possible)", "S", "Service"])
+    let UsersTypeToInclude= dynamic(["A"]);// Dialog Only
+    // CONFIG OPTION - exclude users by user classes
+    let UserClassesToExclude= dynamic(["SUPER", "SYSTEM"]);
+    let UserInFocus= (SAP_USR02
+    | where CLASS !in (UserClassesToExclude)
+    | where USTYP in (UsersTypeToInclude)
+    | summarize arg_max(TimeGenerated, *) by GLTGB, SystemID, User=BNAME, ClientID= MANDT, UserType=USTYP
+    | summarize arg_max(GLTGB, *) by SystemID, User, ClientID, UserType);
+    // Dialog / CPIC / RFC Int / RFC Ext / SRFC / User Switch / HTTP / Restore Session / API Call
+    let DialogLogonTypes = dynamic(['A', 'C', 'F', 'R', 'S', 'U', 'H', 'u', ' ']);
+    let excUsers = _GetWatchlist('SAP - Excluded Users'); // Users that should be removed from query
+    let fixedExcUsers = datatable(User: string) ["SYSWF"];
+    // CONFIG OPTION- exclude user by SAP roles, profiles or tags
+    // here you can exclude system users which are OK to logon from multiple IPs
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'MultipleIPsOK'
+    // can also specify SAP Roles or Profiles to exclude
+    let excludeUsersTags= dynamic(['MultipleIPsOK', "SAPRole1", "SAPProfile1"]);
+    let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    let UnitedExcUsers =
+        toscalar(union excUsers, fixedExcUsers
+        | summarize Users = make_set(User));
+    // CONFIG OPTION- set the threshold of the number of unique IP addresses per user
+    let IPThreshold = 1;
+    // CONFIG OPTION- exclude networks (or ranges) using the watchlist
+    let ExcNetworks = toscalar(_GetWatchlist('SAP - Excluded Networks') // Networks that should be removed from query
+    | where isnotempty(Network)
+    | summarize make_set(Network));
+    // CONFIG OPTION- exclude blank IP addresses
+    // add an entry with serachkey= 000.00.000.0 and Description= EmptyIPAddressesShouldBeExcluded in the 'SAP - Excluded Networks' watchlist
+    // to avoid alerting on empty IP addresses
+    let EmptyIPAddressesShouldBeExcluded = toscalar(_GetWatchlist('SAP - Excluded Networks')
+    | where Description == 'EmptyIPAddressesShouldBeExcluded' and SearchKey == "000.00.000.0" | take 1
+    | project IfEmptyIPAddressesShouldBeExcluded = true);
+    // Query Logic
+    let LogOns= materialize(SAPAuditLog
+    | where TimeGenerated > ago(1d)
+    // actual lookback is set by setting TimeAgo
+    | where ingestion_time() > ago(TimeAgo)
+    | where MessageID in (AuditClasses)
+    | where isnotempty(TerminalIPv6) or  EmptyIPAddressesShouldBeExcluded != true
+    | where ipv4_is_in_any_range(TerminalIPv6, ExcNetworks) == false
+    | where Variable1 in (DialogLogonTypes)
+    | where User !in (UnitedExcUsers)
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | join kind= inner UserInFocus on SystemID, ClientID, User
+    | summarize LogonCount= count(), StartTime = min(TimeGenerated), UserType= any(UserType)
+        ,EndTime = max(TimeGenerated), Email= any(Email), Instance= any(Instance), Host= any(Host) by SystemID, ClientID, User, TerminalIPv6) ;
+    // aggregate the number of subnets (not IP addresses) by user
+    let UsersWithTooManySubnets= LogOns
+    | extend MaskedIP= format_ipv4_mask(TerminalIPv6, Mask)
+    | summarize CountSubnets= dcount(MaskedIP) by User
+    | where CountSubnets > IPThreshold;
+    UsersWithTooManySubnets | join kind = inner LogOns on User
+    | project SystemID, ClientID, User, StartTime, EndTime, Email, TerminalIPv6, Instance, LogonCount, Host, CountSubnets, UserType
+    | extend PackedDetails= pack_all()
+    | extend AlertName= strcat('SAP - User ',User, ' has logged on from ', CountSubnets, ' different subnets'), Dummy= ''
+alertDetailsOverride:
+    alertDisplayNameFormat: '{{AlertName}}'
+    alertDescriptionFormat: |
+        Multipls subnets obsereved for user {{User}}.
+        {{PackedDetails}}
+    alertTacticsColumnName: Dummy
+    alertSeverityColumnName: Dummy
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: Host
+    fieldMappings:
+    -   identifier: HostName
+        columnName: Host
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.33

@@ -1,0 +1,84 @@
+id: 940baadd-fe19-4c1a-9680-63a9c5d21e1c
+name: SAP - Sensitive Tables Direct Access By Dialog Logon
+description: |
+    Identifies generic table access by dialog logon
+
+    Source Action: Open table contents using SE11/SE16/SE16N.
+
+    **Recommended for Production only**
+
+    Tables should be maintained in ""SAP - Sensitive Tables"" Watchlist.
+
+    *Data Sources: SAPcon -  Audit Log*
+severity: Low
+requiredDataConnectors:
+-   connectorId: SAP
+queryFrequency: 12h
+queryPeriod: 12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+relevantTechniques: ''
+query: |
+    // Define variables
+    let Role = "Production";
+    let AuditClasses = dynamic(['DU9']); // Dialog, Audit Log Classes - Generic Table Access
+    let allSystemRoles = dynamic(['Sandbox','Developement','QualityAssurance','Training','Production']); // Available System Roles
+    let allSystemUsage = dynamic (['ERP','CRM','BW','Solman','Gateway','Enterprise Portal']); // Available System Usages
+    // Get Relevant Systems from WatchList
+    let systemID = _GetWatchlist('SAP - Systems');
+    let fixedSID = datatable(SystemID:string, SystemRole:string, SystemUsage:string)
+    // Maintain these if WatchList is not available
+        ["S4H","Production","ERP",
+        "XXX","Sandbox","BW"]
+    ;
+    // Get Relevant Tables
+    let SensitiveTables = _GetWatchlist('SAP - Sensitive Tables');
+    let fixedTables = datatable(Table:string)
+    // Maintain these if WatchList is not available
+        ["USR02"]
+    ;
+    let RelSystemID = union systemID, fixedSID // Create a variable that stores relevant Systems
+    | where SystemRole == Role // Recommended  is Production only
+    //| where SystemRole in (allSystemRoles); // Use this for all system roles
+    | summarize by SystemID;
+    let SensitiveUnionTables = union SensitiveTables, fixedTables // Create a variable that stores relevant sensitive tables
+        | summarize by Table;
+    // Query logic
+    SAPAuditLog
+        | project-rename Table = Variable1, Activity = Variable2
+        | where MessageID in (AuditClasses)
+        | where SystemID in (RelSystemID)
+        | where Table in (SensitiveUnionTables)
+        | order by TimeGenerated asc
+        | project TimeGenerated, Instance, SystemID, ClientID, User, TransactionCode, ABAPProgramName, Table,   Activity, MessageText, MessageID,
+    Email, TerminalIPv6, Host
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+eventGroupingSettings:
+    aggregationKind: SingleAlert
+kind: Scheduled
+version: 2.0.19

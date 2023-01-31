@@ -1,0 +1,83 @@
+id: 47848010-7a36-44f7-96be-d988f3de9421
+name: SAP - Sensitive privileged user makes a change in another user
+description: |
+    Identifies changes  of sensitive privileged users in other users.
+
+    Source Action: Change user details / authorizations using SU01.
+
+    Priveleged users should be maintained in "SAP - Privileged Users" Watchlist
+
+    This rule requires a fresh full reload of SAP user master data to be performed daily.
+    *Data Sources: SAPcon -  Audit Log*
+    *Data Sources: SAPcon -  User MD*
+severity: High
+requiredDataConnectors:
+-   connectorId: SAP
+    dataTypes:
+    - SAPUsersEmail
+    - SAPUsersGetPrivileged
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- PrivilegeEscalation
+- CredentialAccess
+relevantTechniques: ''
+query: |
+    // SAP - High - Sensitive privileged user makes a change in another user
+    // time span for audit events
+    let AuditTimeAgo= 75m;
+    // Audit Log Classes - User Master Changes
+    let AuditClasses = dynamic(['AU7', 'BUV', 'BUW', 'AU8', 'AU9', 'AUA', 'AUB', 'AUD', 'DUH', 'BU2']);
+    // here you can exclude system users which are OK to modify other users' master data
+    // by adding those users in the SAP_User_Config watchlist with a tag of 'ChangeUserMasterDataOK'
+    let excludeUsersTags= dynamic(['ChangeUserMasterDataOK']);
+    let excludedUsers= _GetWatchlist('SAP_User_Config')| where Tags has_any (excludeUsersTags)| summarize by User2Exclude=SAPUser;
+    // Query Logic
+    SAPAuditLog
+    | where TimeGenerated > ago(AuditTimeAgo)
+    | where MessageID in (AuditClasses)
+    | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+    | join kind= leftsemi  SAPUsersGetPrivileged on // The user that makes a change is a sensitive privileged user
+    $left.User == $right.User
+    ,$left.SystemID == $right.SystemID
+    ,$left.ClientID == $right.Client
+    | project-rename ChangedUser= Variable1
+    | lookup  (SAPUsersEmail()| project ChangedEmail= Email, ChangedUser= User, SystemID, ClientID)
+     on SystemID, ClientID, ChangedUser
+    | project TimeGenerated, Instance ,SystemID, ClientID, User, MessageText, MessageID,
+         Email= iff(isempty(Email),User, Email), TerminalIPv6, Host= iff(isempty(Host), TerminalIPv6, Host), ChangedUser, ChangedEmail
+alertDetailsOverride: null
+customDetails:
+    SAP_User: User
+    ChangedUser: ChangedUser
+entityMappings:
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Email
+-   entityType: Host
+    fieldMappings:
+    -   identifier: FullName
+        columnName: Host
+-   entityType: IP
+    fieldMappings:
+    -   identifier: Address
+        columnName: TerminalIPv6
+-   entityType: CloudApplication
+    fieldMappings:
+    -   identifier: Name
+        columnName: SystemID
+    -   identifier: AppId
+        columnName: ClientID
+    -   identifier: InstanceName
+        columnName: Instance
+-   entityType: Account
+    fieldMappings:
+    -   identifier: FullName
+        columnName: ChangedEmail
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+kind: Scheduled
+version: 2.0.19
