@@ -31,7 +31,7 @@ Click the “**Deploy to Azure**” button at the bottom and it will bring you t
 
 Ensure you select a Playbook name
 
-Enter the username that you will use for the Azure Sentinel Connector
+Enter the username that you will use for the Microsoft Sentinel Connector
 #
 ### Setting up the Connectors
 
