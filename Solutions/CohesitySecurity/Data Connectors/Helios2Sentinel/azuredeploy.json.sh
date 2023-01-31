@@ -3,12 +3,13 @@ SCRIPT=$(realpath "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 cd "$SCRIPTPATH"
 
-resourcegroup="ying-test-resource-group"
-workspacename="auto-deploy-workspace-01-24-23-v3"
-producer_fun_prefix="cohesitypro"
-producer_context="IncidentProducer"
-consumer_fun_prefix="cohesitycon"
-consumer_context="IncidentConsumer"
+
+resourcegroup=$(cat ../../cohesity.json | jq '."resource_group"')
+workspacename=$(cat ../../cohesity.json | jq '."workspace_name"')
+producer_fun_prefix=$(cat ../../cohesity.json | jq '."workspace_name"')
+producer_context=$(cat ../../cohesity.json | jq '."workspace_name"')
+consumer_fun_prefix=$(cat ../../cohesity.json | jq '."workspace_name"')
+consumer_context=$(cat ../../cohesity.json | jq '."workspace_name"')
 
 ./remove.py "$producer_fun_prefix" "$resourcegroup"
 ./remove.py "$consumer_fun_prefix" "$resourcegroup"
