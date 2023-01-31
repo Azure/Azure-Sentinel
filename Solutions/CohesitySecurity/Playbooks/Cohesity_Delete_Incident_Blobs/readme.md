@@ -4,7 +4,7 @@ This playbook deletes the blobs on Azure storage created by an incident that is 
 
 ## Deployment instructions
 1. Click on the "Deploy to Azure" button to deploy the playbook. This step directs you to deploy an ARM Template wizard.
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Delete_Incidient_Blobs%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Delete_Incident_Blobs%2Fazuredeploy.json)
 2. Fill in the required parameters:
 * __Playbook Name:__ Enter the playbook name here.
 
@@ -25,7 +25,7 @@ This playbook deletes the blobs on Azure storage created by an incident that is 
 * Choose the _Access Control (IAM)_ option from the left pane.
 * Click on _Add > Add Role Assignment_ and add _Microsoft Sentinel Responder_ managed identity role to the playbook.
 
-4. (Recommendation) You can create an automation rule to close the corresponding ServiceNow ticket when the corresponding Sentinel ticket is closed.
+4. (Recommendation) You can create an automation rule to delete the blobs used by a Cohesity created Sentinel incident when the incident is closed..
 * In _Microsoft Sentinel | Automation_ press _+Create\Automation Rule_.
 * Enter an automation rule name of your choice.
 * In _Trigger_ choose __When incident is updated__.
