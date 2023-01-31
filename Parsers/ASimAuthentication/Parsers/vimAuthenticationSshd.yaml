@@ -1,9 +1,9 @@
 Parser:
-  Title: Authentication ASIM filtering parser for Syslog sshd
+  Title: Authentication ASIM filtering parser for OpenSSH sshd
   Version: '0.2.0'
   LastUpdated: January 29, 2023
 Product:
-  Name: sshd
+  Name: OpenSSH
 Normalization:
   Schema: Authentication
   Version: '0.1.2'
@@ -13,9 +13,11 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports filtering and normalizing Syslog opensshd sign in logs to the ASIM Authentication schema.
+  This ASIM parser supports filtering and normalizing OpenSSH server (sshd) sign in logs, collected using Syslog to the ASIM Authentication schema.
 Notes: |
-  The parser does not use sshd PAN and preauth events, which are in most cases duplicates of the core sshd events. Certain preauth events log unsuccessful authentication negotiation, which have security importance but are not authentication events per se, and therefore are not used by this parser. 
+  - The parser does not use sshd PAN and preauth events, which are in most cases duplicates of the core sshd events. 
+  - Certain preauth events log unsuccessful authentication negotiation, which have security importance but are not authentication events per se, and therefore are not used by this parser.
+  - The parser may support other sshd servers, but this has not been tested.  
 ParserName: vimAuthenticationSshd
 ParserParams:
   - Name: starttime
@@ -44,9 +46,9 @@ ParserQuery: |
             and (isnull(endtime)         or TimeGenerated <= endtime)
             and (targetusername_has=='*' or (SyslogMessage has targetusername_has))
     };
-    let SyslogProjects = Syslog | project TimeGenerated, Computer, SyslogMessage, ProcessName, Type, _ItemId, _ResourceId, _SubscriptionId;
+    let SyslogProjects = Syslog | project TimeGenerated, Computer, SyslogMessage, ProcessName, ProcessID, HostIP, Type, _ItemId, _ResourceId, _SubscriptionId;
     //
-    // -- Succesful login
+    // -- Successful login
     let SSHDAccepted=(disabled:bool=false) { 
         // -- Parse events with the format "Accepted password for <User> from <IP address> port <port> ssh2"
         SyslogProjects | where not(disabled)
@@ -77,6 +79,7 @@ ParserQuery: |
             EventResult          = 'Failure'
             , EventSeverity      = 'Low' 
             , EventType          = 'Logon'
+            , LogonMethod        = iff (SyslogMessage has 'publickey', 'PKI', 'Username & password')
             , EventResultDetails = iff (SyslogMessage has 'publickey', 'Incorrect key', 'Incorrect password')
             , EventCount         = toint(coalesce(EventCount,1))
             | project-away SyslogMessage, ProcessName
@@ -186,38 +189,43 @@ ParserQuery: |
         , SSHDABreakInAttemptNastyPtr (disabled=disabled)
     | where targetusername_has=='*' or (TargetUsername has targetusername_has)
     | invoke _ASIM_ResolveDvcFQDN ('Computer')
-    | project-away Computer
     | extend 
         EventVendor             = 'OpenBSD'
-        , EventProduct          = 'sshd'
+        , EventProduct          = 'OpenSSH'
         , DvcOs                 = 'Linux'
         , TargetDvcOs           = 'Linux'
         , LogonProtocol         = 'ssh'
         , TargetAppName         = 'sshd'
         , TargetAppType         = 'Service'
+        , EventSubType          = 'Remote'
         , EventSchema           = 'Authentication'
         , EventSchemaVersion    = '0.1.2'
         , EventStartTime        = TimeGenerated
         , EventEndTime          = TimeGenerated
         , TargetUsernameType    = 'Simple'
         , DvcIdType             = iff (isnotempty(_ResourceId), "AzureResourceId", "")
+        , TargetAppId           = tostring(ProcessID)
+    | project-away Computer, ProcessID
     | project-rename 
         EventUid                = _ItemId
         , DvcScopeId            = _SubscriptionId
-        , DvcId                 = _ResourceId
+        , DvcId                 = _ResourceId,
+        , DvcIpAddr             = HostIP
     //
     // -- Aliases
     | extend
         User                    = TargetUsername
         , Dvc                   = DvcHostname
-        , Dst                   = coalesce (DvcFQDN, DvcHostname)
+        , Dst                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr)
         , TargetDomain          = DvcDomain
         , TargetFQDN            = DvcFQDN
         , TargetDomainType      = DvcDomainType
         , TargetHostname        = DvcHostname
         , TargetDvcId           = DvcId
-        , TargetScopeId         = DvcScopeId
+        , TargetDvcScopeId      = DvcScopeId
         , TargetDvcIdType       = DvcDomainType
+        , IpAddr                = DvcIpAddr
+        , TargetIpAddr          = DvcIpAddr
     };
     parser (
         disabled            = disabled,
