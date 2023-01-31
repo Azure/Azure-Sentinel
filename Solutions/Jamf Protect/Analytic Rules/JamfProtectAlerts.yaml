@@ -17,18 +17,19 @@ query: |
   | where topicType_s == "alert"
     and input_eventType_s <> "GPUnifiedLogEvent"
     and isnotempty(input_match_severity_d)
-  | extend severity = case(input_match_severity_d == 0, "Informational", input_match_severity_d == 1, "Low", input_match_severity_d == 2, "Medium", input_match_severity_d == 3, "High", "True")
+  | extend severity = case(input_match_severity_d == 0, "Informational", input_match_severity_d == 1, "Low", input_match_severity_d == 2, "Medium", input_match_severity_d == 3, "High", "Informational")
   | extend Match_facts = parse_json(input_match_facts_s)
-  | extend Analytic_description =  parse_json(Match_facts)[0].human
-  | extend Analytic_name =  parse_json(Match_facts)[0].name
+  | extend Analytic_description =  Match_facts[0].human
+  | extend Analytic_name =  Match_facts[0].name
   | extend AlertURL = strcat("https://", org_hd_s, ".jamfcloud.com/Alerts/", input_match_uuid_g)
-  | extend Input_Match = parse_json(input_match_actions_s)[0].name
+  | extend Input_Match = parse_json(input_match_actions_s)
   | extend sha256hex = tostring(parse_json(input_related_binaries_s)[0].sha256hex)
   | extend algorithm = "SHA256"
   | extend Matched_Users = tostring(parse_json(input_related_users_s)[0].name)
   | extend Host_IPs = tostring(parse_json(input_host_ips_s)[0])
-  | extend Tags = tostring(parse_json(Match_facts)[0].tags)
-  | extend JamfPro = case(Input_Match has "SmartGroup", "Workflow with Jamf Pro", Input_Match has "Prevented", "No workflow, Prevented by Protect", isnotempty(Input_Match), "No workflow", "No workflow")
+  | extend Tags = tostring(Match_facts[0].tags)
+  | extend Tactics = case(Tags has "Execution", "Execution", Tags has "Visibility", "Visibility", Tags has "Persistence", "Persistence", Tags has "LateralMovement", "Lateral Movement", Tags has "CredentialAccess", "Credential Acccess", Tags has "DefenseEvasion", "Defense Evasion", Tags has "PrivilegeEscalation", "Privilege Escalation", Tags has "Impact", "Impact", Tags has "CommandAndControl", "Command and Control", Tags has "Discovery", "Discovery", Tags has "InitialAccess", "Initial Access", "")
+  | extend JamfPro = case(Input_Match has "SmartGroup", "Workflow with Jamf Pro", Input_Match has "Prevented", "No workflow, Prevented by Protect", "No workflow")
   | extend ProviderName = "Jamf"
   | extend ProductName = "Jamf Protect"
 incidentConfiguration:
@@ -41,6 +42,7 @@ incidentConfiguration:
 alertDetailsOverride:
   alertDisplayNameFormat: "{{Analytic_name}} detected on {{input_host_hostname_s}}"
   alertDescriptionFormat: "{{Analytic_description}} - Please investigate"
+  alertTacticsColumnName: Tactics
   alertSeverityColumnName: severity
   alertDynamicProperties:
     - alertProperty: AlertLink
