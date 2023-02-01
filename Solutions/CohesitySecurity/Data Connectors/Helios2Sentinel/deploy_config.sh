@@ -3,19 +3,12 @@ SCRIPT=$(realpath "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 cd "$SCRIPTPATH"
 
-if [ -z "$1" ]
-then
-    workspacename="auto-deploy-workspace"
-else
-    workspacename="$1"
-fi
-
-if [ -z "$2" ]
-then
-    resourcegroup="ying-test-resource-group"
-else
-    resourcegroup="$2"
-fi
+resourcegroup=$(cat ../../cohesity.json | jq '."resource_group"' | sed 's/^"//g;s/"$//g')
+workspacename=$(cat ../../cohesity.json | jq '."workspace_name"' | sed 's/^"//g;s/"$//g')
+apiKey=$(cat ../../cohesity.json | jq '."apiKey"' | sed 's/^"//g;s/"$//g')
+ClientId=$(cat ../../cohesity.json | jq '."ClientId"' | sed 's/^"//g;s/"$//g')
+ClientKey=$(cat ../../cohesity.json | jq '."ClientKey"' | sed 's/^"//g;s/"$//g')
+StartDaysAgo=$(cat ../../cohesity.json | jq '."StartDaysAgo"' | sed 's/^"//g;s/"$//g')
 
 az monitor log-analytics workspace delete \
     --force \
@@ -31,8 +24,8 @@ az deployment group create \
     --name ExampleDeployment \
     --resource-group "$resourcegroup" \
     --template-file ./azuredeploy.json \
-    --parameters ApiKey="33e44eac-ce99-46df-7f4e-9ac39446a66e" \
-    --parameters ClientId="cf58a81b-bfc5-4942-9f5e-9cdc8d1d119d" \
-    --parameters ClientKey="Xzf8Q~SxY28H4UA6fd70bt39DB92xoweNC_RRc_y" \
-    --parameters StartDaysAgo="-30" \
+    --parameters ApiKey="$apiKey" \
+    --parameters ClientId="$ClientId" \
+    --parameters ClientKey="$ClientKey" \
+    --parameters StartDaysAgo="$StartDaysAgo" \
     --parameters Workspace="$workspacename"
