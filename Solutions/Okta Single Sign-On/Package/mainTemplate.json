@@ -170,7 +170,7 @@
                 "description": "This query searches for numerous login attempts to the management console with an unknown or invalid user name",
                 "displayName": "Failed Logins from Unknown or Invalid User",
                 "enabled": false,
-                "query": "let FailureThreshold = 15;\nlet FailedLogins = Okta_CL\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| summarize count() by actor_alternateId_s, client_ipAddress_s, bin(TimeGenerated, 5m)\n| where count_ > FailureThreshold\n| project client_ipAddress_s, actor_alternateId_s;\nOkta_CL\n| join kind=inner (FailedLogins) on client_ipAddress_s, actor_alternateId_s\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| summarize count() by actor_alternateId_s, ClientIP = client_ipAddress_s, City = client_geographicalContext_city_s, Country = client_geographicalContext_country_s, column_ifexists('published_t', now())\n| sort by column_ifexists('published_t', now()) desc\n| extend timestamp = column_ifexists('published_t', now()), IPCustomEntity = ClientIP, AccountCustomEntity = actor_alternateId_s\n",
+                "query": "let FailureThreshold = 15;\nlet FailedLogins = Okta_CL\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| summarize count() by actor_alternateId_s, client_ipAddress_s, bin(TimeGenerated, 5m)\n| where count_ > FailureThreshold\n| project client_ipAddress_s, actor_alternateId_s;\nOkta_CL\n| join kind=inner (FailedLogins) on client_ipAddress_s, actor_alternateId_s\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| summarize count() by actor_alternateId_s, ClientIP = client_ipAddress_s, City = column_ifexists('client_geographicalContext_city_s', \"\"), Country = column_ifexists('client_geographicalContext_country_s', \"\"), column_ifexists('published_t', now())\n| sort by column_ifexists('published_t', now()) desc\n| extend timestamp = column_ifexists('published_t', now()), IPCustomEntity = ClientIP, AccountCustomEntity = actor_alternateId_s\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -195,22 +195,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "FullName",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "IPCustomEntity"
+                        "columnName": "IPCustomEntity",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -290,7 +290,7 @@
                 "description": "This query searches for successful user logins to the Okta Console from different countries within 3 hours",
                 "displayName": "User Login from Different Countries within 3 hours",
                 "enabled": false,
-                "query": "let timeframe = ago(3h);\nlet threshold = 2;\nOkta_CL\n| where column_ifexists('published_t', now()) >= timeframe\n| where eventType_s =~ \"user.session.start\"\n| where outcome_result_s =~ \"SUCCESS\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), NumOfCountries = dcount(client_geographicalContext_country_s) by actor_alternateId_s\n| where NumOfCountries >= threshold\n| extend timestamp = StartTime, AccountCustomEntity = actor_alternateId_s\n",
+                "query": "let timeframe = ago(3h);\nlet threshold = 2;\nOkta_CL\n| where column_ifexists('published_t', now()) >= timeframe\n| where eventType_s =~ \"user.session.start\"\n| where outcome_result_s =~ \"SUCCESS\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), NumOfCountries = dcount(column_ifexists('client_geographicalContext_country_s', \"NA\")) by actor_alternateId_s\n| where NumOfCountries >= threshold\n| extend timestamp = StartTime, AccountCustomEntity = actor_alternateId_s\n",
                 "queryFrequency": "PT3H",
                 "queryPeriod": "PT3H",
                 "severity": "High",
@@ -315,13 +315,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "FullName",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -401,7 +401,7 @@
                 "description": "This query searches for failed attempts to log into the Okta console from more than 15 various users within a 5 minute timeframe from the same source. This is a potential indication of a password spray attack",
                 "displayName": "Potential Password Spray Attack",
                 "enabled": false,
-                "query": "let FailureThreshold = 15;\nlet FailedEvents = Okta_CL\n| where eventType_s =~ \"user.session.start\"and outcome_reason_s in (\"VERIFICATION_ERROR\",\"INVALID_CREDENTIALS\")\n| summarize dcount(actor_alternateId_s) by client_ipAddress_s, bin(TimeGenerated, 5m)\n| where dcount_actor_alternateId_s > FailureThreshold\n| project client_ipAddress_s, TimeGenerated;\nOkta_CL\n| where eventType_s =~ \"user.session.start\"and outcome_reason_s in (\"VERIFICATION_ERROR\",\"INVALID_CREDENTIALS\")\n| summarize Users = make_set(actor_alternateId_s) by client_ipAddress_s, City = client_geographicalContext_city_s, Country = client_geographicalContext_country_s, bin(TimeGenerated, 5m)\n| join kind=inner (FailedEvents) on client_ipAddress_s, TimeGenerated\n| sort by TimeGenerated desc\n| extend timestamp = TimeGenerated, IPCustomEntity = client_ipAddress_s\n",
+                "query": "let FailureThreshold = 15;\nlet FailedEvents = Okta_CL\n| where eventType_s =~ \"user.session.start\"and outcome_reason_s in (\"VERIFICATION_ERROR\",\"INVALID_CREDENTIALS\")\n| summarize dcount(actor_alternateId_s) by client_ipAddress_s, bin(TimeGenerated, 5m)\n| where dcount_actor_alternateId_s > FailureThreshold\n| project client_ipAddress_s, TimeGenerated;\nOkta_CL\n| where eventType_s =~ \"user.session.start\"and outcome_reason_s in (\"VERIFICATION_ERROR\",\"INVALID_CREDENTIALS\")\n| summarize Users = make_set(actor_alternateId_s) by client_ipAddress_s, City = column_ifexists('client_geographicalContext_city_s', \"\"), Country = column_ifexists('client_geographicalContext_country_s', \"\"), bin(TimeGenerated, 5m)\n| join kind=inner (FailedEvents) on client_ipAddress_s, TimeGenerated\n| sort by TimeGenerated desc\n| extend timestamp = TimeGenerated, IPCustomEntity = client_ipAddress_s\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -426,13 +426,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "IPCustomEntity"
+                        "columnName": "IPCustomEntity",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -2588,7 +2588,7 @@
           ],
           "metadata": {
             "comments": "This OKTA connector uses okta API to perform different actions on the user accounts.",
-            "lastUpdateTime": "2023-01-31T16:37:03.541Z",
+            "lastUpdateTime": "2023-02-01T14:04:44.742Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
