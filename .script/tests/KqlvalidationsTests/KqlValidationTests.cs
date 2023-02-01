@@ -35,7 +35,7 @@ namespace Kqlvalidations.Tests
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["id"];
 
-            //we ignore known issues
+            //we ignore known issues. We also ignore templates that are not in the skipped templates list.
             if (ShouldSkipTemplateValidation(id))
             {
                 return;
