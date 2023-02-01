@@ -41,7 +41,7 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains IP Addresses and/or Domain Names. In the *Entity mapping* section of the analytics rule creation workflow, IP Address should be mapped to **Address** identifier of the **IP** entity type, and Domain Name should be mapped to **DomainName** identifier of the **Domain** entity type. 
+1. In Microsoft Sentinel, analytical rules should be configured to trigger an incident that contains IP Addresses and/or Domain Names. In the *Entity mapping* section of the analytics rule creation workflow, IP Address should be mapped to **Address** identifier of the **IP** entity type, and Domain Name should be mapped to **DomainName** identifier of the **Domain** entity type. 
 
     Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook. Check the [documentation](https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook) to learn more about automation rules.
