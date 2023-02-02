@@ -42,6 +42,18 @@ Set the 'API Key' to 'Bearer *yourapikey*'.
 ![OpenAiAPIKey](Images/openaiapikey.png)
 
 #
+### Assigning the Responder role to the playbook
+
+The playbook uses a managed identity, this identity needs the Microsoft Sentinel Responder role in any Sentinel instances in order to add comments.
+
+1. Select the Playbook resource.
+2. In the left menu, click Identity.
+3. Under Permissions, click Azure role assignments.
+4. Click Add role assignment (Preview).
+5. Use the drop-down lists to select the resource group that your *Sentinel Instance* is in. If multiple instances are used consider selecting subscription as a scope instead.
+6. In the Role drop-down list, select the role 'Microsoft Sentinel Responder'
+7. Click Save to assign the role.
+#
 ### Usage
 This playbook can be run manually or as part of an automation rule. This has been tested against incidents with a commandline entity, without a commandline entity and with multiple commandline entities and has handled each appropriately.
 
