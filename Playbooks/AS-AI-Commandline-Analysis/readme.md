@@ -9,13 +9,14 @@ This playbook is intended to be run from a Microsoft Sentinel incident that has 
 #
 ### Requirements
 
-OpenAI API Key. 
+1. An OpenAI API Key to authorise the GPT-3 connection.
+
 # 
 ### Setup
 
 Before you begin, you will need to have an API key from https://openai.com/api/. 
 
-**USAGE OF THE OPENAI API IS NOT FREE**, please ensure you are aware of this before usage and select the appropriate plan for your organisation according to https://openai.com/api/pricing/
+**USAGE OF THE OPENAI API IS NOT FREE**, please ensure you are aware of this before usage and select the appropriate plan for your organisation according to https://openai.com/.api/pricing/.
 
 #
 ### Deployment
@@ -29,27 +30,26 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
-Ensure you select a Playbook name
+1. Select a name for the Playbook.
 
-Enter the username that you will use for the Microsoft Sentinel Connector
+2. Enter the username that you will use for the Microsoft Sentinel Connector.
 #
 ### Setting up the Connectors
 
 Before you begin, you will need to have an API key from https://openai.com/api/. 
 
 Go to *yourlogicappname* -> API Connections -> *azuresentinel-yourlogicappname* -> Edit API Connection
-Set your display name if you haven't already and click 'authorize' to log into your account
+Set your display name if you haven't already and click 'authorize' to log into your account.
 ![AzureSentinelAuth](Images/azuresentinelauth.png)
 
 Go to *yourlogicappname* -> API Connections -> *openaiip-yourlogicappname* -> Edit API Connection
-Set the 'API Key' to 'Bearer *yourapikey*'
+Set the 'API Key' to 'Bearer *yourapikey*'.
 ![OpenAiAPIKey](Images/openaiapikey.png)
 
 #
-
 ### Usage
-This playbook can be ran manually or as part of an automation rule. This has been tested against incidents with a commandline entity, without a commandline entity and with multiple commandline entities and has handled each appropriately.
+This playbook can be run manually or as part of an automation rule. This has been tested against incidents with a commandline entity, without a commandline entity and with multiple commandline entities and has handled each appropriately.
 
-Once the playbook runs on an incident, the GPT-3 Analysis of any commandlines appear in the comments
+Once the playbook runs on an incident, the GPT-3 Analysis of any commandlines appear in the comments.
 ![CommandlineAnalysisExample](Images/cmdanalysis.png)
 #
