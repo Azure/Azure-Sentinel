@@ -229,6 +229,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "workbook-source" -NotePropertyValue "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]"
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "_workbook-source" -NotePropertyValue "[variables('workbook-source')]"
                             };
+							
+                        $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
                             $baseWorkbookStep = [PSCustomObject] @{
                                 name       = "workbooks";
                                 label      = "Workbooks";
@@ -238,13 +240,22 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 };
                                 bladeTitle = "Workbooks";
                                 elements   = @(
-                                    [PSCustomObject] @{
+									if($workbookDescriptionText -ne "") {										
+									[PSCustomObject] @{
+                                    name    = "workbook$workbookCounter-text";
+                                    type    = "Microsoft.Common.TextBlock";
+                                    options = [PSCustomObject] @{ text = $workbookDescriptionText; }
+									}
+									}
+									else {
+										[PSCustomObject] @{
                                         name    = "workbooks-text";
                                         type    = "Microsoft.Common.TextBlock";
                                         options = [PSCustomObject] @{
                                             text =  $contentToImport.WorkbookBladeDescription ? $contentToImport.WorkbookBladeDescription : "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view.";
                                         }
-                                    },
+                                    }
+									},
                                     [PSCustomObject] @{
                                         name    = "workbooks-link";
                                         type    = "Microsoft.Common.TextBlock";
@@ -283,7 +294,6 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             Write-Host "Failed to serialize $file" -ForegroundColor Red
                             break;
                         }
-                        $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
                         #creating parameters in mainTemplate
                         $workbookIDParameterName = "workbook$workbookCounter-id"
                         $workbookNameParameterName = "workbook$workbookCounter-name"
@@ -415,10 +425,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
 
-                            if($workbookDescriptionText -ne "")
-                            {
-                                $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
-                            }
+                            # if($workbookDescriptionText -ne "")
+                            # {
+                                # $workbookMetadata | Add-Member -NotePropertyName "description" -NotePropertyValue $workbookDescriptionText
+                            # }
 
                             # Add templateSpecs/versions resource to hold actual content
                             $workbookTemplateSpecContent = [PSCustomObject]@{
