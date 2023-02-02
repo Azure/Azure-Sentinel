@@ -50,8 +50,8 @@ The playbook uses a managed identity, this identity needs the Microsoft Sentinel
 2. In the left menu, click Identity.
 3. Under Permissions, click Azure role assignments.
 4. Click Add role assignment (Preview).
-5. Use the drop-down lists to select the resource group that your *Sentinel Instance* is in. If multiple instances are used consider selecting subscription as a scope instead.
-6. In the Role drop-down list, select the role 'Microsoft Sentinel Responder'
+5. Use the drop-down lists to select the resource group that your *Sentinel Workspace* is in. If multiple workspaces are used in different resource groups consider selecting subscription as a scope instead.
+6. In the Role drop-down list, select the role 'Microsoft Sentinel Responder'.
 7. Click Save to assign the role.
 #
 ### Usage
