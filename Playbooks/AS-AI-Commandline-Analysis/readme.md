@@ -32,15 +32,10 @@ Click the “**Deploy to Azure**” button at the bottom and it will bring you t
 
 1. Select a name for the Playbook.
 
-2. Enter the username that you will use for the Microsoft Sentinel Connector.
 #
-### Setting up the Connectors
+### Setting up the OpenAI Connector
 
 Before you begin, you will need to have an API key from https://openai.com/api/. 
-
-Go to *yourlogicappname* -> API Connections -> *azuresentinel-yourlogicappname* -> Edit API Connection
-Set your display name if you haven't already and click 'authorize' to log into your account.
-![AzureSentinelAuth](Images/azuresentinelauth.png)
 
 Go to *yourlogicappname* -> API Connections -> *openaiip-yourlogicappname* -> Edit API Connection
 Set the 'API Key' to 'Bearer *yourapikey*'.
