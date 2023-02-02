@@ -20,7 +20,7 @@ from typing import List
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
-LOG_TYPE = 'BoxEventsRealTime4'
+LOG_TYPE = 'BoxEvents'
 Delay_Minutes = os.environ.get('Delay_Minutes',2)
 Historical_Data_Days = os.environ.get('Historical_Data_Days',0)
 Delay_Minutes = int(Delay_Minutes)
