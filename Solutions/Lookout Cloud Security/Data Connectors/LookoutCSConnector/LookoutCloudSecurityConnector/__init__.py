@@ -105,6 +105,7 @@ class LookOut:
                     'Authorization':'Bearer'+' '+ self.jwt_token
                      }
             payload = {}
+            logging.info("The url being called: {}".format(baseurl + report_type_suffix+"&startTime="+startTime+"&endTime="+endTime+"&maxResults="+maxResults))
             response = requests.request("GET", baseurl + report_type_suffix+"&startTime="+startTime+"&endTime="+endTime+"&maxResults="+maxResults, headers=headers, data=payload)
             if response.status_code == 200:
                 jsondata = json.loads(response.text)
