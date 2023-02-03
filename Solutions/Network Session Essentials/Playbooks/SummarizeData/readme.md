@@ -1,9 +1,9 @@
-# Network Session Solution for Microsoft Sentinel Summarization capability
+# Network Session Essentials Solution Summarization capability
 
 This logic app helps to summarize Network session data into custom tables. This would incur additional cost.
 
  ## Summary
- To ensure good performance of Network session solution, summarization capability can be used. This would create various custom tables containing analytics based on different parameters of ASIM Network Session Schema.
+ To ensure good performance of Network Session Essentials solution, summarization capability can be used. This would create various custom tables containing analytics based on different parameters of ASIM Network Session Schema.
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
