@@ -71,12 +71,11 @@ def get_result(time_range):
     to_time = time_range[1]
     offset = 0
     limit = 1000
-    element_count = 0
+    element_count = None
     global_element_count = 0
     while element_count != 0:
         result = get_result_request(offset,limit,from_time,to_time)
-        if result is not None:
-            element_count = len(result)
+        element_count = len(result)
         if offset == 0 and element_count == 0:
             logging.info("Logs not founded. Time period: from {} to {}.".format(from_time,to_time))
         elif offset != 0 and element_count != 0:
