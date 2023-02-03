@@ -9,14 +9,11 @@ import azure.functions as func
 import aiohttp
 from dateutil.parser import parse as parse_date
 
-
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 from .state_manager_async import StateManagerAsync
 
-
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
 logging.getLogger('charset_normalizer').setLevel(logging.ERROR)
-
 
 INSIGHTVM_APIKEY = os.environ['InsightVMAPIKey']
 INSIGHTVM_REGION = os.environ['InsightVMCloudRegion']
@@ -46,12 +43,21 @@ async def main(mytimer: func.TimerRequest):
     logging.info('Script started.')
     async with aiohttp.ClientSession() as session_api:
         async with aiohttp.ClientSession() as session_sentinel:
+            delay = os.environ.get('Delay', "60")
+            shift_start_time = os.environ.get('ShiftStartTime', "60")
+            current_time = datetime.datetime.now(tz=datetime.timezone.utc).replace(microsecond=0, second=0)
+            end_time = current_time - datetime.timedelta(minutes=int(delay))
             api = InsightVMAPI(session_api, INSIGHTVM_REGION, INSIGHTVM_APIKEY)
-            sentinel = AzureSentinelConnectorAsync(session=session_sentinel, log_analytics_uri=LOG_ANALYTICS_URI, workspace_id=WORKSPACE_ID, shared_key=SHARED_KEY)
-            state_manager = StateManagerAsync(connection_string=AZURE_WEB_JOBS_STORAGE_CONNECTION_STRING, file_path='rapid7_last_scan_date')
-            last_scan_date = await state_manager.get_last_date_from_storage()
-            async for assets in api.get_assets(last_scan_end=last_scan_date):
-                last_processed_date = await process_assets(assets=assets, api=api, sentinel=sentinel, state_manager=state_manager)
+            sentinel = AzureSentinelConnectorAsync(session=session_sentinel, log_analytics_uri=LOG_ANALYTICS_URI,
+                                                   workspace_id=WORKSPACE_ID, shared_key=SHARED_KEY)
+            state_manager = StateManagerAsync(connection_string=AZURE_WEB_JOBS_STORAGE_CONNECTION_STRING,
+                                              file_path='rapid7_last_scan_date')
+            start_time = await state_manager.get_last_date_from_storage(end_time=end_time, current_time=current_time,
+                                                                        shift_start_time=shift_start_time)
+            logging.info(f'Data processing. Period(UTC): {start_time} - {end_time}')
+            async for assets in api.get_assets(start_time=start_time, end_time=end_time):
+                last_processed_date = await process_assets(assets=assets, api=api, sentinel=sentinel,
+                                                           state_manager=state_manager)
                 state_manager.remember_last_date(last_processed_date)
             await state_manager.save_last_date_to_storage()
     logging.info(f'Script finished. Total sent events: {sentinel.successfull_sent_events_number}')
@@ -64,11 +70,11 @@ class InsightVMAPI:
         self._api_key = api_key
         self.processed_vulner_ids: Set[str] = set()
 
-    async def get_assets(self, last_scan_end: Optional[datetime.datetime] = None) -> AsyncIterable[list]:
-        logging.info(f'Start getting assets where last_scan_end > {last_scan_end}')
+    async def get_assets(self, start_time: Optional[datetime.datetime] = None,
+                         end_time: Optional[datetime.datetime] = None) -> AsyncIterable[list]:
         cursor = None
         while True:
-            res = await self._make_get_assets_request(cursor, last_scan_end=last_scan_end)
+            res = await self._make_get_assets_request(cursor, start_time=start_time, end_time=end_time)
             assets = res['data']
             logging.info(f'Assets found: {len(assets)}')
             yield assets
@@ -77,7 +83,9 @@ class InsightVMAPI:
                 break
         logging.info(f'Finish getting assets.')
 
-    async def _make_get_assets_request(self, cursor: Optional[str] = None, last_scan_end: Optional[datetime.datetime] = None) -> dict:
+    async def _make_get_assets_request(self, cursor: Optional[str] = None,
+                                       start_time: Optional[datetime.datetime] = None,
+                                       end_time: Optional[datetime.datetime] = None) -> dict:
         method = 'POST'
         endpoint = '/v4/integration/assets'
         params = {
@@ -87,16 +95,27 @@ class InsightVMAPI:
         }
         if cursor:
             params['cursor'] = cursor
-        if isinstance(last_scan_end, datetime.datetime):
-            date = last_scan_end.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + 'Z'
+        if isinstance(start_time, datetime.datetime):
+            date = start_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + 'Z'
             payload = {
                 'asset': f'last_scan_end > {date}'
             }
         else:
             payload = None
         res = await self._make_api_request(method=method, endpoint=endpoint, params=params, payload=payload)
-        res = res if res else {}
-        return res
+
+        delay_res = []
+        if res:
+            for event in res["data"]:
+                if parse_date(event["last_scan_end"]) < end_time:
+                    delay_res.append(event)
+        else:
+            res = {}
+
+        filtered_res = res
+        filtered_res["data"] = delay_res
+
+        return filtered_res
 
     async def get_all_vulners(self) -> dict:
         logging.info('Start getting vulners.')
@@ -210,9 +229,9 @@ async def get_vulners_by_vulner_ids(vulner_ids: List[str], api: InsightVMAPI) ->
 
 
 def get_chunks_from_list(lst, n):
-        """Yield successive n-sized chunks from lst."""
-        for i in range(0, len(lst), n):
-            yield lst[i:i + n]
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 
 async def send_assets_to_sentinel(assets: list, sentinel: AzureSentinelConnectorAsync) -> None:
