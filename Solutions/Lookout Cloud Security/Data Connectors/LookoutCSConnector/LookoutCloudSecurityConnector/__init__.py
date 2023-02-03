@@ -24,8 +24,10 @@ logging.info(shared_key)
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 baseurl =  os.environ['Baseurl'] 
+maxResults = os.environ['MaxResults'] 
 Authurl = baseurl+"/apigw/v1/authenticate"
 table_name = "Lookoutlogs"
+Schedule = os.environ['Schedule']
 chunksize = 500
 token = ""
 
@@ -36,6 +38,9 @@ match = re.match(pattern, str(logAnalyticsUri))
 if (not match):
     raise Exception("Lookout: Invalid Log Analytics Uri.")
 
+##############################
+######State Manager######  
+##############################
 class StateManager:
     def __init__(self, connection_string, share_name='funcstatemarkershare', file_path='funcstatemarkerfile'):
         self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
@@ -53,7 +58,9 @@ class StateManager:
             return self.file_cli.download_file().readall().decode()
         except ResourceNotFoundError:
             return None
-
+##############################
+######lookout Connector######  
+##############################
 
 class LookOut:
 
@@ -84,9 +91,9 @@ class LookOut:
         state = StateManager(connection_string)
         past_time = state.get()
         if past_time is not None:
-            logging.info("The last time point is: {}".format(past_time))
+            logging.info("The last time run happened at: {}".format(past_time))
         else:
-            logging.info("There is no last time point, trying to get events for last week.")
+            logging.info("There is no last run timestamp, trying to get events for last week.")
             past_time = (current_time_day - datetime.timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00"
         state.post(current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
         return (past_time, current_time_day.strftime("%Y-%m-%dT%H:%M:%S")+".000-00:00")
@@ -98,7 +105,7 @@ class LookOut:
                     'Authorization':'Bearer'+' '+ self.jwt_token
                      }
             payload = {}
-            response = requests.request("GET", baseurl + report_type_suffix+"&startTime="+startTime+"&endTime="+endTime+'&maxResults=500', headers=headers, data=payload)
+            response = requests.request("GET", baseurl + report_type_suffix+"&startTime="+startTime+"&endTime="+endTime+"&maxResults="+maxResults, headers=headers, data=payload)
             if response.status_code == 200:
                 jsondata = json.loads(response.text)
                 try:
@@ -115,6 +122,10 @@ class LookOut:
                 logging.error("Something wrong. Error code: {}".format(response.status_code))
         except Exception as err:
             logging.error("Something wrong. Exception error text: {}".format(err))
+
+##############################
+######Sentinel Connector######  
+##############################
 
 class Sentinel:
 
@@ -175,10 +186,11 @@ class Sentinel:
             self.success_processed = self.success_processed + chunk_count
         else:
             logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
-            self.fail_processed = self.fail_processed + chunk_count    
+            self.fail_processed = self.fail_processed + chunk_count  
 
+# this function app is fired based on the Timer trigger
+# it is used to capture all the events from LookOut cloud security API   
 def main(mytimer: func.TimerRequest) -> None:
-#if __name__ == '__main__':
     utc_timestamp = datetime.datetime.utcnow().replace(
         tzinfo=datetime.timezone.utc).isoformat()
     if mytimer.past_due:
@@ -190,36 +202,46 @@ def main(mytimer: func.TimerRequest) -> None:
     results_events = []
     results_Violations = []
     finalresult = []
-    Lookout = LookOut()
-    sentinel = Sentinel()
-    sentinel.sharedkey = shared_key
-    sentinel.table_name= table_name    
-    startTime,endTime = Lookout.generate_date()   
-    logging.info('Trying to get events for period: {} - {}'.format(startTime, endTime))
+    try:
+        Lookout = LookOut()
+        sentinel = Sentinel()
+        sentinel.sharedkey = shared_key
+        sentinel.table_name= table_name    
+        startTime,endTime = Lookout.generate_date()   
+        logging.info('Trying to get events for period: {} - {}'.format(startTime, endTime))
+        logging.info('Start: to get Anomalies')
+        results_Anamolies = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+        logging.info('End: to get Anomalies')
+        logging.info('Start: to get Activity')
+        results_events = Lookout.get_Data("/apigw/v1/events?eventType=Activity",startTime,endTime)
+        logging.info('End: to get Activity')
+        logging.info('Start: to get Violation')
+        results_Violations=Lookout.get_Data("/apigw/v1/events?eventType=Violation",startTime,endTime)
+        logging.info('End: to get Violation')
+        
+        if(results_Anamolies is not None):
+            finalresult = results_Anamolies
+        if(results_events is not None):
+            finalresult += results_events
+        if(results_Violations is not None):
+            finalresult += results_Violations
+        
+        if(len(finalresult) > 0):
+            body = json.dumps(finalresult)
+        if(len(finalresult) > 2000):   
+            sentinel.gen_chunks(body)
+        else:
+            sentinel.post_data(body,len(finalresult))
 
-    results_Anamolies = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
-    results_events = Lookout.get_Data("/apigw/v1/events?eventType=Activity",startTime,endTime)
-    results_Violations=Lookout.get_Data("/apigw/v1/events?eventType=Violation",startTime,endTime)
-    
-    if(results_Anamolies is not None):
-       finalresult = results_Anamolies
-    if(results_events is not None):
-      finalresult += results_events
-    if(results_Violations is not None):
-        finalresult += results_Violations
-    
-    if(len(finalresult) > 0):
-     body = json.dumps(finalresult)
-    if(len(finalresult) > 2000):   
-     sentinel.gen_chunks(body)
-    else:
-     sentinel.post_data(body,len(finalresult))
-
-    sentinel_class_vars = vars(sentinel)
-    success_processed, fail_processed = sentinel_class_vars["success_processed"],\
-                                        sentinel_class_vars["fail_processed"]
-    logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
-          .format(success_processed, fail_processed, startTime, endTime))
+        sentinel_class_vars = vars(sentinel)
+        success_processed, fail_processed = sentinel_class_vars["success_processed"],\
+                                            sentinel_class_vars["fail_processed"]
+        logging.info('Total events processed successfully: {}, failed: {}. Period: {} - {}'
+            .format(success_processed, fail_processed, startTime, endTime))
+    except Exception as err:
+      logging.error("Something wrong. Exception error text: {}".format(err))
+      logging.error( "Error: LookOut Cloud Security data connector execution failed with an internal server error.")
+      raise
     
           
     
