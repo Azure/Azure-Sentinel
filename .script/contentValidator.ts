@@ -9,38 +9,44 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
     {
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel";
+        const expectedText = "Microsoft Sentinel";
 
-        // DEFINE SKIP TEXT TO BE SEARCHED
-        const searchTargetProductAzureSentinelTag = '"targetProduct": "Azure Sentinel"';
-        const searchAzureSentinelCommunityGithubText = 'Azure Sentinel Community Github';
+        // Read skip text from a file
+        const skipTextFile = fs.readFileSync('./.script/skip-text.txt', "utf8");
+        const skipTexts = skipTextFile.split("\n").filter(text => text.length > 0);
 
         // SEARCH & CHECK IF SKIP TEXT EXIST IN THE FILE
-        const hasTargetProductAzureSentinel = fileContent.includes(searchTargetProductAzureSentinelTag);
-        const hasAzureSentinelCommunityGithubText = fileContent.includes(searchAzureSentinelCommunityGithubText);
+        let hasSkipText = false;
+        let skipTextValue = '';
+        for (const skipText of skipTexts) 
+        {
+            if (fileContent.includes(skipText)) 
+            {
+                hasSkipText = true;
+                skipTextValue = skipText;
+                break;
+            }
+        }
 
         // REPLACE ALL SKIP TEXT WITH BLANK
-        const skipText = [searchAzureSentinelCommunityGithubText, searchTargetProductAzureSentinelTag];
-        let replacedFileContent = fileContent.replace(new RegExp(skipText.join('|'), 'gi'), '');
+        let replacedFileContent = fileContent.replace(new RegExp(skipTexts.join('|'), 'gi'), '');
 
         // FIND IF AZURE SENTINEL TEXT PRESENT
         let hasAzureSentinelText = replacedFileContent.toLowerCase().includes(searchText.toLowerCase());
-        if (hasAzureSentinelText)
+        if (hasAzureSentinelText) 
         {
-            // VALIDATE AND THROW ERROR
-            CustomizedException(hasTargetProductAzureSentinel, searchTargetProductAzureSentinelTag, searchText);
-            CustomizedException(hasAzureSentinelCommunityGithubText, searchAzureSentinelCommunityGithubText, searchText);
-
-            throw new Error(`Please update text from '${searchText}' to 'Microsoft Sentinel' in file '${filePath}'`);
+            // VALIDATE AND THROW ERROR
+            if (hasSkipText) 
+            {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' except '${skipTextValue}' text in file '${filePath}'`);
+            } 
+            else 
+            {
+                throw new Error(`Please update text from '${searchText}' to '${expectedText}' in file '${filePath}'`);
+            }
         }
     }
     return ExitCode.SUCCESS;
-
-    function CustomizedException(hasSkipText: any, exceptText: any, searchText: any): void
-    {
-        if (hasSkipText) {
-            throw new Error(`Please update text from '${searchText}' to 'Microsoft Sentinel' except '${exceptText}' text in file '${filePath}'`);
-        }
-    }
 }
 
 let fileTypeSuffixes = ["json", "txt", "md", "yaml", "yml", "py"];
