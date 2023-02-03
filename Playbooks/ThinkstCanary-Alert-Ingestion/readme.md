@@ -69,9 +69,9 @@ Once the deployment is completed, you will need to authorize the connection to l
  4. Sign in
  5. Click Save
 
-### b. Configurations in Azure Sentinel
-For Azure Sentinel some additional configuration is needed:
-1. Enable Azure Sentinel Analytics rules that create alerts and incidents which includes the relevant entities.
+### b. Configurations in Microsoft Sentinel
+For Microsoft Sentinel some additional configuration is needed:
+1. Enable Microsoft Sentinel analytics rules that create alerts and incidents which includes the relevant entities.
 2. Use the below templates to import the Thinkst Analytics into your workspace
 
 #### Thinkst Canary Token Sentinel Analytic Template:
