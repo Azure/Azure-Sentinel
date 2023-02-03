@@ -12,7 +12,6 @@ using Microsoft.WindowsAzure.Storage;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
-using StackExchange.Redis;
 using System.Collections.Generic;
 using System.Collections;
 using System.Dynamic;
