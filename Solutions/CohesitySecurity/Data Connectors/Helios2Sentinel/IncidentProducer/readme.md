@@ -10,7 +10,7 @@ Run [this](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.inte
 Check that the function successfully runs at  _``Your function name that starts from cohesitypro`` | Functions | Monitor_. Each successfull run should have the same  log-message. If not, you can refer to the Troubleshooting section for tips.
 
 ## Troubleshooting
-1. If the function failsdue to expriy of your Cohesity Data Cloud API key, then you must create a new API key. Follow the stepps below.
+1. If the function fails due to expiry of your Cohesity Data Cloud API key, then you must create a new API key. Follow the steps below.
 * Go to the Cohesity Data Cloud [login page](https://helios.cohesity.com/login).
 * Enter your credentials and select _Log In_. The _Summary_ page is displayed.
 * Navigate to _Settings > Access Management_. The _Users_ tab is displayed.
