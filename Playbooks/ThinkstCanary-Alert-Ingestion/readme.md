@@ -62,9 +62,9 @@ You can choose to deploy the playbook using the buttons below.
 ## Post-Deployment instructions 
 
 ### a. Authorize connections
-Once the deployment is completed, you will need to authorize each connection. There are connection for Azure KeyVault and Azure Sentinel. For each connection complete the following steps:
- 1. Click edit the Log Analytics connection
- 2. Fill in the necessary information
+Once the deployment is completed, you will need to authorize the connection to log analytics following the below steps:
+ 1. Click and edit the Log Analytics connection
+ 2. Fill in the necessary information including workspace ID and key of your Microsoft Sentinel workspace.
  3. Click Authorize
  4. Sign in
  5. Click Save
@@ -72,6 +72,7 @@ Once the deployment is completed, you will need to authorize each connection. Th
 ### b. Configurations in Azure Sentinel
 For Azure Sentinel some additional configuration is needed:
 1. Enable Azure Sentinel Analytics rules that create alerts and incidents which includes the relevant entities.
+2. Use the below templates to import the Thinkst Analytics into your workspace
 
 #### Thinkst Canary Token Sentinel Analytic Template:
 ```
