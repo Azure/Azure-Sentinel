@@ -82,8 +82,7 @@ class LookOut:
                 'Content-Type': 'application/json'
                 }
         response = requests.request("POST", url, headers=headers, data=payload)
-        tokens = json.loads(response.text) 
-        logging.info("id token"+ tokens['id_token'] ) 
+        tokens = json.loads(response.text)         
         return tokens['id_token']        
 	    
     def generate_date(self):
@@ -183,7 +182,7 @@ class Sentinel:
         }
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
-            logging.info("Chunk was processed({} events)".format(chunk_count))
+            logging.info("Chunk was processed{} events".format(chunk_count))
             self.success_processed = self.success_processed + chunk_count
         else:
             logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
@@ -212,12 +211,15 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('Trying to get events for period: {} - {}'.format(startTime, endTime))
         logging.info('Start: to get Anomalies')
         results_Anamolies = Lookout.get_Data("/apigw/v1/events?eventType=Anomaly",startTime,endTime)
+        logging.info("Anamolies was processed {} ".format(len(results_Anamolies)))
         logging.info('End: to get Anomalies')
         logging.info('Start: to get Activity')
         results_events = Lookout.get_Data("/apigw/v1/events?eventType=Activity",startTime,endTime)
+        logging.info("Activities was processed {} ".format(len(results_events)))
         logging.info('End: to get Activity')
         logging.info('Start: to get Violation')
         results_Violations=Lookout.get_Data("/apigw/v1/events?eventType=Violation",startTime,endTime)
+        logging.info("Violations was processed {} ".format(len(results_Violations)))
         logging.info('End: to get Violation')
         
         if(results_Anamolies is not None):
