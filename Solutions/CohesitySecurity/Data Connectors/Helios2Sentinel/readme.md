@@ -9,4 +9,6 @@ Before deployment, please make sure that all prerequisites are done correctly.
 * Install [azure-functions-core-tools](https://docs.microsoft.com/azure/azure-functions/functions-run-local).
 
 ## Deployment
-* Run [this](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/azuredeploy.json.sh) script to create configuration and deploy the function applications to Azure.
+Click on the "Deploy to Azure" button to deploy the Azure functions. This step directs you to deploy an ARM Template wizard.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FData%2520Connectors%2FHelios2Sentinel%2Fazuredeploy.json)
