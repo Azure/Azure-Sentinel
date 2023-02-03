@@ -39,6 +39,10 @@ def generate_date():
     else:
         logging.info("There is no last time point, trying to get events for last hour.")
         past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dt1 = datetime.fromtimestamp(current_time)
+    dt2 = datetime.fromtimestamp(past_time)
+    if (dt1 - dt2 > 1d):
+        current_time = past_time + 1d
     state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
     return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
