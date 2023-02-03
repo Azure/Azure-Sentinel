@@ -24,8 +24,11 @@ Following are the configuration steps to deploy Function App.
    
 3. Enter the following value in the ARM template deployment
 ```
-"FunctionName": The name of the Azure function. Default value will be given as "fngithubwebhook"
+"FunctionName": The name of the Azure function. Default value will be given as "fnLoCSCon"
 "Workspace Id": The Sentinel Log Analytics Workspace Id  
 "Workspace Key": The Sentinel Log Analytics Workspace Key  
+"LookoutClientId": The unique ID that was provided for this client
+"LookoutApiSecret": The API secret that was provided for this client
+"Baseurl": The URL used to access this client
 ```	
 
