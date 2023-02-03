@@ -21,6 +21,7 @@ connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 log_type = 'Jira_Audit'
 jira_uri_audit = "https://" + jira_homesite_name + ".atlassian.net/rest/api/3/auditing/record"
+MAX_PERIOD_MINUTES = 1440
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -38,11 +39,9 @@ def generate_date():
         logging.info("The last time point is: {}".format(past_time))
     else:
         logging.info("There is no last time point, trying to get events for last hour.")
-        past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    dt1 = datetime.fromtimestamp(current_time)
-    dt2 = datetime.fromtimestamp(past_time)
-    if (dt1 - dt2 > 1d):
-        current_time = past_time + 1d
+        past_time = (current_time - datetime.timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")        
+    if parse_datetime(str(past_time)) + datetime.timedelta(minutes=MAX_PERIOD_MINUTES)  < parse_datetime(str(current_time)):
+        current_time = parse_datetime(str(past_time)) + datetime.timedelta(minutes=MAX_PERIOD_MINUTES)
     state.post(current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
     return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
