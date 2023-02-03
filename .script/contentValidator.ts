@@ -10,8 +10,7 @@ export async function ValidateFileContent(filePath: string): Promise<ExitCode>
         const fileContent = fs.readFileSync(filePath, "utf8");
         const searchText = "Azure Sentinel";
         const expectedText = "Microsoft Sentinel";
-        let filelocation = './.script/skip-text.txt';
-        console.log(filelocation);
+
         // Read skip text from a file
         const skipTextFile = fs.readFileSync('./.script/skip-text.txt', "utf8");
         const skipTexts = skipTextFile.split("\n").filter(text => text.length > 0);
