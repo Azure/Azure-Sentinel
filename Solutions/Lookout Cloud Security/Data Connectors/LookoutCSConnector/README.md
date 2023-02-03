@@ -2,9 +2,9 @@
 Author: Prathibha Tadikamalla
 
  The Azure function based LookOut Cloud Security dataconnector pulls all the LookOut cloud security events into Sentinel. All these events will be placed into the table called "Lookoutlogs_CL". As of now the solution has 3 parsers based on the below events:
-  *	[Lookout Cloud Security Activities](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#code_scanning_alert)
-  *	[Lookout Cloud Security Anomalies](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#repository_vulnerability_alert)
-  *	[Lookout Cloud Security Violations](https://docs.github.com/en/enterprise-cloud@latest/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#secret_scanning_alert)
+  *	[Lookout Cloud Security Activities](https://aka.ms/sentinel-Lookout-Cloud-Security-Activities)
+  *	[Lookout Cloud Security Anomalies](https://aka.ms/sentinel-Lookout-Cloud-Security-Anomalies)
+  *	[Lookout Cloud Security Violations](https://aka.ms/sentinel-Lookout-Cloud-Security-Violations)
   
 
 Following are the configuration steps to deploy Function App.
