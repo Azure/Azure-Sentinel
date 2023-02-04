@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) NetworkSession parsers 
+# Advanced Security Information Model (ASIM) NetworkSession parsers
 
 This template deploys all ASIM NetworkSession parsers.
 

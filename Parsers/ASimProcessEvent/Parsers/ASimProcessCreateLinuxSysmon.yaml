@@ -12,26 +12,26 @@ References:
   Link: https://aka.ms/ASimProcessEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
-Description: | 
-  This ASIM parser supports normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema. 
+Description: |
+  This ASIM parser supports normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema.
 ParserName: ASimProcessCreateLinuxSysmon
 EquivalentBuiltInParser: _ASim_ProcessEvent_CreateLinuxSysmon
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-ParserQuery: | 
+ParserQuery: |
     let ParsedProcessEvent=(){
         Syslog
         | where not(disabled)
         | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>1</EventID>')
-        | parse SyslogMessage with 
+        | parse SyslogMessage with
                 *
                 '<EventRecordID>' EventRecordId:int '</EventRecordID>'
                 *
                 '<Computer>' SysmonComputer:string '</Computer>'
                 *
-                '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readability 
+                '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readability
                 '</Data><Data Name="UtcTime">'UtcTime
                 '</Data><Data Name="ProcessGuid">{'ProcessGuid
                 '}</Data><Data Name="ProcessId">'ProcessId:string
@@ -54,14 +54,14 @@ ParserQuery: |
                 '}</Data><Data Name="ParentProcessId">'ParentProcessId:string
                 '</Data><Data Name="ParentImage">'ParentImage
                 '</Data><Data Name="ParentCommandLine">'ParentCommandLine '</Data>'*
-        | parse SyslogMessage with *'<Data Name="ParentUser">'ActorUsername '</Data>' *// this field appears in newer versions of Sysmon 
+        | parse SyslogMessage with *'<Data Name="ParentUser">'ActorUsername '</Data>' *// this field appears in newer versions of Sysmon
         | extend    TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
                     TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
                     TargetProcessIMPHASH=extract(@'IMPHASH=(\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file
                     TargetProcessMD5=extract(@'MD5=(\w+)',1, tostring(Hashes))
         // End of XML parse
         | project-away SyslogMessage, Hashes
-        | extend 
+        | extend
                     EventType = "ProcessCreated",
                     EventStartTime = TimeGenerated,
                     EventEndTime = TimeGenerated,
@@ -73,18 +73,18 @@ ParserQuery: |
                     EventResult = 'Success',
                     EventOriginalUid = tostring(EventRecordId),
                     DvcOs = "Linux",
-                    TargetUserSessionId = tostring(LogonId)  ,           
+                    TargetUserSessionId = tostring(LogonId)  ,
                     TargetUsernameType = "Simple",
                     TargetUsername = User,
                     TargetProcessCommandLine = CommandLine,
                     TargetProcessCurrentDirectory = CurrentDirectory,
                     ActorUsernameType = "Simple",
                     EventOriginalType = '1' // Set with a constant value to avoid parsing
-        | project-rename 
+        | project-rename
                     // EventMessage = RenderedDescription, // field not available in Linux
-                    DvcHostName = SysmonComputer, // Computer may be different than HostName, in which case HostIP may be incorrect. 
-                    DvcIpAddr = HostIP, 
-                    TargetUserSessionGuid = LogonGuid, 
+                    DvcHostName = SysmonComputer, // Computer may be different than HostName, in which case HostIP may be incorrect.
+                    DvcIpAddr = HostIP,
+                    TargetUserSessionGuid = LogonGuid,
                     TargetProcessId = ProcessId,
                     TargetProcessGuid = ProcessGuid,
                     TargetProcessName = Image,
@@ -94,7 +94,7 @@ ParserQuery: |
                     TargetProcessFileVersion = FileVersion,
                     TargetProcessFileProduct = Product,
                     ActingProcessId = ParentProcessId,
-                    ActingProcessGuid = ParentProcessGuid,                          
+                    ActingProcessGuid = ParentProcessGuid,
                     ActingProcessCommandLine = ParentCommandLine,
                     ActingProcessName = ParentImage
         | extend // aliases

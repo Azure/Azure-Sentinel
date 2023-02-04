@@ -2,7 +2,7 @@
 
 ARM template for deploying the Log Analytics KQL function An ASIM function sets DnsQueryType and DnsQueryTypeName based on an resource record code provided as a parameter
 
-This ASIM tabular function is intended for use in ASIM DNS parsers and sets the DnsQueryType and DnsQueryTypeName based on an resource record (or RR) code provided as a parameter. For example, for the RR code 16 the function sets DnsQueryType to 3 and DnsQueryTypeName to TXT. The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.  
+This ASIM tabular function is intended for use in ASIM DNS parsers and sets the DnsQueryType and DnsQueryTypeName based on an resource record (or RR) code provided as a parameter. For example, for the RR code 16 the function sets DnsQueryType to 3 and DnsQueryTypeName to TXT. The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

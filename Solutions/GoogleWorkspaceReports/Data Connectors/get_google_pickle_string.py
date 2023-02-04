@@ -10,7 +10,7 @@ def main():
     if not creds or not creds.valid:
         print("There is issue with credentials. Please check.")
         exit(0)
-    print("\n\nCopy pickle string which is present in single quotes and save. Paste it during installation GWorkspace Function App:\n\n{}".format(base64.b64encode(pickle.dumps(creds))))           
+    print("\n\nCopy pickle string which is present in single quotes and save. Paste it during installation GWorkspace Function App:\n\n{}".format(base64.b64encode(pickle.dumps(creds))))
 
 if __name__ == '__main__':
     main()

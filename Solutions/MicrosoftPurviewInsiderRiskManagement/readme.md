@@ -13,11 +13,11 @@ You can deploy the solution by clicking on the buttons below:
 1️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
 2️⃣ [Onboard Microsoft Purview Insider Risk Management](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management-configure)<br>
 3️⃣ [Enable the Insider Risk Management Connector](https://docs.microsoft.com/azure/sentinel/data-connectors-reference#microsoft-365-insider-risk-management-irm-preview)<br>
-4️⃣ [Enable User Entity Behavior Analytics](https://docs.microsoft.com/azure/sentinel/enable-entity-behavior-analytics)<br> 
-5️⃣ [Configure Watchlist via SearchKey Columns](https://docs.microsoft.com/azure/sentinel/watchlists)<br> 
+4️⃣ [Enable User Entity Behavior Analytics](https://docs.microsoft.com/azure/sentinel/enable-entity-behavior-analytics)<br>
+5️⃣ [Configure Watchlist via SearchKey Columns](https://docs.microsoft.com/azure/sentinel/watchlists)<br>
 
 ## [Recommended Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Recommended Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions)
-| <strong> Roles </strong> | <strong> Rights </strong> | 
+| <strong> Roles </strong> | <strong> Rights </strong> |
 |:--|:--|
 |Security Reader | View Workbooks, Analytics, Hunting, Security Recommendations |
 |Security Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries, Apply Security Recommendations |
@@ -71,4 +71,4 @@ This query correlates users with entity anomalies, security alerts, and delete/r
 This query correlates a risky user sign ins with access to sensitive data classified by data loss prevention capabilities (watchlist configurable). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists.<br>
 
 ## Playbook
-This solution includes the Notify-Insider Risk Management Team playbook. Playbooks are a Security Orchestration, Automation, & Response (SOAR) capability to automate manual tasks. This playbook should be configured as an automation action with the Insider Risk Management Analytics Rules. Upon triggering an Analytic Rule, this playbook captures respective details and both emails and posts a message in a Teams chat to the Insider Risk Management team. This automation increases response times while reducing the need to return to the workbook for monitoring. 
+This solution includes the Notify-Insider Risk Management Team playbook. Playbooks are a Security Orchestration, Automation, & Response (SOAR) capability to automate manual tasks. This playbook should be configured as an automation action with the Insider Risk Management Analytics Rules. Upon triggering an Analytic Rule, this playbook captures respective details and both emails and posts a message in a Teams chat to the Insider Risk Management team. This automation increases response times while reducing the need to return to the workbook for monitoring.

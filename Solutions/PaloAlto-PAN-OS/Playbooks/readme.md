@@ -50,7 +50,7 @@ This connector supports [API Key authentication](https://paloaltolactest.traffic
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters for deploying custom connector and playbooks:
 
@@ -70,7 +70,7 @@ This connector supports [API Key authentication](https://paloaltolactest.traffic
 
 <a name="postdeployment">
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource
@@ -80,7 +80,7 @@ Once deployment is complete, you will need to authorize each connection.
 5.	Click Save
 6.	Repeat steps for other connections such as Teams connection and PAN-OS API  Connection (For authorizing the PAN-OS API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account. 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account.
 2. Configure the automation rules to trigger the playbooks.
 
 

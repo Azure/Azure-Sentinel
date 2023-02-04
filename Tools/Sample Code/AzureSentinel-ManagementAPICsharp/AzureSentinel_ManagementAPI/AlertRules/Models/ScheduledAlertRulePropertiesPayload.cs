@@ -9,13 +9,13 @@ namespace AzureSentinel_ManagementAPI.AlertRules.Models
         public string Query { get; set; }
         public string QueryFrequency { get; set; }
         public string QueryPeriod { get; set; }
-        
+
         [JsonConverter(typeof(StringEnumConverter))]
         public Severity Severity { get; set; }
-        
+
         [JsonConverter(typeof(StringEnumConverter))]
         public TriggerOperator TriggerOperator { get; set; }
-        
+
         public int TriggerThreshold { get; set; }
         public string DisplayName { get; set; }
         public bool Enabled { get; set; }

@@ -65,7 +65,7 @@ class TenableChunkPartitioner:
         '''
         This method divides export chunks received from Tenable.io response, into multiple sub-chunks
         such that each sub-chunk is <= 30MB.
-        
+
         This is necessary as per
         https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api#data-limits.
 

@@ -1,14 +1,14 @@
-<#  
+<#
     Title:          MCAS Activity Data Connector
     Language:       PowerShell
     Version:        1.0
     Author:         Nicholas DiCola
     Modified By:       Sreedhar Ande
     Last Modified:  3/18/2022
-    
+
     DESCRIPTION
     This Function App calls the MCAS Activity REST API (https://docs.microsoft.com/cloud-app-security/api-activities) to pull the MCAS
-    Activity logs. The response from the MCAS API is recieved in JSON format. This function will build the signature and authorization header 
+    Activity logs. The response from the MCAS API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post the data to MCASActivity_CL.
 #>
 
@@ -38,7 +38,7 @@ $workspaceKey = $env:WorkspaceKey
 $Lookback = $env:Lookback
 $MCASURL = $env:MCASURL
 $LAURI = $env:LAURI
-$LACustomTable = $env:LACustomTable							   
+$LACustomTable = $env:LACustomTable
 $TblLastRunExecutions = "MCASLastRunLogs"
 
 
@@ -77,7 +77,7 @@ function Write-OMSLogfile {
     Version:        2.0
     Author:         Travis Roberts
     Creation Date:  7/9/2018
-    Purpose/Change: Crating a stand alone function    
+    Purpose/Change: Crating a stand alone function
     #>
     [cmdletbinding()]
     Param(
@@ -95,7 +95,7 @@ function Write-OMSLogfile {
     Write-Verbose -Message "DateTime: $dateTime"
     Write-Verbose -Message ('DateTimeKind:' + $dateTime.kind)
     Write-Verbose -Message "Type: $type"
-    write-Verbose -Message "LogData: $logdata"   
+    write-Verbose -Message "LogData: $logdata"
 
     # Supporting Functions
     # Function to create the auth signature
@@ -126,7 +126,7 @@ function Write-OMSLogfile {
             -method $method `
             -contentType $ContentType `
             -resource $resource
-        
+
 		# Compatible with previous version
 		if ([string]::IsNullOrEmpty($LAURI)){
 			$LAURI = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
@@ -135,7 +135,7 @@ function Write-OMSLogfile {
 		{
 			$LAURI = $LAURI + $resource + "?api-version=2016-04-01"
 		}
-		
+
         $headers = @{
             "Authorization"        = $signature;
             "Log-Type"             = $type;
@@ -168,14 +168,14 @@ function Write-OMSLogfile {
     return $returnCode
 }
 
-function SendToLogA ($Data, $customLogName) {    
+function SendToLogA ($Data, $customLogName) {
     #Test Size; Log A limit is 30MB
     $tempdata = @()
     $tempDataSize = 0
-    
-    if ((($Data |  Convertto-json -depth 20).Length) -gt 25MB) {        
-		Write-Host "Upload is over 25MB, needs to be split"									 
-        foreach ($record in $Data) {            
+
+    if ((($Data |  Convertto-json -depth 20).Length) -gt 25MB) {
+		Write-Host "Upload is over 25MB, needs to be split"
+        foreach ($record in $Data) {
             $tempdata += $record
             $tempDataSize += ($record | ConvertTo-Json -depth 20).Length
             if ($tempDataSize -gt 25MB) {
@@ -190,12 +190,12 @@ function SendToLogA ($Data, $customLogName) {
         Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $tempdata -CustomerID $workspaceId -SharedKey $workspaceKey
     }
     Else {
-        #Send to Log A as is        
+        #Send to Log A as is
         Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $Data -CustomerID $workspaceId -SharedKey $workspaceKey
     }
 }
 
-function Convert-EpochToDateTime{    
+function Convert-EpochToDateTime{
     [CmdletBinding()]
     [OutputType([System.DateTime])]
     Param
@@ -209,7 +209,7 @@ function Convert-EpochToDateTime{
         [nullable[datetime]]$convertedDateTime = $null
         try
         {
-            $dt = [DateTime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)            
+            $dt = [DateTime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
             $convertedDateTime = $dt.AddMilliseconds($Epoch)
         }
         catch
@@ -230,14 +230,14 @@ $headers = @{
 
 #$EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
 $EndEpoch = ([int64](($currentUTCtime) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
-$Lookback = [Int16]($Lookback)							  
-# Retrieve Timestamp from last executions 
+$Lookback = [Int16]($Lookback)
+# Retrieve Timestamp from last executions
 # Check if Table has already been created and if not create it to maintain state between executions of Function
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage.Trim().ToString()
 
 
 $LastExecutionsTable = Get-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext -ErrorAction Ignore
-if($null -eq $LastExecutionsTable.Name) {  
+if($null -eq $LastExecutionsTable.Name) {
     New-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext
     $LastRunExecutionsTable = (Get-AzStorageTable -Name $TblLastRunExecutions -Context $storageAccountContext.Context).cloudTable
     Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting
@@ -249,7 +249,7 @@ Else {
 # retrieve the row
 $LastRunExecutionsTableRow = Get-AzTableRow -table $LastRunExecutionsTable -partitionKey "MCASExecutions" -RowKey $workspaceId -ErrorAction Ignore
 if($null -ne $LastRunExecutionsTableRow.lastRunEpoch){
-    $StartEpoch = $LastRunExecutionsTableRow.lastRunEpoch    
+    $StartEpoch = $LastRunExecutionsTableRow.lastRunEpoch
 }
 else {
     $StartEpoch = ([int64](($currentUTCtime).AddMinutes(-$Lookback) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
@@ -270,11 +270,11 @@ $ActivityPayLoad = @"
 }
 "@
 
-  
+
 #Get the Activities
 Write-Host "Starting to process Tenant: $MCASURL"
 $uri = $MCASURL+"/api/v1/activities/"
-$loopAgain = $true 
+$loopAgain = $true
 $totalRecords = 0
 do {
     $results = $null
@@ -298,7 +298,7 @@ do {
             }
             Write-Verbose "Any property name collisions appear to have been resolved."
         }
-        
+
         Write-Host "Microsoft Defender for Cloud Apps Activities between $($activitiesStart) to $($activitiesEnd): "($results.data.Count)
         $totalRecords += ($results.data.Count)
 		if ($null -ne $LACustomTable) {
@@ -307,9 +307,9 @@ do {
             $LACustomTable = "MCASActivity"
             SendToLogA -Data ($results.data) -customLogName $LACustomTable
         }
-		
+
         $loopAgain = $results.hasNext
-    
+
         if($loopAgain -ne $false){
             # if there is more data update the query
             $PagingActivityPayLoad = $ActivityPayLoad | ConvertFrom-Json
@@ -319,7 +319,7 @@ do {
             else {
                 $PagingActivityPayLoad.filters.date.lte = ($results.nextQueryFilters.date.lte)
             }
-            $ActivityPayLoad = $PagingActivityPayLoad | ConvertTo-Json -Depth 4 
+            $ActivityPayLoad = $PagingActivityPayLoad | ConvertTo-Json -Depth 4
             Write-Host $ActivityPayLoad
         }
         else {
@@ -328,9 +328,9 @@ do {
     }
     else {
         $loopAgain = $false
-		Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting																																													   
+		Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting
         Write-Host "No Microsoft Defender for Cloud Apps Activities between $($activitiesStart) to $($activitiesEnd)"
-    }  
+    }
 } until ($loopAgain -eq $false)
 
 if ($totalRecords -ne 0) {

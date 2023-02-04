@@ -26,7 +26,7 @@ This is how the aggregation section works:
 - The event is discarded (```event.cancel()```)
 4. The fields in the previous code block will be pushed to the event when the timeout is reach (```push_map_as_event_on_timeout```)
 5. Timeout time is 15 seconds. This meanse that when a new message is detected, we will aggregate duplicated messages in the following 15 seconds
-6. When the timeout is reached, a code block is executed (```timeout_code```), where Time and SyslogMessage fields are set. 
+6. When the timeout is reached, a code block is executed (```timeout_code```), where Time and SyslogMessage fields are set.
 
 For more information on logstash aggregation's plugin, go [here](https://www.elastic.co/guide/en/logstash/current/plugins-filters-aggregate.html).
 

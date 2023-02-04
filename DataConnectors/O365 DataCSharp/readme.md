@@ -7,7 +7,7 @@ This function app will poll O365 Activity Managment API every 10 mins for logs. 
 2. Create +New Registration
 3. Call it "O365APItoAzureSentinel".  Click Register.
 4. Click API Permissions Blade.
-5. Click Add a Permission.  
+5. Click Add a Permission.
 6. Click Office 365 Management APIs.
 7. Click Appplication Permissions
 8. Check all permissions for each category.  Click Add permissions.
@@ -32,11 +32,11 @@ $TenantGUID = "<tenantguid> from AAD"
 $resource = "https://manage.office.com"
 $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID;client_secret=$ClientSecret}
 $oauth = Invoke-RestMethod -Method Post -Uri $loginURL/$tenantdomain/oauth2/token?api-version=1.0 -Body $body
-$headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"} 
+$headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"}
 $publisher = "<randomGuid>" Get a guid from https://guidgenerator.com/
 ```
 
-* Run this command to enable Audit.General Subscription. 
+* Run this command to enable Audit.General Subscription.
 ```powershell
 Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher"
 ```
@@ -46,17 +46,17 @@ Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.offic
 ```
 
 ### Deploy the Function App pre-req
-1. Create a ResourceGroup to host the artefacts of the solution. 
-2. Create a storage account under resource group. 
-3. Create a Function App to host the solution, and download the publish profile. 
-4. Create a Azure Key vault to store sensitive keys. 
+1. Create a ResourceGroup to host the artefacts of the solution.
+2. Create a storage account under resource group.
+3. Create a Function App to host the solution, and download the publish profile.
+4. Create a Azure Key vault to store sensitive keys.
 
 #### 1: Deploy via Visual Studio
 1. Download the solution artefacts of Azure Funciton app from Github.
 2. Open Solution using Visual Studio (Express and above)
 3. Build the solution.
-4. Publish the function app, using publish profile downloaded in previous section step. 
-5. Deploy. 
+4. Publish the function app, using publish profile downloaded in previous section step.
+5. Deploy.
 6. Press enter to accept the name
 7. Pick a location
 8. Deployment will begin.
@@ -118,16 +118,16 @@ Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.offic
    * Indicating the time range of content to return , read more on https://docs.microsoft.com/en-us/office/office-365-management-api/office-365-management-activity-api-reference
 
    * StorageContainerConnectionString = "Stroage container string"
-   * If key vault is enabled then leave it blank. 
+   * If key vault is enabled then leave it blank.
 
    * LogContainerName = "log"
-   * Container name where function specific log info will be stored. 
+   * Container name where function specific log info will be stored.
    * LogFileName = "logs.txt""
    * log file name.
 
-   * EnableArchiving = true/false , 
+   * EnableArchiving = true/false ,
    * DataContainerName = "data"
-   * Container name where blobs will be stored, depending on EnableArchiving flag 
+   * Container name where blobs will be stored, depending on EnableArchiving flag
 
    * EnableDirectInjestionToWorkSpace = true/false,
    * Indicates if the audit logs to be directly injested to analytics workspace

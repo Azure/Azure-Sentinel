@@ -1,4 +1,4 @@
-<#  
+<#
     Title:          Proofpoint Targeted Attack Project (TAP) Data Connector
     Language:       PowerShell
     Version:        1.0
@@ -8,7 +8,7 @@
 
     DESCRIPTION
     This Function App calls the Proofpoint Targeted Attack Protection (TAP) API (https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API) to pull the Proofpoint
-    Message Blocked, Message Delivered, Clicks Blocked, and Clicks Permitted logs. The response from the Proofpoint API is recieved in JSON format. This function will build the signature and authorization header 
+    Message Blocked, Message Delivered, Clicks Blocked, and Clicks Permitted logs. The response from the Proofpoint API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post each log type to their individual tables in Log Analytics, for example,
     ProofPointMessageBlocked_CL, ProofPointMessageDelivered_CL, ProofPointClicksPermitted_CL, ProofPointClicksBlocked_CL.
 #>
@@ -22,14 +22,14 @@ $logAnalyticsUri = $env:logAnalyticsUri
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
-    
+
 }
 
 # Define the different ProofPoint Log Types. These values are set by the ProofPoint API and required to seperate the log types into the respective Log Analytics tables
 $ProofPointlogTypes = @(
-    "ClicksBlocked", 
+    "ClicksBlocked",
     "ClicksPermitted",
-    "MessagesBlocked", 
+    "MessagesBlocked",
     "MessagesDelivered")
 
 # Build the headers for the ProofPoint API request
@@ -75,7 +75,7 @@ Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     $calculatedHash = $sha256.ComputeHash($bytesToHash)
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
     $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
-    
+
     # Dispose SHA256 from heap before return.
     $sha256.Dispose()
 
@@ -98,7 +98,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    
+
     $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
     $headers = @{
         "Authorization" = $signature;
@@ -113,13 +113,13 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 }
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
 ForEach ($PPLogType in $ProofpointLogTypes) {
-    if ($response.$PPLogType.Length -eq 0 ){ 
+    if ($response.$PPLogType.Length -eq 0 ){
         Write-Host ("ProofPointTAP$($PPLogType) reported no new logs for the time interval configured.")
     }
     else {
         if($response.$PPLogType -eq $null) {                            # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
             Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
-        } else {            
+        } else {
             $json = $response.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
             }

@@ -28,7 +28,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
-    
+
     DSobj = DS_poller.poller(function_name, account_id, key, secret, customer_id, shared_key, connection_string, historical_days, url)
     classification_list = high_variability_classifications.split(",")
 

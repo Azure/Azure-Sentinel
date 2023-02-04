@@ -73,7 +73,7 @@ def main(mytimer: func.TimerRequest):
     sentinel.flush()
     if last_ts:
         state_manager_logins.post(last_ts)
-    
+
     if check_if_script_runs_too_long(script_start_time):
         logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
         return
@@ -137,7 +137,7 @@ def main(mytimer: func.TimerRequest):
     if check_if_script_runs_too_long(script_start_time):
         logging.info(f'Script is running too long. Stop processing new events. Finish script. Sent events: {sentinel.successfull_sent_events_number}')
         return
-    
+
     ctx.close()
     logging.info(f'Script finished. Sent events: {sentinel.successfull_sent_events_number}')
 

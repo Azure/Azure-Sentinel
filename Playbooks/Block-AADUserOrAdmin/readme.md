@@ -26,7 +26,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-AADUserOrAdmin%2Falert-trigger%2Fazuredeploy.json)<br><br>
 
 ## Prerequisites
-Available email account to whom approval to confirm or reject admin isolation will be sent. 
+Available email account to whom approval to confirm or reject admin isolation will be sent.
 
 ## Post-deployment
 1. Assign Microsoft Sentinel Responder role to the Playbook's managed identity - https://docs.microsoft.com/azure/logic-apps/create-managed-service-identity?tabs=consumption#assign-managed-identity-role-based-access-in-the-azure-portal

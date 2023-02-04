@@ -1,6 +1,6 @@
-# Tutorial: Push Defender for Endpoint Alerts including Alert Names, MITRE Tactics, Techniques and Sub-Techniques as Hunting ARM Templates into a Sentinel Github Repository 
+# Tutorial: Push Defender for Endpoint Alerts including Alert Names, MITRE Tactics, Techniques and Sub-Techniques as Hunting ARM Templates into a Sentinel Github Repository
 
-Intent: As a threat hunter or SecOps analyst, I want to be able to easily hunt for threats pertaining to certain Mitre tactics or techniques in Sentinel. 
+Intent: As a threat hunter or SecOps analyst, I want to be able to easily hunt for threats pertaining to certain Mitre tactics or techniques in Sentinel.
 
 Many of these detections are already covered under Defender for Endpoint, and it would be helpful to easily hunt for certain type of Defender for Endpoint alerts by their associated MITRE tactics, techniques and sub-techniques within the Microsoft Sentinel Hunting interface.
 
@@ -13,7 +13,7 @@ You can see a sample of a generated JSON ARM Hunting Template for Sentinel here 
 
 You will need an existing Microsoft Sentinel workspace, connected to a GitHub repository for [Deploying Custom Content from your repository](https://learn.microsoft.com/en-us/azure/sentinel/ci-cd?tabs=github). Make sure you have a Hunting folder within your Github repository to hold the ARM templates.
 
-You will need [Defender for Endpoint alerts Syncronized to Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/microsoft-365-defender-sentinel-integration) which populates the required SecurityAlerts table in Sentinel. 
+You will need [Defender for Endpoint alerts Syncronized to Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/microsoft-365-defender-sentinel-integration) which populates the required SecurityAlerts table in Sentinel.
 
 You will need to generate a [Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) for your Github Repository associated with Sentinel with the Repo, and Workflow permissions.
 
@@ -30,7 +30,7 @@ If your Azure environment meets the prerequisites, and you're familiar with usin
 Select the following image to sign in with your Azure account and open the logic app in the Azure portal:
 
    [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)         [![Deploy to Azure Gov](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.svg)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPut-MDEAlert-Hunting-GitHub%2Fazuredeploy.json)
-   
+
 
 
 1. In the portal, on the **Custom deployment** page, enter or select these values:
@@ -97,6 +97,6 @@ If a new alert is generated from Defender for Endpoint with the same name but di
 
 If an existing ARM Template matching the same Alert Name and MITRE Technique ID's exists within the GitHub repository it will be skipped.
 
-This will also help expand the MITRE ATT&CK Framework coverage map within Sentinel by selecting "Hunting Rules" under the "Simulated" drop down. However due to how the MITE ATT&CK Framework coverage map works within Sentinel, only ROOT techniques (ie. T1509) and not sub techniques (ie. T1059.001) will be shown, some MDE Alerts do get generated with a sub technique, but not a root technique, so keep this in mind.  
+This will also help expand the MITRE ATT&CK Framework coverage map within Sentinel by selecting "Hunting Rules" under the "Simulated" drop down. However due to how the MITE ATT&CK Framework coverage map works within Sentinel, only ROOT techniques (ie. T1509) and not sub techniques (ie. T1059.001) will be shown, some MDE Alerts do get generated with a sub technique, but not a root technique, so keep this in mind.
 
 [![Select "MITRE ATT&CK"](https://learn.microsoft.com/en-us/azure/sentinel/media/whats-new/mitre-coverage.png)](https://learn.microsoft.com/en-us/azure/sentinel/mitre-coverage)]

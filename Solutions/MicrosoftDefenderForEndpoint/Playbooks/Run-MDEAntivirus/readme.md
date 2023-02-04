@@ -1,7 +1,7 @@
 # Run-MDEAntivirus
 author: Nicholas DiCola
 
-This playbook will run a antivirus (full) scan on the machine in Microsoft Defender for Endpoint.  The AV scan only works on supported operating systems.  
+This playbook will run a antivirus (full) scan on the machine in Microsoft Defender for Endpoint.  The AV scan only works on supported operating systems.
 
 The template also deploys the permissions required to write comments to Microsoft Sentinel incidents.  The parameters will ask for the SubscriptionId and Resource Group name for where the Sentinel workspace resides. If they are left blank, it will use the Subscription Id and Resource Group where the playbook is being deployed.
 
@@ -30,7 +30,7 @@ $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
 
 $MDEAppId = "fc780465-2017-40d4-a0c5-307022471b92"
-$PermissionName = "Machine.Scan" 
+$PermissionName = "Machine.Scan"
 
 $MDEServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$MDEAppId'"
 $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}

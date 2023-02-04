@@ -28,11 +28,11 @@ ParserQuery: |
     ,'ConnectionRequest','Outbound', true
     ,'InboundConnectionAccepted', 'Inbound', false
     ,'ConnectionFound', 'Unknown', false
-    ,'ListeningConnectionCreated', 'Listen', false 
+    ,'ListeningConnectionCreated', 'Listen', false
   ];
   // -- Common preprocessing to both input and outbound events
   let RawNetworkEvents = (select_outbound:boolean) {
-    DeviceNetworkEvents | where not(disabled) 
+    DeviceNetworkEvents | where not(disabled)
     | lookup DirectionLookup on ActionType
     | where Outbound == select_outbound
     | project-away AppGuardContainerId, LocalIPType, MachineGroup, RemoteIPType, Timestamp, Outbound //, SourceSystem, TenantId
@@ -50,9 +50,9 @@ ParserQuery: |
       EventResult = iff(ActionType=='ConnectionFailed','Failure','Success'),
       EventSeverity = "Informational",
       DvcIdType = 'MDEid'
-    | project-away 
+    | project-away
         ReportId
-    | project-rename 
+    | project-rename
         EventOriginalResultDetails = ActionType
     | extend
       RemoteUrl = extract (@"(?:https?://)?(.*)", 1, RemoteUrl)
@@ -67,7 +67,7 @@ ParserQuery: |
         toupper(Protocol)
       )
     | project-away Protocol
-    | extend  
+    | extend
       DvcHostname = tostring(SplitHostname[0]),
       DvcDomain = tostring(strcat_array(array_slice(SplitHostname, 1, -1), '.')),
       DvcFQDN = iif (DeviceName contains ".", DeviceName, ""),
@@ -80,12 +80,12 @@ ParserQuery: |
       UrlDomainType = iff(UrlFQDN != "", "FQDN", ""),
       DvcIpAddr = LocalIP
     | extend
-      Dvc = DvcHostname  
+      Dvc = DvcHostname
     | project-rename
       DvcId = DeviceId
     | project-away SplitUrl, SplitHostname
   };
-  let OutboundNetworkEvents = 
+  let OutboundNetworkEvents =
     RawNetworkEvents (true)
     | project-rename
        DstIpAddr = RemoteIP,
@@ -106,7 +106,7 @@ ParserQuery: |
        DstDomain = UrlDomain,
        DstFQDN = UrlFQDN,
        DstDomainType = UrlDomainType
-    | extend  
+    | extend
        SrcHostname = DvcHostname,
        SrcDomain = DvcDomain,
        SrcFQDN = DvcDomain
@@ -134,7 +134,7 @@ ParserQuery: |
        SrcAppName = SrcProcessName,
        SrcAppType = "Process"
   ;
-  let InboundNetworkEvents = 
+  let InboundNetworkEvents =
     RawNetworkEvents (false)
     | project-rename
        SrcIpAddr = RemoteIP,
@@ -183,7 +183,7 @@ ParserQuery: |
        DstAppType = "Process"
   ;
   union InboundNetworkEvents, OutboundNetworkEvents
-  | project-rename 
+  | project-rename
      Hostname = UrlHostname
   | extend // aliases
      IpAddr = SrcIpAddr,
@@ -191,4 +191,3 @@ ParserQuery: |
      Dst = DstIpAddr
   };
   M365Defender (disabled)
-

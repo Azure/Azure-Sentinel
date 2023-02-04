@@ -2,10 +2,10 @@
 
 Author: Accelerynt
 
-For any technical questions, please contact info@accelerynt.com  
+For any technical questions, please contact info@accelerynt.com
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Import-AD-Group-Users-to-MS-Watchlist%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Import-AD-Group-Users-to-MS-Watchlist%2Fazuredeploy.json)       
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Import-AD-Group-Users-to-MS-Watchlist%2Fazuredeploy.json)
 
 This playbook is intended to be run on a schedule. It will add the users from a specified Azure Active Directory group to a Microsoft Sentinel watchlist.
 
@@ -14,7 +14,7 @@ This playbook is intended to be run on a schedule. It will add the users from a 
 #
 ### Requirements
 
-The following items are required under the template settings during deployment: 
+The following items are required under the template settings during deployment:
 
 * An [Azure Active Directory group Id](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Import-AD-Group-Users-to-MS-Watchlist#azure-active-directory-group-id)
 
@@ -22,12 +22,12 @@ The following items are required under the template settings during deployment:
 
 * A [Microsoft Sentinel workspace Id](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Import-AD-Group-Users-to-MS-Watchlist#microsoft-sentinel-workspace-id)
 
-# 
+#
 ### Setup
 
 #### Azure Active Directory Group Id:
 
-Navigate to the Azure Active Directory Groups page: 
+Navigate to the Azure Active Directory Groups page:
 https://portal.azure.com/#view/Microsoft_AAD_IAM/GroupsManagementMenuBlade/~/AllGroups
 
 Create a new group or locate the existing group you would like to use with this playbook and click the name.
@@ -84,26 +84,26 @@ Copy the value of the "**Workspace ID**" field and save it for deployment.
 ![AS_Group_Watchlist_Workspace_Id_2](Images/AS_Group_Watchlist_Workspace_Id_2.png)
 
 #
-### Deployment                                                                                                         
-                                                                                                        
+### Deployment
+
 To configure and deploy this playbook:
- 
+
 Open your browser and ensure you are logged into the same Microsoft Sentinel workspace selected above. In a separate tab, open the link to our playbook on the Accelerynt Security GitHub Repository:
 
 https://github.com/Accelerynt-Security/AS-Import-AD-Group-Users-to-MS-Watchlist
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Import-AD-Group-Users-to-MS-Watchlist%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Import-AD-Group-Users-to-MS-Watchlist%2Fazuredeploy.json)                                             
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Import-AD-Group-Users-to-MS-Watchlist%2Fazuredeploy.json)
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
 In the **Project Details** section:
 
-* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.  
+* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.
 
-In the **Instance Details** section:   
+In the **Instance Details** section:
 
-* **Playbook Name**: This can be left as "**AS-Import-AD-Group-Users-to-MS-Watchlist**" or you may change it.  
+* **Playbook Name**: This can be left as "**AS-Import-AD-Group-Users-to-MS-Watchlist**" or you may change it.
 
 * **Group Id**: Enter the Id of the Azure Active Directory group referenced in [Azure Active Directory group Id](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Import-AD-Group-Users-to-MS-Watchlist#azure-active-directory-group-id).
 
@@ -111,7 +111,7 @@ In the **Instance Details** section:
 
 * **Workspace Id**: The Id of the Microsoft Sentinel workspace the watchlist was created in, referenced in [Microsoft Sentinel workspace Id](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Import-AD-Group-Users-to-MS-Watchlist#microsoft-sentinel-workspace-id)
 
-Towards the bottom, click on “**Review + create**”. 
+Towards the bottom, click on “**Review + create**”.
 
 ![AS_Group_Watchlist_Deploy_1](Images/AS_Group_Watchlist_Deploy_1.png)
 
@@ -128,15 +128,15 @@ Click on the “**Edit**” button. This will bring us into the Logic Apps Desig
 
 ![AS_Group_Watchlist_Deploy_4](Images/AS_Group_Watchlist_Deploy_4.png)
 
-Before the playbook can be run successfully, the Azure AD connection used in the second step and the Microsoft Sentinel connection used in the fourth and ninth steps will either need to be authorized, or existing authorized connections may be alternatively selected.  
+Before the playbook can be run successfully, the Azure AD connection used in the second step and the Microsoft Sentinel connection used in the fourth and ninth steps will either need to be authorized, or existing authorized connections may be alternatively selected.
 
 ![AS_Group_Watchlist_Deploy_5](Images/AS_Group_Watchlist_Deploy_5.png)
 
 To validate the Azure AD connection, expand the second step labeled "**Connections**" and click the exclamation point icon next to the name matching the playbook.
-                                                                                                
+
 ![AS_Group_Watchlist_Deploy_6](Images/AS_Group_Watchlist_Deploy_6.png)
 
-When prompted, sign in to validate the connection.  
+When prompted, sign in to validate the connection.
 
 ![AS_Group_Watchlist_Deploy_7](Images/AS_Group_Watchlist_Deploy_7.png)
 
@@ -148,7 +148,7 @@ Returning to the "**Overview**" page of the logic app, it can now be run success
 
 ![AS_Group_Watchlist_Deploy_9](Images/AS_Group_Watchlist_Deploy_9.png)
 
-# 
+#
 ### Add Microsoft Sentinel Contributor Role
 
 To run successfully, this playbook requires Microsoft Sentinel Contributor role on the Log Analytics workspace.
@@ -173,7 +173,7 @@ Continue on to the "**Review + assign**" tab and click "**Review + assign**".
 
 ![AS_Group_Watchlist_Add_Role_4](Images/AS_Group_Watchlist_Add_Role_4.png)
 
-# 
+#
 ### Editing the Microsoft Sentinel Watchlist
 
 A watchlist needs initial data in order to be created. Because of this, the watchlist will have a row with the values "**initial data**". Once the logic app has run successfully and other entries have been added, you can remove this row.

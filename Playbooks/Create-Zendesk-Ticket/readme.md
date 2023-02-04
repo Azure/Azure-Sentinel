@@ -3,7 +3,7 @@ author: Lior Tamir
 
 This playbook will create a Zendesk ticket when a new incident is created in Microsoft Sentinel.
 
-## Prerequisites 
+## Prerequisites
 Create a Zendesk user (for example, call it Microsoft Sentinel) which on behalf of its requester id new tickets will be created.
 
 ## Screenshots

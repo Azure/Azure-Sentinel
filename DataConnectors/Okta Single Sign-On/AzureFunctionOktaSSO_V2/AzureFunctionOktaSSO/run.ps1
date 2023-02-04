@@ -1,4 +1,4 @@
-﻿<#  
+﻿<#
     Title:          Okta Data Connector
     Language:       PowerShell
     Version:        2.1.1
@@ -10,7 +10,7 @@
 					-Changed zip file reference to use 'https://aka.ms/sentineloktaazuredeployv2'
                     -Added fix for issue: ACN_CD_OktaIssue925
                     -Modified Event log tracking to use OKTA Next URI to fix small quantity of duplicates that were occurring
-                    -Fixed Total Record Counter 
+                    -Fixed Total Record Counter
                     Fixes for the following issues with Version 1
                     -Potential Data loss due to code not processing linked pages
                     -Potential Data loss due to variations in execution of Triggers
@@ -21,8 +21,8 @@
 
 
     DESCRIPTION
-    This Function App calls the Okta System Log API (https://developer.okta.com/docs/reference/api/system-log/) to pull the Okta System logs. The response from the Okta API is recieved in JSON format. 
-    This function will build the signature and authorization header needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. 
+    This Function App calls the Okta System Log API (https://developer.okta.com/docs/reference/api/system-log/) to pull the Okta System logs. The response from the Okta API is recieved in JSON format.
+    This function will build the signature and authorization header needed to post the data to the Log Analytics workspace via the HTTP Data Connector API.
     The Function App will post the Okta logs to the Okta_CL table in the Log Analytics workspace.
 
     NOTES:
@@ -73,11 +73,11 @@ if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-z
 }
 $resource = "/api/logs"
 $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
-# Retrieve Timestamp from last records received from Okta 
+# Retrieve Timestamp from last records received from Okta
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
 $storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $StorageTable = Get-AzStorageTable -Name $Tablename -Context $Storage -ErrorAction Ignore
-if($null -eq $StorageTable.Name){  
+if($null -eq $StorageTable.Name){
     $result = New-AzStorageTable -Name $Tablename -Context $storage
     $Table = (Get-AzStorageTable -Name $Tablename -Context $storage.Context).cloudTable
     $uri = "$uri$($StartDate)&limit=1000"
@@ -122,13 +122,13 @@ do {
         $responseObj = (ConvertFrom-Json $response.content)
         $responseCount = $responseObj.count
         $TotalRecordCount= $TotalRecordCount + $responseCount
-        
+
         #ACN_CD_OktaIssue925
         $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
         $responseObj = $response | ConvertFrom-Json
         $responseObj | Add-Member -MemberType NoteProperty -Name "domain" -Value $domain
         $json = $responseObj | ConvertTo-Json -Depth 5
-         
+
         Function new-BuildSignature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
         {
             $xHeaders = "x-ms-date:" + $date
@@ -144,9 +144,9 @@ do {
         }
         $method="POST"
         $contentType = "application/json"
-        
+
         $rfc1123date = [DateTime]::UtcNow.ToString("r")
-        
+
         $body = ([System.Text.Encoding]::UTF8.GetBytes($json))
         $contentLength = $body.Length
         $signature = new-BuildSignature `
@@ -158,7 +158,7 @@ do {
             -contentType $contentType `
             -resource $resource
 
-        
+
         $LAheaders = @{
             "Authorization" = $signature;
             "Log-Type" = $logType;
@@ -167,15 +167,15 @@ do {
         }
         $result = Invoke-WebRequest -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $LAheaders -Body $body -UseBasicParsing
         #update State table for next time we execute function
-        #store details in function storage table to retrieve next time function runs 
+        #store details in function storage table to retrieve next time function runs
         $result = Add-AzTableRow -table $Table -PartitionKey "part1" -RowKey $apiToken -property @{"uri"=$uri} -UpdateExisting
     }
     else{
         $exitDoUntil = $true
     }
     #check on time running, Azure Function default timeout is 5 minutes, if we are getting close exit function cleanly now and get more records next execution
-    IF((new-timespan -Start $currentUTCtime -end ((Get-Date).ToUniversalTime())).TotalSeconds -gt 500){$exitDoUntil = $true} 
-}until($exitDoUntil) 
+    IF((new-timespan -Start $currentUTCtime -end ((Get-Date).ToUniversalTime())).TotalSeconds -gt 500){$exitDoUntil = $true}
+}until($exitDoUntil)
 
 if($TotalRecordCount -lt 1){
     Write-Output "OKTASSO: No new Okta logs since $StartDate are available as of $currentUTCtime"

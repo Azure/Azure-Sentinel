@@ -1,7 +1,7 @@
 Description:
 This Playbook runs on a daily schedule and moves 89 day old logs per data type to Blob storage in hourly incremements. The result of this Playbook is a structured file explorer within a data container in Azure that allows for easy file exploration and the ability to query the data from storage within a Log Analytics workspace.
 
-To deploy the template: 
+To deploy the template:
 - Go to the Azure Portal
 - In the top search bar, type deploy
 - Choose 'deploy a custom template'
@@ -21,7 +21,7 @@ You will need to authenticate a connection for Azure Monitor within the Playbook
 - Confirm that the subscription, resource group, and workspace are all correct based on what you entered for the template
 - Make sure that the container that you named is listed under the Azure Blob option so that the logs are routed properly when the Playbook is run
 
-Note: 
+Note:
 - The Logic App will not save if there are any errors so make sure any issue is resolved before saving.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FMove-LogAnalytics-to-Storage%2Fazuredeploy.json)

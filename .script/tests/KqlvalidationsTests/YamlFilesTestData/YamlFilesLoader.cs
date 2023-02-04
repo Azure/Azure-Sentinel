@@ -9,7 +9,7 @@ namespace Kqlvalidations.Tests
         protected const int TestFolderDepth = 6;
 
         protected abstract List<string> GetDirectoryPaths();
-        
+
         public List<string> GetFilesNames()
         {
             var directoryPaths = GetDirectoryPaths();

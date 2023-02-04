@@ -1,7 +1,7 @@
 # Create-AzureDevOpsTask
 author: Jan Marek
 
-This playbook will create the Azure DevOps task filled with the Microsoft Sentinel incident details.  
+This playbook will create the Azure DevOps task filled with the Microsoft Sentinel incident details.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)

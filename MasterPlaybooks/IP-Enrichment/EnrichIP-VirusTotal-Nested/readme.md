@@ -4,7 +4,7 @@
 This playbook will take each IP entity and query VirusTotal for IP Address Report (https://developers.virustotal.com/v3.0/reference#ip-info). It will write the results to Log Analytics and add a comment to the incident.
 
 ## Quick Deployment
-**Deploy with HTTP trigger** 
+**Deploy with HTTP trigger**
 
 
 

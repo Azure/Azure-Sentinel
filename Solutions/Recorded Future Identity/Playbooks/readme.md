@@ -2,17 +2,17 @@
 <img src="./images/logo.png" alt="RecordedFuture logo" width="100%"/>
 
 
-# Recorded Future Identity Solution 
+# Recorded Future Identity Solution
 
-Recorded Future Identity Intelligence enables security and IT teams to detect identity compromises, for both employees and customers. 
+Recorded Future Identity Intelligence enables security and IT teams to detect identity compromises, for both employees and customers.
 
-To do this, Recorded Future automates the collection, analysis, and production of identity intelligence from a vast range of sources. 
+To do this, Recorded Future automates the collection, analysis, and production of identity intelligence from a vast range of sources.
 
 Organizations can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action with applications such as Azure Active Directory and Microsoft Sentinel.
 
-There are many ways organizations can utilize Recorded Future Identity Intelligence; the playbooks in this Solution are just a quick introduction to some of those ways. 
+There are many ways organizations can utilize Recorded Future Identity Intelligence; the playbooks in this Solution are just a quick introduction to some of those ways.
 
-In particular, these playbooks include several actions that can be coordinated, or used separately. 
+In particular, these playbooks include several actions that can be coordinated, or used separately.
 
 They include:
 
@@ -26,7 +26,7 @@ They include:
 
 These playbooks and actions are designed to meet the following use cases:
 
-1. **My Organization ("Workforce" use case)** 
+1. **My Organization ("Workforce" use case)**
 
 Organizations seeking to proactively protect their own employees from account takeovers and prevent outside third parties from using employee credentials to gain access to sensitive company information can use the Identity Intelligence module in two ways:
 - on a periodic basis, query Recorded Future identity intelligence (via "Credential Search" Action) for any "new" employee credentials that may have been exposed.
@@ -35,11 +35,11 @@ Organizations seeking to proactively protect their own employees from account ta
 Possible remediations include password resets, user privilege revocation, and user quarantining.  Advanced teams may also choose to flag users suspected of takeover by a threat actor to track usage through their system.
 
 <br />
- 
+
 2. **Customer ("External" use case)**
 
 Organizations that provide their customers with online services via a web-based login can use the Identity Intelligence module to assess whether their customers are at risk of fraudulent use by a third party.  Suggested work flows include:
-- on a periodic basis, query Recorded Future identity intelligence (via "Credential Search" Action) for any compromised credentials that may have been exposed. 
+- on a periodic basis, query Recorded Future identity intelligence (via "Credential Search" Action) for any compromised credentials that may have been exposed.
 - during account creation, use the Identity Intelligence module (via "Credential Lookup" Action) to check whether the username and/or username/password pair are previously compromised.
 - during account login, check the Identity Intelligence module (via "Credential Lookup" Action) for whether the username/password pair is compromised.
 
@@ -281,11 +281,11 @@ Logic App Parameters:
 
 ##### Troubleshooting:
 
-If you use this playbook to Lookup leaks info for an email and response lookup data is empty (for specified email and lookback range) - the playbook will still save empty results to the Log Analytics Custom Log. 
+If you use this playbook to Lookup leaks info for an email and response lookup data is empty (for specified email and lookback range) - the playbook will still save empty results to the Log Analytics Custom Log.
 
 This case is possible if you set up the Logic Apps in that way that Lookup lookback range (in `RecordedFutureIdentity-lookup-and-save-user` playbook) is smaller than Search lookback range (in `RecordedFutureIdentity-search-workforce-user` and `RecordedFutureIdentity-search-external-user` playbooks).
 
-In that case you will see some empty records in the corresponding Log Analytics Custom Log (see the screenshot). 
+In that case you will see some empty records in the corresponding Log Analytics Custom Log (see the screenshot).
 
 <img src="./images/empty_lookup_results.png" alt="Empty Lookup results" width="60%"/>
 
@@ -305,7 +305,7 @@ There is several ways you can deploy this Solution:
 - Using ["Deploy a Custom template"](https://portal.azure.com/#create/Microsoft.Template)
   - Deploy the Solution (one step to deploy all resources in the Solution)
   - Deploy each playbook one by one
-  
+
 **Important:**
 - **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
 - **Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
@@ -334,7 +334,7 @@ There is several ways you can deploy this Solution:
 4) Search for "Recorded Future Identity"
 
 <img src="./images/microsoft_sentinel_2.png" alt="Microsoft Sentinel Content Hub Installation  #2" width="60%"/>
- 
+
 6) Select the Solution you are interested in.
 7) Click "Install" to install the Solution.
 
@@ -400,13 +400,13 @@ You can deploy resources (Solution, Playbooks, etc) from templates using `Deploy
 
 You can find `Deploy a custom template` service using search on Home page.
 
-Here is how icons for this service looks: 
+Here is how icons for this service looks:
 
 <img src="./images/deploy_custom_template_service_icon_1.png" alt="Deploy a Custom Template Icon #1" width="70px"/>
 
 <img src="./images/deploy_custom_template_service_icon_2.png" alt="Deploy a Custom Template Icon #2" width="170px"/>
 
-<img src="./images/deploy_custom_template_service_icon_3.png" alt="Deploy a Custom Template Icon #3" width="250px"/> 
+<img src="./images/deploy_custom_template_service_icon_3.png" alt="Deploy a Custom Template Icon #3" width="250px"/>
 
 <br/>
 
@@ -493,7 +493,7 @@ Important:
 
 ##### RecordedFutureIdentity-add-AAD-security-group-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-AAD-security-group-user.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-AAD-security-group-user.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-AAD-security-group-user.json)
 
 Parameters for deployment:
@@ -512,7 +512,7 @@ Parameters for deployment:
 
 ##### RecordedFutureIdentity-confirm-AAD-risky-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-AAD-risky-user.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-AAD-risky-user.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-AAD-risky-user.json)
 
 Parameters for deployment:
@@ -531,7 +531,7 @@ Parameters for deployment:
 
 ##### RecordedFutureIdentity-lookup-and-save-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user.json)
 
 Parameters for deployment:
@@ -550,7 +550,7 @@ Parameters for deployment:
 
 ##### RecordedFutureIdentity-search-workforce-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user.json)
 
 Parameters for deployment:
@@ -572,7 +572,7 @@ Parameters for deployment:
 
 ##### RecordedFutureIdentity-search-external-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user.json)
 
 Parameters for deployment:
@@ -594,7 +594,7 @@ Parameters for deployment:
 
 ## How to configure playbooks
 
-Every playbook (Logic App) can be configured using parameters in the playbook (Logic App). 
+Every playbook (Logic App) can be configured using parameters in the playbook (Logic App).
 
 After deployment - initial set up for each deployed Logic App (playbook) includes:
 - configuring [Connections](https://docs.microsoft.com/azure/connectors/apis-list#connection-configuration)
@@ -602,7 +602,7 @@ After deployment - initial set up for each deployed Logic App (playbook) include
 
 <br/>
 
-**What exact parameters to configure for a specific Playbook and what each of the parameters means - you can find in the corresponding [section of this document](#playbooks).** 
+**What exact parameters to configure for a specific Playbook and what each of the parameters means - you can find in the corresponding [section of this document](#playbooks).**
 
 <br/>
 
@@ -660,7 +660,7 @@ Using Logic Apps parameters - you can configure each Playbook in this Solution.
 
 What exact parameters to configure for a specific Playbook and what each of the parameters means - you can find in the corresponding [section of this document](#playbooks).
 
-On the screenshots you can see where to configure Logic Apps Parameters: 
+On the screenshots you can see where to configure Logic Apps Parameters:
 
 <img src="./images/workforce_playbook_edit.png" alt="Logic Apps Parameters #1" width="60%"/>
 <img src="./images/workforce_playbook_parameters_arrow.png" alt="Logic Apps Parameters #2" width="60%"/>
@@ -714,7 +714,7 @@ Recorded Future clients interested in API access for custom scripts or to enable
 Recorded Future API Services - Choose if your token is pertaining to one of the below Recorded Future API offerings:
 - Connect API
 - Entity Match API
-- List API 
+- List API
 - Identity API (Note:  Identity API is included with license to Identity Intelligence Module)
 - Detection Rule API
 - Playbook Alert API (currently in Beta)
@@ -736,6 +736,6 @@ Additional questions about API token requests not covered by the above can be se
 
 ## How to contact Recorded Future
 
-If you are already a Recorded Future client and wish to learn more about using Recorded Future’s Microsoft integrations, including how to obtain an API Token to enable an integration contact us at **support@recordedfuture.com**. 
+If you are already a Recorded Future client and wish to learn more about using Recorded Future’s Microsoft integrations, including how to obtain an API Token to enable an integration contact us at **support@recordedfuture.com**.
 
 If you not a current Recorded Future client and wish to become one, contact **sales@recordedfuture.com** to setup a discussion with one of our business development associates.

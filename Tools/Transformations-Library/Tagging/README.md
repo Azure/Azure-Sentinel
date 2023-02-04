@@ -7,7 +7,7 @@ Tagging each record with additional information can be extremely useful to add c
 In this case we add context to the event. This example, tags all events with the type of IP address in the *SrcAddress* field.
 
 ```kusto
-source 
+source
 | extend Int_Ext_IP_CF = case(toint(case(substring(SrcAddr,0,3) contains '.', substring(SrcAddr,0,2), substring(SrcAddr,0,3))) >100, 'Internal IP', 'External IP')
 ```
 

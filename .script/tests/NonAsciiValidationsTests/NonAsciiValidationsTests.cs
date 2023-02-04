@@ -84,4 +84,3 @@ namespace NonAsciiValidations.Tests
     }
 
 }
-

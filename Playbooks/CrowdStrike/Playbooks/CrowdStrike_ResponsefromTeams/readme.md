@@ -19,7 +19,7 @@
 ![Crowdstrike-ResponsefromTeams](./ResponsefromTeams.png)
 
 
-### Prerequisites 
+### Prerequisites
 
 1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json)
 2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment
@@ -31,9 +31,9 @@
    * 	Enable the toggle real time functionality and enable custom scripts toggle to run them in [Real time resonse policy settings](https://falcon.crowdstrike.com/support/documentation/71/real-time-response-and-network-containment#rtr-policy-config)
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-  
+
   [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2Fmaster%2FPlaybooks%2FCrowdStrike%2FPlaybooks%2FCrowdStrike_ResponsefromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2FAzure%2FAzure-Sentinel%2Fblob%2Fmaster%2FPlaybooks%2FCrowdStrike%2FPlaybooks%2FCrowdStrike_ResponsefromTeams%2Fazuredeploy.json)
 
 2. Fill in the required parameters:
@@ -42,8 +42,8 @@
     * Teams GroupId : Enter the Teams GroupId
     * Teams ChannelId : Enter the Teams ChannelId
       [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
-    
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
@@ -53,7 +53,7 @@ Once deployment is complete, you will need to authorize each connection.
 5.	Click Save
 6.	Repeat steps for Teams connection as well
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky device 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky device
 2. Configure the automation rules to trigger this playbook
 
 
@@ -71,7 +71,7 @@ Get the list of risky devices as entities from the Incident
   a. Adaptivecardbody - Assing the dynamically prepared adaptive card body
 
   b. ActionSummary - Assign the summary of the actions taken by SOC
-  
+
   C. DeviceActions - Choice list contains actions information [ Contain/LiftContainment, RunScript and Ignore ]
 
   b. DeviceInfo - Assign the Crowdstrike device information
@@ -79,7 +79,7 @@ Get the list of risky devices as entities from the Incident
   d. Scriptoptions - Assign the list of script names present in crowdstrike to display in the choice list of adaptive card
 
   e. ActionTaken - Assign the action taken on host by SOC on device
-  
+
 
 ### CrowdStrike Base
 Call the base logic App to get access token and Falcon Host URL
@@ -92,7 +92,7 @@ This prepares Json message for the device id response
 
  ### Condition to check if device is present in crowdstrike
 1. If device is present, get the device information from crowdstrike API and prepares HTML table with required information
-2. Check if the device status or assigned to predefined policy or contains any predefined scripts 
+2. Check if the device status or assigned to predefined policy or contains any predefined scripts
 3. Prepare choice lists based on the response returned by API [ Contain/Lift Containment, Run Script and Ignore ]
 
  ### Compose Adaptive card
@@ -107,7 +107,7 @@ Again Call the base logic App to get access token and Falcon Host URL
 ### Switch to take action on the device
 This action make a call to the CrowdStrike cloud API endpoint to take the necessary actions based on SOC [ Contain/LiftContainment/Run Script and Ignore ]
 
-### Post a summarized adaptive card 
+### Post a summarized adaptive card
 This action will send an adaptive card with the summary of actions taken
 
  ### Compose image to add in the incident

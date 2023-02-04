@@ -26,9 +26,9 @@ query: |
   let auditLogEvents = view (startTimeSpan:timespan)  {
       AuditLogs | where TimeGenerated >= auditLookback
       | extend ModProps = iff(TargetResources.[0].modifiedProperties != "[]", TargetResources.[0].modifiedProperties, todynamic("NoValues"))
-      | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
+      | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
       tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
-      | extend InitiatedByFull = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+      | extend InitiatedByFull = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)),
       tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
       | extend InitiatedBy = replace("_","@",tostring(split(InitiatedByFull, "#")[0]))
       | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
@@ -39,26 +39,26 @@ query: |
       tolower(tostring(TargetResources.[0].displayName))
       )
       | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
-      | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName ) 
+      | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName )
       | mvexpand ModProps
       | extend PropertyName = tostring(ModProps.displayName), newValue = replace('\"','',tostring(ModProps.newValue));
   };
   let HistoricalAdd = auditLogEvents(auditLookback)
   | where OperationName in~ (opName)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count()
   by Type, InitiatedBy, IpAddress, TargetUserName, TargetResourceName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
   // Remove comment below to only include operations initiated by a user or app that is above the threshold for the last 14 days
   | where OperationCount > threshold
   ;
   // Get list of new added users to correlate with all other events
-  let Correlate = HistoricalAdd 
+  let Correlate = HistoricalAdd
   | summarize by InitiatedBy, TargetUserName, CorrelationId;
   // Get all other events related to list of newly added users
   let allOtherEvents = auditLogEvents(auditLookback);
   // Join the new added user list to get the list of associated events
-  let CorrelatedEvents = Correlate 
+  let CorrelatedEvents = Correlate
   | join allOtherEvents on InitiatedBy, TargetUserName
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) 
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)
   by Type, InitiatedBy, IpAddress, TargetUserName, TargetResourceName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
   ;
   // Union the results so we can see when the user was added and any associated events that occurred during the same time.
@@ -67,7 +67,7 @@ query: |
   Results
   | extend newValue = split(newValue, ";")
   | extend PropertyUpdate = pack(PropertyName, newValue, "Id", Id)
-  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) 
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate)
   by InitiatedBy, IpAddress, TargetUserName, TargetResourceName, OperationName, CorrelationId
   | extend timestamp = StartTime, AccountCustomEntity = InitiatedBy, IPCustomEntity = IpAddress
 

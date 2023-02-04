@@ -1,7 +1,7 @@
 # DeleteCybersixgillAlert
 author: Loginsoft
 
-This playbook will delete Actionable alerts in Cybersixgill Portal. When incident is deleted in Microsoft Sentinel, playbook will run and delete Actionable alerts from Portal 
+This playbook will delete Actionable alerts in Cybersixgill Portal. When incident is deleted in Microsoft Sentinel, playbook will run and delete Actionable alerts from Portal
 
 # Prerequisites
 We will need the following data to do one time setup

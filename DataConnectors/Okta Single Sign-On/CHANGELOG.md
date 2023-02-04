@@ -17,7 +17,7 @@
     - Code needs to loop requests to Okta as each response from Okta is limited to max of 1000 records
     - relying on Timetrigger time minus (-) 5 minutes is unreliable and may result in duplicates and missing records
     - Okta communicates via HTTP Headers details about log event pagination orginal version did not utilise this information
-- Added using a table on Azure Storage account of function to maintain state of latest event time provided in OKTA Response 
+- Added using a table on Azure Storage account of function to maintain state of latest event time provided in OKTA Response
 - Added logic to use OKTA time detials in records to track last record returned from OKTA
 - Added Loop to continue getting paged results from OKTA until either all records retrieved or getting close (260 seconds) to Azure Function default timeout (300 seconds)
 - Added dependency on Powershell modules 'AZTable' and 'Az.OperationalInsights'

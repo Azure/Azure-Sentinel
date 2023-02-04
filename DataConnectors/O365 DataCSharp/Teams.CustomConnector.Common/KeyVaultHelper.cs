@@ -74,6 +74,6 @@ namespace Teams.CustomConnector.Common
                 throw ex;
             }
         }
-     
+
     }
 }

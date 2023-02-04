@@ -1,7 +1,7 @@
 function Get-RoleAndGuardDutyS3Policy
 {
 	<#
-    .SYNOPSIS 
+    .SYNOPSIS
         Creates a S3 Policy for GuardDuty based on specified bucket name, role ARN, and Kms ARN
 
     .PARAMETER RoleArn
@@ -23,7 +23,7 @@ function Get-RoleAndGuardDutyS3Policy
         [Parameter(position=2)]
         [ValidateNotNullOrEmpty()][string]
         $KmsArn
-    )  
+    )
     $s3PolicyForRoleAndGuardDuty = "{
 	 'Statement': [
 		{
@@ -92,14 +92,14 @@ function Get-RoleAndGuardDutyS3Policy
                     'aws:SecureTransport': 'false'
                 }
             }
-	 }]}"	
+	 }]}"
 	return $s3PolicyForRoleAndGuardDuty.Replace("'",'"')
 }
 
 function Get-GuardDutyAndRoleKmsPolicy
 {
 	<#
-    .SYNOPSIS 
+    .SYNOPSIS
         Creates a customized KMS Policy for GuardDuty based on specified role ARN
     .PARAMETER RoleArn
 		Specifies the Role ARN
@@ -135,14 +135,14 @@ function Get-GuardDutyAndRoleKmsPolicy
             'Resource': '*'
         }
     ]}"
-	
+
 	return $kmsPolicy.Replace("'",'"')
 }
 
 function Enable-GuardDuty-ForRegion
 {
     <#
-    .SYNOPSIS 
+    .SYNOPSIS
         Enables GuardDuty based on specified configuration
     .PARAMETER Region
 		Specifies the region
@@ -158,7 +158,7 @@ function Enable-GuardDuty-ForRegion
     Set-RetryAction({
         Write-Log -Message "Executing: aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1" -LogFileName $LogFileName -Severity Verbose
         $newGuarduty = aws --region $region guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES 2>&1
-        
+
         $isGuardutyEnabled = $lastexitcode -ne 0
         if ($isGuardutyEnabled)
         {
@@ -173,7 +173,7 @@ function Enable-GuardDuty-ForRegion
         {
             $script:detectorId = ($newGuarduty | ConvertFrom-Json).DetectorId
         }
-        
+
         Write-Log -Message "Executing: aws guardduty list-publishing-destinations --detector-id $detectorId 2>&1" -LogFileName $LogFileName -Severity Verbose
         $script:currentDestinations = aws --region $region guardduty list-publishing-destinations --detector-id $detectorId 2>&1
         Write-Log $currentDestinations -LogFileName $LogFileName -Severity Verbose
@@ -183,7 +183,7 @@ function Enable-GuardDuty-ForRegion
 function Set-GuardDutyPublishDestinationBucket
 {
     <#
-    .SYNOPSIS 
+    .SYNOPSIS
         Configures GuardDuty to publish logs to destination bucket
     .PARAMETER Region
 		Specifies the region
@@ -219,22 +219,22 @@ function Set-GuardDutyPublishDestinationBucket
         {
             Write-Log -Message 'GuardDuty setup was not completed. You must manually update the GuardDuty destination bucket' -LogFileName $LogFileName -Severity Error -LinePadding 2
         }
-    } 
+    }
 }
 
 function Enable-GuardDuty
 {
     <#
-    .SYNOPSIS 
+    .SYNOPSIS
         Enables GuardDuty based on specified configuration
     #>
 
     [String[]]$allRegionsArray =  (aws ec2 describe-regions | ConvertFrom-Json)."Regions".RegionName
     $regionConfirmation = Read-ValidatedHost 'Do you want enable guardduty for all regions? [y/n]' -ValidationType Confirm
     if ($regionConfirmation -eq 'y')
-    {     
+    {
         for($i = 0; $i -lt $allRegionsArray.length; $i++)
-        { 
+        {
             Enable-GuardDuty-ForRegion -Region $allRegionsArray[$i]
             Set-GuardDutyPublishDestinationBucket -Region $allRegionsArray[$i]
         }
@@ -245,7 +245,7 @@ function Enable-GuardDuty
         $selectedRegionsArray = $selectedRegionsArray.Split(' ') | Select-Object -Unique
 
         for($i = 0; $i -lt $selectedRegionsArray.length; $i++)
-        { 
+        {
             if (-not($allRegionsArray -contains $selectedRegionsArray[$i]))
             {
                 $notValidRegion = $selectedRegionsArray[$i]
@@ -254,7 +254,7 @@ function Enable-GuardDuty
             }
         }
         for($i = 0; $i -lt $selectedRegionsArray.length; $i++)
-        { 
+        {
             Enable-GuardDuty-ForRegion -Region $selectedRegionsArray[$i]
             Set-GuardDutyPublishDestinationBucket -Region $selectedRegionsArray[$i]
         }
@@ -287,7 +287,7 @@ $callerAccount = (aws sts get-caller-identity | ConvertFrom-Json).Account
 Write-Log -Message $callerAccount -LogFileName $LogFileName -Severity Verbose
 
 New-KMS
-$kmsArn = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.Arn 
+$kmsArn = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.Arn
 $kmsKeyId = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
 Write-Log -Message "kmsArn: $kmsArn kmsKeyId: $kmsKeyId" -LogFileName $LogFileName -Severity Verbose
 
@@ -312,6 +312,6 @@ Enable-S3EventNotification -DefaultEventNotificationPrefix "AWSLogs/${callerAcco
 
 Enable-GuardDuty
 
- 
+
 # Output information needed to configure Sentinel data connector
 Write-RequiredConnectorDefinitionInfo -DestinationTable AWSGuardDuty

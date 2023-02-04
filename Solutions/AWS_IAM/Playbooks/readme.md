@@ -35,7 +35,7 @@ You can choose to deploy the whole package: connector + all three playbook templ
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2Fazuredeploy.json)
 
-# AWS IAM connector documentation 
+# AWS IAM connector documentation
 
 <a name="authentication">
 
@@ -51,7 +51,7 @@ AWS Access Key Id and AWS Secret Access Key are required. Check the [documentati
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 
 1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters for deploying Custom Connectors and Playbooks

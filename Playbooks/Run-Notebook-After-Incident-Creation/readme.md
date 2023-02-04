@@ -1,14 +1,14 @@
 # Run-Notebook-After-Incident-Creation
 author: Zhipeng Zhao
 
-This playbook will trigger a Microsoft Sentinel notebook to process newly created incident.  It will pass incident ID and entities if any to the notebook.  
+This playbook will trigger a Microsoft Sentinel notebook to process newly created incident.  It will pass incident ID and entities if any to the notebook.
 
 
 ## Prerequisites
 
-Before deploying the the playbook you will need 
-- set up Sentinel notebook automation system with a Synapse workspace (more info coming), 
-- upload incident related notebooks and create pipelines for the notebooks (more info coming).  
+Before deploying the the playbook you will need
+- set up Sentinel notebook automation system with a Synapse workspace (more info coming),
+- upload incident related notebooks and create pipelines for the notebooks (more info coming).
 - gather Synapse workspace name and Synapse pipeline name for template deployment.
 
 ## Quick Deployment

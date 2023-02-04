@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) FileEvent parsers 
+# Advanced Security Information Model (ASIM) FileEvent parsers
 
 This template deploys all ASIM FileEvent parsers. The template is part of the Advanced Security Information Model (ASIM).
 
@@ -18,11 +18,10 @@ For more information, see:
 The template deploys parsers for the following products:
 * vimFileEventEmpty - An empty FileEvent table
 * vimFileEventGeneric - Source agnostic parser
-* vimFileEventMicrosoftDefender - Microsoft Defender 
+* vimFileEventMicrosoftDefender - Microsoft Defender
 * vimFileEventMicrosoftFileStorage - Microsoft Azure File Storage
 * vimFileEventMicrosoftSharePoint - Microsoft SharePoint
 * vimFileEventMicrosoftSysmonFileCreated - Sysmon File Created event (EventId 11)
 * vimFileEventMicrosoftSysmonFileDeleted - Sysmon File Deleted events (EventId 23, 26)
 
 <br>
-

@@ -20,7 +20,7 @@ Here's how these permissions can be provided.
 
 On the application that was created in the above step, click on API Permissions on the left blade, then click Add a  Permission.
 
-From the options that open on the right, select APIs mu organization uses and search for and then click Microsft Threat Protection. 
+From the options that open on the right, select APIs mu organization uses and search for and then click Microsft Threat Protection.
 
 Next, click Application permissions. Select Incident.ReadWrite.All and then click on Add permissions.
 

@@ -1,7 +1,7 @@
 # Define, Track, and Complete Key Deployment and Migration Tasks
 Author: Matt Lowe
 
-This watchlist is meant to be used in tandem with the Deployment and Migration workbook within the Microsoft Sentinel WOrkbook Gallery or GitHub repository. This watchlist assists with defining, tracking, and completing the key actions during a Microsoft Sentinel deployment/migration. It is a key resource for the solution so please make sure to deploy it. 
+This watchlist is meant to be used in tandem with the Deployment and Migration workbook within the Microsoft Sentinel WOrkbook Gallery or GitHub repository. This watchlist assists with defining, tracking, and completing the key actions during a Microsoft Sentinel deployment/migration. It is a key resource for the solution so please make sure to deploy it.
 
 ## **Pre-requisites**
 
@@ -17,7 +17,7 @@ Note: If deploying any Microsoft Defender or Azure Active Directory connector, G
 2. Once in the Azure Portal, select the Subscription and Resource Group that Microsoft Sentinel is under and the name of the workspace that this watchlist should be tied to.
 3. Click "Review and Create".
 4. Click "Create".
-5. Within a minute or two, the template should deploy and the Watchlist should appear within the Microsoft Sentinel environment. 
+5. Within a minute or two, the template should deploy and the Watchlist should appear within the Microsoft Sentinel environment.
 
 ## Option 2
 1. Enter the template within the GitHub folder.
@@ -30,6 +30,6 @@ Note: If deploying any Microsoft Defender or Azure Active Directory connector, G
 8. Select the Subscription and Resource Group that Microsoft Sentinel is under.
 9. Click "Review and Create".
 10. Click "Create".
-11. Within a minute or two, the template should deploy and the Watchlist should appear within the Microsoft Sentinel environment. 
+11. Within a minute or two, the template should deploy and the Watchlist should appear within the Microsoft Sentinel environment.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FWatchlists%2FDeploymentandMigration%2Fazuredeploy.json)

@@ -14,7 +14,7 @@
 
 ## Summary
 
-This folder contains 1 playbook: 
+This folder contains 1 playbook:
 * Zscaler Authentication: Can be used to handle the Zscaler Authentication authentication process. The output is a JSessionID which can be used to do other API actions. The playbook can be embedded in other playbooks. Refer this link for the authentication Process: [Authenticate and create an API session](https://help.zscaler.com/zia/api-getting-started#CreateSession)
 
 ![Playbook](../Images/Authentication.png)
@@ -27,7 +27,7 @@ This folder contains 1 playbook:
 
 <a name="deployment"></a>
 
-## Deployment instructions 
+## Deployment instructions
 
 You can choose to deploy one ore more playbooks.
 
@@ -49,7 +49,7 @@ You can choose to deploy one ore more playbooks.
 
 <a name="postdeployment"></a>
 
-## Post-Deployment instructions 
+## Post-Deployment instructions
 ### a. Authorize connections
 Once the deployment is completed, you will need to authorize the Azure Sentinel connection.Please complete the following steps:
  1. Click edit API connection

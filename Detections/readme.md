@@ -12,7 +12,7 @@ More Specific to Detections:
 * These detections are written using [KQL query langauge](https://docs.microsoft.com/azure/kusto/query/index) and will provide you a starting point to protect your environment and get familiar with the different data tables.
 * To enable these detections in your environment follow the [out of the box guidance](https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-built-in) (Notice that after a detection is available in this GitHub, it might take up to 2 weeks before it is available in Microsoft Sentinel portal).
 * The rule created will run the query on the scheduled time that was defined, and trigger an alert that will be seen both in the **SecurityAlert** table and in a case in the **Incidents** tab
-* If you are contributing analytic rule templates as part of a solution, follow [guidance for solutions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions#step-1--create-your-content) to include those in the right folder paths. Do NOT include content to be packaged in solutions under the Detections folder. 
+* If you are contributing analytic rule templates as part of a solution, follow [guidance for solutions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions#step-1--create-your-content) to include those in the right folder paths. Do NOT include content to be packaged in solutions under the Detections folder.
 
 # Feedback
 For questions or feedback, please contact AzureSentinel@microsoft.com

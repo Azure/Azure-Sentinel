@@ -16,14 +16,14 @@ This playbook allows the SOC users to automatically response to Azure Sentinel i
 
 ![Fortinet](./CommentOnIPIncident.PNG)<br>
 
-### Prerequisites 
+### Prerequisites
 - Sentinel IP block group should create in the VM
 - FortinetConnector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
 - Function App needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the Function doc page.
 - FortinetConnector need to be authenticated with an API key. Relevant instructions can be found in the connector doc page.
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2FPlaybooks%2FFortinet_ResponseOnIP%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2FPlaybooks%2FFortinet_ResponseOnIP%2Fazuredeploy.json)
@@ -73,14 +73,14 @@ Once deployment is complete, you will need to authorize each connection.
 
 - Get the list of risky/malicious IPs as entities from the Incident.
 
-### Initialize variables 
+### Initialize variables
 
 -  Action Name (type-String) - To determine the action name to be displayed in the adaptive card such as Block or Unblock IP from predefined address group.
 
--  Adaptive card body(type-Array) - To determine the dynamic adaptive card body 
-   
+-  Adaptive card body(type-Array) - To determine the dynamic adaptive card body
+
 -  Address group Members(type-Array) - To determine the body of predefined address group
-   
+
 -  IP Address Action(type-Array) - Consolidated actions summary on each IP to display in adaptive card
 
 -  Predefined group name(type-String)- You can change the pre-defined address group name here
@@ -88,14 +88,14 @@ Once deployment is complete, you will need to authorize each connection.
 ## Post an adaptive card to the SOC channel
 - Trigger an adaptive card for the SOC with all incident information
 
-## Create an address object      
+## Create an address object
 - Create an address object of type FQDN  if IP received from sentinel (if it not exist).
 
 ## Compose a member collection
 
 - Capture all the existing member of address group
 
-## Update an address group 
+## Update an address group
 
 - Block IP or Unblock IP by adding or removing from address group
 
@@ -110,5 +110,3 @@ Once deployment is complete, you will need to authorize each connection.
 ## Known Issues and Limitations
 
 - When pre-defined group reaches the max limit user must create the new pre-defined group and change in the play book
-
-

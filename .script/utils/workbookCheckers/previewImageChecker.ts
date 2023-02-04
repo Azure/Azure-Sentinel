@@ -6,7 +6,7 @@ function isAllPng(previewImagesFileNames: Array<string>): boolean {
 }
 
 function isAllIncludeBlackOrWhite(previewImagesFileNames: Array<string>): boolean {
-    return previewImagesFileNames.every((previewImageFileName: string) => 
+    return previewImagesFileNames.every((previewImageFileName: string) =>
         ["Black", "black", "white", "White"].some(color => previewImageFileName.includes(color))
     );
 }
@@ -23,11 +23,11 @@ function isMissingImages(previewImagesFileNames: Array<string>): boolean {
 
 export function isValidPreviewImageFileNames(items: Array<WorkbookMetadata>) {
   items.forEach((workbookMetadata: WorkbookMetadata) => {
-    
+
     if (!isAllPng(workbookMetadata.previewImagesFileNames)) {
         throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview images must be png files`);
     }
-    
+
     if (!isAllIncludeBlackOrWhite(workbookMetadata.previewImagesFileNames)) {
         throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview image file names must include either "Black" or "White"`);
     }
@@ -37,4 +37,3 @@ export function isValidPreviewImageFileNames(items: Array<WorkbookMetadata>) {
     }
   });
 };
-

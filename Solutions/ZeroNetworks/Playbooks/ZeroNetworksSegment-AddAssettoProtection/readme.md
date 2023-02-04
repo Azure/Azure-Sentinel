@@ -16,7 +16,7 @@ When a new Microsoft Sentinel incident is created, this playbook gets triggered 
 ### Prerequisites
 1. Zero Networks custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FZeroNetworks%2FPlaybooks%2FZeroNetworksSegment-AddAssettoProtection%2Fazuredeploy.json)
@@ -26,7 +26,7 @@ When a new Microsoft Sentinel incident is created, this playbook gets triggered 
     * Playbook Name: Enter the playbook name here (ex:ZNSegment-AddAssettoProtection)
     * Zero Networks Connector name : Enter the name of the Zero Networks custom connector (default value:ZeroNetworksConnector)
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource

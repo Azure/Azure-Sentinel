@@ -21,15 +21,15 @@ class LogAnalyticsClient
     raise ConfigError, 'no json_records' if body.empty?
     # Create REST request header
     header = get_header(body.bytesize)
-    # Post REST request 
+    # Post REST request
     response = RestClient.post(@uri, body, header)
 
     return response
   end # def post_data
 
-  private 
+  private
 
-  # Create a header for the given length 
+  # Create a header for the given length
   def get_header(body_bytesize_length)
     # We would like each request to be sent with the current time
     date = rfc1123date()
@@ -45,16 +45,16 @@ class LogAnalyticsClient
   end # def get_header
 
   # Setting proxy for the REST client.
-  # This option is not used in the output plugin and will be used 
-  #  
+  # This option is not used in the output plugin and will be used
+  #
   def set_proxy(proxy='')
     RestClient.proxy = proxy.empty? ? ENV['http_proxy'] : proxy
   end # def set_proxy
 
-  # Return the current data 
+  # Return the current data
   def rfc1123date()
     current_time = Time.now
-    
+
     return current_time.httpdate()
   end # def rfc1123date
 
@@ -65,7 +65,7 @@ class LogAnalyticsClient
     hmac_sha256_sigs = OpenSSL::HMAC.digest(OpenSSL::Digest.new('sha256'), decoded_shared_key, utf8_sigs)
     encoded_hash = Base64.encode64(hmac_sha256_sigs)
     authorization = sprintf("SharedKey %s:%s", @logstashLoganalyticsConfiguration.workspace_id, encoded_hash)
-    
+
     return authorization
   end # def signature
 

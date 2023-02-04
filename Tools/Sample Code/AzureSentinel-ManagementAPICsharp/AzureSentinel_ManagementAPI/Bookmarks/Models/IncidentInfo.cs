@@ -7,7 +7,7 @@ namespace AzureSentinel_ManagementAPI.Bookmarks.Models
     public class IncidentInfo
     {
         public string IncidentId { get; set; }
-        
+
         [JsonConverter(typeof(StringEnumConverter))]
         public Severity Severity { get; set; }
         public string Title { get; set; }

@@ -29,10 +29,10 @@ This package includes:
 
 You can choose to deploy the whole package : all four playbook templates, or each one seperately from it's specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/azuredeploy.json)  [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/azuredeploy.json)  
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/azuredeploy.json)  [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/azuredeploy.json)
 
 
-# F5 BIG-IP documentation 
+# F5 BIG-IP documentation
 
 <a name="authentication">
 
@@ -51,7 +51,7 @@ API Key Authentication
 
 <a name="deployment">
 
-# Deployment instructions 
+# Deployment instructions
 1. Deploy the playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters for deploying custom connector and playbooks
 
@@ -71,9 +71,9 @@ API Key Authentication
 
 <a name="postdeployment">
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky IP address, URL or Hosts. 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky IP address, URL or Hosts.
 2. Configure the automation rules to trigger the playbooks.
 
 
@@ -88,5 +88,3 @@ Playbooks
 * [BlockIP-F5 BIG-IP](/Playbooks/BlockIP-F5BigIP/readme.md)
 * [BlockURL-F5 BIG-IP](/Playbooks/BlockURL-F5BigIP/readme.md)
 * [EnrichmentIP-F5 Big-IP](/Playbooks/EnrichmentIP-F5BigIP/readme.md)
-
-

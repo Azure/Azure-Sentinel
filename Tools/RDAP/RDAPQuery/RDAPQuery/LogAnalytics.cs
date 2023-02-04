@@ -27,7 +27,7 @@ namespace RDAPQuery
         /// </summary>
         static string workspaceID = QueryEngine.GetEnvironmentVariable("WorkspaceID");
 
-        // For sharedKey, use either the primary or the secondary Connected Sources client authentication key   
+        // For sharedKey, use either the primary or the secondary Connected Sources client authentication key
         /// <summary>
         /// The shared key
         /// </summary>
@@ -243,7 +243,7 @@ namespace RDAPQuery
         }
 
     }
-    // Root myDeserializedClass = JsonConvert.DeserializeObject<Root>(myJsonResponse); 
+    // Root myDeserializedClass = JsonConvert.DeserializeObject<Root>(myJsonResponse);
     /// <summary>
     /// Class Column.
     /// </summary>

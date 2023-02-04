@@ -1,4 +1,4 @@
-# Microsoft Defender for Office 365 Detection Details Report – Configuration Guide 
+# Microsoft Defender for Office 365 Detection Details Report – Configuration Guide
 
 ## Contents
 
@@ -9,25 +9,25 @@
 
 ## Overview
 
-This report template will give you an example how to use Microsoft 365 Defender Hunting API to build a custom report using Power BI. This way you can visualise Microsoft Defender for Office 365 (MDO) data based on your organisation needs. 
+This report template will give you an example how to use Microsoft 365 Defender Hunting API to build a custom report using Power BI. This way you can visualise Microsoft Defender for Office 365 (MDO) data based on your organisation needs.
 
-* It is using Delegated model to connect to the M365D Hunting API. No need for app registration simply need an admin account which can run the underlying Hunting queries using the API. 
-* The built-in Security Reader or Security Administrator role is enough to have the report working for example. 
-* This is intended to be a template, we encourage everybody to modify queries, visualisations, bring in more data sets based on organisation needs. 
-* The “ReadMe” tab of the template files has more information about terminology used in the template.  
-* This not intended to be a permanent or complete solution rather show an example how to create custom Microsoft Defender for Office 365 (MDO) reports using the hunting API and Power BI. 
+* It is using Delegated model to connect to the M365D Hunting API. No need for app registration simply need an admin account which can run the underlying Hunting queries using the API.
+* The built-in Security Reader or Security Administrator role is enough to have the report working for example.
+* This is intended to be a template, we encourage everybody to modify queries, visualisations, bring in more data sets based on organisation needs.
+* The “ReadMe” tab of the template files has more information about terminology used in the template.
+* This not intended to be a permanent or complete solution rather show an example how to create custom Microsoft Defender for Office 365 (MDO) reports using the hunting API and Power BI.
 
-## Example View of Microsoft Defender for Office 365 (MDO) Detection Details Report 
+## Example View of Microsoft Defender for Office 365 (MDO) Detection Details Report
 
 ![MDOPowerBI1](Media/MDOPowerBI1.png)
 
 ## How to use the .pbit file
 
-Using the .pbit file will load the template with no data and ask for Authentication at first run. 
+Using the .pbit file will load the template with no data and ask for Authentication at first run.
 Power BI will ask for connect/Authenticate to the data source (Hunting API in M365D) <br/> <br/> ![MDOPowerBI2](Media/MDOPowerBI2.png)  <br/> <br/>
 Change the settings to “Organization account” and Sign in with an account which has access to the M365D hunting tables. Minimum Azure AD built-in role/permission required to run the queries behind the report is “Security Reader” or “Security Operator” <br/> <br/> ![MDOPowerBI3](Media/MDOPowerBI3.png) <br/> <br/>
 Follow the Authentication flow for the account after you clicked “Sign in” <br/> <br/> ![MDOPowerBI4](Media/MDOPowerBI4.png) <br/> <br/>
-After you signed in click “Connect” and the data should load. It can take few minutes to load the data at the first time. It depends on the size if the environment Queries may run longer in a larger tenant. 
+After you signed in click “Connect” and the data should load. It can take few minutes to load the data at the first time. It depends on the size if the environment Queries may run longer in a larger tenant.
 
 ## How to publish to Power BI online and configure scheduled auto-refresh
 You can publish the report to Power BI online when you finished making changes to visuals. In Power BI there is an easy way to share only the report with others without the need to have admin access to the underlying data set. It is also possible to configure scheduled auto-refresh so the report data kept up-to date.

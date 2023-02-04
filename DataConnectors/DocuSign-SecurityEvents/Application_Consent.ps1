@@ -4,11 +4,11 @@ param(
 )
 
 If ($DocuSignEnvironment.ToLower() -eq "developer") {
-    $jwtHost = "account-d"    
-} 
+    $jwtHost = "account-d"
+}
 Else {
     $jwtHost = "account"
-   
+
 }
 
 $scopes = "signature%20impersonation"

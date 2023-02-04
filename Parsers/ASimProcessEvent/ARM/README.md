@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) ProcessEvent parsers 
+# Advanced Security Information Model (ASIM) ProcessEvent parsers
 
 This template deploys all ASIM ProcessEvent parsers.
 

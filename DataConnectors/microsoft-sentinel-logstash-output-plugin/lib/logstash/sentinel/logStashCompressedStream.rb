@@ -13,7 +13,7 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
         def initialize(logstashLoganalyticsConfiguration)
             @compression_buffer = StringIO.new
             @deflater = Zlib::Deflate.new
-            
+
             @compression_stream_state = {
                 :events_in_compression_buffer => 0,
                 :original_events_size => 0,
@@ -21,7 +21,7 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
                 # guarding the flush
                 :flush_mutex => Mutex.new,
                 # guarding the stream
-                :insert_mutex => Mutex.new               
+                :insert_mutex => Mutex.new
             }
 
             buffer_initialize(
@@ -32,10 +32,10 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
               )
             super
         end # initialize
-  
+
         public
         # Adding an event document into the buffer
-        def batch_event(event_document)        
+        def batch_event(event_document)
             buffer_receive(event_document)
         end # def batch_event
 
@@ -52,7 +52,7 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
             flush_compression_buffer(:final => true)
         end
 
-        protected        
+        protected
         def get_time_since_last_flush
           Time.now.to_i - @compression_stream_state[:last_flush]
         end
@@ -71,8 +71,8 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
         private
         def add_event_to_compression_buffer(event_document)
             event_json = event_document.to_json
-               
-            # Ensure that adding the current event to the stream will not exceed the maximum size allowed. 
+
+            # Ensure that adding the current event to the stream will not exceed the maximum size allowed.
             # If so, first flush and clear the current stream and then add the current record to the new stream instance.
             if event_json.bytesize + @deflater.total_out > @buffer_config[:flush_each]
                 flush_compression_buffer
@@ -80,12 +80,12 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 
             buffer_empty? ? write_string_to_compression_buffer("[") :
                             write_string_to_compression_buffer(",")
-            
+
             write_string_to_compression_buffer(event_json)
             @compression_stream_state[:events_in_compression_buffer] += 1
-            @compression_stream_state[:original_events_size] += event_json.bytesize        
+            @compression_stream_state[:original_events_size] += event_json.bytesize
         end
-        
+
         def write_string_to_compression_buffer(string_to_compress)
             @compression_buffer << @deflater.deflate(string_to_compress, Zlib::SYNC_FLUSH)
         end
@@ -96,22 +96,22 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 
         def flush_compression_buffer(options={})
             # logstash service is shutting down, flush all pending logs
-            final = options[:final] 
+            final = options[:final]
             # Force is passed when the timer fires - ensure the stream will flush every x seconds
             force = options[:force]
 
-            # there might be more than one thread trying to flush concurrently 
+            # there might be more than one thread trying to flush concurrently
             if final
                 # final flush will wait for lock, so we are sure to flush out all buffered events
                 @compression_stream_state[:flush_mutex].lock
             elsif ! @compression_stream_state[:flush_mutex].try_lock # failed to get lock, another flush already in progress
-                return 
+                return
             end
-            
+
             begin
                 time_since_last_flush = get_time_since_last_flush
 
-                if buffer_empty? || 
+                if buffer_empty? ||
                     (get_time_since_last_flush < @buffer_config[:max_interval] && force && (!final))
                     @logger.trace("flushing aborted. buffer_empty? #{buffer_empty?} time_since_last_flush #{time_since_last_flush} force #{force} final #{final}")
                     return
@@ -120,25 +120,25 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
                 write_string_to_compression_buffer("]")
                 @compression_buffer.flush
                 outgoing_data = @compression_buffer.string
-                
+
                 number_outgoing_events = @compression_stream_state[:events_in_compression_buffer]
                 @logger.trace("about to send [#{@compression_stream_state[:events_in_compression_buffer]}] events. Compressed data byte size [#{outgoing_data.bytesize}] Original data byte size [#{@compression_stream_state[:original_events_size]}].")
 
                 reset_compression_stream
-                
+
                 send_message_to_loganalytics(outgoing_data, number_outgoing_events)
             ensure
                 @compression_stream_state[:flush_mutex].unlock
             end
         end
 
-        def reset_compression_stream                            
+        def reset_compression_stream
             @deflater.reset
             @compression_buffer.reopen("")
             @compression_stream_state[:events_in_compression_buffer] = 0
             @compression_stream_state[:original_events_size] = 0
             @compression_stream_state[:last_flush] = Time.now.to_i
-        end        
+        end
 
     end
 end;end;end;

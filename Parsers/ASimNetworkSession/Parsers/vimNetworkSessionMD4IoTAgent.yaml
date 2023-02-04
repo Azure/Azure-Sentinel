@@ -49,40 +49,40 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-        starttime:datetime=datetime(null), 
-        endtime:datetime=datetime(null), 
-        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
-        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        starttime:datetime=datetime(null),
+        endtime:datetime=datetime(null),
+        srcipaddr_has_any_prefix:dynamic=dynamic([]),
+        dstipaddr_has_any_prefix:dynamic=dynamic([]),
         ipaddr_has_any_prefix:dynamic=dynamic([]),
-        dstportnumber:int=int(null), 
-        hostname_has_any:dynamic=dynamic([]), 
-        dvcaction:dynamic=dynamic([]), 
-        eventresult:string='*', 
+        dstportnumber:int=int(null),
+        hostname_has_any:dynamic=dynamic([]),
+        dvcaction:dynamic=dynamic([]),
+        eventresult:string='*',
         disabled:bool=false)
   {
-    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let ip_any  =  set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix, srcipaddr_has_any_prefix); 
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let ip_any  =  set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix, srcipaddr_has_any_prefix);
     let DirectionNetworkEvents =
-    SecurityIoTRawEvent 
-    | where (isnull(starttime) or TimeGenerated>=starttime) 
+    SecurityIoTRawEvent
+    | where (isnull(starttime) or TimeGenerated>=starttime)
         and (isnull(endtime) or TimeGenerated<=endtime)
     | where not(disabled)
     | where RawEventName == "NetworkActivity"
     // ***************  Prefilterring *****************************************************************
     |where  (eventresult=='*' or eventresult=='Success')
-        and (array_length(hostname_has_any)==0) 
+        and (array_length(hostname_has_any)==0)
         and (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
         and EventDetails has tostring(dstportnumber)
         and (array_length (ip_any)==0 or has_any_ipv4_prefix(EventDetails,ip_any))
         // *************** Prefilterring *****************************************************************
     | parse EventDetails with * ',"LocalPort":' LocalPort:int ',"RemotePort":' RemotePort:int ',' *
     | extend outbound = LocalPort > RemotePort
-    | where (isnull(dstportnumber) or (not(outbound) and dstportnumber == LocalPort) or (outbound and dstportnumber == RemotePort) ) 
+    | where (isnull(dstportnumber) or (not(outbound) and dstportnumber == LocalPort) or (outbound and dstportnumber == RemotePort) )
     ;
     let parser = (T: (EventDetails: string)) {
-      T 
-      | parse EventDetails with 
+      T
+      | parse EventDetails with
         '{"LocalAddress":"' LocalAddress:string '",'
         '"RemoteAddress":"' RemoteAddress:string '",'
         *
@@ -99,8 +99,8 @@ ParserQuery: |
         '"TimestampUTC":"' TimestampUTC:datetime '",'
         *
     }
-    ; 
-    let OutboundNetworkEvents = 
+    ;
+    let OutboundNetworkEvents =
       DirectionNetworkEvents
       | where outbound
       // ***************  Postfilterring *****************************************************************
@@ -111,11 +111,11 @@ ParserQuery: |
              , temp_isDstMatch=has_any_ipv4_prefix(RemoteAddress,dst_or_any)
       | extend ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual
             , temp_isSrcMatch, "SrcIpAddr"
             , temp_isDstMatch, "DstIpAddr"
             , "No match"
-    ) 
+    )
     | where ASimMatchingIpAddr != "No match"
     | project-away temp_*
       | project-rename
@@ -134,7 +134,7 @@ ParserQuery: |
         Process = SrcProcessId, // alias
         SrcDvcOs = iif (MessageSource == "Linux", "Linux", "Windows")
     ;
-    let InboundNetworkEvents = 
+    let InboundNetworkEvents =
       DirectionNetworkEvents
       | where not(outbound)
       // ***************  Postfilterring *****************************************************************
@@ -143,17 +143,17 @@ ParserQuery: |
       | invoke parser ()
       | extend temp_isSrcMatch=( // only one of each pair has_any_ipv4_prefix is calculated
                         has_any_ipv4_prefix(RemoteAddress,src_or_any)
-                    ) 
+                    )
            , temp_isDstMatch=(
-                     has_any_ipv4_prefix(LocalAddress,dst_or_any) 
-                    ) 
+                     has_any_ipv4_prefix(LocalAddress,dst_or_any)
+                    )
       | extend ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual
             , temp_isSrcMatch, "SrcIpAddr"
             , temp_isDstMatch, "DstIpAddr"
             , "No match"
-    ) 
+    )
     | project-away temp_*
     | where ASimMatchingIpAddr != "No match"
       | project-rename
@@ -172,23 +172,23 @@ ParserQuery: |
         Process = DstProcessId, // alias
         DstDvcOs = iif (MessageSource == "Linux", "Linux", "Windows")
     ;
-    let NetworkSessionMD4IoT = 
+    let NetworkSessionMD4IoT =
       union InboundNetworkEvents, OutboundNetworkEvents
       | extend
         EventCount = int(1),
-        EventProduct = 'Azure Defender for IoT', 
+        EventProduct = 'Azure Defender for IoT',
         EventVendor = 'Microsoft',
         EventSchemaVersion = '0.2.3',
-        EventSchema = "NetworkSession", 
+        EventSchema = "NetworkSession",
         EventType = 'NetworkSession',
-        EventStartTime = TimeGenerated, 
-        EventEndTime = TimeGenerated, 
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
         EventResult = 'Success',
         EventSeverity = 'Informational'
       | project-rename
         EventProductVersion = AgentVersion, // Not available in Windows
-        _ResourceId = AssociatedResourceId, 
-        _SubscriptionId = AzureSubscriptionId, 
+        _ResourceId = AssociatedResourceId,
+        _SubscriptionId = AzureSubscriptionId,
         EventOriginalUid = OriginalEventId,  // OK pending question
         DvcOs = MessageSource,
         NetworkProtocol = Protocol,

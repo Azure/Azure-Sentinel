@@ -8,11 +8,11 @@
 #  TODO:
 #    What is the meaning/significance of the skipped data?  Search for "## SKIP:"  in this file
 #    Is it ok to skip syslog header
-#    Verify input and output (i.e. bring logger archive online and compare to json files; count events etc) 
+#    Verify input and output (i.e. bring logger archive online and compare to json files; count events etc)
 #    Record types? (ChunkVersion, SourceType, Flags):  ('6', '0', '5') is processed, ('100', '0', '1') and ('5', '0', '5') are skipped.
-#	100=ROS - Read Optimized Search (some indexing data?) 
+#	100=ROS - Read Optimized Search (some indexing data?)
 #         5=Internal logger events, not of interestt (?)
-#       . 6=CEF records we can process 
+#       . 6=CEF records we can process
 #    ...
 #
 #
@@ -100,7 +100,7 @@ def parse_cef(s):
     #    raise ValueError("CEF string is missing CEF:0 or CEF:1 header")
 
     d["devicevendor"], d["deviceproduct"], d["deviceversion"], d["signatureid"], d["name"], d["severity"] = fields[1], fields[2], fields[3], fields[4], fields[5], fields[6]
-    
+
     s = s[field_start:]
     last_start = len(s)
     matches = cef_key_re.finditer(s)
@@ -161,7 +161,7 @@ def parse_chunk(ck, event_count, ck_id):
     for _ in range(event_count):
         #unpacked = unpack(">qllqq", ck.read(32))   # q=8bytes, l=4
         #(time, length, recv_id, dvc_ip, zero) = unpacked
-        ck.read(8) # skip time, not used        
+        ck.read(8) # skip time, not used
         (length,) = unpack(">l", ck.read(4))   # q=8bytes, l=4
         ck.read(20)  # skip 4=recv_id 8=dvc_ip 8=zero
         #print("time: ", ctime(time/1000))
@@ -175,8 +175,8 @@ def parse_chunk(ck, event_count, ck_id):
 #        yy=yy[yy.index(b"CEF"):len(yy)]
         # del yy[0:yy.index(b"CEF")]
         # always read next 8 trailing bytes, dunno what that is
-        ck.read(8)   ## SKIP: ???         
-        try: 
+        ck.read(8)   ## SKIP: ???
+        try:
             # strip off syslog header, if present
             event = yy[yy.index(b"CEF:"):].decode('utf-8')
         except ValueError:
@@ -184,7 +184,7 @@ def parse_chunk(ck, event_count, ck_id):
         else:
             yield event #[event.index(u"CEF:"):]    # u"..."  means Unicode string
         #xx2=ck.read(8)  ## SKIP: another 8 bytes, values like  ( b'Gbdg\\=\\=' , b'4Rog\\=\\=' , b'CBSA\\=\\=', b'JZdg\\=\\=', b'PZ2w\\=\\=',b'E0HA\\=\\=',b'Fz9Q\\=\\=',b'+1bA\\=\\=',b'tXkQ\\=\\=')
-        #if  xx2 not inset(( b'Gbdg\\=\\=' , b'4Rog\\=\\=' , b'CBSA\\=\\=', b'JZdg\\=\\=', b'PZ2w\\=\\=',b'E0HA\\=\\=',b'Fz9Q\\=\\=',b'+1bA\\=\\=',b'tXkQ\\=\\=')): 
+        #if  xx2 not inset(( b'Gbdg\\=\\=' , b'4Rog\\=\\=' , b'CBSA\\=\\=', b'JZdg\\=\\=', b'PZ2w\\=\\=',b'E0HA\\=\\=',b'Fz9Q\\=\\=',b'+1bA\\=\\=',b'tXkQ\\=\\=')):
         #  eprint("STOP Reading funny bytes: ", xx2)
         #yield event #[event.index(u"CEF:"):]    # u"..."  means Unicode string
 
@@ -208,7 +208,7 @@ def read_cef(file_list):
             for chunk_md in metadata:
                 #print(chunk_md)
                 ck_count += 1
-                start, event_count, chunk_length, chunk_id  = int(chunk_md['BeginOffset']), int(chunk_md['EventCount']), int(chunk_md['Length']), chunk_md['ChunkId'] 
+                start, event_count, chunk_length, chunk_id  = int(chunk_md['BeginOffset']), int(chunk_md['EventCount']), int(chunk_md['Length']), chunk_md['ChunkId']
 
                 if int(chunk_md['ChunkVersion']) == 100:   # Read Optimized Search data
                   eprint("ROS - ChunkId ", chunk_id, " - skip ", event_count, " data bytes.")
@@ -221,7 +221,7 @@ def read_cef(file_list):
                 #print(asctime(gmtime(int(chunk_md['MinEventEndTime']) / 1000)))
                 #print(asctime(gmtime(int(chunk_md['MaxEventEndTime']) / 1000)))
                 #print(asctime(gmtime(int(chunk_md['ReceiptTime']) / 1000)))
-                
+
                 if options.term:
                   print("CHUNK:", ck_count," van ", num_chunks, " Ofs:",start," Len:", chunk_length," #Evt:", event_count, file=tty, end='\r')
 

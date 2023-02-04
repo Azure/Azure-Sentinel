@@ -20,28 +20,28 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-  let LearningPeriod = 7d; 
-  let BinTime = 1h; 
-  let RunTime = 1h; 
-  let StartTime = 1h; 
-  let NumberOfStds = 3; 
-  let MinThreshold = 10.0; 
-  let EndRunTime = StartTime - RunTime; 
+  let LearningPeriod = 7d;
+  let BinTime = 1h;
+  let RunTime = 1h;
+  let StartTime = 1h;
+  let NumberOfStds = 3;
+  let MinThreshold = 10.0;
+  let EndRunTime = StartTime - RunTime;
   let EndLearningTime = StartTime + LearningPeriod;
   let aadFunc = (tableName:string){
-  let GitHubFailedSSOLogins = (table(tableName)  
-  | where AppDisplayName == "GitHub.com" 
-  | where ResultType != 0); 
-  GitHubFailedSSOLogins 
-  | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime)) 
+  let GitHubFailedSSOLogins = (table(tableName)
+  | where AppDisplayName == "GitHub.com"
+  | where ResultType != 0);
+  GitHubFailedSSOLogins
+  | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
   | summarize FailedLoginsCountInBinTime = count() by  UserPrincipalName, bin(TimeGenerated, BinTime), Type
   | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by UserPrincipalName, Type
-  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold)  
-  | join kind=innerunique ( 
-    GitHubFailedSSOLogins 
-    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime)) 
+  | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning + StdOfFailedLoginsInLearning * NumberOfStds, MinThreshold)
+  | join kind=innerunique (
+    GitHubFailedSSOLogins
+    | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
     | summarize FailedLoginsCountInRunTime = count() by User = Identity, UserPrincipalName, bin(TimeGenerated, BinTime), Type
-  ) on UserPrincipalName 
+  ) on UserPrincipalName
   | where FailedLoginsCountInRunTime > LearningThreshold
   | extend AccountCustomEntity = UserPrincipalName , timestamp = TimeGenerated
   };

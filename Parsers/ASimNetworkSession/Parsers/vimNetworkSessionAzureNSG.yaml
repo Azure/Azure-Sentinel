@@ -61,30 +61,30 @@ ParserQuery: |
       'U', 'UDP'
   ];
   let parser = (
-        starttime:datetime=datetime(null), 
+        starttime:datetime=datetime(null),
         endtime:datetime=datetime(null),
-        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
-        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        srcipaddr_has_any_prefix:dynamic=dynamic([]),
+        dstipaddr_has_any_prefix:dynamic=dynamic([]),
         ipaddr_has_any_prefix:dynamic=dynamic([]),
-        dstportnumber:int=int(null), 
-        hostname_has_any:dynamic=dynamic([]), 
-        dvcaction:dynamic=dynamic([]), 
-        eventresult:string='*', 
+        dstportnumber:int=int(null),
+        hostname_has_any:dynamic=dynamic([]),
+        dvcaction:dynamic=dynamic([]),
+        eventresult:string='*',
         disabled:bool=false)
   {
-    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM1_s:string, VM2_s:string)) { 
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM1_s:string, VM2_s:string)) {
       T
       | where
-        (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) 
+        (isnull(dstportnumber) or dstportnumber == toint(DestPort_d))
       | extend dataSrcIPs = strcat(SrcIP_s," ",SrcPublicIPs_s),
                dataDstIPs = strcat(DestIP_s," ",DestPublicIPs_s)
       | extend temp_isSrcMatch=has_any_ipv4_prefix(dataSrcIPs,src_or_any)
              , temp_isDstMatch=has_any_ipv4_prefix(dataDstIPs,dst_or_any)
       | extend ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual
             , temp_isSrcMatch, "SrcIpAddr"
             , temp_isDstMatch, "DstIpAddr"
             , "No match"
@@ -104,7 +104,7 @@ ParserQuery: |
       | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
       | where (eventresult=='*' or EventResult == eventresult)
     }; // prefilter ends
-    let AzureNetworkAnalytics = 
+    let AzureNetworkAnalytics =
       AzureNetworkAnalytics_CL
       | where
        (isnull(starttime) or TimeGenerated >= starttime)
@@ -126,14 +126,14 @@ ParserQuery: |
           SrcInterfaceName = tostring(split(NIC_s, '/')[1]),
           SrcGeoCountry = toupper(Country_s)
       | extend hostelements=split(VM2_s,'/')
-      | extend 
+      | extend
           DstFQDN = strcat(hostelements[0], @"\", hostelements[1]),
           DstHostname = tostring(hostelements[1]),
           DstDomain = tostring(hostelements[0]),
           DstDomainType = "ResourceGroup"
       | extend Hostname = DstHostname
       | project-away hostelements, isOutBound
-    ;  
+    ;
     let AzureNetworkAnalyticsOutbound =
       AzureNetworkAnalytics
       | where isOutBound
@@ -141,14 +141,14 @@ ParserQuery: |
       | project-rename
           SrcMacAddr = MACAddress_s
       | extend
-          SrcBytes   = tolong(OutboundBytes_d), 
+          SrcBytes   = tolong(OutboundBytes_d),
           SrcPackets = tolong(OutboundPackets_d),
           DstBytes   = tolong(InboundBytes_d),
           DstPackets = tolong(InboundPackets_d),
           DstInterfaceName = tostring(split(NIC_s, '/')[1]),
           DstGeoCountry = toupper(Country_s)
       | extend hostelements=split(VM1_s,'/')
-      | extend 
+      | extend
           SrcFQDN = strcat(hostelements[0], @"\", hostelements[1]),
           SrcHostname = tostring(hostelements[1]),
           SrcDomain = tostring(hostelements[0]),
@@ -178,7 +178,7 @@ ParserQuery: |
         NetworkDuration = toint((((EventEndTime - datetime(1970-01-01)) / 1s) - ((EventStartTime - datetime(1970-01-01)) / 1s )) * 1000),
         Rule = NetworkRuleName,
         SessionId = NetworkSessionId
-    | extend 
+    | extend
         DstIpAddr = iff(isnotempty(DestIP_s),
                         DestIP_s,
                         split(DestPublicIPs_s, '|')[0]),

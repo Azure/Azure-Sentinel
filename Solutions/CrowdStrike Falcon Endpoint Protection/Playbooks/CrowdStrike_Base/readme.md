@@ -1,15 +1,15 @@
-# CrowdStrike_Base 
+# CrowdStrike_Base
  ## Summary
 This is Crowdstrike base template which is used to generate access token and this is used in actual crowdstrike templates. This playbook gets triggered when a new Http request is created and this is being called from other Crowdstrike playbooks.
 
 ![CrowdStrike_Base](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Playbooks/CrowdStrike_Base/images/designerScreenshotLight.png)
-### Prerequisites 
+### Prerequisites
 
 1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2Fquickstarts%2Fmicrosoft.keyvault%2Fkey-vault-secret-create%2Fazuredeploy.json)
 2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters:
 
@@ -18,9 +18,9 @@ This is Crowdstrike base template which is used to generate access token and thi
     * ClientSecret: Enter the client secret key name used in key vault
     * Service_Endpoint: Enter the service endpoint of crowdstrike ex: {https://crowdsrtikeurl.com}
     * Playbook_Name: Enter the playbook name here (Ex:CrowdStrike_Base)
-    
-    
-### Post-Deployment instructions 
+
+
+### Post-Deployment instructions
 #### a. Authorize playbook
 Once deployment is complete, we need to add the playbook in the access policy of the Keyvault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)
 

@@ -11,12 +11,12 @@ const workbooksMetadataFilePath: string = "Workbooks/WorkbooksMetadata.json";
 export async function IsValidWorkbookTemplate(filePath: string): Promise<ExitCode> {
   const workbookTemplateString: string = fs.readFileSync(filePath, "utf8");
   const parsedWorkbookTemplate: WorkbookTemplate = JSON.parse(workbookTemplateString);
-  
+
   // WorkbooksMetadata.json file is not a workbook template file but is still under the same folder of the templates. Therefore we want to exclude it from this test.
   if(filePath === workbooksMetadataFilePath){
     return ExitCode.SUCCESS;
   }
-  
+
   if(isValidWorkbookJson(parsedWorkbookTemplate))
   {
     isFromTemplateIdNotSentinelUserWorkbook(parsedWorkbookTemplate);

@@ -1,7 +1,7 @@
 # Ingest-Prisma
 author: Nathan Swift
 
-This Logic App connector will act as a Webhook listener, Prisma can then send an array of events to it and it will send the events to Azure Sentinel - Prisma_CL  
+This Logic App connector will act as a Webhook listener, Prisma can then send an array of events to it and it will send the events to Azure Sentinel - Prisma_CL
 
 When setting up Prisma you will see the field "Auth Toekn", this field is not required to connect Prisma. Only copy the complete HTTP Listener URL into the Prisma Webhook URL field.
 

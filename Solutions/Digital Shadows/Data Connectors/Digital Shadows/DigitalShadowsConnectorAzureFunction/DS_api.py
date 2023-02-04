@@ -9,7 +9,7 @@ logger = logging.getLogger("DS_api")
 class api:
 
     def __init__(self, id, key, secret, url):
-        """ 
+        """
             constructer initializes the DS creds and creates passkey.
             Parses the url recieved from user.
         """
@@ -27,7 +27,7 @@ class api:
         })
 
     def get_alerts(self, alert_ids):
-        """ 
+        """
             function for getting alerts using id
         """
 
@@ -38,7 +38,7 @@ class api:
         return response.json()
 
     def get_incidents(self, incident_ids):
-        """ 
+        """
             function for getting incidents using id list
         """
         incident_url = self.url + "incidents"
@@ -48,7 +48,7 @@ class api:
         return response.json()
 
     def get_triage_events(self, before_date, after_date, classification_filter_operation, classification_list):
-        """ 
+        """
             function for getting triage events,
             send only the DS converted dates using state serializer functions to get triage events
         """
@@ -60,7 +60,7 @@ class api:
         return response.json()
 
     def get_triage_items(self, triage_ids):
-        """  
+        """
             gets triage items from the triage events
         """
 
@@ -71,7 +71,7 @@ class api:
         return response.json()
 
     def get_triage_comments(self, item_id):
-        """  
+        """
             gets triage comments from the triage items
         """
 
@@ -79,7 +79,7 @@ class api:
         response = self.session.get(items_url)
         response.raise_for_status()
         return response.json()
-    
+
     def get_triage_events_by_num(self, event, classification_filter_operation, classification_list):
         """
             gets triage events by number
@@ -102,4 +102,3 @@ class api:
         else:
             raise Exception("Invalid Classification Filter Operation: %s. Valid operations can be one of (include, exclude)" % classification_filter_operation)
         return params
-        

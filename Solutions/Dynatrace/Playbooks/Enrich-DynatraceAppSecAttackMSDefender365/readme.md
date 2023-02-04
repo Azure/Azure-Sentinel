@@ -3,7 +3,7 @@ author: Dynatrace
 
 This playbook will Report only Microsoft Defender 365 insights related to Dynatrace Application Security Attack back to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/support/help/how-to-use-dynatrace/application-security) and [Microsoft Defender 365](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender) enabled in your enviornment to make use of this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
 
-** Prerequisites ** 
+** Prerequisites **
 - Follow [these instructions](https://www.dynatrace.com/support/help/get-started/access-tokens#create-api-token) to generate a Dynatrace access token, the token should have Read attacks (attacks.read) and Ingest logs (logs.ingest) scopes.
 - [Important step]Store the Dynatrace Access Token as a [secret in Azure Key vault](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal) and provide the key vault name during playbook deployment, by convention the secret name should be 'DynatraceAccessToken'.
 
@@ -11,7 +11,7 @@ This playbook will Report only Microsoft Defender 365 insights related to Dynatr
 
 Authorize the Azure Monitor Logs API Connection associated with the logic app deployed into the ResourceGroup.
 
-The Logic App uses a Managed System Identity (MSI) to query the Log Analytics Workspace. 
+The Logic App uses a Managed System Identity (MSI) to query the Log Analytics Workspace.
 
 Assign RBAC 'Microsoft Sentinel Reader' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
 

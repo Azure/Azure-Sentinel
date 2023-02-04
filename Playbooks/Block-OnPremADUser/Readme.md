@@ -8,7 +8,7 @@ Many organizations have an on-premises Active Directory infrastructure that is s
 
 <em> [Before you begin review the pre-requisites of deploying a Hybrid Runbook Worker here:](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install) </em>
 
-Create an Automation Account 
+Create an Automation Account
 
 
 Create an Automation Account from the Azure Portal
@@ -31,11 +31,11 @@ From the same Automation Account menu, create a Hybrid Worker Group
 It is highly recommended that the permissions of the account used above be restricted to the minimum required to disable user accounts using the Delegation userAccountControl bit mask. More details can be found [here](https://docs.microsoft.com/troubleshoot/windows-server/identity/useraccountcontrol-manipulate-account-properties)
 
 
-To create a new PowerShell Runbook navigate to you Automation Account and select the Runbooks blade. 
+To create a new PowerShell Runbook navigate to you Automation Account and select the Runbooks blade.
 
 ![05-createrunbook](../Block-OnPremADUser/images/05-createrunbook.png)
 
-Select PowerShell from the Runbook type menu and paste the below script in the resulting window. Click save then publish to activate the Runbook. 
+Select PowerShell from the Runbook type menu and paste the below script in the resulting window. Click save then publish to activate the Runbook.
 Note: the script also includes code to report an error in case of a failure in the process of disabling the account:
 
 
@@ -54,17 +54,17 @@ Create a new PowerShell Runbook with the below script, save and publish it. In c
 	 Write-Output "Remote Server Tools module does not exist on host. Installing..."
 	 try {
 	 Install-WindowsFeature -IncludeAllSubFeature RSAT -WhatIf
-	 } 
-	 catch{ 
+	 }
+	 catch{
 		 Write-Error "Error installing Remote Server Administration Tools"
 		 throw $_
 		 break
-		} 
+		}
 		Write-Output "Remote Server Administration Tools installed"
 	}
     if (Get-Module -ListAvailable -Name ActiveDirectory) {
     Write-Output "ActiveDirectory PowerShell module already exists on host."
-    } 
+    }
     else {
     Write-Output "ActiveDirectory PowerShell module does not exist on host. Installing..."
     try {
@@ -81,7 +81,7 @@ Create a new PowerShell Runbook with the below script, save and publish it. In c
 
     if (Get-Module -ListAvailable -Name ActiveDirectory) {
     Write-Output "ActiveDirectory PowerShell module already exists on host."
-    } 
+    }
     else {
     Write-Output "ActiveDirectory PowerShell module does not exist on host. Installing..."
     try {
@@ -110,7 +110,7 @@ The script takes in a SAMAccountName parameter which it uses to find the appropr
 
 
 
-Create a test user in Active Directory then perform the steps in the on-prem machine to install the Hybrid Worker feature 
+Create a test user in Active Directory then perform the steps in the on-prem machine to install the Hybrid Worker feature
 
 Deploy the below script from this URL: PowerShell Gallery | New-OnPremiseHybridWorker 1.7 . Depending on the PowerShell module currently installed on your machine you may need manually download the file. If you do so, you will need to rename the extension to a .zip file first then extract to the directory where you’ll execute the script from.
 
@@ -136,11 +136,11 @@ $NewOnPremiseHybridWorkerParameters = @{
   SubscriptionID        = "xxxxxxxxxxxxxxxx"
   WorkspaceName         = "iwautola"}
 
-From the same PowerShell command prompt type: Install-Script -Name New-OnPremiseHybridWorker which will use parameters specified above 
-This command will open a log on screen to Azure Portal to register the Hybrid Worker in Azure 
+From the same PowerShell command prompt type: Install-Script -Name New-OnPremiseHybridWorker which will use parameters specified above
+This command will open a log on screen to Azure Portal to register the Hybrid Worker in Azure
 
 
-The command will use parameters specified above to register your HybridWorker Group in your Azure Subscription. You can learn more about the process of deploying Hybrid Workers [here](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install) 
+The command will use parameters specified above to register your HybridWorker Group in your Azure Subscription. You can learn more about the process of deploying Hybrid Workers [here](https://docs.microsoft.com/azure/automation/automation-windows-hrw-install)
 
 The command will open a log on screen in Azure Portal to register the Hybrid Worker in Azure
 
@@ -155,10 +155,10 @@ To confirm successful registration, navigate to your automation account then sel
 <em> If you get the error indicating that the PowerShell file is not digitally signed, then you will need to execute the command below:
 
 Set-ExecutionPolicy RemoteSigned
-You may still have to unblock the file in case changing the execution policy alone does not work. The command to do this is from a PowerShell prompt is: 
+You may still have to unblock the file in case changing the execution policy alone does not work. The command to do this is from a PowerShell prompt is:
 Unblock-File -Path .\New-OmPremiseHybridWorker.ps1
 
-More details here: [Set-ExecutionPolicy (Microsoft.PowerShell.Security](https://docs.microsoft.com/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.1) 
+More details here: [Set-ExecutionPolicy (Microsoft.PowerShell.Security](https://docs.microsoft.com/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-7.1)
 
 It is also recommended that you use TLS versions more recent than 1.0 and 1.1. For this reason you may be required to run the below command as well:
 
@@ -178,7 +178,7 @@ To confirm successful registration, navigate to your automation account then sel
 ![08-HybridWorker](../Block-OnPremADUser/images/08-HybridWorker.png)
 
 
-### Test the Runbook 
+### Test the Runbook
 To ensure the Runbook is working ok before integrating with a Logic App, execute the Runbook manually from the Azure Portal and specify a test account in the SAMAccountName box, select HybridWorker in the Run Settings section and then choose your Hybrid Worker group name from the drop-down list:
 
 ![09-manualtest](../Block-OnPremADUser/images/09-manualtest.png)
@@ -206,7 +206,7 @@ Parse the JSON output from the Entities-Get Actions step above in order to extra
 ![DisableAD](../Block-OnPremADUser/images/DisableonAzureAD.png)
 
 
-### Create Hybrid Automation Job 
+### Create Hybrid Automation Job
 ![Createjob](../Block-OnPremADUser/images/Createjob.png)
 
 The string function below is contained in the 'Runbook Parameter SamAccountName' above and is needed to extract the SAMAccount from the UPN of the user as the On-Prem AD can only act on the User ID when specified in this format:
@@ -232,11 +232,3 @@ To simulate the block orchestration from Azure Sentinel, you may use the below s
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-OnPremADUser%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FBlock-OnPremADUser%2Fazuredeploy.json)
-
-
-
-
-
-
-
-

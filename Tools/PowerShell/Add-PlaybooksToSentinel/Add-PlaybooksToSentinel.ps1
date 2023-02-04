@@ -4,7 +4,7 @@ Authors: Tom Lilly @tlilly2010 (@TheTomLilly), Rich Lilly @richlilly2004 (@richl
 From https://github.com/Azure/Azure-Sentinel/PLACEHOLDER
 Last Updated Date: August 18, 2020
 
-This PowerShell script will enumerate a local Github repository clone of https://github.com/Azure/Azure-Sentinel/Playbook, or a cloud repo can be provided (defaults to Azure/Azure-Sentinel) 
+This PowerShell script will enumerate a local Github repository clone of https://github.com/Azure/Azure-Sentinel/Playbook, or a cloud repo can be provided (defaults to Azure/Azure-Sentinel)
 ask for a multi-select of the playbooks to import and import them.
 At the time of authoring, additional API authorization will have to be completed, but this is being worked on :)
 
@@ -66,7 +66,7 @@ foreach($playbook in $playbooks.Name)
     if($PSCmdlet.ParameterSetName -eq "CloudRepo")
     {
         $playbookUri = "$apiUri/$playbook"
-        $response = (Invoke-WebRequest $playbookUri).Content | ConvertFrom-Json 
+        $response = (Invoke-WebRequest $playbookUri).Content | ConvertFrom-Json
         $templates = ($response |Where-Object {$_.download_url -like "*.json"}).download_url
     }
     elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
@@ -84,7 +84,7 @@ foreach($playbook in $playbooks.Name)
         {
             $templateObj = Get-Content $template | ConvertFrom-Json
         }
-    
+
         $params = $templateObj.parameters | Get-Member -MemberType NoteProperty | Select-Object Name
         Write-Host "Sentinel Workbook: $($playbook)"
         Write-Host "Parameters: $($params.Name)"
@@ -92,7 +92,7 @@ foreach($playbook in $playbooks.Name)
         foreach($param in $params.Name)
         {
             $armTemplateParameters.Add($param) | Out-Null
-        }    
+        }
     }
 }
 
@@ -117,7 +117,7 @@ foreach($playbook in $playbooks.Name)
     if($PSCmdlet.ParameterSetName -eq "CloudRepo")
     {
         $playbookUri = "$apiUri/$playbook"
-        $response = (Invoke-WebRequest $playbookUri).Content | ConvertFrom-Json 
+        $response = (Invoke-WebRequest $playbookUri).Content | ConvertFrom-Json
         $templates = ($response |Where-Object {$_.download_url -like "*.json"}).download_url
     }
     elseif($PSCmdlet.ParameterSetName -eq "LocalRepo")
@@ -137,7 +137,7 @@ foreach($playbook in $playbooks.Name)
         {
             $templateObj = Get-Content $template | ConvertFrom-Json
         }
-    
+
         $params = $templateObj.parameters | Get-Member -MemberType NoteProperty | Select-Object Name
         Write-Host "Sentinel Workbook: $($playbook)"
         Write-Host "Parameters: $($params.Name)"
@@ -149,7 +149,7 @@ foreach($playbook in $playbooks.Name)
             $paramValue = (Get-Variable -Name $param).Value
             $templateParamTable.Add($param,$paramValue)
         }
-        
+
         Write-Host -ForegroundColor Yellow "Deploying Playbook $playbook"
         if($PSCmdlet.ParameterSetName -eq "CloudRepo")
         {

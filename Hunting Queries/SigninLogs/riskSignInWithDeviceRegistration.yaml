@@ -18,29 +18,29 @@ query: |
   let endtime = todatetime('{{EndTimeISO}}');
   let registeredDevices=AuditLogs
   | where TimeGenerated between (starttime .. endtime)
-  | where OperationName =~ "Add registered owner to device" 
-  | where Identity =~ "Device Registration Service" 
+  | where OperationName =~ "Add registered owner to device"
+  | where Identity =~ "Device Registration Service"
   | extend AccountUpn = tostring(TargetResources[0].userPrincipalName)
   | extend AccountObjectId = tostring(TargetResources[0].id)
   | extend DeviceObjectId = trim('"', tostring(TargetResources[0].modifiedProperties[0].newValue))
   | extend DeviceDisplayName = trim('"', tostring(TargetResources[0].modifiedProperties[1].newValue))
   | project DeviceRegistrationTimestamp=TimeGenerated,CorrelationId,AccountUpn,AccountObjectId,DeviceObjectId,DeviceDisplayName;
-  let registeringUser= 
-  registeredDevices 
+  let registeringUser=
+  registeredDevices
   | distinct AccountObjectId;
   let hasRegisteringUser = isnotempty(toscalar(registeringUser));
   let riskySignins=SigninLogs
   | where TimeGenerated between ((starttime-timeDelta) .. endtime)
   | where hasRegisteringUser
-  | where UserId in (registeringUser) 
+  | where UserId in (registeringUser)
   | where RiskLevelDuringSignIn has_any ('medium', 'high')
-  | where AppDisplayName in~ ("Office 365 Exchange Online", "OfficeHome") 
-  | where isnotempty(Id) 
-  | project SignInTimestamp=TimeGenerated, AppDisplayName, CorrelationId, AccountObjectId=UserId, IPAddress, RiskLevelDuringSignIn 
+  | where AppDisplayName in~ ("Office 365 Exchange Online", "OfficeHome")
+  | where isnotempty(Id)
+  | project SignInTimestamp=TimeGenerated, AppDisplayName, CorrelationId, AccountObjectId=UserId, IPAddress, RiskLevelDuringSignIn
   | summarize SignInTimestamp=argmin(SignInTimestamp,*) by AppDisplayName, CorrelationId, AccountObjectId, IPAddress, RiskLevelDuringSignIn;
-  registeredDevices 
-  | join riskySignins on AccountObjectId 
-  | where DeviceRegistrationTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h 
+  registeredDevices
+  | join riskySignins on AccountObjectId
+  | where DeviceRegistrationTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h
   | project-away AccountObjectId1
   | extend timestamp = DeviceRegistrationTimestamp, AccountCustomEntity = AccountUpn, IPCustomEntity = IPAddress
 entityMappings:

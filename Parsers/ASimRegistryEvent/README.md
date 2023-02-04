@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) RegistryEvent parsers 
+# Advanced Security Information Model (ASIM) RegistryEvent parsers
 
 This template deploys all ASIM RegistryEvent parsers.
 

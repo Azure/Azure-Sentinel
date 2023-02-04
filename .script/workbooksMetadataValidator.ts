@@ -18,9 +18,9 @@ export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCod
   doDefinedLogoImageFilesExist(workbooksMetadata);
   doDefinedPreviewImageFilesExist(workbooksMetadata);
   await isVersionIncrementedOnModification(workbooksMetadata);
-  
+
   return ExitCode.SUCCESS;
-} 
+}
 
 let fileTypeSuffixes = ["WorkbooksMetadata.json"];
 let filePathFolderPrefixes = ["Workbooks"];

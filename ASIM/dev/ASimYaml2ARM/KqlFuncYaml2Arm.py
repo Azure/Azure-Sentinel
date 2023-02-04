@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description='Generates ARM templates from a fol
 parser.add_argument('-m', '--mode', type=str, default='files', metavar='package, file or asim', dest='mode',
                     help='Select the mode:\n "files" to translate each input YAML files to an ARM template. "package" to create a full deployment package including readme files and a full deployment template. "asim" to create a full package using ASIM specific templates. "asimdev" to create a test ASIM package. Defaults to "files".')
 parser.add_argument(
-        'folders', nargs='*',  type=str, metavar='files and folders',   
+        'folders', nargs='*',  type=str, metavar='files and folders',
         help='List of YAML files and folders to process. For folders, each YAML file in the folder will be converted.'
 )
 parser.add_argument('-d', '--dest', type=str, default='ARM', metavar='destination folder', dest='dest',
@@ -96,16 +96,16 @@ logging.info (f'Inspecting files and folders {folders}.')
 for f in folders:
     f = os.path.abspath(f)
     if Path(f).is_file():
-        logging.debug (f'Adding file {f}.')      
+        logging.debug (f'Adding file {f}.')
         if not(f.endswith('.yaml')):
             logging.debug (f'{f} is not a YAML file.')
         else:
             files.append(f)
     elif Path(f).exists():
-        logging.debug (f'Adding folder {f}.')      
+        logging.debug (f'Adding folder {f}.')
         for file in os.listdir(f):
             file = os.path.join (f, file)
-            logging.debug (f'Adding file {file}.')  
+            logging.debug (f'Adding file {file}.')
             if Path(file).is_file():
                 if not(file.endswith('.yaml')):
                     logging.debug (f'{file} is not a YAML file.')
@@ -156,7 +156,7 @@ for f in files:
                 Alias = parserYaml[0][0]["FunctionName"]
             except:
                  raise SystemExit (f"Error: file {f} does not specify a parser or function name.")
-           
+
         try:
              Query = parserYaml[0][0]["ParserQuery"]
         except:
@@ -164,14 +164,14 @@ for f in files:
                  Query = parserYaml[0][0]["FunctionQuery"]
             except:
                  raise SystemExit (f"Error: file {f} does not specify a parser or function query.")
-        
+
         try:
              Product = parserYaml[0][0]["Product"]["Name"]
         except:
             Product = ""
             if not(FunctionMode):
                 raise SystemExit (f"Error: file {f} does not specify a parser product name.")
-       
+
         try:
             Description = parserYaml[0][0]["Description"]
         except:
@@ -187,7 +187,7 @@ for f in files:
             Category = parserYaml[0][0]["Category"]
         except:
             Category = "ASIM" # -- should not be hardcoded
-    
+
         if Schema != "":
             if package_type == 'asim' and package_schema != "" and package_schema != Schema:
                 raise SystemExit(f"Error: schema in file {f} is inconsistent with asim package schema.")
@@ -195,7 +195,7 @@ for f in files:
 
         params = parserYaml[0][0].get("ParserParams")
         if not(params):
-            params = parserYaml[0][0].get("FunctionParams")            
+            params = parserYaml[0][0].get("FunctionParams")
 
         logging.debug ('Generating ARM template')
         # generate the ARM template
@@ -211,7 +211,7 @@ for f in files:
                     ParamString = f'{param["Name"]}:{param["Type"].split(":",1)[1]}'
                 else:
                     try:
-                        Default = param["Default"] 
+                        Default = param["Default"]
                         if param['Type']=='string':
                             Default = f"\'{Default}\'"
                         ParamString = f'{param["Name"]}:{param["Type"]}={Default}'
@@ -244,7 +244,7 @@ for f in files:
                     rmf.write(readme.format(branch=encoded_branch, schema=Schema, filename=fname, product=Product, description=Description, uri=encoded_uri, title=Title))
 
             logging.debug ('Appending to full deployment (folder mode only)')
-            # Add to full deployment 
+            # Add to full deployment
             genericTemplate_element = copy.deepcopy(generic_element_template)
             genericTemplate_element['name'] = f'linked{fname}'
             formated_uri = template_uri.format(branch=Branch, schema='{schema}', filename=fname, uri=Uri)

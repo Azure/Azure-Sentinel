@@ -10,7 +10,7 @@ This utility can be used to export CEF records ( available in dat format) from A
     $ERRLOG=Err_1_504403158265500976.log
 
     $JSONOUT=Out_1_504403158265500976.json.gz
-    
+
     $DATIN=ArcSight_Data_1_0504403158265500976.dat
 
     ./lacat-opt.py -j $DATIN $META  2> $ERRLOG | gzip -c > $JSONOUT

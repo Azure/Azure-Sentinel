@@ -101,7 +101,7 @@ Note: You will need to prepare VS code for Azure function development. See https
 
 28. Click On under system assigned. Click Save. Click Yes
 
-  
+
 
 ### Step 2 - Create a Key Vault
 
@@ -141,7 +141,7 @@ Note: You will need to prepare VS code for Azure function development. See https
 
 18. Click **Review + assign**
 
-  
+
 
 ### Step 3 - Configure Settings for the Function
 

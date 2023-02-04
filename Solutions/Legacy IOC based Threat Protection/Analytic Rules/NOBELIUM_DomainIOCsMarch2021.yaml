@@ -1,6 +1,6 @@
 id: bb8a3481-dd14-4e76-8dcc-bbec8776d695
 name: NOBELIUM - Domain and IP IOCs - March 2021
-description: | 
+description: |
   'Identifies a match across various data feeds for domains and IP IOCs related to NOBELIUM.
    References: https://www.microsoft.com/security/blog/2021/03/04/goldmax-goldfinder-sibot-analyzing-nobelium-malware/'
 severity: Medium
@@ -12,23 +12,23 @@ requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
       - DnsEvents
-  - connectorId: AzureMonitor(VMInsights)  
-    dataTypes: 
-      - VMConnection 
-  - connectorId: CiscoASA 
-    dataTypes: 
-      - CommonSecurityLog 
-  - connectorId: PaloAltoNetworks 
-    dataTypes: 
-      - CommonSecurityLog 
-  - connectorId: MicrosoftThreatProtection 
-    dataTypes: 
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
       - DeviceNetworkEvents
   - connectorId: Office365
     dataTypes:
       - OfficeActivity
   - connectorId: AzureFirewall
-    dataTypes: 
+    dataTypes:
       - AzureDiagnostics
       - AZFWApplicationRule
       - AZFWDnsQuery
@@ -36,43 +36,43 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
   - connectorId: InfobloxNIOS
-    dataTypes: 
+    dataTypes:
       - Syslog
   - connectorId: GCPDNSDataConnector
-    dataTypes: 
+    dataTypes:
       - GCP_DNS_CL
   - connectorId: NXLogDnsLogs
-    dataTypes: 
+    dataTypes:
       - NXLog_DNS_Server_CL
   - connectorId: CiscoUmbrellaDataConnector
-    dataTypes: 
+    dataTypes:
       - Cisco_Umbrella_dns_CL
   - connectorId: Corelight
-    dataTypes: 
+    dataTypes:
       - Corelight_CL
 
-queryFrequency: 6h 
-queryPeriod: 6h 
-triggerOperator: gt 
-triggerThreshold: 0 
-tactics: 
-  - CommandAndControl 
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
 relevantTechniques:
   - T1102
 tags:
   - NOBELIUM
   - Schema: ASIMDns
     SchemaVersion: 0.1.1
-query:  |  
+query:  |
   let DomainNames = dynamic(['onetechcompany.com', 'reyweb.com', 'srfnetwork.org', 'sense4baby.fr', 'nikeoutletinc.org', 'megatoolkit.com']);
   let IPList = dynamic(['185.225.69.69']);
   let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
   (union isfuzzy=true
   (CommonSecurityLog
   | where SourceIP in (IPList) or DestinationIP in (IPList) or DestinationHostName in~ (DomainNames) or RequestURL has_any (DomainNames) or Message has_any (IPList)
-  | parse Message with * '(' DNSName ')' * 
+  | parse Message with * '(' DNSName ')' *
   | extend MessageIP = extract(IPRegex, 0, Message)
-  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message", RequestURL in (DomainNames), "RequestUrl", "NoMatch") 
+  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message", RequestURL in (DomainNames), "RequestUrl", "NoMatch")
   | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "NoMatch"), AccountCustomEntity = SourceUserID
   ),
   (_Im_Dns (domain_has_any=DomainNames)
@@ -90,7 +90,7 @@ query:  |
   (VMConnection
   | where SourceIp in (IPList) or DestinationIp in (IPList) or RemoteDnsCanonicalNames has_any (DomainNames)
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
+  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None")
   | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "NoMatch"), HostCustomEntity = Computer
   ),
   (OfficeActivity
@@ -101,12 +101,12 @@ query:  |
   | where RemoteUrl has_any (DomainNames) or RemoteIP in (IPList)
   | extend timestamp = TimeGenerated, DNSName = RemoteUrl, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName
   ),
-  (AzureDiagnostics 
+  (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (DomainNames)  
+  | where DestinationHost has_any (DomainNames)
   | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost
   ),
   (AZFWApplicationRule
@@ -136,7 +136,7 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity 
+        columnName: IPCustomEntity
   - entityType: DNS
     fieldMappings:
       - identifier: DomainName

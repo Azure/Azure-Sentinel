@@ -25,4 +25,3 @@ Make sure you are logged into Azure and are in the correct subscription before r
 
 ### Create a file named "simulated.csv" containing those rule templates that will cover techniques and have not been used yet.
 `Export-AzSentineMITREtoCSV -WorkspaceName "workspacename" -ResourceGroupName "rgname" -fileName "simulated" -ShowAllSimulatedRuleTemplates $true`
-

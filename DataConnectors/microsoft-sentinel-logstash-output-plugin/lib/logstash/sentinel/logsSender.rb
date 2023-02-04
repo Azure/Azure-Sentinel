@@ -18,9 +18,9 @@ module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 
         def handle_events(events)
           t = Thread.current
-          
+
           unless @thread_batch_map.include?(t)
-            @thread_batch_map[t] = @logstashLogAnalyticsConfiguration.compress_data ? 
+            @thread_batch_map[t] = @logstashLogAnalyticsConfiguration.compress_data ?
                                       LogStashCompressedStream::new(@logstashLogAnalyticsConfiguration) :
                                       LogStashAutoResizeBuffer::new(@logstashLogAnalyticsConfiguration)
           end

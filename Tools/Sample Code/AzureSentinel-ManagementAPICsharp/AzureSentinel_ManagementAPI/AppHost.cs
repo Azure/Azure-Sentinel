@@ -110,7 +110,7 @@ namespace AzureSentinel_ManagementAPI
 
         public async Task Run(string[] args)
         {
-            if (cliMode) 
+            if (cliMode)
             {
                 if (args.Length < 1)
                 {
@@ -134,7 +134,7 @@ namespace AzureSentinel_ManagementAPI
                     0 : int.Parse(args[cmdArgs[index - 1].Item2 - 1]);
 
                 await RunCommands(cliMode, index, args, insId);
-            } 
+            }
             else
             {
                 while (true)
@@ -581,7 +581,7 @@ namespace AzureSentinel_ManagementAPI
                     Console.WriteLine(Utils.GetString("Continue_Prompt_Text"));
                     Console.ReadLine();
                     return;
-                }               
+                }
             }
             catch (Exception exception)
             {
@@ -597,7 +597,7 @@ namespace AzureSentinel_ManagementAPI
         private string GetNonEmptyInput(string promptText)
         {
             var id = "";
-            
+
             while (id.Trim() == string.Empty)
             {
                 Console.WriteLine(promptText);
@@ -611,7 +611,7 @@ namespace AzureSentinel_ManagementAPI
         {
             Console.WriteLine(promptText);
             var input = Console.ReadLine();
-            
+
             if (input.Trim() == string.Empty)
             {
                 input = defaultValue;

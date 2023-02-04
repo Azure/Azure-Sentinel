@@ -32,7 +32,7 @@ fresh_event_timestamp = os.environ.get('FreshEventTimeStamp')
 
 logAnalyticsUri = os.environ.get('LAURI')
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
@@ -53,7 +53,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Starting program')
-    
+
     cli = S3Client(aws_access_key_id, aws_secret_acces_key, aws_region_name, aws_s3_bucket)
     ts_from, ts_to = cli.get_time_interval()
     print("From:{0}".format(ts_from))
@@ -63,27 +63,27 @@ def main(mytimer: func.TimerRequest) -> None:
     obj_list = cli.get_files_list(ts_from, ts_to)
 
     failed_sent_events_number = 0
-    successfull_sent_events_number = 0    
-    coreEvents = []   
+    successfull_sent_events_number = 0
+    coreEvents = []
 
     for obj in obj_list:
-        log_events = cli.process_obj(obj)       
-        
+        log_events = cli.process_obj(obj)
+
         for log in log_events:
             if len(log) > 0:
                 coreEvents.append(log)
-    
+
     file_events = 0
-    t0 = time.time()    
-    logging.info('Total number of files is {}'.format(len(coreEvents)))                                                                       
+    t0 = time.time()
+    logging.info('Total number of files is {}'.format(len(coreEvents)))
     for event in coreEvents:
         sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
             sentinel.send(event)
-        file_events += 1 
+        file_events += 1
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
-        
+
     if failed_sent_events_number:
         logging.info('{} AWS S3 files have not been sent'.format(failed_sent_events_number))
 
@@ -105,7 +105,7 @@ class S3Client:
         self.aws_secret_acces_key = aws_secret_acces_key
         self.aws_region_name = aws_region_name
         self.aws_s3_bucket = self._get_s3_bucket_name(aws_s3_bucket)
-        self.aws_s3_prefix = self._get_s3_prefix(aws_s3_bucket)        
+        self.aws_s3_prefix = self._get_s3_prefix(aws_s3_bucket)
         self.total_events = 0
         self.input_date_format = '%Y-%m-%d %H:%M:%S'
         self.output_date_format = '%Y-%m-%dT%H:%M:%SZ'
@@ -115,15 +115,15 @@ class S3Client:
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_acces_key,
             region_name=self.aws_region_name
-        )       
-       
+        )
+
     def _get_aws_account_id(self):
         self.sts = boto3.client(
-            "sts", 
-            aws_access_key_id=self.aws_access_key_id, 
+            "sts",
+            aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_acces_key,
             region_name=self.aws_region_name
-        )    
+        )
         return self.sts.get_caller_identity()["Account"]
 
     def _get_s3_bucket_name(self, aws_s3_bucket):
@@ -155,11 +155,11 @@ class S3Client:
         ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         ts_from = ts_from.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
         ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        return ts_from, ts_to                   
-    
+        return ts_from, ts_to
+
     def _make_objects_list_request(self, marker='', prefix=''):
         response = self.s3.list_objects(
-            Bucket=self.aws_s3_bucket, 
+            Bucket=self.aws_s3_bucket,
             Marker=marker,
             Prefix=prefix
         )
@@ -175,14 +175,14 @@ class S3Client:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = self.s3.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix, Delimiter='/')       
+        folders = self.s3.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix, Delimiter='/')
 
         marker_end = (ts_from - datetime.timedelta(minutes=60)).strftime("/%Y-%m-%d/%Y-%m-%d-%H-%M")
-        
-        for o in folders.get('CommonPrefixes'):        
-            marker = o.get('Prefix') + s3_folder + marker_end   
-            folder = o.get('Prefix') + s3_folder           
-            while True:                
+
+        for o in folders.get('CommonPrefixes'):
+            marker = o.get('Prefix') + s3_folder + marker_end
+            folder = o.get('Prefix') + s3_folder
+            while True:
                 response = self._make_objects_list_request(marker=marker, prefix=folder)
                 for file_obj in response.get('Contents', []):
                     if ts_to > file_obj['LastModified'] >= ts_from:
@@ -220,7 +220,7 @@ class S3Client:
             elif '.jsonl.gz' in key.lower():
                 extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode('utf-8')
             elif '.log.gz' in key.lower():
-                extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode('utf-8')                             
+                extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode('utf-8')
             elif '.json' in key.lower():
                 extracted_file = file_obj
             return extracted_file
@@ -234,7 +234,7 @@ class S3Client:
             if v == '' or (isinstance(v, list) and len(v) == 1 and v[0] == ''):
                 d[k] = None
         return d
-        
+
     @staticmethod
     def format_date(date_string, input_format, output_format):
         try:
@@ -242,14 +242,14 @@ class S3Client:
             date_string = date.strftime(output_format)
         except Exception:
             pass
-        return date_string    
+        return date_string
 
     @staticmethod
     def sort_files_by_date(ls):
         return sorted(ls, key=lambda k: k['LastModified'])
 
-    def process_obj(self, obj):        
-        key = obj['Key']        
+    def process_obj(self, obj):
+        key = obj['Key']
         if '.json.gz' in key.lower():
             downloaded_obj = self.download_obj(key)
             json_file = self.unpack_file(downloaded_obj, key)
@@ -269,8 +269,8 @@ class S3Client:
             sortedLogEvents = self.parse_log_file(csv_file)
         elif '.json' in key.lower():
             downloaded_obj = self.download_obj(key)
-            sortedLogEvents = self.unpack_file(downloaded_obj, key)            
-            
+            sortedLogEvents = self.unpack_file(downloaded_obj, key)
+
         return sortedLogEvents
 
     def parse_csv_file(self, csv_file):
@@ -358,19 +358,19 @@ class S3Client:
                         try:
                             event[field] = int(event[field])
                         except Exception:
-                            pass                
+                            pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
-                
-                event = self.convert_empty_string_to_null_values(event)                
+
+                event = self.convert_empty_string_to_null_values(event)
                 yield event
-                
+
     def parse_log_file(self, log_file):
-        log_reader = csv.reader(log_file.split('\n'), delimiter=' ')        
+        log_reader = csv.reader(log_file.split('\n'), delimiter=' ')
         for row in log_reader:
             if len(row) > 1:
                 if len(row) == 28: #Service name, traffic path, and flow direction
-                    event = {                    
+                    event = {
                         'version': row[0],
                         'srcaddr': row[1],
                         'dstaddr': row[2],
@@ -382,7 +382,7 @@ class S3Client:
                         'type': row[8],
                         'packets': row[9],
                         'bytes': row[10],
-                        'account-id': row[11],                    
+                        'account-id': row[11],
                         'vpc-id': row[12],
                         'subnet-id': row[13],
                         'instance-id': row[14],
@@ -398,19 +398,19 @@ class S3Client:
                         'pkt-dst-aws-service': row[24],
                         'traffic-path': row[25],
                         'flow-direction': row[26],
-                        'log-status': row[27]                    
-                    }                   
+                        'log-status': row[27]
+                    }
                 elif len(row) == 6: #Traffic through a NAT gateway
-                    event = {                    
+                    event = {
                         'instance-id': row[0],
                         'interface-id': row[1],
                         'srcaddr': row[2],
                         'dstaddr': row[3],
                         'pkt-srcaddr': row[4],
                         'pkt-dstaddr': row[5]
-                    }                    
+                    }
                 elif len(row) == 17: #Traffic through a transit gateway
-                    event = {                    
+                    event = {
                         'version': row[0],
                         'interface-id': row[1],
                         'account-id': row[2],
@@ -422,15 +422,15 @@ class S3Client:
                         'srcport': row[8],
                         'dstport': row[9],
                         'protocol': row[10],
-                        'tcp-flags': row[11],                    
+                        'tcp-flags': row[11],
                         'type': row[12],
                         'pkt-srcaddr': row[13],
                         'pkt-dstaddr': row[14],
                         'action': row[15],
                         'log-status': row[16]
-                    }                    
+                    }
                 elif len(row) == 21: #TCP flag sequence
-                    event = {                    
+                    event = {
                         'version': row[0],
                         'vpc-id': row[1],
                         'subnet-id': row[2],
@@ -442,7 +442,7 @@ class S3Client:
                         'dstaddr': row[8],
                         'srcport': row[9],
                         'dstport': row[10],
-                        'pkt-srcaddr': row[11],                    
+                        'pkt-srcaddr': row[11],
                         'pkt-dstaddr': row[12],
                         'protocol': row[13],
                         'bytes': row[14],
@@ -452,11 +452,11 @@ class S3Client:
                         'action': row[18],
                         'tcp-flags': row[19],
                         'log-status': row[20]
-                    }                    
-                elif len(row) == 14: 
+                    }
+                elif len(row) == 14:
                     #Accepted and rejected traffic; No data and skipped records
                     #Security group and network ACL rules; IPv6 traffic
-                    event = {                    
+                    event = {
                         'version': row[0],
                         'account-id': row[1],
                         'interface-id': row[2],
@@ -468,14 +468,14 @@ class S3Client:
                         'packets': row[8],
                         'bytes': row[9],
                         'start': row[10],
-                        'end': row[11],                    
+                        'end': row[11],
                         'action': row[12],
-                        'log-status': row[13]                        
-                    }                    
+                        'log-status': row[13]
+                    }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
 
-                event = self.convert_empty_string_to_null_values(event)                
+                event = self.convert_empty_string_to_null_values(event)
                 yield event
 
 
@@ -533,7 +533,7 @@ class AzureSentinelConnector:
     def _build_signature(self, customer_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
         string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")  
+        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
         encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
         authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
@@ -552,7 +552,7 @@ class AzureSentinelConnector:
         content_length = len(body)
         signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
         uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
-        
+
         headers = {
             'content-type': content_type,
             'Authorization': signature,

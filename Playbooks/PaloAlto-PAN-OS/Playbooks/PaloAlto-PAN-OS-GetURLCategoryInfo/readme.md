@@ -6,16 +6,16 @@
 
 
 ![PaloAlto-PAN-OS-GetURLCategoryInfo](./designerscreenshot.PNG)<br>
-### Prerequisites 
+### Prerequisites
 1. PAN-OS Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (e.g. PAN-OS Playbook)
-    
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
@@ -26,7 +26,7 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for PAN-OS API Connection (For authorizing the PAN-OS API connection, API Key needs to be provided)
 
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account
 2. Configure the automation rules to trigger this playbook
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)   [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-PAN-OS%2FPlaybooks%2FPaloAlto-PAN-OS-GetURLCategoryInfo%2Fazuredeploy.json)
@@ -62,9 +62,8 @@ Iterates on the URLs found in this incident (probably one) and performs the foll
      a. User information collected by "List address obects" action from PAN-OS such as
 
     *  name, location, description and URL
-    
-     
+
+
      b. URL filtering category information collected by "List URL filtering category information" action from PAN-OS such as
 
     * name, location and description
-

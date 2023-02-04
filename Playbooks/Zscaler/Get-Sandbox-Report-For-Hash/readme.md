@@ -14,12 +14,12 @@
 
 ## Summary
 
-This folder contains 1 playbook: 
+This folder contains 1 playbook:
 * Get Sandbox Report For Hash: Get a summary report for a file hash (if scanned by Zscaler)
 
 ![Playbook](../Images/Get-Sandbox-Report.png)
 
-The playbook is used to respond to an incident in Azure Sentinel and uses the Zscaler API. The playbook leverages the [authentication playbook](../authentication/readme.md).  The results of the scan are shown in the related Azure Sentinel Incident. 
+The playbook is used to respond to an incident in Azure Sentinel and uses the Zscaler API. The playbook leverages the [authentication playbook](../authentication/readme.md).  The results of the scan are shown in the related Azure Sentinel Incident.
 
 ![Playbook](../Images/Sentinel_Get_Sandbox_Report.png)
 
@@ -31,7 +31,7 @@ The playbook is used to respond to an incident in Azure Sentinel and uses the Zs
 
 <a name="deployment"></a>
 
-## Deployment instructions 
+## Deployment instructions
 
 You can choose to deploy one ore more playbooks.
 
@@ -62,7 +62,7 @@ Please note: The [authentication playbook](../authentication/) is a mandatory pr
 
 <a name="postdeployment"></a>
 
-## Post-Deployment instructions 
+## Post-Deployment instructions
 ### a. Authorize connections
 Once the deployment is completed, you will need to authorize each connection. There are connection for Azure KeyVault and Azure Sentinel. For each connection complete the following steps:
  1. Click edit API connection

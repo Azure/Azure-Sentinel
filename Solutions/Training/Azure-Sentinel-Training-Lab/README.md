@@ -5,7 +5,7 @@
 </p>
 
 ## Introduction
-These labs help you get ramped up with Microsoft Sentinel and provide hands-on practical experience for product features, capabilities, and scenarios. 
+These labs help you get ramped up with Microsoft Sentinel and provide hands-on practical experience for product features, capabilities, and scenarios.
 
 The lab deploys an Microsoft Sentinel workspace and ingests pre-recorded data to simulate scenarios that showcase various Microsoft Sentinel features. You should expect very little or no cost at all due to the size of the data (~10 MBs) and the fact that Microsoft Sentinel offers a 30-day free trial.
 
@@ -15,7 +15,7 @@ To deploy Microsoft Sentinel Trainig Lab, **you must have a Microsoft Azure subs
 
 ## Last release notes
 
-* Version 1.0 - Microsoft Sentinel Training Lab 
+* Version 1.0 - Microsoft Sentinel Training Lab
 
 ## Getting started
 
@@ -27,7 +27,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 - [The Microsoft Sentinel workspace](./Modules/Module-1-Setting-up-the-environment.md#exercise-1-the-azure-sentinel-workspace)
 - [Deploy the Microsoft Sentinel Training Lab Solution](./Modules/Module-1-Setting-up-the-environment.md#exercise-2-deploy-the-azure-sentinel-training-lab-solution)
 - [Configure Microsoft Sentinel Playbook](./Modules/Module-1-Setting-up-the-environment.md#exercise-3-configure-azure-sentinel-playbook)
- 
+
 [**Module 2 – Data Connectors**](./Modules/Module-2-Data-Connectors.md)
 - [Enable Azure Activity data connector](./Modules/Module-2-Data-Connectors.md#exercise-1-enable-azure-activity-data-connector)
 - [Enable Azure Defender data connector](./Modules/Module-2-Data-Connectors.md#exercise-2-enable-azure-defender-data-connector)
@@ -47,7 +47,7 @@ Below you can see all the [modules](#Modules) that are part of this lab. Althoug
 - [Hunting for more evidence](./Modules/Module-4-Incident-Management.md#exercise-4-Hunting-for-more-evidence)
 - [Add IOC to Threat Intelligence](./Modules/Module-4-Incident-Management.md#exercise-5-Add-IOC-to-Threat-Intelligence)
 - [Handover incident](./Modules/Module-4-Incident-Management.md#exercise-6-Handover-incident)
- 
+
 [**Module 5 – Hunting**](./Modules/Module-5-Hunting.md)
 - [Hunting on a specific MITRE technique](./Modules/Module-5-Hunting.md#exercise-1-Hunting-on-a-specific-MITRE-technique)
 - [Bookmarking hunting query results](./Modules/Module-5-Hunting.md#exercise-2-Bookmarking-hunting-query-results)

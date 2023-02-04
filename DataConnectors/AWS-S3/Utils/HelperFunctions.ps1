@@ -14,7 +14,7 @@ function Test-AwsConfiguration
      {
         Write-Log -Message $error[0] -LogFileName $LogFileName -Severity Error
         Write-Log -Message "Please execute again 'aws configure' and verify that AWS configuration is correct." -LogFileName $LogFileName -Severity Error
-        Write-Log -Message "For more details please see AWS doc https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html" -LogFileName $LogFileName -Severity Error               
+        Write-Log -Message "For more details please see AWS doc https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html" -LogFileName $LogFileName -Severity Error
         exit
      }
 }
@@ -51,10 +51,10 @@ function Set-RetryAction
 	<#
     .SYNOPSIS
         Main worker function to try and retry configuration steps
-        
+
     .PARAMETER Action
         Specifies the action to execute
-    
+
     .PARAMETER MaxRetries
         Specifies the maximum number of times to retry the action. The default is 3.
     #>
@@ -62,9 +62,9 @@ function Set-RetryAction
         [Parameter(Mandatory=$true,Position=0)][Action]$Action,
         [Parameter(Mandatory=$false)][int]$MaxRetries = 3
     )
-        
+
     $retryCount = 0
-	
+
     do {
             $retryCount++
             $Action.Invoke();
@@ -93,7 +93,7 @@ function Read-ValidatedHost
 <#
 .SYNOPSIS
     Gets validated user input and ensures that it is not empty. It will continue to prompt until valid text is provided.
-    Th 
+    Th
 .PARAMETER Prompt
     Text that will be displayed to user
 .PARAMETER ValidationType
@@ -127,7 +127,7 @@ param (
             $returnString = Read-Host -Prompt $Prompt
 
         } while (($returnString -eq "") -or ($returnString.Length -lt $MinLength) -or ($returnString.Length -gt $MaxLength))
-             
+
         return $returnString
 
     }
@@ -138,7 +138,7 @@ param (
             try
             {
                 [ValidateSet("Y","Yes","N","No")]$returnString = Read-Host -Prompt $Prompt
-            } 
+            }
             catch {}
         } until ($?)
 
@@ -149,26 +149,26 @@ param (
         else
         {
             $returnString = "n"
-        } 
-        
+        }
+
         return $returnString
 
     }
     else{
         return ""
-    
+
     }
 }
 
-function Write-Log 
+function Write-Log
 {
     <#
-    .DESCRIPTION 
+    .DESCRIPTION
         Write-Log is used to write information to a log file and to the console. It provides basic formatting capabilities.
-        
-    
+
+
     .PARAMETER Severity
-        Specifies the severity of the log message. Values can be: Information, Warning, Error, Verbose, or LogOnly. 
+        Specifies the severity of the log message. Values can be: Information, Warning, Error, Verbose, or LogOnly.
     .PARAMETER Padding
         Specifies the number of empty rows to add before message in the console. This does not apply to the log on disk.
     .PARAMETER Indent
@@ -193,7 +193,7 @@ function Write-Log
         Write the message to the verbose channel and to the log. Users would only see this in the console if they have enabled Verbose messaging.
     .EXAMPLE
         Write-Log -Message "Text to only send to the log" -LogFileName C:\temp\TestLog1.csv -Severity Verbose -Indent 2
-        Write the text only to the log and not to the console.    
+        Write the text only to the log and not to the console.
     #>
 
     [OutputType([System.Void])]
@@ -225,8 +225,8 @@ function Write-Log
             Write-Host ""
         }
     }
-	
-    try 
+
+    try
     {
         [PSCustomObject]@{
             Time     = (Get-Date -f g)
@@ -234,10 +234,10 @@ function Write-Log
             Severity = $Severity
         } | Export-Csv -Path $LogFileName -Append -NoTypeInformation -Force
     }
-    catch 
+    catch
     {
-        Write-Error "An error occurred writing log to disk"		
-    }    
+        Write-Error "An error occurred writing log to disk"
+    }
 
     # Add specified indentation to the message before it is displayed
     if ($Indent -gt 0)
@@ -247,7 +247,7 @@ function Write-Log
         }
     }
 
-    # Write the message to the correct output channel											  
+    # Write the message to the correct output channel
     switch ($Severity) {
         "Information" { Write-Host $Message -ForegroundColor $Color }
         "Warning" { Write-Warning $Message }

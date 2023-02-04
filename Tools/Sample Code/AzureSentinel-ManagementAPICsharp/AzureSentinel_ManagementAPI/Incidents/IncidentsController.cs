@@ -42,11 +42,11 @@ namespace AzureSentinel_ManagementAPI.Incidents
         /// </summary>
         /// <returns></returns>
         public async Task CreateIncident(int insId = -1)
-        {            
+        {
             if (insId != -1)
             {
                 await CreateIncidentByInstance(insId);
-            } 
+            }
             else
             {
                 for (var i = 0; i < azureConfigs.Length; i++)
@@ -64,7 +64,7 @@ namespace AzureSentinel_ManagementAPI.Incidents
         private async Task CreateIncidentByInstance(int i)
         {
             var incidents = Utils.LoadPayload<IncidentPayload[]>("IncidentPayload.json", cliMode);
-            
+
             foreach (var payload in incidents)
             {
                 try
@@ -165,7 +165,7 @@ namespace AzureSentinel_ManagementAPI.Incidents
         /// </summary>
         /// <returns></returns>
         public async Task BatchUpdateIncidents(int insId)
-        {           
+        {
             if (insId != -1)
             {
                 await BatchUpdateIncidentsByInstance(insId);
@@ -251,7 +251,7 @@ namespace AzureSentinel_ManagementAPI.Incidents
             var incidentIds = incidentUpdates.Select(x => x.Name);
             Console.WriteLine("Updating incidents:");
             Console.WriteLine("[{0}]", string.Join(", ", incidentIds));
-            
+
             foreach (var payload in incidentUpdates)
             {
                 try
@@ -314,7 +314,7 @@ namespace AzureSentinel_ManagementAPI.Incidents
                 var response = await http.SendAsync(request);
 
                 if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
-                
+
                 if (response.StatusCode == HttpStatusCode.NotFound)
                     throw new Exception("Not found, please create a new Incident first...");
 
@@ -363,7 +363,7 @@ namespace AzureSentinel_ManagementAPI.Incidents
         /// </summary>
         /// <returns></returns>
         public async Task GetIncidents(int insId)
-        {           
+        {
             if (insId != -1)
             {
                 var values = await GetIncidentsByInstance(insId, azureConfigs[insId].FilterQuery);
@@ -396,7 +396,7 @@ namespace AzureSentinel_ManagementAPI.Incidents
             {
                 var insName = azureConfigs[i].InstanceName;
                 var url = $"{azureConfigs[i].BaseUrl}/incidents?api-version={azureConfigs[i].ApiVersion}";
-                
+
                 if (!string.IsNullOrEmpty(filter))
                 {
                     url = $"{url}{filter}";
@@ -412,14 +412,14 @@ namespace AzureSentinel_ManagementAPI.Incidents
                     string res = await response.Content.ReadAsStringAsync();
                     JObject result = JsonConvert.DeserializeObject<JObject>(res);
                     var values = result["value"] as JArray;
-                    
+
                     if (values == null)
                     {
                         values = new JArray();
                     }
 
                     int callTimes = 1;
-                    
+
                     while (result.ContainsKey("nextLink") && callTimes < 100)
                     {
                         try
@@ -428,14 +428,14 @@ namespace AzureSentinel_ManagementAPI.Incidents
                             request = new HttpRequestMessage(HttpMethod.Get, nextLink);
                             await authenticationService.AuthenticateRequest(request, i);
                             var nextResponse = await http.SendAsync(request);
-                            
+
                             if (nextResponse.IsSuccessStatusCode)
                             {
                                 var newRes = await nextResponse.Content.ReadAsStringAsync();
                                 JObject newResult = JsonConvert.DeserializeObject<JObject>(newRes);
                                 result = newResult;
                                 var newValues = result["value"] as JArray;
-                                
+
                                 if (newValues == null)
                                 {
                                     newValues = new JArray();
@@ -487,7 +487,7 @@ namespace AzureSentinel_ManagementAPI.Incidents
             var insId = Utils.SelectInstance(azureConfigs);
 
             var comments = Utils.LoadPayload<IncidentCommentPayload[]>("IncidentCommentPayload.json", cliMode);
-            
+
             foreach (var payload in comments)
             {
                 try
@@ -580,14 +580,14 @@ namespace AzureSentinel_ManagementAPI.Incidents
                     string res = await response.Content.ReadAsStringAsync();
                     JObject result = JsonConvert.DeserializeObject<JObject>(res);
                     var values = result["value"] as JArray;
-                    
+
                     if (values == null)
                     {
                         values = new JArray();
                     }
 
                     int callTimes = 1;
-                    
+
                     while (result.ContainsKey("nextLink") && callTimes < 100)
                     {
                         try
@@ -596,14 +596,14 @@ namespace AzureSentinel_ManagementAPI.Incidents
                             request = new HttpRequestMessage(HttpMethod.Get, nextLink);
                             await authenticationService.AuthenticateRequest(request, insId);
                             var nextResponse = await http.SendAsync(request);
-                            
+
                             if (nextResponse.IsSuccessStatusCode)
                             {
                                 var newRes = await nextResponse.Content.ReadAsStringAsync();
                                 JObject newResult = JsonConvert.DeserializeObject<JObject>(newRes);
                                 result = newResult;
                                 var newValues = result["value"] as JArray;
-                                
+
                                 if (newValues == null)
                                 {
                                     newValues = new JArray();

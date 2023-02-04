@@ -56,7 +56,7 @@ ParserQuery: |
     false, false, 'Local'
   ];
   let ResultLookup = datatable (conn_state:string, EventResult:string, EventResultDetails:string, EventOriginalResultDetails:string, EventSeverity:string)
-  [ 
+  [
      'S0', 'Success', '', 'Connection attempt seen, no reply', 'Informational',
      'S1', 'Success', '', 'Connection established, not terminated', 'Informational',
      'SF', 'Success', 'Terminated', 'Normal establishment and termination', 'Informational', // Note that this is the same symbol as for state S1. You can tell the two apart because for S1 there will not be any byte counts in the summary, while for SF there will be.
@@ -72,30 +72,30 @@ ParserQuery: |
      'OTH', 'Success', '', 'No SYN seen, just midstream traffic', 'Informational'
   ];
   let parser = (
-    starttime:datetime=datetime(null), 
-    endtime:datetime=datetime(null), 
-    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
-    dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstipaddr_has_any_prefix:dynamic=dynamic([]),
     ipaddr_has_any_prefix:dynamic=dynamic([]),
-    dstportnumber:int=int(null), 
-    hostname_has_any:dynamic=dynamic([]), 
-    dvcaction:dynamic=dynamic([]), 
-    eventresult:string='*', 
+    dstportnumber:int=int(null),
+    hostname_has_any:dynamic=dynamic([]),
+    dvcaction:dynamic=dynamic([]),
+    eventresult:string='*',
     disabled:bool=false
-  ) 
+  )
   {
-    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);    
-    Corelight_CL 
-    | where (isnull(starttime) or TimeGenerated>=starttime) 
-        and (isnull(endtime) or TimeGenerated<=endtime) 
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    Corelight_CL
+    | where (isnull(starttime) or TimeGenerated>=starttime)
+        and (isnull(endtime) or TimeGenerated<=endtime)
         and not(disabled)
         and (array_length(hostname_has_any) == 0)
         and (array_length(dvcaction) == 0)
         and (Message has '"_path":"conn"' or Message has '"conn_red"')
-        and (array_length(ip_any)==0 or has_any_ipv4_prefix(Message,ip_any)) 
-        and (isnull(dstportnumber) or Message has (strcat('"id.resp_p":', tostring(dstportnumber)))) 
+        and (array_length(ip_any)==0 or has_any_ipv4_prefix(Message,ip_any))
+        and (isnull(dstportnumber) or Message has (strcat('"id.resp_p":', tostring(dstportnumber))))
     | project Message
     | parse Message with * '"conn_state":"' conn_state '",' *
     | lookup ResultLookup on conn_state
@@ -125,9 +125,9 @@ ParserQuery: |
         ['"community_id']:string,
         ['"vlan"']:string,
         ['"inner_vlan"']:string
-    ) 
+    )
     with (quote = '"')
-    | extend 
+    | extend
         EventCount=int(1),
         EventProduct="Zeek",
         EventVendor="Corelight",
@@ -159,12 +159,12 @@ ParserQuery: |
         FlowHistory = ['"history"'],
         NetworkSessionId = ['"community_id'],
         Dvc = ['"_system_name"']
-    | extend 
-      temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any), 
+    | extend
+      temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any),
       temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
     | extend ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual
             , temp_isSrcMatch, "SrcIpAddr"
             , temp_isDstMatch, "DstIpAddr"
             , "No match"
@@ -177,7 +177,7 @@ ParserQuery: |
         NetworkPackets = SrcPackets + DstPackets,
         NetworkProtocol = toupper(NetworkProtocol)
     // Aliases
-    | extend 
+    | extend
         IpAddr=SrcIpAddr,
         Src=SrcIpAddr,
         Duration=NetworkDuration,
@@ -187,4 +187,4 @@ ParserQuery: |
         Dst=DstIpAddr
     | project-away Message, local_orig, local_resp, conn_state
   };
-  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=dstipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled) 
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=dstipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)

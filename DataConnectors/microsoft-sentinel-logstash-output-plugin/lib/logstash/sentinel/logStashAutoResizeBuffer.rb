@@ -17,7 +17,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
           :max_items => logstashLoganalyticsConfiguration.max_items,
           :max_interval => logstashLoganalyticsConfiguration.plugin_flush_interval,
           :logger => logstashLoganalyticsConfiguration.logger,
-          #todo: There is a small discrepancy between the total size of the documents and the message body 
+          #todo: There is a small discrepancy between the total size of the documents and the message body
           :flush_each => logstashLoganalyticsConfiguration.MAX_SIZE_BYTES - 2000
         )
         super
@@ -27,7 +27,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
     public
 
     # Adding an event document into the buffer
-    def batch_event(event_document)        
+    def batch_event(event_document)
         buffer_receive(event_document)
     end # def batch_event
 
@@ -40,7 +40,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
             return
         end
 
-        # We send Json in the REST request 
+        # We send Json in the REST request
         documents_json = documents.to_json
         documents_byte_size = documents_json.bytesize
         if (documents_byte_size <= @logstashLoganalyticsConfiguration.MAX_SIZE_BYTES)
@@ -62,16 +62,16 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
         buffer_flush(:final => true)
     end
 
-    # Private methods 
-    private 
+    # Private methods
+    private
 
     def warn_documents_size_over_limitation(documents, documents_byte_size)
         average_document_size = documents_byte_size / documents.length
         recommended_max_items = (@buffer_config[:flush_each] / average_document_size).floor
-        
+
         if @logstashLoganalyticsConfiguration.amount_resizing == true
             change_buffer_size(recommended_max_items)
-        else 
+        else
             @logger.info("Warning: The size of the batch to post (#{documents_byte_size} bytes) is higher than the maximum allowed to post (#{@logstashLoganalyticsConfiguration.MAX_SIZE_BYTES}).")
         end
 
@@ -104,7 +104,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
             send_message_to_loganalytics(documents.to_json, documents.length)
         end
     end
-   
+
     # We would like to change the amount of messages in the buffer (change_max_size)
     # We change the amount according to the Azure Loganalytics limitation and the amount of messages inserted to the buffer
     # in one sending window.
@@ -112,11 +112,11 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
     # Else we would like to decrease it(to reduce latency for messages)
     def change_message_limit_size(amount_of_documents, documents_byte_size)
         current_buffer_size = @buffer_config[:max_items]
-        new_buffer_size = current_buffer_size 
+        new_buffer_size = current_buffer_size
         average_document_size = documents_byte_size / amount_of_documents
 
-        # If window is full we need to increase it 
-        # "amount_of_documents" can be greater since buffer is not synchronized meaning 
+        # If window is full we need to increase it
+        # "amount_of_documents" can be greater since buffer is not synchronized meaning
         # that flush can occur after limit was reached.
         if  amount_of_documents >= current_buffer_size
             # if doubling the size wouldn't exceed the API limit
@@ -132,7 +132,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
             end
 
         # We would like to decrease the window but not more then the MIN_MESSAGE_AMOUNT
-        # We are trying to decrease it slowly to be able to send as much messages as we can in one window 
+        # We are trying to decrease it slowly to be able to send as much messages as we can in one window
         elsif amount_of_documents < current_buffer_size and  current_buffer_size != [(current_buffer_size - @logstashLoganalyticsConfiguration.decrease_factor) ,@logstashLoganalyticsConfiguration.MIN_MESSAGE_AMOUNT].max
             new_buffer_size = [(current_buffer_size - @logstashLoganalyticsConfiguration.decrease_factor) ,@logstashLoganalyticsConfiguration.MIN_MESSAGE_AMOUNT].max
         end
@@ -154,4 +154,4 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
     end # def change_buffer_size
 
 end # LogStashAutoResizeBuffer
-end ;end ;end 
+end ;end ;end

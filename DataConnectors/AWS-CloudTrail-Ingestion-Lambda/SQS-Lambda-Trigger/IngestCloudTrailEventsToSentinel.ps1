@@ -35,7 +35,7 @@ $workspaceKey = $secretValue.LAWKEY
 $LATableName = $env:LogAnalyticsTableName
 $IsCoreFieldsAllTable = $env:CoreFieldsAllTable
 $IsSplitAWSResourceTypes = $env:SplitAWSResourceTypeTables
-$ResourceID = ''  
+$ResourceID = ''
 
 #The $eventobjectlist is the Json Parameter field names that form the core of the Json message that we want in the ALL Table in Log Ananlytics
 $eventobjectlist = @('eventTime', 'eventVersion', 'userIdentity', 'eventSource', 'eventName', 'awsRegion', 'sourceIPAddress', 'userAgent', 'errorCode', 'errorMessage', 'requestID', 'eventID', 'eventType', 'apiVersion', 'managementEvent', 'readOnly', 'resources', 'recipientAccountId', 'serviceEventDetails', 'sharedEventID', 'vpcEndpointId', 'eventCategory', 'additionalEventData')
@@ -44,20 +44,20 @@ $eventobjectlist = @('eventTime', 'eventVersion', 'userIdentity', 'eventSource',
 Function Expand-GZipFile {
     Param(
         $infile,
-        $outfile       
+        $outfile
     )
 	Write-Host "Processing Expand-GZipFile for: infile = $infile, outfile = $outfile"
-    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)	
-    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)	
-    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)	
-	
-    $buffer = New-Object byte[](1024)	
+    $inputfile = New-Object System.IO.FileStream $infile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
+    $output = New-Object System.IO.FileStream $outfile, ([IO.FileMode]::Create), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
+    $gzipStream = New-Object System.IO.Compression.GzipStream $inputfile, ([IO.Compression.CompressionMode]::Decompress)
+
+    $buffer = New-Object byte[](1024)
     while ($true) {
-        $read = $gzipstream.Read($buffer, 0, 1024)		
-        if ($read -le 0) { break }		
-		$output.Write($buffer, 0, $read)		
+        $read = $gzipstream.Read($buffer, 0, 1024)
+        if ($read -le 0) { break }
+		$output.Write($buffer, 0, $read)
 	}
-	
+
     $gzipStream.Close()
     $output.Close()
     $inputfile.Close()
@@ -66,14 +66,14 @@ Function Expand-GZipFile {
 #function to create HTTP Header signature required to authenticate post
 Function New-BuildSignature {
     param(
-        $customerId, 
-        $sharedKey, 
-        $date, 
-        $contentLength, 
-        $method, 
-        $contentType, 
+        $customerId,
+        $sharedKey,
+        $date,
+        $contentLength,
+        $method,
+        $contentType,
         $resource )
-    
+
     $xHeaders = "x-ms-date:" + $date
     $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource
     $bytesToHash = [Text.Encoding]::UTF8.GetBytes($stringToHash)
@@ -85,14 +85,14 @@ Function New-BuildSignature {
     $authorization = 'SharedKey {0}:{1}' -f $customerId, $encodedHash
     return $authorization
 }
-        
+
 # Function to create and post the request
 Function Invoke-LogAnalyticsData {
-    Param( 
-        $CustomerId, 
-        $SharedKey, 
-        $Body, 
-        $LogTable, 
+    Param(
+        $CustomerId,
+        $SharedKey,
+        $Body,
+        $LogTable,
         $TimeStampField,
         $resourceId)
 
@@ -116,30 +116,30 @@ Function Invoke-LogAnalyticsData {
         "x-ms-date"            = $rfc1123date;
         "x-ms-AzureResourceId" = $resourceId;
         "time-generated-field" = $TimeStampField;
-    }  
+    }
     $status = $false
     do {
         $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers1 -Body $Body
-		#If requests are being made at a rate higher than this, then these requests will receive HTTP status code 429 (Too Many Requests) along with the Retry-After: 
-		#<delta-seconds> header which indicates the number of seconds until requests to this application are likely to be accepted.If requests are being made at a rate higher than this, 
-		#then these requests will receive HTTP status code 429 (Too Many Requests) along with the Retry-After: <delta-seconds> header which indicates the number of seconds until requests to this application are likely to be accepted.																																				  
+		#If requests are being made at a rate higher than this, then these requests will receive HTTP status code 429 (Too Many Requests) along with the Retry-After:
+		#<delta-seconds> header which indicates the number of seconds until requests to this application are likely to be accepted.If requests are being made at a rate higher than this,
+		#then these requests will receive HTTP status code 429 (Too Many Requests) along with the Retry-After: <delta-seconds> header which indicates the number of seconds until requests to this application are likely to be accepted.
         If ($reponse.StatusCode -eq 429) {
             $rand = get-random -minimum 10 -Maximum 80
-            start-sleep -seconds $rand 
+            start-sleep -seconds $rand
         }
         else { $status = $true }
-    }until($status) 
+    }until($status)
     Remove-variable -name Body
     return $response.StatusCode
-    
+
 }
 
 
 Function Ingest-Core-Fields-Single-Table {
 	Param(
 	$coreEvents)
-	
-	$coreJson = convertto-json $coreEvents -depth 5 -Compress    
+
+	$coreJson = convertto-json $coreEvents -depth 5 -Compress
 	$Table = "$LATableName" + "_All"
 	IF (($corejson.Length) -gt 28MB) {
 		Write-Host "Log length is greater than 28 MB, splitting and sending to Log Analytics"
@@ -155,14 +155,14 @@ Function Ingest-Core-Fields-Single-Table {
 				$finish = $start + $RecSetSize
 			}
 			$body = Convertto-Json ($coreEvents[$start..$finish]) -Depth 5 -Compress
-			$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID          
+			$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID
 			if ($result -eq 200)
 			{
 				Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
 			}
 			$start = $finish + 1
 		}
-		$null = Remove-variable -name body        
+		$null = Remove-variable -name body
 
 	}
 	Else {
@@ -183,9 +183,9 @@ Function Ingest-AWS-ResourceType-Multi-Tables {
 	Param(
 	$eventSources,
 	$groupEvents)
-	
+
 	$RecCount = 0
-	foreach ($d in $eventSources) { 
+	foreach ($d in $eventSources) {
 		#$events = $groupevents[$d]
 		$eventsJson = ConvertTo-Json $groupEvents[$d] -depth 5 -Compress
 		$Table = $LATableName + '_' + $d
@@ -205,14 +205,14 @@ Function Ingest-AWS-ResourceType-Multi-Tables {
 					$finish = $start + $RecSetSize
 				}
 				$body = Convertto-Json ($groupEvents[$d][$start..$finish]) -Depth 5 -Compress
-				$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID                
+				$result = Invoke-LogAnalyticsData -CustomerId $workspaceId -SharedKey $workspaceKey -Body $body -LogTable $Table -TimeStampField 'eventTime' -ResourceId $ResourceID
 				if ($result -eq 200)
 				{
 					Write-Host "CloudTrail Logs successfully ingested to LogAnalytics Workspace under Custom Logs --> Table: $Table"
 				}
 				$start = $finish + 1
 			}
-			$null = Remove-variable -name body        
+			$null = Remove-variable -name body
 		}
 		Else {
 			#$logEvents = Convertto-Json $events -depth 20 -compress
@@ -223,11 +223,11 @@ Function Ingest-AWS-ResourceType-Multi-Tables {
 			}
 		}
 	}
-	
+
 }
 
 foreach ($sqsRecord in $LambdaInput.Records)
-{    
+{
 	$sqsRecordBody = ConvertFrom-Json -InputObject $sqsRecord.body
     foreach ($s3Event in $sqsRecordBody.Records)
     {
@@ -235,28 +235,28 @@ foreach ($sqsRecord in $LambdaInput.Records)
         $s3BucketKey = $s3Event.s3.object.key
 
         Write-Host "Processing event for: bucket = $s3BucketName, key = $s3BucketKey"
-	
+
 		IF ($Null -ne $s3BucketName -and $Null -ne $s3BucketKey) {
-			$s3KeyPath = $s3BucketKey -Replace ('%3A', ':')			
-			$fileNameSplit = $s3KeyPath.split('/')			
-			$fileSplits = $fileNameSplit.Length - 1			
-			$fileName = $filenameSplit[$fileSplits].replace(':', '_')			
-			$downloadedFile = Read-S3Object -BucketName $s3BucketName -Key $s3BucketKey -File "/tmp/$filename"			
+			$s3KeyPath = $s3BucketKey -Replace ('%3A', ':')
+			$fileNameSplit = $s3KeyPath.split('/')
+			$fileSplits = $fileNameSplit.Length - 1
+			$fileName = $filenameSplit[$fileSplits].replace(':', '_')
+			$downloadedFile = Read-S3Object -BucketName $s3BucketName -Key $s3BucketKey -File "/tmp/$filename"
 			Write-Host "Object $s3BucketKey is $($downloadedFile.Size) bytes; Extension is $($downloadedFile.Extension)"
-			
+
 			IF ($downloadedFile.Extension -eq '.gz' ) {
-				$infile = "/tmp/$filename"				
-				$outfile = "/tmp/" + $filename -replace ($downloadedFile.Extension, '')					
+				$infile = "/tmp/$filename"
+				$outfile = "/tmp/" + $filename -replace ($downloadedFile.Extension, '')
 				Expand-GZipFile $infile.Trim() $outfile.Trim()
 				$null = Remove-Item -Path $infile -Force -Recurse -ErrorAction Ignore
 				$filename = $filename -replace ($downloadedFile.Extension, '')
 				$filename = $filename.Trim()
-			
-    
-				$logEvents = Get-Content -Raw -LiteralPath ("/tmp/$filename" ) 
+
+
+				$logEvents = Get-Content -Raw -LiteralPath ("/tmp/$filename" )
 				$logEvents = $LogEvents.Substring(0, ($LogEvents.length) - 1)
 				$LogEvents = $LogEvents -Replace ('{"Records":', '')
-				$loglength = $logEvents.Length    
+				$loglength = $logEvents.Length
 				$logevents = Convertfrom-json $LogEvents -AsHashTable
 				$groupevents = @{}
 				$coreEvents = @()
@@ -282,7 +282,7 @@ foreach ($sqsRecord in $LambdaInput.Records)
 							$groupevents[$Ec2Request] = @()
 							$eventSources += $Ec2Request
 						}
-						$ec2Events = @{} 
+						$ec2Events = @{}
 						$ec2Events += @{'eventID' = $log.eventID }
 						$ec2Events += @{'awsRegion' = $log.awsRegion }
 						$ec2Events += @{'requestID' = $log.requestID }
@@ -295,7 +295,7 @@ foreach ($sqsRecord in $LambdaInput.Records)
 							$groupevents[$Ec2Response] = @()
 							$eventSources += $Ec2Response
 						}
-						$ec2Events = @{} 
+						$ec2Events = @{}
 						$ec2Events += @{'eventID' = $log.eventID }
 						$ec2Events += @{'awsRegion' = $log.awsRegion }
 						$ec2Events += @{'requestID' = $log.requestID }
@@ -315,7 +315,7 @@ foreach ($sqsRecord in $LambdaInput.Records)
 						$logdetails += @{$col = $log.$col }
 					}
 					$coreEvents += $Logdetails
-				
+
 				}
 
 				IF ($IsCoreFieldsAllTable -eq "true" -and $IsSplitAWSResourceTypes -eq "true") {
@@ -331,7 +331,7 @@ foreach ($sqsRecord in $LambdaInput.Records)
 				ELSE {
 					Write-Host "Make sure you have correct values supplied in Environment Variables for CoreFieldsAllTable and SplitAWSResourceTypeTables"
 				}
-				
+
 				$null = Remove-Variable -Name groupevents
 				$null = Remove-Variable -Name LogEvents
 			}

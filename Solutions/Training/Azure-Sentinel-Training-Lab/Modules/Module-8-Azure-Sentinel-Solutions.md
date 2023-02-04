@@ -85,4 +85,3 @@ This exercise explains how to install a new solution into your Microsoft Sentine
 ## Summary
 
 In this module your learned how to use the Microsoft Sentinel content hub to bring new content into your workspace.
-

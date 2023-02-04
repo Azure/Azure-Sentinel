@@ -38,7 +38,7 @@ You can choose to deploy the whole package: connectors + all three playbook temp
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTheHive%2FPlaybooks%2Fazuredeploy.json)
 [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTheHive%2FPlaybooks%2Fazuredeploy.json)
 
-# The Hive connectors documentation 
+# The Hive connectors documentation
 
 <a name="authentication">
 
@@ -57,7 +57,7 @@ Therefore [installation of the On-Premises Data Gateway](https://docs.microsoft.
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 
 1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters for deploying Custom Connectors and Playbooks

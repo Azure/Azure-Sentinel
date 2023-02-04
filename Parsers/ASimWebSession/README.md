@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) WebSession parsers 
+# Advanced Security Information Model (ASIM) WebSession parsers
 
 This template deploys all ASIM WebSession parsers.
 

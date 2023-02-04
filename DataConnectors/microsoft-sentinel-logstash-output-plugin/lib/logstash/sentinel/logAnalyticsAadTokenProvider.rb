@@ -35,7 +35,7 @@ class LogAnalyticsAadTokenProvider
 
   # Private  methods
   private
-  
+
   def is_saved_token_need_refresh()
     return @token_state[:access_token].nil? || @token_state[:expiry_time].nil? || @token_state[:expiry_time] <= Time.now
   end # def is_saved_token_need_refresh
@@ -61,8 +61,8 @@ class LogAnalyticsAadTokenProvider
     # Create REST request header
     header = get_header()
     begin
-        # Post REST request 
-        response = RestClient.post(@token_request_uri, @token_request_body, header)        
+        # Post REST request
+        response = RestClient.post(@token_request_uri, @token_request_body, header)
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
         else
@@ -83,11 +83,11 @@ class LogAnalyticsAadTokenProvider
   end # def get_header
 
   # Setting proxy for the REST client.
-  # This option is not used in the output plugin and will be used 
-  #  
+  # This option is not used in the output plugin and will be used
+  #
   def set_proxy(proxy='')
     RestClient.proxy = proxy.empty? ? ENV['http_proxy'] : proxy
   end # def set_proxy
 
 end # end of class
-end ;end ;end 
+end ;end ;end

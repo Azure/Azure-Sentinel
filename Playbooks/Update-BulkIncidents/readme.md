@@ -13,7 +13,7 @@ The Logic App requires the SecurityIncident Table preview
 
 **Usage Notes**
 
-To obtain your Logic App URI to make POST calls to, go to the Logic App designer mode and the first action and copy the URI 
+To obtain your Logic App URI to make POST calls to, go to the Logic App designer mode and the first action and copy the URI
 
 <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Update-BulkIncidents/images/logicappedit.png"/>
 
@@ -29,7 +29,7 @@ At this time the Logic App can only bulk update the Status of Azure Sentinel Inc
     Object parameters accepted are:
 
     operationtype - acceptable values are 'kql' or 'ids' | 'kql' = you will pass a parameter 'operationquery' with the kql language, those results will be passed to bulk update incidents | 'ids' = use an array list in parameter 'operationids'
-    operationstatus - Closed, New, InProgress  
+    operationstatus - Closed, New, InProgress
     operationkql - use a kql query to send results of Azure Sentinel Incidents to bulk update
     operationids - using an array list of Azure Sentinel Incident Ids/case numbers to bulk update
 
@@ -37,7 +37,7 @@ At this time the Logic App can only bulk update the Status of Azure Sentinel Inc
 
 #>
 
-# Your URI from the Deployed LogicApp - 
+# Your URI from the Deployed LogicApp -
 $uri = "https://prod-38.eastus.logic.azure.com:443/workflows/r794bb6/triggers/request/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Frequest%2Frun&sv=1.0&sig=b_7K3GTyGxvJ2V"
 
 # Header should be JSON

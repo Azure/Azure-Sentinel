@@ -1,9 +1,9 @@
 # Playbook templates update required
 
 Due to recent changes in Azure Sentinel, playbook templates should be updated to use the most recent components of the Azure Sentinel Logic Apps connector. <br>
-Below are details about the recent changes and links to relevant documentation for references. 
+Below are details about the recent changes and links to relevant documentation for references.
 * Please find in the playbook template you have contributed the required changes listed here.
-* Create a new version of the playbook template. 
+* Create a new version of the playbook template.
 * We recommend to check if the updates in the Logic Apps connector can improve the current playbook logic (for example, use new formatted comments; add Incident URL to your external messages or tickets; reduce complexity).
 * When you are done, create a Pull Request with the corrections. Use the title “connector updates - {playbook name}” and list the changes.
 
@@ -44,8 +44,8 @@ Below are details about the recent changes and links to relevant documentation f
 
 ### Trigger change: playbook are reccomended be triggered with “When Azure Sentinel incident creation rule was triggered”
 
-**Required change:** Playbooks which start with alert trigger (“When a response to an Azure Sentinel alert is triggered”) 
-are highly recommended to use the Incident trigger (“When Azure Sentinel incident creation rule was triggered”). 
+**Required change:** Playbooks which start with alert trigger (“When a response to an Azure Sentinel alert is triggered”)
+are highly recommended to use the Incident trigger (“When Azure Sentinel incident creation rule was triggered”).
 !['triggers'](./images/triggers.png)
 
 **Case playbook require both incident and alert trigger vesrion:**<br>
@@ -57,11 +57,11 @@ Folder structure in this case:
 * alert-trigger (folder)
    * images (folder)
    * azuredeploy.json
-* readme.md 
+* readme.md
 
 ```json
 # {PLAYBOOKNAME}
-author: 
+author:
 
 description
 
@@ -104,12 +104,12 @@ None
 
 
 
-**Additional value to consider when making the change:** 
+**Additional value to consider when making the change:**
 * Incident trigger recieves as an input:
     * Incident properties
-    * Alerts and their properties 
+    * Alerts and their properties
     * Entities
-* Note that you might not need to work with the alerts. For example, **Incident Alert product names** is a list of alert providers in this incident, **Incident Description, Title, Severity, Created time** can be used instead of the respective alert fields and **Incident URL** allows a direct pivot to Sentinel.<br> 
+* Note that you might not need to work with the alerts. For example, **Incident Alert product names** is a list of alert providers in this incident, **Incident Description, Title, Severity, Created time** can be used instead of the respective alert fields and **Incident URL** allows a direct pivot to Sentinel.<br>
 !['dynamic fields'](./images/dynamicFields.png)
 * This eliminates the need for "Alert - Get Incident".
 * Identify to **Update Incident**/**Add comment to incident (V3)** using **Incident ARM ID**
@@ -117,30 +117,30 @@ None
 ### Action change: "Alert - Get Incident"
 **Required change:** Use the latest version of "Alert - Get Incident", which works on Incidents API (instead of Cases API).
 
-**Instructions:** 
-* Remove the old component and re-select the action “Alert – Get Incident”. 
+**Instructions:**
+* Remove the old component and re-select the action “Alert – Get Incident”.
 * For validation, you can use “pick code” or Logic Apps code view. New version path starts with "path": "/incidents” (old version used "path": "/Cases”).<br>
 !['get incident'](./images/getIncident.png)
 
-**Additional value to consider when making the change:** 
+**Additional value to consider when making the change:**
 * Improve your logic using the new incident fields this version fetches, such as incident URL.
 * If required, identify to **Update Incident**/**Add comment to incident (V3)** using **Incident ARM ID**.
 
 ### Action change: Old “Change incident” actions should be replaced by “Update Incident”
-**Required change:** 
-<br>Remove any of the following actions: 
-* Add labels to incident 
-* Remove labels from incident 
-* Change incident description 
-* Change incident severity 
-* Change incident status 
+**Required change:**
+<br>Remove any of the following actions:
+* Add labels to incident
+* Remove labels from incident
+* Change incident description
+* Change incident severity
+* Change incident status
 * Change incident title
 
 and add **Update Incident** instead.
 Fill in only fields you want to change.
 
-To identify, this action requires **Incident ARM ID**. 
-* If playbook starts with incident trigger, Incident ARM ID is a dynamic field of the trigger. 
+To identify, this action requires **Incident ARM ID**.
+* If playbook starts with incident trigger, Incident ARM ID is a dynamic field of the trigger.
 * If you chose to keep the playbook to work with alert trigger, use the **Alert - Get Incident** action beforehand to get Incident ARM ID. See [usage examples](https://docs.microsoft.com/connectors/azuresentinel/#actions-on-incidents---usage-examples).
 
 New action:<br>
@@ -148,17 +148,17 @@ New action:<br>
 Actions to be deprecated:<br>
     !['deprecated'](./images/deprecated.png)
 
-**Additional value to consider when making the change:** 
+**Additional value to consider when making the change:**
 * If you had multiple changes on the incident in separated steps, you can use one step of Update Incident to do multiple changes.
 
 ### Action change: Add comment to incident should be replaced with new version (V3)
-**Required change:** 
+**Required change:**
 Remove previous version of Add comment to incident, and add version V3.<br><br>
-To identify, this action requires **Incident ARM ID**. 
-* If playbook starts with incident trigger, Incident ARM ID is a dynamic field of the trigger. 
+To identify, this action requires **Incident ARM ID**.
+* If playbook starts with incident trigger, Incident ARM ID is a dynamic field of the trigger.
 * If you chose to keep the playbook to work with alert trigger, use the **Alert - Get Incident** action beforehand to get Incident ARM ID. See [usage examples](https://docs.microsoft.com/connectors/azuresentinel/#actions-on-incidents---usage-examples).
 
-**Additional value to consider when making the change:** 
+**Additional value to consider when making the change:**
 * New version supports HTML and Marksdown, so you can create rich formatted comments:
     * Use the HTML editor for simple formatting.
     * Add a previous step of “Compose” built in action to implement raw HTML code. Then, use the output as an input to the comment.

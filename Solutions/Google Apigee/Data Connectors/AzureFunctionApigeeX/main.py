@@ -58,7 +58,7 @@ def main(mytimer: func.TimerRequest):
     last_ts = get_last_ts(state_manager)
 
     filt = """
-        resource.type="audited_resource" AND resource.labels.service="apigee.googleapis.com" 
+        resource.type="audited_resource" AND resource.labels.service="apigee.googleapis.com"
         AND
         timestamp>="{}"
     """.format(last_ts)

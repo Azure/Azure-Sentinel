@@ -16,7 +16,7 @@ import time
 import re
 from .state_manager import StateManager
 
-customer_id = os.environ['WorkspaceID'] 
+customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 pickle_str = os.environ['GooglePickleString']
 pickle_string = base64.b64decode(pickle_str)
@@ -24,7 +24,7 @@ connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
 activities = [
-            "access_transparency", 
+            "access_transparency",
             "admin",
             "calendar",
             "chat",
@@ -33,20 +33,20 @@ activities = [
             "gplus",
             "groups",
             "groups_enterprise",
-            "jamboard", 
-            "login", 
-            "meet", 
-            "mobile", 
-            "rules", 
-            "saml", 
-            "token", 
-            "user_accounts", 
-            "context_aware_access", 
-            "chrome", 
+            "jamboard",
+            "login",
+            "meet",
+            "mobile",
+            "rules",
+            "saml",
+            "token",
+            "user_accounts",
+            "context_aware_access",
+            "chrome",
             "data_studio"
             ]
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
 match = re.match(pattern,str(logAnalyticsUri))

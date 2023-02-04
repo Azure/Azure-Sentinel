@@ -130,10 +130,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         # If the API response length for the given logtype is less than the page limit, it indicates there are no subsquent pages, break the while loop and move to the next logtype
                         $skip = 0
                         $count = 1
-                        
+
                      }
-                }                
-                
+                }
+
                 if($responseCode -ne 200) {
                    Write-Error "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
                     $skip =  $skip - $pageLimit -lt 0 ? 0 : $skip - $pageLimit
@@ -145,11 +145,11 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                     $startTime = $startTime + $timeInterval
                     $count = 0
                     Write-Host "For Logtype $($logtype) modified starttime is $($startTime)."
-                }   
+                }
 
                 $functionCurrentTimeEpoch = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                 $TimeDifferenceEpoch = $functionCurrentTimeEpoch - $functionStartTimeEpoch
-                
+
                 if ($TimeDifferenceEpoch -ge 420) {
                     Write-Host "Exiting from do while loop for logType : $($logtype) to avoid function timeout."
                     #UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $startTime -skip $skip
@@ -168,7 +168,7 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         #if($count -eq 1)
         #{
         #    UpdateCheckpointTime -CheckpointFile $checkPointFile -LogType $logtype -LastSuccessfulTime $endTime -skip $skip
-        #} 
+        #}
     }
 
     # Function for processing the Netskope's API response
@@ -206,11 +206,11 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
         try {
             Write-Host "CheckpointFile : $($checkPointFile) | LogType : $($LogType) | LastSuccessfulTime : $($LastSuccessfulTime) | skip : $($skip)"
             $mutex = New-Object System.Threading.Mutex($false, 'NetSkopeCsvConnection')
-        
+
                 $mutex.WaitOne() > $null;
                 $LastSuccessfulTime  = $LastSuccessfulTime.ToString() + "|" + $skip
                 $checkpoints = Import-Csv -Path $CheckpointFile
-                if ($null -ne $checkpoints){                
+                if ($null -ne $checkpoints){
                     Write-Host "CHECKPOINT FILE : $($checkpoints.Length)"
                 } else {
                     Write-Host "Checkpointing file is Null."
@@ -218,13 +218,13 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                 $checkpoints | ForEach-Object { if ($_.Key -eq $LogType) { $_.Value = $LastSuccessfulTime } }
                 # $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
                 $checkpoints.GetEnumerator() | Select-Object -Property Key, Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
-                Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"                
+                Write-Host "Updated LastSuccessfulTime as $($LastSuccessfulTime) for LogType $($LogType)"
                 $mutex.ReleaseMutex();
 
-            #if ($mutex.WaitOne(2000)) {                
+            #if ($mutex.WaitOne(2000)) {
             #} else {
             #    Write-Host "Could not aquire the Mutex for Updated to Checkpoint File with $($LastSuccessfulTime) for LogType $($LogType)"
-            #}       
+            #}
         }
         catch {
             Write-Host "Error while updating the checkpointfile. Message: $($Error[0].Exception.Message)"
@@ -248,10 +248,10 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
 
     # Function to retrieve the checkpoint start time of the last successful API call for a given logtype. Checkpoint file will be created if none exists
     function GetStartTime($CheckpointFile, $LogType, $TimeInterval) {
-        
+
         $loggingOptions = $env:logTypes
         $apitypes = @($loggingOptions.split(",").Trim())
-    
+
         $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
         $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
         if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
@@ -286,8 +286,8 @@ function GetUrl ($uri, $ApiKey, $StartTime, $EndTime, $LogType, $Page, $Skip){
                         $_.Value
                     }
                 }
-                if ($null -ne $LastRecordObject) { 
-                    return $LastRecordObject 
+                if ($null -ne $LastRecordObject) {
+                    return $LastRecordObject
                 } else {
                     $firstEndTimeRecord = (Get-Date -Date ((Get-Date).DateTime) -UFormat %s)
                     $firstStartTimeRecord = $firstEndTimeRecord - $TimeInterval
@@ -381,7 +381,7 @@ function SplitDataAndProcess($customerId, $sharedKey, $payload, $logType) {
     catch {
         Write-Host "Error, error message: $($Error[0].Exception.Message)"
     }
-}   
+}
     GetNetSkopeAPILogs -logtype $logtype
 }
 

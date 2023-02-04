@@ -42,11 +42,11 @@ You can choose to deploy the whole package: connector + all three playbook templ
 </a>
 
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAzure%2520Firewall%2FPlaybooks%2Fazuredeploy.json" target="_blank">
-   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
 
-# Firewall connector documentation 
+# Firewall connector documentation
 
 <a name="authentication">
 
@@ -92,7 +92,7 @@ To use your own application with the Microsoft Sentinel connector, perform the f
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required parameteres:
 
@@ -100,7 +100,7 @@ To use your own application with the Microsoft Sentinel connector, perform the f
 |----------------|--------------|
 |**Custom Connector name**| Enter the Custom connector name (e.g. AzureFirewallConnector)|
 |**AzureFirewall-BlockIP-addNewRule Playbook Name**|  Enter the playbook name here (e.g. AzureFirewall-BlockIP-addNewRule)|
-|**AzureFirewall-BlockIP-addToIPGroup Playbook Name** | Enter the playbook name here (e.g. AzureFirewall-BlockIP-addToIPGroup)| 
+|**AzureFirewall-BlockIP-addToIPGroup Playbook Name** | Enter the playbook name here (e.g. AzureFirewall-BlockIP-addToIPGroup)|
 |**AzureFirewall-AddIPtoTIAllowList Playbook Name** |Enter the playbook name here (e.g. AzureFirewall-AddIPtoTIAllowList)|
 |**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
 |**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
@@ -108,7 +108,7 @@ To use your own application with the Microsoft Sentinel connector, perform the f
 |**ClientSecret** | Enter the Client secret of the Service Principal which the custom connector will authenticate with|
 <a name="postdeployment">
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
  1. Click the Microsoft Sentinel connection resource

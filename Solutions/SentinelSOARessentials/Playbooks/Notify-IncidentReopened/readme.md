@@ -16,8 +16,8 @@ This playbook is utilizing new update trigger to notify person/group on Microsof
 # Post-deployment
 1. Authorize Microsoft Teams and Microsoft Office 365 Outlook connectors
 2. Choose Microsoft Teams Team and Channel where to send the adaptive card (only if Team ID and Channel ID were not added during the deployment)
-3. Add playbook as an action to the automation rule 
-- Trigger = When incident is updated;  
+3. Add playbook as an action to the automation rule
+- Trigger = When incident is updated;
 - Condition = Staus > Changed From > Closed;.<br>
 **Automation rule example**<br>
 ![Automation Rule Example](./images/AutomationRuleExample.jpg)

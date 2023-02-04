@@ -6,7 +6,7 @@ https://techcommunity.microsoft.com/t5/azure-sentinel/enabling-security-research
 Microsoft open-sources Covid19 threat intelligence:
 https://www.microsoft.com/security/blog/2020/05/14/open-sourcing-covid-threat-intelligence/
 
-Using Azure Playbooks to import text-based threat indicators to Azure Sentinel: 
+Using Azure Playbooks to import text-based threat indicators to Azure Sentinel:
 https://techcommunity.microsoft.com/t5/azure-sentinel/using-azure-playbooks-to-import-text-based-threat-indicators-to/ba-p/1383980
 
 Integrating open source threat feeds with MISP and Azure Sentinel:

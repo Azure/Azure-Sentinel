@@ -2,7 +2,7 @@
 
 Author: Accelerynt
 
-For any technical questions, please contact info@accelerynt.com 
+For any technical questions, please contact info@accelerynt.com
 
 ## Functionality
 This package contains three separate logic apps:
@@ -11,7 +11,7 @@ This package contains three separate logic apps:
 * **edgescan_hosts**
 
 
-The end goal of this document is to set up Azure Sentinel logic apps that run daily and ingest records created in Edgescan over the past two days. 
+The end goal of this document is to set up Azure Sentinel logic apps that run daily and ingest records created in Edgescan over the past two days.
 The logic apps will scan the entries created within the last 7 days in the **custom logs** in Azure Sentinel for IDs duplicate IDs before adding a new entry to the corresponding log.
 
 The logic app templates you will deploy, however, are created for the initial run, which is missing this duplicate checking logic and are instead geared to pull in all data. This documentation will walk you through executing this initial run and then walk you through the changes needed to achieve the end goal.
@@ -75,7 +75,7 @@ Click on the exclamation point icon for the connection matching the logic app na
 
 ![connection2](Images/logicappconnection2.png)
 
-Enter the logic app name in for the Connection Name. 
+Enter the logic app name in for the Connection Name.
 
 ![connection3](Images/logicappconnection3.png)
 
@@ -89,7 +89,7 @@ This will show you the workspace id and key, corresponding to items 3 and 2 resp
 
 ![connectionsworkspace2](Images/connectionsworkspace2.png)
 
-Now the logic app can be saved and enabled. 
+Now the logic app can be saved and enabled.
 
 **Note** Before you enable and run the logic apps, you may wish to limit the data initially ingested from Edgescan. If this is the case, click edit on each of the logic apps again.
 
@@ -110,11 +110,11 @@ To only ingest records created in the last year, for example, you would add the 
 ### edgescan_hosts
     ?c[updated_at]=@{formatDateTime(addDays(utcNow(),-365),'yy-MM-dd')}
 
-  
-**Note** In the case of hosts, since no created date field appears to exist, the field indicating the last update is used instead.
-  
 
-Once this is done, be sure to save each logic app. 
+**Note** In the case of hosts, since no created date field appears to exist, the field indicating the last update is used instead.
+
+
+Once this is done, be sure to save each logic app.
 
 ## Initial Run
 To execute our initial run, enable each logic app and run their triggers.
@@ -144,7 +144,7 @@ Select the information from the drop-down lists matching what was used in the lo
 Add the query matching the logic app you are editing:
 
 ### edgescan_vulnerabilities
-    edgescan_vulnerabilities_CL 
+    edgescan_vulnerabilities_CL
     | where date_opened_t >= now(-3d)
 
 
@@ -172,9 +172,9 @@ Below the query action, add another action, searching for "**Control**" and then
 Select the value from the query result to loop through.
 
 ![actionadd4](Images/actionadd4.png)
- 
+
  Add an action inside the for loop, searching for "**Append to string variable**".
- 
+
 ![actionadd5](Images/actionadd5.png)
 
 Select the string variable referenced in the logic app and add paste the following in the "**Expression**" tab of the dynamic content value box:
@@ -203,7 +203,7 @@ In the Condition box, select the string variable in your logic app, select "**do
 
 ### edgescan_hosts
     string(items('For_Each_Host')['id'])
-    
+
 
 ![actionadd7](Images/actionadd7.png)
 
@@ -228,8 +228,8 @@ Expand the HTTP Request action in your logic app and add one of the following to
     ?c[updated_at]=@{formatDateTime(addDays(utcNow(),-2),'yy-MM-dd')}
 
 The end result should look like this:
-  
+
 ![actionadd9](Images/actionadd9.png)
 
-  
+
 Save the logic app and enable it.

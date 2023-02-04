@@ -28,12 +28,12 @@ function Get-CloudTrailKmsPolicy
             'Resource': '*'
         }
     ]}"
-	
+
 	return $kmsPolicy.Replace("'",'"')
 }
 
 function Get-OrganizationCloudTrailS3Policy
-{	
+{
 	<#
 	.SYNOPSIS
 		Returns a customized S3 Policy for specified organization and S3 bucket
@@ -59,13 +59,13 @@ function Get-OrganizationCloudTrailS3Policy
 }
 
 function Get-KmsS3Policy
-{	
+{
 	<#
 	.SYNOPSIS
-		Returns customized S3 policy for Kms Arn to access S3 bucket	
+		Returns customized S3 policy for Kms Arn to access S3 bucket
 	#>
 	$s3PolicyForKms = "
-	[	
+	[
 		{
             'Sid': 'Deny unencrypted object uploads. This is optional',
             'Effect': 'Deny',
@@ -138,7 +138,7 @@ function Get-RoleAndCloudTrailS3Policy
                     's3:x-amz-acl': 'bucket-owner-full-control'
                 }
             }
-        }]}"	
+        }]}"
 	return $s3PolicyForRoleAndCloudTrail.Replace("'",'"')
 }
 
@@ -149,7 +149,7 @@ function New-CloudTrailS3Policy
 		Returns customized S3 Policy for CloudTrail logs
 	#>
 	$s3RequiredPolicy = Get-RoleAndCloudTrailS3Policy
-	$s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json 
+	$s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json
 	if ($organizationCloudTrailConfirmation -ne 'n')
 	{
 		$s3RequiredPolicyObject.Statement += (Get-OrganizationCloudTrailS3Policy | ConvertFrom-Json)
@@ -175,7 +175,7 @@ function Get-EventNotificationPrefix
 	else
 	{
 		return  "AWSLogs/${callerAccount}/CloudTrail/"
-	}	
+	}
 }
 
 function Set-CloudTrailDataEventConfig
@@ -196,17 +196,17 @@ function Set-MultiRegionTrailConfig
 	<#
 	.SYNOPSIS
 		Configures multi-region trail capability
-	#>	
+	#>
 	$regionConfirmation = Read-ValidatedHost 'Do you want the Trail to be multi-region? [y/n]' -ValidationType Confirm
 	if ($regionConfirmation -eq 'y')
 	{
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --is-multi-region-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
-		aws cloudtrail update-trail --name $cloudTrailName --is-multi-region-trail | Out-Null 
+		aws cloudtrail update-trail --name $cloudTrailName --is-multi-region-trail | Out-Null
 	}
 	else
 	{
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --no-is-multi-region-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
-		aws cloudtrail update-trail --name $cloudTrailName --no-is-multi-region-trail | Out-Null 
+		aws cloudtrail update-trail --name $cloudTrailName --no-is-multi-region-trail | Out-Null
 	}
 }
 
@@ -215,9 +215,9 @@ function Set-OrganizationTrailConfig
 	<#
 	.SYNOPSIS
 		Configures trail logging for the entire organization
-	#>	
+	#>
 	if ($organizationCloudTrailConfirmation -ne 'n')
-	{	
+	{
 		Write-Log -Message "Executing: aws cloudtrail update-trail --name $cloudTrailName --is-organization-trail | Out-Null" -LogFileName $LogFileName -Severity Verbose
 		aws cloudtrail update-trail --name $cloudTrailName --is-organization-trail | Out-Null
 	}
@@ -263,9 +263,9 @@ $kmsConfirmation = Read-ValidatedHost -Prompt 'Do you want to enable KMS for Clo
 if ($kmsConfirmation -eq 'y')
 {
 	New-KMS
-	$kmsArn = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.Arn 
+	$kmsArn = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.Arn
 	$kmsKeyId = ($kmsKeyDescription | ConvertFrom-Json).KeyMetadata.KeyId
-	
+
 	$customMessage = "Changes CloudTrail: Kms GenerateDataKey to CloudTrail"
     $kmsRequiredPolicies = Get-CloudTrailKmsPolicy
     Update-KmsPolicy -RequiredPolicy $kmsRequiredPolicies -CustomMessage $customMessage
@@ -283,7 +283,7 @@ if ($organizationCloudTrailConfirmation -eq "y")
 		$organizationId = ((aws organizations describe-account --account-id $callerAccount) | ConvertFrom-Json -ErrorAction SilentlyContinue).Account.Arn.Split('/')[1]
 	}
 	catch {
-		Write-Log -Message "Unable to access AWS organization information. This could be a permissions or policy issue." -LogFileName $LogFileName -Severity Information -Indent 2 
+		Write-Log -Message "Unable to access AWS organization information. This could be a permissions or policy issue." -LogFileName $LogFileName -Severity Information -Indent 2
 		$organizationCloudTrailConfirmation = "n"
 	}
 
@@ -299,13 +299,13 @@ Enable-S3EventNotification -DefaultEventNotificationPrefix $eventNotificationPre
 Write-Log -Message 'CloudTrail definition' -LogFileName $LogFileName -LinePadding 2
 
 Set-RetryAction({
-	 
+
 	$script:cloudTrailName = Read-ValidatedHost 'Please enter CloudTrail name'
 	Write-Log -Message "Using CloudTrail name: $cloudTrailName" -LogFileName $LogFileName -Indent 2
 
 	Write-Log -Message "Executing: aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
 	aws cloudtrail get-trail --name $cloudTrailName 2>&1| Out-Null
-	
+
 	$isCloudTrailNotExist = $lastexitcode -ne 0
 	if ($isCloudTrailNotExist)
 	{
@@ -329,7 +329,7 @@ Set-RetryAction({
 	else
 	{
 		$cloudTrailBucketConfirmation = Read-ValidatedHost "Trail '${cloudTrailName}' is already configured. Do you want to override the bucket destination? [y/n]"
-		
+
 		if ($cloudTrailBucketConfirmation -eq 'y')
 		{
 			if ($kmsConfirmation -eq 'y')

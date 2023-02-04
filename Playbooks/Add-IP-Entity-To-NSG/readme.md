@@ -26,6 +26,6 @@ This playbook will not create, or attach the NSG to any network interfaces or su
 - Attach this playbook to an **automation rule** so it runs when specified incidents are created.
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
-  
+
 ## Screenshots
 ![Designer](images/designer-light.jpg)

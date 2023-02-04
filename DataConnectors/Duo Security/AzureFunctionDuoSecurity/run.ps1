@@ -1,4 +1,4 @@
-<#  
+<#
     Title:          Duo Security Data Connector
     Language:       PowerShell
     Version:        1.0
@@ -8,7 +8,7 @@
 
     DESCRIPTION
     This Function App calls the Duo Security Admin API (https://duo.com/docs/adminapi#logs) to pull the Duo
-    Authentication, Administrator, Telephony and Offline Enrollment logs. The response from the Duo Security API is recieved in JSON format. This function will build the signature and authorization headers 
+    Authentication, Administrator, Telephony and Offline Enrollment logs. The response from the Duo Security API is recieved in JSON format. This function will build the signature and authorization headers
     needed to pull data from the Duo Security API and post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post each log type to their individual tables in Log Analytics, for example,
     DuoSecurityAuthentication_CL, DuoSecurityAdministrator_CL, DuoSecurityTelephony_CL, and DuoSecurityOfflineEnrollment_CL.
 #>
@@ -20,12 +20,12 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
-    
+
 }
 
 # Define the different Duo Security Log Types. These values are set by the Duo Security API and required to seperate the log types into the respective Log Analytics tables
 $DuoSecuritylogTypes = @{
-    Authentication    = "/admin/v2/logs/authentication" 
+    Authentication    = "/admin/v2/logs/authentication"
     Administrator     = "/admin/v1/logs/administrator"
     Telephony         = "/admin/v1/logs/telephony"
     OfflineEnrollment = "/admin/v1/logs/offline_enrollment"
@@ -85,7 +85,7 @@ function Convertto-DuoRequest() {
             $StringAPIParams.trim()
         ).trim() -join "`n").ToCharArray().ToByte([System.IFormatProvider]$UTF8)
 
-    #Hash out some secrets 
+    #Hash out some secrets
     $HMACSHA1 = [System.Security.Cryptography.HMACSHA1]::new($sKey.ToCharArray().ToByte([System.IFormatProvider]$UTF8))
     $hmacsha1.ComputeHash($DuoParams) | Out-Null
     $ASCII = [System.BitConverter]::ToString($hmacsha1.Hash).Replace("-", "").ToLower()
@@ -122,7 +122,7 @@ Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     $calculatedHash = $sha256.ComputeHash($bytesToHash)
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
     $authorization = 'SharedKey {0}:{1}' -f $customerId, $encodedHash
-    
+
     # Dispose SHA256 from heap before return.
     $sha256.Dispose()
 
@@ -144,7 +144,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
         -method $method `
         -contentType $contentType `
         -resource $resource
-    
+
         # Compatible with previous version
 		if ([string]::IsNullOrEmpty($logAnalyticsUri)){
 			$logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
@@ -171,10 +171,10 @@ ForEach ($DSLogType in $DuoSecurityLogTypes.Keys) {
     Write-Debug $DSLogType
     $LogPath = $DuoSecuritylogTypes[$DSLogType]
     $moreLogs = $true
-    
+
     #Define first run params for
     switch ($DSLogType) {
-        "Authentication" { 
+        "Authentication" {
             $ApiParams = @{
                 mintime = $minTime
                 maxtime = $maxTime
@@ -214,18 +214,18 @@ ForEach ($DSLogType in $DuoSecurityLogTypes.Keys) {
             "Authentication" { $Output = $Response | Select-Object -ExpandProperty Response | Select-Object -ExpandProperty authlogs }
             "TrustMonitor" { $Output = $Response | Select-Object -ExpandProperty Response | Select-Object -ExpandProperty events }
             Default { $Output = $Response | Select-Object -ExpandProperty Response }
-        }     
+        }
 
         #Write Output
-        if ($Output.Length -eq 0 ) { 
+        if ($Output.Length -eq 0 ) {
             Write-Host ("DuoSecurity$($DSLogType) reported no new logs for the time interval configured.")
         }
         else {
             # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
             if ($Output -eq $null) {
                 # exclude it from being posted
-                Write-Host ("DuoSecurity$($DSLogType) null line excluded")    
-            } 
+                Write-Host ("DuoSecurity$($DSLogType) null line excluded")
+            }
             else {
                 # convert each log entry and post each entry to the Log Analytics API
                 $json = $Output | ConvertTo-Json -Depth 20

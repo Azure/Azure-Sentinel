@@ -15,7 +15,7 @@ References:
 - Title: Squid Proxy Connector
   Link: https://docs.microsoft.com/azure/sentinel/data-connectors-reference#squid-proxy-preview
 - Title: Squid native access log format
-  Link: https://wiki.squid-cache.org/Features/LogFormat 
+  Link: https://wiki.squid-cache.org/Features/LogFormat
 Description: |
   This ASIM parser supports filtering and normalizing Squid Proxy logs produced by the Microsoft Sentinel Squid Connector to the ASIM Web Session normalized schema. The parser supports squid native log format.
 ParserName: vimWebSessionSquidProxy
@@ -37,10 +37,10 @@ ParserParams:
     Type: dynamic
     Default: dynamic([])
   - Name: httpuseragent_has_any
-    Type: dynamic 
+    Type: dynamic
     Default: dynamic([])
   - Name: eventresultdetails_in
-    Type: dynamic 
+    Type: dynamic
     Default: dynamic([])
   - Name: eventresult
     Type: string
@@ -50,10 +50,10 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-    starttime:datetime=datetime(null), 
+    starttime:datetime=datetime(null),
     endtime:datetime=datetime(null),
-    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
-    ipaddr_has_any_prefix:dynamic=dynamic([]), 
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    ipaddr_has_any_prefix:dynamic=dynamic([]),
     url_has_any:dynamic=dynamic([]),
     httpuseragent_has_any:dynamic=dynamic([]),
     eventresultdetails_in:dynamic=dynamic([]),
@@ -62,9 +62,9 @@ ParserQuery: |
    ){
   SquidProxy_CL | where not(disabled)
     // -- Pre filtering
-    | where  
-      (isnull(starttime) or TimeGenerated >= starttime) 
-      and (isnull(endtime) or TimeGenerated <= endtime) 
+    | where
+      (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
       and (array_length(httpuseragent_has_any) == 0)
       and ((array_length(url_has_any) == 0) or (RawData has_any (url_has_any)))
       and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(RawData, srcipaddr_has_any_prefix))
@@ -82,52 +82,52 @@ ParserQuery: |
     | project-rename
       Dvc = Computer
     | extend
-      EventEndTime = unixtime_milliseconds_todatetime(todouble(tostring(AccessRawLog[0]))*1000), 
-      NetworkDuration = toint(AccessRawLog[1]), 
-      SrcIpAddr = tostring(AccessRawLog[2]), 
-      DstBytes = tolong(AccessRawLog[5]), 
-      HttpRequestMethod = tostring(AccessRawLog[6]), 
+      EventEndTime = unixtime_milliseconds_todatetime(todouble(tostring(AccessRawLog[0]))*1000),
+      NetworkDuration = toint(AccessRawLog[1]),
+      SrcIpAddr = tostring(AccessRawLog[2]),
+      DstBytes = tolong(AccessRawLog[5]),
+      HttpRequestMethod = tostring(AccessRawLog[6]),
       // -- Squid URL might be shortened by including ellipsis (...) instead of a section in the middle. This may impact the hostname part as well.
-      Url = tostring(AccessRawLog[7]), 
-      SrcUsername = tostring(AccessRawLog[8]), 
-      DstIpAddr = tostring(AccessRawLog[10]), 
-      HttpContentType = tostring(AccessRawLog[11]) 
+      Url = tostring(AccessRawLog[7]),
+      SrcUsername = tostring(AccessRawLog[8]),
+      DstIpAddr = tostring(AccessRawLog[10]),
+      HttpContentType = tostring(AccessRawLog[11])
     //
-    | extend 
-      ASimMatchingIpAddr = case( 
+    | extend
+      ASimMatchingIpAddr = case(
         array_length(ipaddr_has_any_prefix) == 0             , "-",
         has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix), "DstIpAddr",
         has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix), "SrcIpAddr"
                                                              , "No match"
             )
     // Post Filter
-    | where 
+    | where
         (
           (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
           and (ASimMatchingIpAddr != "No match")
         )
     // -- Constant fields
-    | extend 
-      EventCount = int(1), 
-      EventProduct = 'Squid Proxy', 
-      EventVendor = 'Squid', 
-      EventSchema = 'WebSession', 
-      EventSchemaVersion = '0.2.3', 
-      EventType = 'HTTPsession' 
+    | extend
+      EventCount = int(1),
+      EventProduct = 'Squid Proxy',
+      EventVendor = 'Squid',
+      EventSchema = 'WebSession',
+      EventSchemaVersion = '0.2.3',
+      EventType = 'HTTPsession'
     // -- Value normalization
     | extend
       SrcUsernameType = "Unknown",
-      SrcUsername = iff (SrcUsername == "-", "", SrcUsername), 
-      HttpContentType = iff (HttpContentType in (":", "-"), "", HttpContentType), 
+      SrcUsername = iff (SrcUsername == "-", "", SrcUsername),
+      HttpContentType = iff (HttpContentType in (":", "-"), "", HttpContentType),
       DstIpAddrIsHost = DstIpAddr matches regex @"^[^\:]*[a-zA-Z]$"
-    | extend 
+    | extend
       FQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
       DstIpAddr = iif (DstIpAddr == "-" or DstIpAddrIsHost, "", DstIpAddr)
-    | extend 
+    | extend
       EventSeverity = iff(EventResult == "Success", "Informational", "Low")
     | invoke _ASIM_ResolveDstFQDN ('FQDN')
     // -- aliases
-    | extend 
+    | extend
       EventStartTime = EventEndTime,
       Duration = NetworkDuration,
       HttpStatusCode = EventResultDetails,

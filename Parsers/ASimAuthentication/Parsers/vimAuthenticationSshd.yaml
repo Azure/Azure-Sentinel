@@ -15,9 +15,9 @@ References:
 Description: |
   This ASIM parser supports filtering and normalizing OpenSSH server (sshd) sign in logs, collected using Syslog to the ASIM Authentication schema.
 Notes: |
-  - The parser does not use sshd PAN and preauth events, which are in most cases duplicates of the core sshd events. 
+  - The parser does not use sshd PAN and preauth events, which are in most cases duplicates of the core sshd events.
   - Certain preauth events log unsuccessful authentication negotiation, which have security importance but are not authentication events per se, and therefore are not used by this parser.
-  - The parser may support other sshd servers, but this has not been tested.  
+  - The parser may support other sshd servers, but this has not been tested.
 ParserName: vimAuthenticationSshd
 ParserParams:
   - Name: starttime
@@ -34,22 +34,22 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-        starttime:datetime          = datetime(null), 
+        starttime:datetime          = datetime(null),
         endtime:datetime            = datetime(null),
-        targetusername_has:string   = "*", 
+        targetusername_has:string   = "*",
         disabled:bool               = false
     ) {
     let prefilter = (T:(SyslogMessage:string, TimeGenerated:datetime)) {
         T
-        | where 
-            (isnull(starttime)           or TimeGenerated >= starttime) 
+        | where
+            (isnull(starttime)           or TimeGenerated >= starttime)
             and (isnull(endtime)         or TimeGenerated <= endtime)
             and (targetusername_has=='*' or (SyslogMessage has targetusername_has))
     };
     let SyslogProjects = Syslog | project TimeGenerated, Computer, SyslogMessage, ProcessName, ProcessID, HostIP, Type, _ItemId, _ResourceId, _SubscriptionId;
     //
     // -- Successful login
-    let SSHDAccepted=(disabled:bool=false) { 
+    let SSHDAccepted=(disabled:bool=false) {
         // -- Parse events with the format "Accepted password for <User> from <IP address> port <port> ssh2"
         SyslogProjects | where not(disabled)
             | where ProcessName == "sshd" and SyslogMessage startswith 'Accepted'
@@ -69,15 +69,15 @@ ParserQuery: |
         // -- Or a number of such events message repeated <n> times: [ <message> ]
         SyslogProjects | where not(disabled)
             | where ProcessName == "sshd" and (
-                SyslogMessage startswith 'Failed' 
+                SyslogMessage startswith 'Failed'
                 or (SyslogMessage startswith 'message repeated' and SyslogMessage has 'Failed')
             )
             | invoke prefilter()
             | parse SyslogMessage with * "Failed " * " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
-            | parse SyslogMessage with "message repeated" EventCount:int " times:" * 
+            | parse SyslogMessage with "message repeated" EventCount:int " times:" *
             | extend
             EventResult          = 'Failure'
-            , EventSeverity      = 'Low' 
+            , EventSeverity      = 'Low'
             , EventType          = 'Logon'
             , LogonMethod        = iff (SyslogMessage has 'publickey', 'PKI', 'Username & password')
             , EventResultDetails = iff (SyslogMessage has 'publickey', 'Incorrect key', 'Incorrect password')
@@ -179,7 +179,7 @@ ParserQuery: |
                 Rule = RuleName
             | project-away SyslogMessage, ProcessName
     };
-    union isfuzzy=false 
+    union isfuzzy=false
         SSHDAccepted (disabled=disabled)
         , SSHDFailed (disabled=disabled)
         , SSHDInvalidUser (disabled=disabled)
@@ -189,7 +189,7 @@ ParserQuery: |
         , SSHDABreakInAttemptNastyPtr (disabled=disabled)
     | where targetusername_has=='*' or (TargetUsername has targetusername_has)
     | invoke _ASIM_ResolveDvcFQDN ('Computer')
-    | extend 
+    | extend
         EventVendor             = 'OpenBSD'
         , EventProduct          = 'OpenSSH'
         , DvcOs                 = 'Linux'
@@ -206,7 +206,7 @@ ParserQuery: |
         , DvcIdType             = iff (isnotempty(_ResourceId), "AzureResourceId", "")
         , TargetAppId           = tostring(ProcessID)
     | project-away Computer, ProcessID
-    | project-rename 
+    | project-rename
         EventUid                = _ItemId
         , DvcScopeId            = _SubscriptionId
         , DvcId                 = _ResourceId,
@@ -229,7 +229,7 @@ ParserQuery: |
     };
     parser (
         disabled            = disabled,
-        starttime           = starttime, 
+        starttime           = starttime,
         endtime             = endtime,
         targetusername_has  = targetusername_has
     )

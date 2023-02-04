@@ -50,7 +50,7 @@ $jsonComment = $comment | ConvertFrom-Json
 #Check if this is a public or internal comment. We only sync public comments
 if($jsonComment.jsdPublic -eq "True"){
     Write-Host "This is a public comment that will be posted"
-    
+
     #remove images from comments
     $sanitizedComment = $newComment.body -replace "(?<=!image)(.*)(?=!)" -replace "!image!"
 
@@ -73,7 +73,7 @@ if($jsonComment.jsdPublic -eq "True"){
     $keyResponse = Invoke-RestMethod -Method GET -Uri $queryUrl -Headers $headers
     $apiSecret= $keyResponse.value
 
-    
+
     $body=@{
         client_id=$clientid
         client_secret=$apiSecret

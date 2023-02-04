@@ -7,6 +7,6 @@ namespace AzureSentinel_ManagementAPI.IncidentRelation.Models
         public RelationPayload()
         {
         }
-        [JsonProperty("properties")] public RelationPropertiesPayload PropertiesPayload { get; set; }   
+        [JsonProperty("properties")] public RelationPropertiesPayload PropertiesPayload { get; set; }
     }
 }

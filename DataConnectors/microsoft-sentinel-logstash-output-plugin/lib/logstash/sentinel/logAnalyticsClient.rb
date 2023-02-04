@@ -7,7 +7,7 @@ require 'base64'
 require 'time'
 require 'rbconfig'
 
-module LogStash; module Outputs; class MicrosoftSentinelOutputInternal 
+module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsClient
 require "logstash/sentinel/logstashLoganalyticsConfiguration"
 require "logstash/sentinel/logAnalyticsAadTokenProvider"
@@ -41,9 +41,9 @@ require "logstash/sentinel/logAnalyticsAadTokenProvider"
     return (response.code >= 200 && response.code < 300 ) ? true : false
   end # def self.is_successfully_posted
 
-  private 
+  private
 
-  # Create a header for the given length 
+  # Create a header for the given length
   def get_header()
     # Getting an authorization token bearer (if the token is expired, the method will post a request to get a new authorization token)
     token_bearer = @aadTokenProvider.get_aad_token_bearer()
@@ -64,11 +64,11 @@ require "logstash/sentinel/logAnalyticsAadTokenProvider"
   end # def get_header
 
   # Setting proxy for the REST client.
-  # This option is not used in the output plugin and will be used 
+  # This option is not used in the output plugin and will be used
   def set_proxy(proxy='')
     RestClient.proxy = proxy.empty? ? ENV['http_proxy'] : proxy
   end # def set_proxy
-  
+
   def ruby_agent_version()
     case RUBY_ENGINE
         when 'jruby'
@@ -87,4 +87,4 @@ require "logstash/sentinel/logAnalyticsAadTokenProvider"
   end #getUserAgent
 
 end # end of class
-end ;end ;end 
+end ;end ;end

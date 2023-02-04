@@ -9,7 +9,7 @@ require "logstash/sentinel/logsSender"
 class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
 
   config_name "microsoft-sentinel-logstash-output-plugin"
-  
+
   # Stating that the output plugin will run in concurrent mode
   concurrency :shared
 
@@ -43,7 +43,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # This will trigger message amount resizing in a REST request to LA
   config :amount_resizing, :validate => :boolean, :default => true
 
-  # Setting the default amount of messages sent                                                                                                    
+  # Setting the default amount of messages sent
   # it this is set with amount_resizing=false --> each message will have max_items
   config :max_items, :validate => :number, :default => 2000
 
@@ -65,8 +65,8 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   public
   def register
     @logstash_configuration= build_logstash_configuration()
-	
-    # Validate configuration correctness 
+
+    # Validate configuration correctness
     @logstash_configuration.validate_configuration()
 
     @events_handler = @logstash_configuration.create_sample_file ?
@@ -82,7 +82,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
     @events_handler.close
   end
 
-  #private 
+  #private
   private
 
   # Building the logstash object configuration from the output configuration provided by the user

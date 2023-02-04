@@ -1,7 +1,7 @@
 # CreateIncident-MicrosoftForms
 author: Benjamin Kovacevic
 
-This playbook will create a new Microsoft Incident when Microsoft Forms response is submitted. 
+This playbook will create a new Microsoft Incident when Microsoft Forms response is submitted.
 
 # Prerequisites
 1. Create Microsoft Forms from template - https://forms.office.com/Pages/ShareFormPage.aspx?id=b6PlTP9aoEiHWDhi2Ji_bQ9ohJdYaDxFpei_Nyf2P35UQVBRWk83OUhCUjUyU0pUWkdIV1FMNjFCVC4u&sharetoken=7MfhwUMCnEB9pBTvSX7w

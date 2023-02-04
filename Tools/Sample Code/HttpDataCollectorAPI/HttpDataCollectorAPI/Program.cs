@@ -15,7 +15,7 @@ namespace HttpDataCollectorAPI
 		// Update customerId to your Log Analytics workspace ID
 		static string customerId = "enter_your_workspaceId";
 
-		// For sharedKey, use either the primary or the secondary Connected Sources client authentication key   
+		// For sharedKey, use either the primary or the secondary Connected Sources client authentication key
 		static string sharedKey = "enter_your_workspace_key";
 
 		// LogName is name of the event type that is being submitted to Azure Monitor

@@ -1,15 +1,15 @@
 #!/bin/bash
 
-function log_update() {	
+function log_update() {
 	echo "$@"
 	DATE=$(date)
-	echo "$DATE" "$@" | sudo tee -a /var/log/sapcon-sentinel-auto-update.log > /dev/null 
+	echo "$DATE" "$@" | sudo tee -a /var/log/sapcon-sentinel-auto-update.log > /dev/null
 }
 
-function log_register() {		
+function log_register() {
 	echo "$@"
 	DATE=$(date)
-	echo "$DATE" "$@" | sudo tee -a /var/log/sapcon-sentinel-register-autoupdate.log > /dev/null 
+	echo "$DATE" "$@" | sudo tee -a /var/log/sapcon-sentinel-register-autoupdate.log > /dev/null
 }
 
 function check_package() {
@@ -35,13 +35,13 @@ function register_auto_update() {
 	nocompress
 }' | sudo tee -a "/etc/logrotate.d/sapcon-sentinel-auto-update" > /dev/null
 	fi
-	
+
 	sudo logrotate /etc/logrotate.d/sapcon-sentinel-auto-update
 
-	UPDATEPOLICY='{ "auto_update" : true }'	
+	UPDATEPOLICY='{ "auto_update" : true }'
 	FREQUENCY="daily"
 	CRONPATH="/etc/cron.$FREQUENCY/sapcon-update"
-	AUTOUPDATESCRIPT="sapcon-sentinel-auto-update.sh"	
+	AUTOUPDATESCRIPT="sapcon-sentinel-auto-update.sh"
 
 	echo '
 ************************************************************
@@ -73,14 +73,14 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 
 		sysfileloc=$(docker inspect "$contname" --format '{{ .Mounts }}'| awk 'NR==1 {print $2}')
 		settingsjson=$sysfileloc/settings.json
-		
-		# Populate settings.json	
+
+		# Populate settings.json
 		if [ -f "$settingsjson" ]; then
 			if [ ! -s "$settingsjson" ]; then
 				echo $UPDATEPOLICY> "$settingsjson"
 			else
 				echo "$(jq '.auto_update = true' "$settingsjson")" > "$settingsjson"
-			fi	
+			fi
 		else
 			echo $UPDATEPOLICY> "$settingsjson"
 		fi
@@ -97,11 +97,11 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 	sudo chmod +x "/opt/sapcon/$AUTOUPDATESCRIPT"
 
 	log_register "Scheduling $FREQUENCY update job as $CRONPATH"
-	echo "#!/bin/bash" | sudo tee "$CRONPATH" > /dev/null	
+	echo "#!/bin/bash" | sudo tee "$CRONPATH" > /dev/null
 	echo "/opt/sapcon/$AUTOUPDATESCRIPT --update-mode" | sudo tee -a "$CRONPATH" > /dev/null
 	sudo chmod +x $CRONPATH
 
-	
+
 }
 
 function update_agents() {
@@ -197,7 +197,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-*)
 		echo "Unknown option $1"
-		echo "Valid options are"		
+		echo "Valid options are"
 		echo "--containername <containername> [--containername <containername>]..."
 		exit 1
 		;;

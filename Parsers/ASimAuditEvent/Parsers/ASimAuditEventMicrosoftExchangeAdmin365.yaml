@@ -51,7 +51,7 @@ ParserQuery: |
     | where not(disabled)
     | where RecordType  in ('ExchangeAdmin')
     | project Operation, ResultStatus, Parameters, OrganizationName, OrganizationId, OfficeObjectId, ClientIP, UserId, UserKey, UserAgent, UserType, TimeGenerated, OriginatingServer, SourceRecordId, Type, _ResourceId
-    | extend 
+    | extend
         SplitOp = split (Operation,"-")
     | extend
         op=tostring(SplitOp[0])
@@ -61,31 +61,31 @@ ParserQuery: |
     // Calculate Object
     | extend
         SplitObject = extract_all(@'^(.*?)[\\/](.*)$', OfficeObjectId)[0]
-    | extend 
+    | extend
         Object = case (
-            SplitObject[0] == OrganizationName, SplitObject[1], 
+            SplitObject[0] == OrganizationName, SplitObject[1],
             OfficeObjectId == "", SplitOp[1],
             OfficeObjectId
         )
     | project-away SplitOp, OfficeObjectId
     // --
     // Calculate source IP address and port
-    | extend 
+    | extend
         SplitIpAddr = extract_all(@'^\[?(.*?)\]?:(\d+)$', ClientIP)[0]
-    | extend 
+    | extend
         SrcIpAddr = iff (SplitIpAddr[1] == "", ClientIP, SplitIpAddr[0]),
         SrcPortNumber = toint(iff (SplitIpAddr[1] == "", "", SplitIpAddr[1]))
     | parse UserId with ActorUsername " (" ActingAppName ")"
-    | extend 
+    | extend
         ActorUsernameType = iff (ActorUsername == "", "UPN", "Windows"),
         ActorUsername = iff (ActorUsername == "", UserId, ActorUsername),
         ActingAppType = iff (ActingAppName == "", "", "Process")
     | project-rename
         SrcDescription = OriginatingServer,
-        NewValue = Parameters 
+        NewValue = Parameters
     | project-away SplitObject, UserKey, SplitIpAddr, ClientIP, UserId
     | project-rename
-        HttpUserAgent = UserAgent, 
+        HttpUserAgent = UserAgent,
         ActorOriginalUserType = UserType,
         ActorScopeId = OrganizationId,
         ActorScope = OrganizationName,
@@ -93,7 +93,7 @@ ParserQuery: |
     | lookup usertypes on ActorOriginalUserType
     | extend
         EventCount = int(1),
-        EventStartTime = TimeGenerated, 
+        EventStartTime = TimeGenerated,
         EventEndTime= TimeGenerated,
         EventProduct = 'Exchange 365',
         EventVendor = 'Microsoft',
@@ -102,12 +102,12 @@ ParserQuery: |
         TargetAppName = 'Exchange 365',
         TargetAppType = 'SaaS application',
         EventResult = iff(ResultStatus == "True", "Success", "Failure")
-    | project-away 
+    | project-away
         ResultStatus
     | extend
         EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
     // Aliases
-    | extend 
+    | extend
         User=ActorUsername,
         IpAddr = SrcIpAddr,
         Value = NewValue,

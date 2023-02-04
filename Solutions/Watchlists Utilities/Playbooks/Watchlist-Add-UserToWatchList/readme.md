@@ -4,7 +4,7 @@ Author: Yaniv Shasha
 
 
 This playbook will add a User entity to a new or existing watchlist.
- 
+
 
 ## Logical flow to use this playbook
 

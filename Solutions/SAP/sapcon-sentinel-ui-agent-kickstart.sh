@@ -3,7 +3,7 @@
 function log() {
 	echo "$@"
 	DATE=$(date)
-	echo "$DATE" "$@" | sudo tee -a /var/log/sapcon-sentinel-ui-agent-kickstart.log > /dev/null 
+	echo "$DATE" "$@" | sudo tee -a /var/log/sapcon-sentinel-ui-agent-kickstart.log > /dev/null
 }
 
 function verlte() {
@@ -147,13 +147,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # UI Agent validation
-if [ -z "$UI_AGENT" ] || 
-   [ -z "$GUID" ] || 
-   [ -z "$kv" ] || 
-   [ -z "$SDKFILELOC" ] || 
-   ( [ "$MODE" != 'kvsi' ] && [ "$MODE" != 'kvmi' ] ) ||   
+if [ -z "$UI_AGENT" ] ||
+   [ -z "$GUID" ] ||
+   [ -z "$kv" ] ||
+   [ -z "$SDKFILELOC" ] ||
+   ( [ "$MODE" != 'kvsi' ] && [ "$MODE" != 'kvmi' ] ) ||
    ( [ "$MODE" == 'kvsi' ] && ( [ -z "$APPID" ] || [ -z "$APPSECRET" ] || [ -z "$TENANT" ] ) ) ||
-   ( [ "$CLOUD" != 'public' ] && [ "$CLOUD" != 'fairfax' ] && [ "$CLOUD" != 'mooncake' ] ); then   
+   ( [ "$CLOUD" != 'public' ] && [ "$CLOUD" != 'fairfax' ] && [ "$CLOUD" != 'mooncake' ] ); then
 		log 'This script is intended exclusively for deploying Sentinel for SAP data connector using Azure UI-driven deployment. Do not run this script in standalone. For manual deployment, use the kickstart script available at https://aka.ms/sentinel4sapkickstart'
 		exit 1
 fi
@@ -282,7 +282,7 @@ if [ $DEVMODE ]; then
 	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
 else
 	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
-	
+
 	if [ "$CLOUD" == 'public' ]; then
 		tagver=':latest'
 	elif [ "$CLOUD" == 'fairfax' ]; then
@@ -336,7 +336,7 @@ if [ $? -eq 1 ]; then
 fi
 log 'Latest Microsoft Sentinel data connector downloaded successfully.'
 imagereleaseid=$(docker inspect "$dockerimage$tag" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.release.releaseid"}}')
-log "Downloaded data connector version $imagereleaseid" 
+log "Downloaded data connector version $imagereleaseid"
 
 sysfileloc=$CONFIGPATH/$containername/$GUID/
 
@@ -457,4 +457,3 @@ else
 fi
 
 newgrp docker
-

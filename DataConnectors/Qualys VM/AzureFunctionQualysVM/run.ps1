@@ -1,6 +1,6 @@
-<#  
+<#
     Title:          Qualys Vulnerability Management (VM) Host Detection Data Connector
-    Language:       PowerShell    
+    Language:       PowerShell
     Version:        1.1
     Author(s):      Microsoft
     Last Modified:  12/04/2020
@@ -9,7 +9,7 @@
     DESCRIPTION
     This Function App calls the Qualys Vulnerability Management (VM) API (https://www.qualys.com/docs/qualys-api-vmpc-user-guide.pdf) specifically for Host List Detection data (/api/2.0/fo/asset/host/vm/detection/).
     The response from the Qualys API is recieved in XML format. This function will parse the XML into JSON format, build the signature and authorization header needed to post the data
-    to the Log Analytics workspace via the HTTP Data Connector API. The Function App will omit API responses that with an empty host list, which indicates there were no records for that 
+    to the Log Analytics workspace via the HTTP Data Connector API. The Function App will omit API responses that with an empty host list, which indicates there were no records for that
     time interval. Often, there are Hosts with numerous scan detections, which causes the record submitted to the Data Connector API to be truncated and improperly ingested, The Function App
     will also identify those records greater than the 32Kb limit per record and seperate them into individual records.
 #>
@@ -36,7 +36,7 @@ $username = [uri]::EscapeDataString($env:apiUsername)
 $password = [uri]::EscapeDataString($env:apiPassword)
 $hdrs = @{"X-Requested-With"="PowerShell"}
 $uri = $env:uri
-$filterParameters = $env:filterParameters       
+$filterParameters = $env:filterParameters
 $time = $env:timeInterval
 $logAnalyticsUri = $env:logAnalyticsUri
 
@@ -53,7 +53,7 @@ if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-z
 }
 
 $base =  [regex]::matches($uri, '(https:\/\/[\w\.]+\/api\/\d\.\d\/fo)').captures.groups[1].value
-$body = "action=login&username=$($username)&password=$($password)"  
+$body = "action=login&username=$($username)&password=$($password)"
 Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body -SessionVariable LogonSession
 
 # ISO:8601-compliant DateTime required.
@@ -125,7 +125,7 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
         $calculatedHash = $sha256.ComputeHash($bytesToHash)
         $encodedHash = [Convert]::ToBase64String($calculatedHash)
         $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
-        
+
         # Dispose SHA256 from heap before return
         $sha256.Dispose()
 
@@ -148,7 +148,7 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
             -method $method `
             -contentType $contentType `
             -resource $resource
-        
+
         $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
         $headers = @{
             "Authorization" = $signature;
@@ -165,12 +165,12 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
     # Convert to JSON and API POST to Log Analytics Workspace
     $newcustomObjects = @()
     $under30kbObjects = @()
-	$customObjects | ForEach-Object {  
+	$customObjects | ForEach-Object {
         $records = $_ | ConvertTo-Json -Compress -Depth 3
         # Calculate the kbytes/record
-        $kbytes = ([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024         
-            # If the record is greater than 30kb (Azure HTTP Data Connector field size limit-32kb), create a new object. Record size surpasses this limit due to large amounts of detections per host                           
-            if ($kbytes -gt 30){                                                                                                                                                                           
+        $kbytes = ([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024
+            # If the record is greater than 30kb (Azure HTTP Data Connector field size limit-32kb), create a new object. Record size surpasses this limit due to large amounts of detections per host
+            if ($kbytes -gt 30){
                 $newObject = @()
                 # The new object will consist of only a single detection with all the parent/host record information
                 ForEach ($QID in $_.Detections){
@@ -186,7 +186,7 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
                     Add-Member -InputObject $newObject -MemberType NoteProperty -Name "LastVMScannedDateTime" -Value $_.LastVMScannedDateTime
                     Add-Member -InputObject $newObject -MemberType NoteProperty -Name "LastVMAuthScannedDateTime" -Value $_.LastVMAuthScannedDateTime
                     $subdetection = @()
-                    $QID | ForEach-Object {                                                                             
+                    $QID | ForEach-Object {
                     $newSubObject = New-Object -TypeName PSObject
                         Add-Member -InputObject $newSubObject -MemberType NoteProperty -Name "QID" -Value $QID.QID
                         Add-Member -InputObject $newSubObject -MemberType NoteProperty -Name "Type" -Value $QID.Type
@@ -206,7 +206,7 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
                     }
                     # Add the custom object as a child object to the parent
                     Add-Member -InputObject $newObject -MemberType NoteProperty -Name "Detections" -Value $subdetection
-                    
+
                     # Add it to the array that contains all the records parent information / individual detection to be posted
                     $newcustomObjects += $newObject
                 }
@@ -221,12 +221,12 @@ if (-not ($response.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST -eq $null))
         if($newcustomObjects.Length -gt 0){
             $json = $newcustomObjects | ConvertTo-Json -Compress -Depth 3
             # $mbytes = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024/1024,2)
-            # Write-Output "$($mbytes) MB ALA API POST payload size)  
-            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName 
+            # Write-Output "$($mbytes) MB ALA API POST payload size)
+            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $TableName
         }
         if($under30kbObjects.Length -gt 0){
             # $mbytes2 = [math]::Round(([System.Text.Encoding]::UTF8.GetBytes($records)).Count/1024/1024,2)
-            # Write-Output "$($mbytes2) MB ALA API POST payload size)  
+            # Write-Output "$($mbytes2) MB ALA API POST payload size)
             $under30kbjson = $under30kbObjects | ConvertTo-Json -Compress -Depth 3
             Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($under30kbjson)) -logType $TableName
         }
@@ -236,4 +236,4 @@ else
     # If the response from the Qualys API is null or empty, dispose of the session
     Invoke-RestMethod -Headers $hdrs -Uri "$($base)/session/" -Method Post -Body "action=logout" -WebSession $LogonSession
     Write-Host "No new results found for this interval"
-} 
+}

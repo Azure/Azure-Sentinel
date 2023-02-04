@@ -45,7 +45,7 @@ The template performs the following tasks:
 - Creates resource group (if given resource group doesn't exist yet)
 - Creates Log Analytics workspace (if given workspace doesn't exist yet)
 - Installs Azure Sentinel on top of the workspace (if not installed yet)
-- Enables selected Data Connectors from tihs list: 
+- Enables selected Data Connectors from tihs list:
     + Azure Activity
     + Azure Defender
     + Azure Active Directory Identity Protection
@@ -57,9 +57,9 @@ The template performs the following tasks:
     + Linux Syslog
     + DNS (Preview)
     + Windows Firewall
-- Enables analytics rules for selected Microsoft 1st party products 
+- Enables analytics rules for selected Microsoft 1st party products
 - Enables Fusion rule and ML Behavior Analytics rules for RDP or SSH (if Security Events or Syslog data sources are selected)
-- Enables Scheduled analytics rules that apply to all the enabled connectors 
+- Enables Scheduled analytics rules that apply to all the enabled connectors
 
 It takes around **10 minutes** to deploy if enabling Scheduled analytics rules is selected. If Scheduled rules are not needed it will complete in less than 1 minute.
 
@@ -77,7 +77,7 @@ The Powershell script inside the Powershell folder (*SentinelallInOne.ps1*) take
 - Creates resource group (if given resource group doesn't exist yet)
 - Creates Log Analytics workspace (if given workspace doesn't exist yet)
 - Installs Azure Sentinel on top of the workspace (if not installed yet)
-- Enables the following Data Connectors: 
+- Enables the following Data Connectors:
     + Azure Activity
     + Azure Defender
     + Azure Active Directory
@@ -87,7 +87,7 @@ The Powershell script inside the Powershell folder (*SentinelallInOne.ps1*) take
     + Microsoft Defender for Identity
     + Microsoft Defender for Endpoint
     + Threat Intelligence Platforms
-- Enables Analytics Rules for enabled Microsoft 1st party products 
+- Enables Analytics Rules for enabled Microsoft 1st party products
 
 ### Getting started
 These instructions will show you what you need to now to use Sentinel All in One.
@@ -115,7 +115,7 @@ The following table summarizes permissions, licenses needed and cost to enable e
 
 #### Usage
 
-Once you have PowerShell Core installed on your machine, you just need two files from this repo: 
+Once you have PowerShell Core installed on your machine, you just need two files from this repo:
 
 * *connectors.json* - contains all the connectors that will be enabled. If you don't want some of the connectors to be enabled, just remove them from the your copy of the file.
 

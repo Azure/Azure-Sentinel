@@ -1,12 +1,12 @@
 ﻿# Created On: 4/13/2022 11:31 PM
 # Created By: Nathan Swift
-# This script is as is and not supported by Microsoft 
+# This script is as is and not supported by Microsoft
 # Microsoft does not assume any risk of data loss
 # Use it at your own risk
 ################################################################################
 
 <#  Possible Futures:
- 
+
 1. recreate the script with aprameters and a function
 2. build a way to auto generate the Headers dynamically into the entry string
 
@@ -43,13 +43,13 @@ do {
 } while ($counter -le $headers.count )
 #>
 
-# conversion of each entry into a rawcontent string to be appended 
+# conversion of each entry into a rawcontent string to be appended
 foreach ($entry in $csvData){
-    
+
     # Update This ! # Be sure to update the .headers according to your needs
     # example: "Port,TCP,UDP,SCTP,DCCP,Description\r\n"
     $entrystring = $entry.Port + "," + $entry.TCP + "," + $entry.UDP + "," + $entry.SCTP + "," + $entry.DCCP + "," + $entry.Description + "\r\n"
-    
+
     #Set and apply next entry line from csv
     $entrystring | Out-File $outputFile -Append -NoNewline
 

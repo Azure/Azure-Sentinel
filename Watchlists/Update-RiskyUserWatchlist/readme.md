@@ -12,11 +12,11 @@ This Logic App will run weekly and create/update a Risky User watchlist with use
 
 **Deploying the solution**:
 
-1. Add/Update the missing parameters in the ARM template deployment 
-   The Watchlist name will be also the alias name that you will use to query the data, for example 
+1. Add/Update the missing parameters in the ARM template deployment
+   The Watchlist name will be also the alias name that you will use to query the data, for example
 
       _GetWatchlist(**'cloudappriskyusers'**)
-	  
+
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FWatchlists%2FUpdate-RiskyUserWatchlist%2Fazuredeploy.json)
 

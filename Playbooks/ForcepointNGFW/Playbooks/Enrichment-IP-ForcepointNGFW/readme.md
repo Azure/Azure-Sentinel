@@ -15,7 +15,7 @@
  1. Deploy the Forcepoint SMC Custom Connector before the deployment of this playbook under the same subscription and same resource group as will be used for this playbook. Capture the name of the connector during deployment.
  2. Forcepoint SMC API Key should be known to establish a connection with Forcepoint SMC. For API Key [Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )
  3. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/) to download and install Forcepoint SMC and capture the version number for the same.
- 
+
 
 
  ## Deployment Instructions
@@ -31,14 +31,14 @@
 | ------------- | ------------- |
 | **Playbook Name** | Enter the Playbook Name here without spaces. (e.g. EnrichmentIP-forcepoint) |
 | **SMC Connector name**|Enter the name of your Forcepoint SMC Connector without spaces.|
-| **SMC API Key**  | Enter the SMC API Key.  | 
+| **SMC API Key**  | Enter the SMC API Key.  |
 | **SMC Version Number** | Enter the version number of SMC. (e.g. 6.9) |
 
 
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook steps explained
@@ -57,12 +57,8 @@ This action will compose the Forcepoint image to add to the incident comments.
 - Check IP address List and host associated with IP address are part of how many security policy rules.
 - The incident comment is shown below for reference.
 
-##Incident comment 
+##Incident comment
 
 ![forcepoint](./Images/IncidentCommentLight.png)
 
 ![forcepoint](./Images/IncidentCommentDark.png)
-
-
-
-

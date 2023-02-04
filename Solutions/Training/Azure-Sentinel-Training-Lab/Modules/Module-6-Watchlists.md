@@ -21,11 +21,11 @@ You have received a message from the SOC manager, informing you about a penetrat
     - Name: **PenTestsIPaddresses**
     - Description: **IP addresses used during penetration tests**
     - Watchlist Alias: **PenTestIPaddresses**
-    - SearchKey field: **IPAddress** 
+    - SearchKey field: **IPAddress**
 
 ![watchlists](../Images/watchlists2.png)
 
-3. Download the [CSV file](../Artifacts/Telemetry/PenTestsIPaddresses.csv) to your desktop. 
+3. Download the [CSV file](../Artifacts/Telemetry/PenTestsIPaddresses.csv) to your desktop.
 
 4. In the watchlist wizard, upload the file from your desktop, check the *Results Preview* and click *Next: Review and Create*.
 
@@ -33,7 +33,7 @@ You have received a message from the SOC manager, informing you about a penetrat
 
 5. Click *Create* to finish the wizard.
 
-6. You are brought back to the Watchlists screen, where you see your newly created watchlist. The watchlst data takes about **1 minute** to be available in the workspace. Wait until the **Rows** number changes from 0 to 6. Then click on *View in Log Analytics*. 
+6. You are brought back to the Watchlists screen, where you see your newly created watchlist. The watchlst data takes about **1 minute** to be available in the workspace. Wait until the **Rows** number changes from 0 to 6. Then click on *View in Log Analytics*.
 
 ![watchlists](../Images/watchlists4.png)
 

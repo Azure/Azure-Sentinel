@@ -9,7 +9,7 @@ namespace SampleDataIngestTool
         {
 
         }
-        
+
         public string GetDirPath()
         {
             try
@@ -25,7 +25,7 @@ namespace SampleDataIngestTool
                 Console.WriteLine("Get Directory Path Error" + ex.Message);
                 return "Get Directory Path Error";
             }
-            
+
         }
 
     }

@@ -11,23 +11,23 @@ A MCAS API Token is required. See the documentation to learn more about the [API
 
 
 ## Configuration Steps to Deploy Function App
-1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
+1. Click on Deploy to Azure (For both Commercial & Azure GOV)
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FMCASActivityFunction%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FMCASActivityFunction%2Fazuredeploy.json)
-  
 
-2. Select the preferred **Subscription**, **Resource Group** and **Location**  
-   **Note**  
-   Best practice : Create new Resource Group while deploying - all the resources of your custom Data connector will reside in the newly created Resource 
+
+2. Select the preferred **Subscription**, **Resource Group** and **Location**
+   **Note**
+   Best practice : Create new Resource Group while deploying - all the resources of your custom Data connector will reside in the newly created Resource
    Group
-   
+
 3. Enter the following value in the ARM template deployment
 	```
-	"APIToken": This is the MCAS API Token​  
+	"APIToken": This is the MCAS API Token​
 	"MCASURL": This is the MCAS URL.  See About in the portal for specfici url.
-	"Workspace Id": The Sentinel Log Analytics Workspace Id  
-	"Workspace Key": The Sentinel Log Analytics Workspace Key  
-	"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule  
+	"Workspace Id": The Sentinel Log Analytics Workspace Id
+	"Workspace Key": The Sentinel Log Analytics Workspace Key
+	"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule
 	"Lookback": The number of minutes between runs
 	```
 
@@ -47,21 +47,21 @@ A MCAS API Token is required. See the documentation to learn more about the [API
 	```
 
 2. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
-   the schedule 
+   the schedule
    ```
-   a.	Click on Function App "Configuration" under Settings 
+   a.	Click on Function App "Configuration" under Settings
    b.	Click on "Schedule" under "Application Settings"
    c.	Update your own schedule using cron expression.
    ```
    **Note: For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 5 minutes is `0 */5 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 5, for any hour, day of the month, month, day of the week, or year".**
 
 3. If you change the TimerTigger you need to configure the Lookback setting to match the number of minutes between runs. If you want to change
-   the Lookback 
+   the Lookback
    ```
-   a.	Click on Function App "Configuration" under Settings 
+   a.	Click on Function App "Configuration" under Settings
    b.	Click on "Lookback" under "Application Settings"
    c.	Update your Lookback using a number of minutes (e.g 10).
    ```
 
-	
+
 Note: there are  parsers (here)[https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/MCAS] to make the logs useful

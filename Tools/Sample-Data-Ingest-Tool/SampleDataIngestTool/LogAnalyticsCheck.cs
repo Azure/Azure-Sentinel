@@ -36,7 +36,7 @@ namespace SampleDataIngestTool
 
                 // Get a list of table names in your workspace
                 var distinctTablesQuery = "search * | distinct $table";
-                Response<LogsQueryResult> response = 
+                Response<LogsQueryResult> response =
                     await logsClient.QueryWorkspaceAsync(_workspaceId, distinctTablesQuery, QueryTimeRange.All);
                 LogsTable table = response.Value.Table;
 
@@ -56,7 +56,7 @@ namespace SampleDataIngestTool
                     // Check if there's any data in the table for last 7 days
                     var query = $"{tableName} | limit 10";
                     var timeRange = new QueryTimeRange(TimeSpan.FromDays(7));
-                    Response<LogsQueryResult> results = 
+                    Response<LogsQueryResult> results =
                         await logsClient.QueryWorkspaceAsync(_workspaceId, query, timeRange);
                     int tableCount = results.Value.AllTables.Count;
 

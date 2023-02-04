@@ -2,7 +2,7 @@
 
 Author: Accelerynt
 
-For any technical questions, please contact info@accelerynt.com 
+For any technical questions, please contact info@accelerynt.com
 
 This playbook is intended to be run from an Azure Sentinel alert. It will pull email addresses from the account entities in an alert and use them as targets in a Spiderfoot scan. By default, the scan is created using the HaveIBeenPwned module. The resulting report of that scan will be emailed to a recipient specified upon deployment.
 
@@ -13,17 +13,17 @@ This playbook is intended to be run from an Azure Sentinel alert. It will pull e
 
 #
 
-You will need the following items to enter into the template settings during deployment: 
+You will need the following items to enter into the template settings during deployment:
 
 * The URL of your Spiderfoot account.
-* Your Spiderfoot API key. 
+* Your Spiderfoot API key.
 * The email address you would like to have the completed Spiderfoot report link sent to.
 
- # 
+ #
  To obtain your Spiderfoot API key:
- 
+
  Log into your Spiderfoot account and in the top right-hand corner under your name, click the "API Key" option.
- 
+
 ![API Key](Images/APIKey.png)
 
  #
@@ -31,21 +31,21 @@ To configure and deploy this playbook:
 
 Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
-In the first section:  
+In the first section:
 
-* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.  
+* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.
 
-In the **Parameters** section:   
+In the **Parameters** section:
 
-* **Playbook Name**: This can be left as “AS_Alert_Spiderfoot_Scan” or you may change it.  
+* **Playbook Name**: This can be left as “AS_Alert_Spiderfoot_Scan” or you may change it.
 
 * **Spiderfoot URL**: Once you have logged into your Spiderfoot account, paste the URL of your homepage here. Your unique subdomain is needed to make API calls. This should replace "example" in "example.hx.spiderfoot.net". Nothing else needs to be changed; do not include "https://".
 
 * **Spiderfoot API Key**: Enter your Spiderfoot API key.
 
-* **Email Addresses**:  Enter the desired email addresses here. If entering more than one, separate with a semicolon. 
+* **Email Addresses**:  Enter the desired email addresses here. If entering more than one, separate with a semicolon.
 
-Towards the bottom, click on “Review + create”. 
+Towards the bottom, click on “Review + create”.
 
 ![Template](Images/template1.png)
 
@@ -62,7 +62,7 @@ Click on the “Edit” button. This will bring us into the Logic Apps Designer.
 
 ![Edit](Images/logicappedit.png)
 
-Click on the bar labeled “Connections”.  
+Click on the bar labeled “Connections”.
 
 Here you can select an existing connection or create a new one. You will need to do this twice.
 

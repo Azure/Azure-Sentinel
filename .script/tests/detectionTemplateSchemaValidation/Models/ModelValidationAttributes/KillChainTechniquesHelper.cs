@@ -55,7 +55,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
 
             return result;
         }
-        
+
         public static string ExtractTechnique(this string subTechnique)
         {
             return subTechnique.Split('.').First();

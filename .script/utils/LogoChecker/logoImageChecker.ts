@@ -6,11 +6,11 @@ function isLogoSVG(LogoImagesFileNames: string) {
 function isLogoSizeValid(filePath: string)
 {
     var result= true;
-    fs.stat(filePath, (error, stats) => { 
-        if (error) { 
-          result=false; 
-        } 
-        else { 
+    fs.stat(filePath, (error, stats) => {
+        if (error) {
+          result=false;
+        }
+        else {
           var size= stats.size/1000;
           console.log(size);
           if(size<=5)
@@ -20,9 +20,9 @@ function isLogoSizeValid(filePath: string)
           else{
               result=false;
           }
-        } 
+        }
       });
-      
+
       return result;
 }
 export function isValidLogoImage(LogoImagesPath: string) {
@@ -34,4 +34,3 @@ export function isValidLogoImage(LogoImagesPath: string) {
         throw new LogoValidationError(`Logo size size is  more then 5 kb`);
       }
   };
- 

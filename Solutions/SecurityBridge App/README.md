@@ -30,11 +30,11 @@ This is only a temporary solution to deploy the connector manually until the off
 * Cron job to be added to the machine to append the newly created logs into an already existing file
 * Logs reception in a custom table named "SecurityBridgeLogs_CL"
 
-### Installation Steps 
+### Installation Steps
 * Click on the Deploy to Azure button below
 * Select the **Resource Group** where Azure Sentinel is deployed
 * Add the name of the **Azure Sentinel Workspace** in the Workspace box
-* Leave rest of the items intact 
+* Leave rest of the items intact
 * Click on **Review + create** button
 * Wait for the validation to complete
 * Click on **Create**

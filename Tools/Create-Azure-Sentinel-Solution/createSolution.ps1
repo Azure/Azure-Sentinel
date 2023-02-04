@@ -86,7 +86,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 
     # Convenience Variables
     $solutionName = $contentToImport.Name
-	
+
 
     # Base JSON Object Paths
     $baseMainTemplatePath = "$PSScriptRoot/templating/baseMainTemplate.json"
@@ -208,7 +208,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             break;
                         }
                         $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
-						
+
                         $workbookUiParameter = [PSCustomObject] @{
                             name     = "workbook$workbookCounter";
                             type     = "Microsoft.Common.Section";
@@ -471,7 +471,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             else
                             {
                                 $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook$playbookCounter-$variableName" -NotePropertyValue $variableValue
-                            }                           
+                            }
                         }
 
                         $azureManagementUrlExists = $false
@@ -557,12 +557,12 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                     }
                                     $foundConnection = getConnectionVariableName $connectionVar
                                     if ($foundConnection) {
-                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"                     
+                                        $playbookResource.properties.api.id = "[variables('_$foundConnection')]"
                                     }
                                     else {
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue $(replaceVarsRecursively $connectionVar)
                                         $baseMainTemplate.variables | Add-Member -NotePropertyName "_playbook-$playbookCounter-connection-$connectionCounter" -NotePropertyValue "[variables('playbook-$playbookCounter-connection-$connectionCounter')]"
-                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"               
+                                        $playbookResource.properties.api.id = "[variables('_playbook-$playbookCounter-connection-$connectionCounter')]"
                                     }
                                     if(($playbookResource.properties.parameterValues) -and ($null -ne $baseMainTemplate.variables.'playbook-ApiKey'))
                                         {
@@ -638,10 +638,10 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 }
                             }
                         }
-                        elseif ($connectorData.resources -and 
-                            $connectorData.resources[0] -and 
-                            $connectorData.resources[0].properties -and 
-                            $connectorData.resources[0].properties.connectorUiConfig -and 
+                        elseif ($connectorData.resources -and
+                            $connectorData.resources[0] -and
+                            $connectorData.resources[0].properties -and
+                            $connectorData.resources[0].properties.connectorUiConfig -and
                             $connectorData.resources[0].properties.pollingConfig) {
                             # Else check if Polling connector
                             $connectorData = $connectorData.resources[0]
@@ -757,7 +757,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         $searchData = $json # Assume input is basic array of SavedSearches to start
                         # Check if SavedSearch input file uses direct structure given by export
                         if ($searchData -isnot [System.Array] -and $searchData.value) {
-                            $searchData = $searchData.value 
+                            $searchData = $searchData.value
                         }
                         # Check if SavedSearch input file uses standard template structure
                         if ($searchData -isnot [System.Array] -and $searchData.resources) {
@@ -1082,7 +1082,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             $alertRule.queryFrequency = $(checkISO8601Format $yaml.queryFrequency.ToUpper())
                             $alertRule.queryPeriod = $(checkISO8601Format $yaml.queryPeriod.ToUpper())
                             $alertRule.suppressionDuration = "PT1H"
-                            
+
                             # Handle optional fields
                             foreach ($yamlField in @("entityMappings", "eventGroupingSettings", "customDetails", "alertDetailsOverride", "incidentConfiguration", "sentinelEntitiesMappings")) {
                                 if ($yaml.$yamlField) {
@@ -1311,8 +1311,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
             }
         }
     }
-	
-	
+
+
     # Update CreateUiDefinition Description with Content Counts
     function updateDescriptionCount($counter, $emplaceString, $replaceString, $countStringCondition) {
         if ($counter -gt 0) {

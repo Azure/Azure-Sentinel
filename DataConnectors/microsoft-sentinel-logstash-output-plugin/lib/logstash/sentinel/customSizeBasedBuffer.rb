@@ -64,7 +64,7 @@
   # Including class should call <code>buffer_flush(:final => true)</code>
   # during a teardown/shutdown routine (after the last call to buffer_receive)
   # to ensure that all accumulated messages are flushed.
-  module LogStash; module Outputs; class MicrosoftSentinelOutputInternal 
+  module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
   module CustomSizeBasedBuffer
 
     public
@@ -279,7 +279,7 @@
 
     private
     def var_size(var)
-        # Calculate event size as a json. 
+        # Calculate event size as a json.
         # assuming event is a hash
        return var.to_json.bytesize + 2
     end
@@ -287,7 +287,7 @@
     protected
     def get_time_since_last_flush
       Time.now.to_i - @buffer_state[:last_flush]
-    end    
+    end
 
   end
-end ;end ;end 
+end ;end ;end

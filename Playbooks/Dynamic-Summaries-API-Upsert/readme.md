@@ -1,11 +1,11 @@
 # Dynamic-Summaries-API-Upsert
 author: Zhipeng Zhao
 
-This playbook shows how to query Log Analytics data and upload the query result to Sentinel Dynamic Summaries table through Dynamic Summaries REST API.  
+This playbook shows how to query Log Analytics data and upload the query result to Sentinel Dynamic Summaries table through Dynamic Summaries REST API.
 
 ## Prerequisites
 
-Before deploying the playbook you will need 
+Before deploying the playbook you will need
 - [Create Azure Integration account through Azure portal](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/logic-apps/logic-apps-enterprise-integration-create-integration-account.md#tab/azure-portal).  Integration account should be in the same region as Logic App. And integration account must be in either Basic or Standard pricing tier.
 - Have a KQL that renders data for [Dynamic Summaries object models](https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/Dynamic-Summaries-API-Upsert/DynamicSummaries_API_Models.pdf).
 - Logic App and Log Analytics Workspace for Dynamic Summaries should be in the same Azure resource group.

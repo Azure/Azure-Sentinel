@@ -1,17 +1,17 @@
-<#  
+<#
     Title:          DocuSign Security Events Data Connector
     Language:       PowerShell
     Version:        2.0
     Author:         Sreedhar Ande
     Last Modified:  2/16/2021
-    Comment:        V2 re-designed; 
+    Comment:        V2 re-designed;
 					Ingests Security Events for your DocuSign account into Azure Log Analytics Workspace using DocuSign Monitor REST API
-                    Ingests DocuSign Account Users into Azure Log Analytics Workspace using DocuSign Users REST API	
+                    Ingests DocuSign Account Users into Azure Log Analytics Workspace using DocuSign Users REST API
 					Note:Above API's resumes getting records from the spot where the previous call left off to avoid duplication of records in DocuSignSecurityEvents_CL and DocuSignUsers_CL Log Analytics Workspace custom tables
 
     DESCRIPTION
-    This Function App calls the DocuSign Monitor REST API (https://lens.docusign.net/api/v2.0/datasets/monitor/stream/) to pull the security events for your DocuSign account. 
-    The response from the DocuSign Monitor REST API is recieved in JSON format. This function will build the signature and authorization header 
+    This Function App calls the DocuSign Monitor REST API (https://lens.docusign.net/api/v2.0/datasets/monitor/stream/) to pull the security events for your DocuSign account.
+    The response from the DocuSign Monitor REST API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API.
 #>
 
@@ -85,7 +85,7 @@ Function Write-OMSLogfile {
     Version:        2.0
     Author:         Travis Roberts
     Creation Date:  7/9/2018
-    Purpose/Change: Crating a stand alone function    
+    Purpose/Change: Crating a stand alone function
     #>
     [cmdletbinding()]
     Param(
@@ -103,7 +103,7 @@ Function Write-OMSLogfile {
     Write-Verbose -Message "DateTime: $dateTime"
     Write-Verbose -Message ('DateTimeKind:' + $dateTime.kind)
     Write-Verbose -Message "Type: $type"
-    write-Verbose -Message "LogData: $logdata"   
+    write-Verbose -Message "LogData: $logdata"
 
     # Supporting Functions
     # Function to create the auth signature
@@ -145,7 +145,7 @@ Function Write-OMSLogfile {
         $response = Invoke-WebRequest -Uri $LAURI.Trim() -Method $method -ContentType $contentType -Headers $headers -Body $Body -UseBasicParsing
         Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
         return $response.statuscode
-    }   
+    }
 
     # Check if time is UTC, Convert to UTC if not.
     # $dateTime = (Get-Date)
@@ -155,21 +155,21 @@ Function Write-OMSLogfile {
     }
     #Build the JSON file
     $logMessage = ($logdata | ConvertTo-Json -Depth 20)
-    
+
     #Submit the data
     $returnCode = PostLogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body $logMessage -Type $type
     Write-Verbose -Message "Post Statement Return Code $returnCode"
     return $returnCode
 }
 
-Function SendToLogA ($eventsData, $eventsTable) {    	
+Function SendToLogA ($eventsData, $eventsTable) {
 	#Test Size; Log A limit is 30MB
     $tempdata = @()
     $tempDataSize = 0
-    
-    if ((($eventsData |  Convertto-json -depth 20).Length) -gt 25MB) {        
-		Write-Host "Upload is over 25MB, needs to be split"									 
-        foreach ($record in $eventsData) {            
+
+    if ((($eventsData |  Convertto-json -depth 20).Length) -gt 25MB) {
+		Write-Host "Upload is over 25MB, needs to be split"
+        foreach ($record in $eventsData) {
             $tempdata += $record
             $tempDataSize += ($record | ConvertTo-Json -depth 20).Length
             if ($tempDataSize -gt 25MB) {
@@ -183,8 +183,8 @@ Function SendToLogA ($eventsData, $eventsTable) {
         Write-Host "Sending left over data = $Tempdatasize"
         $postLAStatus = Write-OMSLogfile -dateTime (Get-Date) -type $eventsTable -logdata $eventsData -CustomerID $workspaceId -SharedKey $workspaceKey
     }
-    Else {          
-        $postLAStatus = Write-OMSLogfile -dateTime (Get-Date) -type $eventsTable -logdata $eventsData -CustomerID $workspaceId -SharedKey $workspaceKey        
+    Else {
+        $postLAStatus = Write-OMSLogfile -dateTime (Get-Date) -type $eventsTable -logdata $eventsData -CustomerID $workspaceId -SharedKey $workspaceKey
     }
 
     return $postLAStatus
@@ -194,7 +194,7 @@ Function SendToLogA ($eventsData, $eventsTable) {
 If ($DocuSignEnvironment.ToLower() -eq "developer") {
     $jwtHost = "account-d"
     $dsmHost = "lens-d"
-} 
+}
 Else {
     $jwtHost = "account"
     $dsmHost = "lens"
@@ -217,7 +217,7 @@ else{
 
 if ($apiVersion -eq "rooms") {
     $scopes = "signature%20impersonation%20dtr.rooms.read%20dtr.rooms.write%20dtr.documents.read%20dtr.documents.write%20dtr.profile.read%20dtr.profile.write%20dtr.company.read%20dtr.company.write%20room_forms"
-  } elseif ($apiVersion -eq "eSignature") {    
+  } elseif ($apiVersion -eq "eSignature") {
     $scopes = "signature%20impersonation"
   } elseif ($apiVersion -eq "click") {
     $scopes = "click.manage"
@@ -282,53 +282,53 @@ catch {
 # Step 2. Obtain the access token
 try {
 	Write-Output "Obtaining DocuSign access token"
-    $authorizationEndpoint = "https://$jwtHost.docusign.com/oauth/"    
+    $authorizationEndpoint = "https://$jwtHost.docusign.com/oauth/"
     $tokenResponse = Invoke-WebRequest `
         -Uri "$authorizationEndpoint/token" `
         -Method "POST" `
         -Body "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=$jwtToken"
-    
+
     $docuSignAccessToken = ($tokenResponse | ConvertFrom-Json).access_token
-	
+
 	#Setup uri Headers for requests to DSM API & User API
 	$docuSignAPIHeaders = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 	$docuSignAPIHeaders.Add("Content-Type", "application/json")
 	$docuSignAPIHeaders.Add("Authorization", "Bearer $docuSignAccessToken")
 
 	$StorageTable = Get-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext -ErrorAction Ignore
-	if($null -eq $StorageTable.Name){  
+	if($null -eq $StorageTable.Name){
 		New-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext
-		$docuSignTimeStampTbl = (Get-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext.Context).cloudTable    
-		Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=""} -UpdateExisting		
+		$docuSignTimeStampTbl = (Get-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext.Context).cloudTable
+		Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=""} -UpdateExisting
 	}
 	Else {
 		$docuSignTimeStampTbl = (Get-AzStorageTable -Name $storageAccountTableName -Context $storageAccountContext.Context).cloudTable
 	}
 	# retrieve the last execution values
-	$lastExeEndCursor = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -ErrorAction Ignore	
+	$lastExeEndCursor = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -ErrorAction Ignore
 	$lastRunEndCursorValue = $lastExeEndCursor.lastCursorValue
-	
-	$complete=$false    
+
+	$complete=$false
 	$iterations=0
 	DO{
-		$iterations++	
+		$iterations++
 		try{
 			$docuSignMonitorAPI=$null
 			$monitorApiResponse = $null
 			$docuSignMonitorAPI = "https://$dsmHost.docusign.net/api/v2.0/datasets/monitor/stream?cursor=${lastRunEndCursorValue}&limit=2000"
 			Write-Output "Calling DocuSign Monitor API"
 			$monitorApiResponse = Invoke-RestMethod -Uri $docuSignMonitorAPI -Method 'GET' -Headers $docuSignAPIHeaders
-			
+
 			# Display the data
-			Write-Output "Iteration:$iterations"           
+			Write-Output "Iteration:$iterations"
 
 			# Get the endCursor value from the response. This lets you resume
 			# getting records from the spot where this call left off
-			#Response from Invoke-RestMethod        
-			$currentRunEndCursorValue = $monitorApiResponse.endCursor			
+			#Response from Invoke-RestMethod
+			$currentRunEndCursorValue = $monitorApiResponse.endCursor
 			Write-Output "currentRunEndCursorValue :$currentRunEndCursorValue"
 			Write-Output "Last run cursorValue : $lastRunEndCursorValue"
-				
+
 			if (![string]::IsNullOrEmpty($lastRunEndCursorValue))
 			{
 				# If the endCursor from the response is the same as the one that you already have,
@@ -339,10 +339,10 @@ try {
 					$complete=$true
 				}
 			}
-			
-			if(!$complete){           
+
+			if(!$complete){
 				Write-Output "Updating the cursor value of $lastRunEndCursorValue to the new value of $currentRunEndCursorValue"
-				$lastRunEndCursorValue=$currentRunEndCursorValue  
+				$lastRunEndCursorValue=$currentRunEndCursorValue
 				$securityEvents = $monitorApiResponse.data
 				$securityEventsCount = $monitorApiResponse.data.length
 				if ($securityEventsCount -gt 0) {
@@ -354,9 +354,9 @@ try {
 					}
 				}
 				Remove-Item $monitorApiResponse
-				Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=$lastRunEndCursorValue} -UpdateExisting                           
+				Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey "docusignmonitor" -RowKey "lastRunEndCursor" -property @{"lastCursorValue"=$lastRunEndCursorValue} -UpdateExisting
 				Start-Sleep -Second 5
-			}        
+			}
 		}
 		catch{
 			$int = 0
@@ -367,35 +367,35 @@ try {
 			write-host "Error : $_.ErrorDetails.Message"
 			write-host "Command : $_.InvocationInfo.Line"
 			$complete = $true
-		} 
+		}
 
 	} While ($complete -eq $false )
-	
+
 	#users Export
-	if ($DocuSignUsersIngestion.ToLower() -eq "true"){		
+	if ($DocuSignUsersIngestion.ToLower() -eq "true"){
 		try{
 			$docuSignUsersAPI = $null
 			$userApiResponse = $null
 			$docuSignUsersAPI = "$DocuSignUserInfoBaseURI/restapi/v2.1/accounts/$DocuSignAccountAPIID/users?additional_info=true"
 			Write-Output "Calling DocuSign Users API"
-			$userApiResponse = Invoke-RestMethod -Uri $docuSignUsersAPI -Method 'GET' -Headers $docuSignAPIHeaders			
+			$userApiResponse = Invoke-RestMethod -Uri $docuSignUsersAPI -Method 'GET' -Headers $docuSignAPIHeaders
 			$docuSignUsers = $userApiResponse.users
-			
-			$accountUsers = @()	
+
+			$accountUsers = @()
             foreach($dsUser in $docuSignUsers)
             {
                 $isUserExisting = Get-azTableRow -table $docuSignTimeStampTbl -partitionKey $dsUser.userId.ToString() -ErrorAction Ignore
                 if ($null -eq $isUserExisting) {
                     Add-AzTableRow -table $docuSignTimeStampTbl -PartitionKey $dsUser.userId.ToString() -RowKey $dsUser.userName.ToString() -UpdateExisting
-                    $accountUsers += $dsUser					
+                    $accountUsers += $dsUser
                 }
-            }	
+            }
             $totalUsers = $accountUsers.Count
 			Write-Output "New Users Count : $totalUsers"
 			if($totalUsers -gt 0) {
 				Write-Output "Ingesting DocuSign Users information to $LATableDSUsers"
                 $postReturnCode = SendToLogA -EventsData $accountUsers -EventsTable $LATableDSUsers
-                
+
                 if($postReturnCode -eq 200)
                 {
                     Write-Output ("$totalUsers users have been ingested into Azure Log Analytics Workspace Table $LATableDSUsers")
@@ -404,7 +404,7 @@ try {
             else {
                 Write-Output ("No New Users")
             }
-			Remove-Item $userApiResponse			
+			Remove-Item $userApiResponse
 		}
 		catch {
 			$int = 0
@@ -413,8 +413,8 @@ try {
 				$int++
 			}
 			write-host "Error : $_.ErrorDetails.Message"
-			write-host "Command : $_.InvocationInfo.Line"   
-		}	
+			write-host "Command : $_.InvocationInfo.Line"
+		}
 	}
 	Remove-Item $privateKeyPath -Force
 	Write-Output "Done."
@@ -430,4 +430,3 @@ catch {
 	write-host "Error : $_.ErrorDetails.Message"
 	write-host "Command : $_.InvocationInfo.Line"
 }
-

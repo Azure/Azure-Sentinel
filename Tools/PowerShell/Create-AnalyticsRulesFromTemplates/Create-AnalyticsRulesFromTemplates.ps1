@@ -12,7 +12,7 @@
         LASTEDIT: 14 Feb 2021
     .EXAMPLE
         Create-AzSentinelAnalyticsRulesFromTemplates -WorkspaceName "workspacename" -ResourceGroupName "rgname"
-        The script will create Azure Sentinel Alert Rules in Workspace "workspacename"      
+        The script will create Azure Sentinel Alert Rules in Workspace "workspacename"
 #>
 
 [CmdletBinding()]
@@ -22,78 +22,78 @@ param (
 
     [Parameter(Mandatory = $true)]
     [string]$ResourceGroupName
-    
+
 )
 
-Function Get-AzSentinelAnalyticsRuleTemplates ($workspaceName, $resourceGroupName) {    
+Function Get-AzSentinelAnalyticsRuleTemplates ($workspaceName, $resourceGroupName) {
     # Configure the authentication header needed for REST calls
     $context = Get-AzContext
     $profile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
     $profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($profile)
     $token = $profileClient.AcquireAccessToken($context.Subscription.TenantId)
     $SubscriptionId = (Get-AzContext).Subscription.Id
-	
+
 	$authHeader = @{
-        'Content-Type'  = 'application/json' 
-        'Authorization' = 'Bearer ' + $token.AccessToken 
+        'Content-Type'  = 'application/json'
+        'Authorization' = 'Bearer ' + $token.AccessToken
     }
-    
+
     $urlTemplates = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/alertruletemplates?api-version=2021-10-01"
 	$urlDataConnectors = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2021-10-01"
-	
+
 	Write-Host -ForegroundColor Cyan "Fetching configured Data Connectors"
 	$resultDataConnectors = (Invoke-RestMethod -Method "GET" -Uri $urlDataConnectors -Headers $authHeader ).value
-	
+
 	Write-Host -ForegroundColor Cyan "Fetching Alert Templates"
 	$resultAlertTemplates = (Invoke-RestMethod -Method "GET" -Uri $urlTemplates -Headers $authHeader ).value
-		
+
     foreach ($template in $resultAlertTemplates) {
 		# skip if Alert has already been created from this template
 		if($template.properties.alertRulesCreatedByTemplateCount -gt 0)
 		{
 			continue
 		}
-		
+
 		# add only alerts for configured DataConnectors
 		$dcExist = $false
 		foreach($requiredDC in $template.properties.requiredDataConnectors)
 		{
 			foreach($existingDC in $resultDataConnectors)
-			{				
+			{
 				if($requiredDC.connectorId -eq $existingDC.kind)
-				{					
+				{
 					$dcExist = $true
 				}
 			}
 		}
-		
+
 		if($dcExist)
-		{			
+		{
 			[void]$alertCreationTemplates.Add($template)
-		}		
-    }	
+		}
+    }
 }
 
-Function New-AzSentinelAnalyticsRulesFromTemplate ($workspaceName, $resourceGroupName, $templates) {    
+Function New-AzSentinelAnalyticsRulesFromTemplate ($workspaceName, $resourceGroupName, $templates) {
     # Configure the authentication header needed for REST calls
     $context = Get-AzContext
     $profile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
     $profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($profile)
     $token = $profileClient.AcquireAccessToken($context.Subscription.TenantId)
 	$SubscriptionId = (Get-AzContext).Subscription.Id
-	
+
     $authHeader = @{
-        'Content-Type'  = 'application/json' 
-        'Authorization' = 'Bearer ' + $token.AccessToken 
+        'Content-Type'  = 'application/json'
+        'Authorization' = 'Bearer ' + $token.AccessToken
     }
-    
+
     # Iterate through all alert templates
     foreach($template in $templates)
 	{
 		$body = ""
 		#Depending on the type of alert we are creating, the body has different parameters
 		switch ($template.kind) {
-			"MicrosoftSecurityIncidentCreation" {  
+			"MicrosoftSecurityIncidentCreation" {
 				$body = @{
 					"kind"       = "MicrosoftSecurityIncidentCreation"
 					"properties" = @{
@@ -154,9 +154,9 @@ Function New-AzSentinelAnalyticsRulesFromTemplate ($workspaceName, $resourceGrou
 			#Create the URI we need to create the alert.
 			$uri = "https://management.azure.com/subscriptions/$($subscriptionId)/resourceGroups/$($resourceGroupName)/providers/Microsoft.OperationalInsights/workspaces/$($workspaceName)/providers/Microsoft.SecurityInsights/alertRules/$($guid)?api-version=2021-10-01"
 			try {
-				Write-Host -ForegroundColor Cyan "Attempting to create rule $($template.properties.displayName)"				
+				Write-Host -ForegroundColor Cyan "Attempting to create rule $($template.properties.displayName)"
 				$verdict = Invoke-RestMethod -Uri $uri -Method Put -Headers $authHeader -Body ($body | ConvertTo-Json -EnumsAsStrings)
-				Write-Host -ForegroundColor Green "Succeeded" 
+				Write-Host -ForegroundColor Green "Succeeded"
 			}
 			catch {
 				#The most likely error is that there is a missing dataset. There is a new
@@ -168,7 +168,7 @@ Function New-AzSentinelAnalyticsRulesFromTemplate ($workspaceName, $resourceGrou
 			}
 			#This pauses for 2 second so that we don't overload the workspace.
 			Start-Sleep -Seconds 2
-		}                   
+		}
     }
 }
 

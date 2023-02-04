@@ -9,11 +9,11 @@ requiredDataConnectors:
   - IdentityInfo
   - DeviceEvents
 query: |
-  let ADAZUsers =  IdentityInfo 
-  | extend DirectoryDomain = AccountDomain 
-  | extend DirectoryAccount = AccountName 
+  let ADAZUsers =  IdentityInfo
+  | extend DirectoryDomain = AccountDomain
+  | extend DirectoryAccount = AccountName
   | distinct DirectoryDomain , DirectoryAccount , OnPremSid , CloudSid, AccountUpn, GivenName, Surname;
-   // check for any new created or modified local accounts 
+   // check for any new created or modified local accounts
   let NewUsers =  DeviceEvents
   | where ActionType contains "UserAccountCreated"  // or ActionType contains "UserAccountModified"
   | extend lUserAdded = AccountName
@@ -21,8 +21,8 @@ query: |
   | extend laccountdomain = AccountDomain
   | distinct NewUserSID, lUserAdded,laccountdomain;
   // Check for any local group changes and enrich the data with the account name obtained from the previous query
-  DeviceEvents 
-  | where ActionType == 'UserAccountAddedToLocalGroup' 
+  DeviceEvents
+  | where ActionType == 'UserAccountAddedToLocalGroup'
   | extend AddedAccountSID = tostring(parse_json(AdditionalFields).MemberSid)
   | extend LocalGroup = AccountName
   | extend LocalGroupSID = AccountSid
@@ -31,14 +31,14 @@ query: |
   //  | where LocalGroupSID contains "S-1-5-32-544"
   | join kind= leftouter    (NewUsers)
   on $left.AddedAccountSID == $right.NewUserSID
-  | project Timestamp, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, lUserAdded , Actor, ActionType , laccountdomain 
+  | project Timestamp, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, lUserAdded , Actor, ActionType , laccountdomain
   | join kind= leftouter        (ADAZUsers)
   on $left.AddedAccountSID == $right.OnPremSid
   | extend UserAdded = iff(isnotempty(lUserAdded),strcat(laccountdomain,"\\", lUserAdded), strcat(DirectoryDomain,"\\", DirectoryAccount))
-  | project Timestamp, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, UserAdded , Actor, ActionType  
-  | where DeviceName !contains Actor 
+  | project Timestamp, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, UserAdded , Actor, ActionType
+  | where DeviceName !contains Actor
   // Provide details on actors that added users
-  // | summarize count()  by Actor 
+  // | summarize count()  by Actor
   // | join ADAZUsers
-  // on $left.Actor == $right.DirectoryAccount 
-  // | render piechart 
+  // on $left.Actor == $right.DirectoryAccount
+  // | render piechart

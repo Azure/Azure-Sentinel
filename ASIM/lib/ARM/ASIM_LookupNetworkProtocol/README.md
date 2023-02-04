@@ -2,7 +2,7 @@
 
 ARM template for deploying the Log Analytics KQL function An ASIM function to return the IP network protocol name
 
-This ASIM function returns IP network protocol name associated with the numerical value provided as a parameter. For example, for 6, the function returns "TCP".  
+This ASIM function returns IP network protocol name associated with the numerical value provided as a parameter. For example, for 6, the function returns "TCP".
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

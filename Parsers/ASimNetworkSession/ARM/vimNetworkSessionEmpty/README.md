@@ -2,7 +2,7 @@
 
 ARM template for ASIM NetworkSession schema parser for Microsoft.
 
-This function returns an empty ASIM Network Session schema 
+This function returns an empty ASIM Network Session schema
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

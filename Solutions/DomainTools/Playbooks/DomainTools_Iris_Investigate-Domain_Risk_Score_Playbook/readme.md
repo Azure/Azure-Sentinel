@@ -14,7 +14,7 @@
 
 ## Overview
 This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident, return the risk scores and adjust the severity of the incident if a high risk domain is observed. Add the risk scoring details in the comments of the incident.
- 
+
 Learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
 When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
@@ -22,7 +22,7 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 - It fetches all the Domain objects in the Incident.
 - Iterates through the Domain objects and fetches the results from DomaintTools Iris Investigate for each Domain.
 - The Risk Scoring details from DomainTools Iris Investigate will be added as comments in a tabular format.
-- The Incident Severity is updated based on the overall Risk Score of the Domain: 
+- The Incident Severity is updated based on the overall Risk Score of the Domain:
   - Domain overall Risk Score between 0-49, the incident severity will be set to informational.
   - Domain overall Risk Score between 50-69, the incident severity will be set to low.
   - Domain overall Risk Score between 70-89, the incident severity will be set to medium.
@@ -58,7 +58,7 @@ Authentication methods this connector supports
 <a name="postdeployment">
 
 ### Post-Deployment instructions
-#### a. Authorize connections: 
+#### a. Authorize connections:
 Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode.
 - Open "For each" Action.

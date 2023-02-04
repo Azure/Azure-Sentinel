@@ -18,7 +18,7 @@ This custom connector connects to Minemeld service end point to runs any Minemel
 | **Get indicators** | Fetch the detailed enriched data of indicators available at minemeld |
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters:
     * Custom Connector Name : Enter the Custom connector name (ex:MinemeldCustomConnector)

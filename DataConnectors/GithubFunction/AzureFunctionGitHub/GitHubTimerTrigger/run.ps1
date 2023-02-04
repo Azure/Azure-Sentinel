@@ -1,13 +1,13 @@
-<#  
+<#
     Title:          GitHub Repo Logs Data Connector
     Language:       PowerShell
     Version:        1.2
     Author:         Nicholas Dicola, Sreedhar Ande
     Last Modified:  03/29/2021
-    
+
     DESCRIPTION
     This Function App calls the GitHub REST API (https://api.github.com/) to pull the GitHub
-    Audit, Repo and Vulnerability logs. The response from the GitHub API is recieved in JSON format. This function will build the signature and authorization header 
+    Audit, Repo and Vulnerability logs. The response from the GitHub API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post each log type to their individual tables in Log Analytics, for example,
     Github_CL and GitHubRepoLogs_CL.
 #>
@@ -75,7 +75,7 @@ function Write-OMSLogfile {
     Version:        2.0
     Author:         Travis Roberts
     Creation Date:  7/9/2018
-    Purpose/Change: Crating a stand alone function    
+    Purpose/Change: Crating a stand alone function
     #>
     [cmdletbinding()]
     Param(
@@ -93,7 +93,7 @@ function Write-OMSLogfile {
     Write-Verbose -Message "DateTime: $dateTime"
     Write-Verbose -Message ('DateTimeKind:' + $dateTime.kind)
     Write-Verbose -Message "Type: $type"
-    write-Verbose -Message "LogData: $logdata"   
+    write-Verbose -Message "LogData: $logdata"
 
     # Supporting Functions
     # Function to create the auth signature
@@ -124,7 +124,7 @@ function Write-OMSLogfile {
             -method $method `
             -contentType $ContentType `
             -resource $resource
-        
+
 		# Compatible with previous version
 		if ([string]::IsNullOrEmpty($LAURI)){
 			$LAURI = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
@@ -133,7 +133,7 @@ function Write-OMSLogfile {
 		{
 			$LAURI = $LAURI + $resource + "?api-version=2016-04-01"
 		}
-		
+
         $headers = @{
             "Authorization"        = $signature;
             "Log-Type"             = $type;
@@ -166,14 +166,14 @@ function Write-OMSLogfile {
     return $returnCode
 }
 
-function SendToLogA ($gitHubData, $customLogName) {    
+function SendToLogA ($gitHubData, $customLogName) {
     #Test Size; Log A limit is 30MB
     $tempdata = @()
     $tempDataSize = 0
-    
-    if ((($gitHubData |  Convertto-json -depth 20).Length) -gt 25MB) {        
-		Write-Host "Upload is over 25MB, needs to be split"									 
-        foreach ($record in $gitHubData) {            
+
+    if ((($gitHubData |  Convertto-json -depth 20).Length) -gt 25MB) {
+		Write-Host "Upload is over 25MB, needs to be split"
+        foreach ($record in $gitHubData) {
             $tempdata += $record
             $tempDataSize += ($record | ConvertTo-Json -depth 20).Length
             if ($tempDataSize -gt 25MB) {
@@ -188,7 +188,7 @@ function SendToLogA ($gitHubData, $customLogName) {
         Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $gitHubData -CustomerID $workspaceId -SharedKey $workspaceKey
     }
     Else {
-        #Send to Log A as is        
+        #Send to Log A as is
         Write-OMSLogfile -dateTime (Get-Date) -type $customLogName -logdata $gitHubData -CustomerID $workspaceId -SharedKey $workspaceKey
     }
 }
@@ -216,7 +216,7 @@ $repoList = @()
 foreach($org in $githubOrgs){
     $orgName = $org.org
     Write-Host "Starting to process ORG: $orgName"
-    
+
     #Get Audit Entries
     #check for last run file
     $checkBlob = Get-AzStorageBlob -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext
@@ -247,7 +247,7 @@ foreach($org in $githubOrgs){
     else {
         $AuditQuery = '{"query": "query { organization(login: \"'+$orgName+'\") { auditLog(first: 100 orderBy: { direction: ASC field: CREATED_AT } after: \"'+$lastRunContext.lastContext+'\") { edges { node { ... on AuditEntry { action actor actorIp actorLocation { city country countryCode region regionCode } actorLogin actorResourcePath actorUrl createdAt operationType user { email } userLogin userResourcePath } ... on MembersCanDeleteReposClearAuditEntry { organizationName enterpriseSlug } ... on MembersCanDeleteReposDisableAuditEntry { organizationName enterpriseSlug } ... on MembersCanDeleteReposEnableAuditEntry { organizationName enterpriseSlug } ... on OauthApplicationCreateAuditEntry { applicationUrl oauthApplicationName organizationName state } ... on OrgAddBillingManagerAuditEntry { invitationEmail organizationName } ... on OrgAddMemberAuditEntry { organizationName permission } ... on OrgBlockUserAuditEntry { organizationName blockedUserName } ... on OrgConfigDisableCollaboratorsOnlyAuditEntry { organizationName } ... on OrgConfigEnableCollaboratorsOnlyAuditEntry { organizationName } ... on OrgCreateAuditEntry { organizationName } ... on OrgDisableOauthAppRestrictionsAuditEntry { organizationName } ... on OrgDisableSamlAuditEntry { organizationName } ... on OrgDisableTwoFactorRequirementAuditEntry { organizationName } ... on OrgEnableOauthAppRestrictionsAuditEntry { organizationName } ... on OrgEnableSamlAuditEntry { organizationName } ... on OrgEnableTwoFactorRequirementAuditEntry { organizationName } ... on OrgInviteMemberAuditEntry { email organizationName } ... on OrgInviteToBusinessAuditEntry { organizationName enterpriseSlug } ... on OrgOauthAppAccessApprovedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgOauthAppAccessDeniedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgOauthAppAccessRequestedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgRemoveBillingManagerAuditEntry { organizationName reason } ... on OrgRemoveMemberAuditEntry { organizationName membershipTypes reason } ... on OrgRemoveOutsideCollaboratorAuditEntry { organizationName membershipTypes reason } ... on OrgRestoreMemberAuditEntry { organizationName restoredMembershipsCount restoredRepositoriesCount restoredMemberships { ... on OrgRestoreMemberMembershipOrganizationAuditEntryData { organizationName } ... on OrgRestoreMemberMembershipRepositoryAuditEntryData { repositoryName } ... on OrgRestoreMemberMembershipTeamAuditEntryData { teamName } } } ... on OrgUnblockUserAuditEntry { blockedUserName organizationName } ... on OrgUpdateDefaultRepositoryPermissionAuditEntry { organizationName permission permissionWas } ... on OrgUpdateMemberAuditEntry { organizationName permission permissionWas } ... on OrgUpdateMemberRepositoryCreationPermissionAuditEntry { canCreateRepositories organizationName visibility } ... on OrgUpdateMemberRepositoryInvitationPermissionAuditEntry { canInviteOutsideCollaboratorsToRepositories organizationName } ... on PrivateRepositoryForkingDisableAuditEntry { enterpriseSlug organizationName repositoryName } ... on PrivateRepositoryForkingEnableAuditEntry { enterpriseSlug organizationName repositoryName } ... on RepoAccessAuditEntry { organizationName repositoryName visibility } ... on RepoAddMemberAuditEntry { organizationName repositoryName visibility } ... on RepoAddTopicAuditEntry { organizationName repositoryName topicName } ... on RepoArchivedAuditEntry { organizationName repositoryName visibility } ... on RepoChangeMergeSettingAuditEntry { isEnabled mergeType organizationName repositoryName } ... on RepoConfigDisableAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigDisableCollaboratorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigDisableContributorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigDisableSockpuppetDisallowedAuditEntry { organizationName repositoryName } ... on RepoConfigEnableAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigEnableCollaboratorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigEnableContributorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigEnableSockpuppetDisallowedAuditEntry { organizationName repositoryName } ... on RepoConfigLockAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigUnlockAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoCreateAuditEntry { forkParentName forkSourceName organizationName repositoryName visibility } ... on RepoDestroyAuditEntry { organizationName repositoryName visibility } ... on RepoRemoveMemberAuditEntry { organizationName repositoryName visibility } ... on RepoRemoveTopicAuditEntry { organizationName repositoryName topicName } ... on RepositoryVisibilityChangeDisableAuditEntry { enterpriseSlug organizationName } ... on RepositoryVisibilityChangeEnableAuditEntry { enterpriseSlug organizationName } ... on TeamAddMemberAuditEntry { isLdapMapped organizationName teamName } ... on TeamAddRepositoryAuditEntry { isLdapMapped organizationName repositoryName teamName } ... on TeamChangeParentTeamAuditEntry { organizationName parentTeamName parentTeamNameWas teamName } ... on TeamRemoveMemberAuditEntry { isLdapMapped organizationName teamName } ... on TeamRemoveRepositoryAuditEntry { isLdapMapped organizationName repositoryName teamName } } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } }"}'
     }
-    
+
     #Get the Audit Entries
     Write-Host "Starting to process ORG: $orgName Audit Entries"
     $hasNextPage = $true
@@ -256,12 +256,12 @@ foreach($org in $githubOrgs){
         $results = $null
         $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
         if(($results.data.organization.auditLog.edges).Count -ne 0){
-            #write to log A to be added later           
+            #write to log A to be added later
             SendToLogA -gitHubData ($results.data.organization.auditLog.edges) -customLogName $AuditLogTable
         }
         $hasNextPage = $results.data.organization.auditLog.pageInfo.hasNextPage
         $lastRunContext.lastContext = $results.data.organization.auditLog.pageInfo.endCursor
-        
+
         if ($lastRunContext.lastContext -eq $null){
             $lastRunContext.lastContext = ""
         }
@@ -284,10 +284,10 @@ foreach($org in $githubOrgs){
             Set-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-Audit.json" -Force
         }
     } until ($hasNextPage -eq $false)
-    
+
     $uri = $null
     $results = $null
-    
+
     #get Org repos
     $hasMoreRepos = $true
     $pageNumber = 1
@@ -304,13 +304,13 @@ foreach($org in $githubOrgs){
             $pageNumber++
         }
     } until ($hasMoreRepos -eq $false)
-    
+
     $uri = $null
     $results = $null
 
     #For Each Repo in Org, get repo logs
     foreach($repo in $repoList){
-        $repoName = $repo.Name        
+        $repoName = $repo.Name
         $uri = "https://api.github.com/repos/$orgName/$repoName/contributors"
         $contributorsInfo = Invoke-WebRequest -Method Get -Uri $uri -Headers $headers -UseBasicParsing
         Write-Host $contributorsInfo.statuscode
@@ -329,7 +329,7 @@ foreach($org in $githubOrgs){
                 #Send to log A;
                 SendToLogA -gitHubData $referrerLogs -customLogName $RepoLogTable
             }
-            
+
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
             $pathLogs = $null
@@ -341,7 +341,7 @@ foreach($org in $githubOrgs){
                 #Send to log A;
                 SendToLogA -gitHubData $pathLogs -customLogName $RepoLogTable
             }
-            
+
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
             $viewLogs = $null
             $viewLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
@@ -362,7 +362,7 @@ foreach($org in $githubOrgs){
                 $cloneLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Clones
                 #Send to log A
                 SendToLogA -gitHubData $cloneLogs -customLogName $RepoLogTable
-            }        
+            }
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
             $commitLogs = $null
@@ -374,7 +374,7 @@ foreach($org in $githubOrgs){
                 #Send to log A
                 SendToLogA -gitHubData $commitLogs -customLogName $RepoLogTable
             }
-            
+
             $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
             $collaboratorLogs = $null
             $collaboratorLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
@@ -384,7 +384,7 @@ foreach($org in $githubOrgs){
                 $collaboratorLogs | Add-Member -NotePropertyName LogType -NotePropertyValue Collaborators
                 #Send to log A
                 SendToLogA -gitHubData $collaboratorLogs -customLogName $RepoLogTable
-            }        
+            }
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
             $forkLogs = $null
@@ -406,14 +406,14 @@ foreach($org in $githubOrgs){
                 $secretscanningalerts | Add-Member -NotePropertyName LogType -NotePropertyValue SecretScanningAlerts
                 #Send to log A
                 SendToLogA -gitHubData $secretscanningalerts -customLogName $RepoLogTable
-            }      
-        }		 
+            }
+        }
         else {
             Write-Host "$repoName is empty"
             Write-Verbose "$repoName is empty"
-        }       
+        }
     }
-    
+
     # get blobs for last run
     # For each repo get Github Vulnerability Alerts
     $blobs = Get-AzStorageBlob -Context $storageAccountContext -Container $storageAccountContainer
@@ -458,7 +458,7 @@ foreach($org in $githubOrgs){
                 $vulnList | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
                 $vulnList | Add-Member -NotePropertyName LogType -NotePropertyValue vulnerabilityAlerts
                 #send to log A; Name:GitHubRepoLogs
-                SendToLogA -gitHubData $vulnList -customLogName $RepoLogTable                
+                SendToLogA -gitHubData $vulnList -customLogName $RepoLogTable
             }
             $hasNextPage = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.hasNextPage
             $lastRunContext = $results.data.organization.repository.vulnerabilityAlerts.pageInfo.endCursor

@@ -57,7 +57,7 @@ requiredDataConnectors:
     dataTypes:
       - AWSCloudTrail
   - connectorId: AzureFirewall
-    dataTypes: 
+    dataTypes:
       - AzureDiagnostics
       - AZFWApplicationRule
       - AZFWNetworkRule
@@ -65,19 +65,19 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
   - connectorId: InfobloxNIOS
-    dataTypes: 
+    dataTypes:
       - Syslog
   - connectorId: GCPDNSDataConnector
-    dataTypes: 
+    dataTypes:
       - GCP_DNS_CL
   - connectorId: NXLogDnsLogs
-    dataTypes: 
+    dataTypes:
       - NXLog_DNS_Server_CL
   - connectorId: CiscoUmbrellaDataConnector
-    dataTypes: 
+    dataTypes:
       - Cisco_Umbrella_dns_CL
   - connectorId: Corelight
-    dataTypes: 
+    dataTypes:
       - Corelight_CL
 
 tags:
@@ -89,15 +89,15 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - CommandAndControl
-query:  | 
+query:  |
   let IPList = dynamic(["154.223.45.38","185.141.207.140","185.234.73.19","216.245.210.106","51.91.48.210","46.255.230.229"]);
   (union isfuzzy=true
   (CommonSecurityLog
   | where isnotempty(SourceIP) or isnotempty(DestinationIP)
   | where SourceIP in (IPList) or DestinationIP in (IPList) or Message has_any (IPList)
-  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "Message") 
+  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "Message")
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by SourceIP, DestinationIP, DeviceProduct, DeviceAction, Message, Protocol, SourcePort, DestinationPort, DeviceAddress, DeviceName, IPMatch
-  | extend timestamp = StartTimeUtc, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "IP in Message Field") 
+  | extend timestamp = StartTimeUtc, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "IP in Message Field")
   ),
   (OfficeActivity
   |extend SourceIPAddress = ClientIP, Account = UserId
@@ -130,12 +130,12 @@ query:  |
   | where IPAddress in (IPList)
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
   ),
-  (W3CIISLog 
+  (W3CIISLog
   | where isnotempty(cIP)
   | where cIP in (IPList)
   | extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName
   ),
-  (AzureActivity 
+  (AzureActivity
   | where isnotempty(CallerIpAddress)
   | where CallerIpAddress in (IPList)
   | extend timestamp = TimeGenerated, IPCustomEntity = CallerIpAddress, AccountCustomEntity = Caller
@@ -152,21 +152,21 @@ query:  |
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (IPList)  
-  | extend DestinationIP = DestinationHost 
+  | where DestinationHost has_any (IPList)
+  | extend DestinationIP = DestinationHost
   | extend IPCustomEntity = SourceHost
   ),
   (
   AZFWApplicationRule
   | where isnotempty(Fqdn)
-  | where Fqdn has_any (IPList)  
-  | extend DestinationIP = Fqdn 
+  | where Fqdn has_any (IPList)
+  | extend DestinationIP = Fqdn
   | extend IPCustomEntity = SourceIp
   ),
   (AZFWNetworkRule
   | where isnotempty(DestinationIp)
-  | where DestinationIp  has_any (IPList)  
-  | extend DestinationIP = DestinationIp 
+  | where DestinationIp  has_any (IPList)
+  | extend DestinationIP = DestinationIp
   | extend IPCustomEntity = SourceIp
   ),
   (Event
@@ -175,8 +175,8 @@ query:  |
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend SourceIP = EventDetail.[9].["#text"], DestinationIP = EventDetail.[14].["#text"]
-  | where SourceIP in (IPList) or DestinationIP in (IPList) 
-  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
+  | where SourceIP in (IPList) or DestinationIP in (IPList)
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
   | extend timestamp = TimeGenerated, AccountCustomEntity = UserName, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
   )
   )

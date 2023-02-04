@@ -7,7 +7,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors.Models
     {
         [JsonProperty("etag")]
         public string ETag { get; set; }
-        
+
         [JsonConverter(typeof(StringEnumConverter))]
         public DataConnectorKind Kind { get; set; }
     }

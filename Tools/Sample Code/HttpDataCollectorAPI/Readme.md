@@ -39,7 +39,7 @@ The TimeStampField is optional from the data. If the time field is not specified
 		static string TimeStampField = "";
 
 5) For this following custom data section, you can either replace the value of the string json variable with your own custom data or comment this out and create your own json file with custom log data in the solution. For creating your own file option, you will need to modify the code to read the json file in the API call.
-		static string json = @"[{""DemoField1"":""DemoValue1"",""DemoField2"":""DemoValue2""},{""DemoField3"":""DemoValue3"",""DemoField4"":""DemoValue4""}]"; 
+		static string json = @"[{""DemoField1"":""DemoValue1"",""DemoField2"":""DemoValue2""},{""DemoField3"":""DemoValue3"",""DemoField4"":""DemoValue4""}]";
 6) Once changes are complete, save the file.
 Now you can run the application. Please note that the "Main" function in the Program.cs class is the entry point for the application.
 

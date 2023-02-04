@@ -1,20 +1,20 @@
-# Master Playbook Host Remediation 
+# Master Playbook Host Remediation
 
-Master playbook is integrated with multiple firewall Endpoint protection products.  
- - CarbonBlack 
+Master playbook is integrated with multiple firewall Endpoint protection products.
+ - CarbonBlack
  - Crowdstrike
  - CiscoMeraki
  - MDE
 
 Endpoint protection products are deployed as child/nested playbooks.
 
-If a malicious host is detected from the Azure sentinel, master playbook calls all the child/nested playbooks and each firewall product will take remidiation steps needed on that host and comments will be passed to the master playbook from the child/nested playbooks involving multiple products. 
+If a malicious host is detected from the Azure sentinel, master playbook calls all the child/nested playbooks and each firewall product will take remidiation steps needed on that host and comments will be passed to the master playbook from the child/nested playbooks involving multiple products.
 
 ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious hosts.
  2. Each nested playbook receives the list of host and performs respective defined automated actions on it.
- 3. Response from individual playbooks are returned to master playbook for incident comment. 
+ 3. Response from individual playbooks are returned to master playbook for incident comment.
 
 ![Master](./Images/PlaybookDesignerLight.png)
 
@@ -22,7 +22,7 @@ If a malicious host is detected from the Azure sentinel, master playbook calls a
  ## Pre-requisites for deployment
 At least one of the below-mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
 
-- [CarbonBlack-Remediation-Host](/MasterPlaybook-Host-Remediation/CarbonBlack-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for CarbonBlack.  
+- [CarbonBlack-Remediation-Host](/MasterPlaybook-Host-Remediation/CarbonBlack-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for CarbonBlack.
 - [Crowdstrike-Remediation-Host](/MasterPlaybook-Host-Remediation/Crowdstrike-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for Crowdstrike.
 - [CiscoMeraki-Remediation-Host](/MasterPlaybook-Host-Remediation/CiscoMeraki-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for CiscoMeraki.
 - [MDEIsolate-Remediation-Host](/MasterPlaybook-Host-Remediation/MDEIsolate-Remediation-Host/azuredeploy.json) is a nested playbook that handles remidiation for MDE.
@@ -47,7 +47,7 @@ Each of the nested playbooks of Host Remediation gives following outputs:
 
 - Status code: Status code tells the success or failure status of nested playbook run results. The status code value is displayed in incident comment.
 - Body: Body provides with all the output values that nested playbook returns. It varies according to the nested playbook. Based on the length of body Incident Comment is created.
-- Incident Comment: It contains output body from nested playbook in tabular format. 
+- Incident Comment: It contains output body from nested playbook in tabular format.
 
 For example, taking reference of CarbonBlack incident comment image below, CarbonBlack logo is composed for incident comment.
 Also, table is populated with values such as Device name, Quarantined status, Policy name, Policy id, Device owner id, Device id, Device status, Operating system, Operating system version, Organization name and Email address.
@@ -89,7 +89,7 @@ To add new nested playbook to master playbook:
 # Post-Deployment Instructions
 
 ### Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with host. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with host.
 - Configure the automation rules to trigger the playbook which calls multiple nested playbooks.
 
 # Playbook steps explained
@@ -122,8 +122,3 @@ Get the list of Hosts as entities from the Incident.
 ### If the nested playbook ran Successfully then Incident Comment looks like below: (e.g. CarbonBlack)
 
 ![Master](./Images/IncidentComment_Success.PNG)
-
-
-
-
-

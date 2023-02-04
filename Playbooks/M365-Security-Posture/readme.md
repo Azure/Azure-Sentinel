@@ -55,7 +55,7 @@ First, an application needs to registered in Azure AD and assigned API permissio
 
 Note: The Microsoft Cloud Application Security data connector needs to be on and is ingesting Shadow IT data (Cloud Discovery Logs). If the MCAS data connector isn’t enabled, please follow the public documentation - https://docs.microsoft.com/azure/sentinel/connect-cloud-app-security.
 
-Once the application is ready, as well as <strong>Workspace ID and Workspace key</strong>, the Logic App can be deployed. 
+Once the application is ready, as well as <strong>Workspace ID and Workspace key</strong>, the Logic App can be deployed.
 
 ## **Deployment Process**
 ## **Option 1**
@@ -64,7 +64,7 @@ Once the application is ready, as well as <strong>Workspace ID and Workspace key
 3. Enter the details that are required for the Playbook.
 4. Click "Review and Create".
 5. Click "Create".
-6. Within a minute or two, the template should deploy and the Playbook should appear within the Azure Sentinel environment. 
+6. Within a minute or two, the template should deploy and the Playbook should appear within the Azure Sentinel environment.
 
 ## **Option 2**
 1. Enter the template within the GitHub folder.
@@ -78,6 +78,6 @@ Once the application is ready, as well as <strong>Workspace ID and Workspace key
 9. Enter the details that are required for the Playbook.
 10. Click "Review and Create".
 11. Click "Create".
-12. Within a minute or two, the template should deploy and the Playbook should appear within the Azure Sentinel environment. 
+12. Within a minute or two, the template should deploy and the Playbook should appear within the Azure Sentinel environment.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FM365-Security-Posture%2Fazuredeploy.json)

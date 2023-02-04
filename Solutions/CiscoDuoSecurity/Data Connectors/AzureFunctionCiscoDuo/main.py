@@ -98,7 +98,7 @@ def process_trust_monitor_events(admin_api: duo_client.Admin, state_manager: Sta
     for event in admin_api.get_trust_monitor_events_iterator(mintime=mintime, maxtime=maxtime):
         sentinel.send(event)
     sentinel.flush()
-    
+
     logging.info('Saving trust_monitor logs last timestamp {}'.format(maxtime))
     state_manager.post(str(maxtime))
 
@@ -121,10 +121,10 @@ def process_auth_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
         sentinel.send(event)
 
     sentinel.flush()
-    
+
     logging.info('Saving auth logs last timestamp {}'.format(maxtime))
     state_manager.post(str(maxtime))
-    
+
 
 def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> Iterable[dict]:
     limit = 1000
@@ -171,11 +171,11 @@ def process_admin_logs(admin_api: duo_client.Admin, state_manager: StateManager,
         sentinel.send(event)
 
     sentinel.flush()
-    
+
     if last_ts:
         logging.info('Saving admin logs last timestamp {}'.format(last_ts))
         state_manager.post(str(last_ts))
-    
+
 
 def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
@@ -195,7 +195,7 @@ def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
             mintime = event['timestamp']
             yield event
 
-    
+
 def process_tele_logs(admin_api: duo_client.Admin, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
     logging.info('Start processing telephony logs')
 
@@ -207,19 +207,19 @@ def process_tele_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
     else:
         logging.info('Last timestamp is not known. Getting data for last 24h')
         mintime = int(time.time() - 86400)
-    
+
     last_ts = None
 
     for event in get_tele_logs(admin_api, mintime):
         last_ts = event['timestamp']
         sentinel.send(event)
-    
+
     sentinel.flush()
 
     if last_ts:
         logging.info('Saving telephony logs last timestamp {}'.format(last_ts))
         state_manager.post(str(last_ts))
-    
+
 
 def get_tele_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
@@ -259,11 +259,11 @@ def process_offline_enrollment_logs(admin_api: duo_client.Admin, state_manager: 
         sentinel.send(event)
 
     sentinel.flush()
-    
+
     if last_ts:
         logging.info('Saving offline_enrollment logs last timestamp {}'.format(last_ts))
         state_manager.post(str(last_ts))
-    
+
 
 def get_offline_enrollment_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000

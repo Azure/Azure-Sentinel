@@ -19,7 +19,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
 
   if(pr){ // pr may return undefined
     const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
-    
+
     if(changedFiles && changedFiles.length > 0){
       const options = [pr.targetBranch, pr.sourceBranch, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
       const diffSummary = await git.diff(options);

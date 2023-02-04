@@ -10,7 +10,7 @@ using Teams.CustomConnector.Common;
 using Constants = Teams.CustomConnector.Common.Constants;
 
 /// <summary>
-/// 
+///
 /// </summary>
 namespace Teams.CustomConnector.StorageHandler
 {
@@ -30,7 +30,7 @@ namespace Teams.CustomConnector.StorageHandler
         public StorageHandler(ILogger log)
         {
             this.log = log;
-        
+
         }
 
 

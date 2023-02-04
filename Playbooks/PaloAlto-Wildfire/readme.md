@@ -7,7 +7,7 @@
 1. [Overview](#overview)
 1. [Prerequisites](#prerequisites)
 1. [Authentication](#authentication)
-1. [Deploy WildFire custom connector and 3 playbook templates](#deployall) 
+1. [Deploy WildFire custom connector and 3 playbook templates](#deployall)
 1. [Deployment Instructions](#instructions)
 1. [Post-Deployment Instructions](#postdeployment)
 1. [References](#references)
@@ -15,7 +15,7 @@
 
 <a name="overview">
 
-# Overview 
+# Overview
 
 Palo Alto Wildfire Next Generation Firewall is used to fetch the verdict information of the URL and filehash, hence providing protection from malware and malicious URLs.
 
@@ -30,7 +30,7 @@ Palo Alto Wildfire Next Generation Firewall is used to fetch the verdict informa
 <a name="authentication">
 
 # Authentication
-WildFire Custom Connector supports: API Key Authentication 
+WildFire Custom Connector supports: API Key Authentication
 
 
 <a name="deployall">
@@ -47,7 +47,7 @@ You can choose to deploy the whole package: connector and all three playbook tem
 
 <a name="instructions">
 
-# Deployment Instructions 
+# Deployment Instructions
 - Deploy the WildFire custom connector and Playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill in the required parameters for deploying WildFire custom connector and playbooks.
 
@@ -61,14 +61,14 @@ You can choose to deploy the whole package: connector and all three playbook tem
 | **Block URL From Teams Playbook Name** | Enter the Block URL From Teams Playbook Name |
 | **Wildfire Custom Connector Name** | Enter the name of Palo Alto WildFire custom connector |
 | **Wildfire Service End Point** | Enter the Service End Point of Wildfire API [WildFire Console](https://wildfire.paloaltonetworks.com)|
-| **Wildfire API Key**  | Enter the WildFire API Key| 
+| **Wildfire API Key**  | Enter the WildFire API Key|
 | **Notification Email** | Enter the DL or SOC email address for receiving filehash report|
 | **PAN-OS Custom Connector Name**  | Enter the Palo Alto PAN-OS custom connector name  |
 | **Security Policy Rule** | Enter the Security Policy Rule which is created in PAN-OS |
 
 <a name="postdeployment">
 
-# Post Deployment Instructions 
+# Post Deployment Instructions
 ## a. Authorize Connections
 * Once deployment is complete, you will need to authorize each connection.
   - Click the Teams connection resource
@@ -80,7 +80,7 @@ You can choose to deploy the whole package: connector and all three playbook tem
 * In Logic App designer authorize Teams channel connection as well, for playbooks posting adaptive cards.
 
 ## b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with filehash and URL. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with filehash and URL.
 - Configure the automation rules to trigger the playbook.
 
 <a name="references">

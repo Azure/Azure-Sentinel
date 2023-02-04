@@ -8,7 +8,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules.Models
         {
             Kind = AlertRuleKind.Fusion;
         }
-        
+
         [JsonProperty("properties")]
         public FusionAlertRulePropertiesPayload PropertiesPayload { get; set; }
     }

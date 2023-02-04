@@ -18,7 +18,7 @@ def get_header(headers=None):
 
     headers['User-Agent'] = configurations.get_user_agent()
 
-    return headers    
+    return headers
 
 
 def get_trace_log():
@@ -72,7 +72,7 @@ def get_workbench_detail(token, workbench_id):
         msg = response_data['error']['message']
         logging.warning(f'Workbench not found: {msg}')
         return None
-    
+
     response.raise_for_status()
     response_data = response.json()
 

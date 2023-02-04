@@ -6,7 +6,7 @@ namespace AzureSentinel_ManagementAPI.Bookmarks.Models
     {
         [JsonProperty("etag")]
         public string ETag { get; set; }
-        
+
         [JsonProperty("properties")]
         public BookmarkPropertiesPayload PropertiesPayload { get; set; }
     }

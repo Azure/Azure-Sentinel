@@ -15,14 +15,14 @@ You can deploy the solution by clicking on the buttons below:
 This solution is designed to augment staffing through automation, machine learning, query/alerting generation, and visualizations. This workbook leverages Azure Policy, Azure Resource Graph, and Azure Log Analytics to align with NIST SP 800-53 control requirements. A filter set is available for custom reporting by guides, subscriptions, workspaces, time-filtering, control family, and controls. This offering telemetry from 25+ Microsoft Security products (1P/3P/Multi-Cloud/Hybrid/On-Premises), while only Microsoft Sentinel/Microsoft Defender for Cloud are required to get started, each offering provides additional enrichment for aligning with control requirements. Each NIST SP 800-53 control includes a Control Card detailing an overview of requirements, primary/secondary controls, deep-links to referenced product pages/portals, recommendations, implementation guides, compliance cross-walks and tooling telemetry for building situational awareness of cloud workloads.
 
 ### [Recommended Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Recommended Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions)
-| <strong> Roles </strong> | <strong> Rights </strong> | 
+| <strong> Roles </strong> | <strong> Rights </strong> |
 |:--|:--|
 |Security Reader | View Workbooks, Analytics, Hunting, Security Recommendations |
 |Security Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries, Apply Security Recommendations |
 |Automation Contributor| Deploy/Modify Playbooks & Automation Rules |
 |Owner| Assign Regulatory Compliance Initiatives|
 
-### Onboarding Prerequisites 
+### Onboarding Prerequisites
 1️⃣ [Access Microsoft 365 Compliance Manager: Assessments](https://compliance.microsoft.com/compliancemanager?viewid=Assessments)<br>
 2️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
 3️⃣ [Onboard Microsoft Defender for Cloud](https://docs.microsoft.com/azure/security-center/security-center-get-started)<br>

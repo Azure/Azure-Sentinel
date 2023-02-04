@@ -9,7 +9,7 @@
 ![CarbonBlack](./Images/PlaybookDesignerLight.png)<br>
 ![CarbonBlack](./Images/PlaybookDesignerDark.png)<br>
 
-### Prerequisites 
+### Prerequisites
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription and same resource group. Capture the name of connector during deployment.
 2. Generate an API key ([learn how](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)), and grant it to the following access levels:
 
@@ -26,7 +26,7 @@ To deploy CarbonBlack Custom connector click on the below button.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCarbonBlack%2FCarbonBlackConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCarbonBlack%2FCarbonBlackConnector%2Fazuredeploy.json)
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Ftree%2Fmaster%2FMasterPlaybooks%2FRemediation-Host%2FCarbonBlack-Remediation-Host%2Fazuredeploy.json)
@@ -40,8 +40,8 @@ To deploy CarbonBlack Custom connector click on the below button.
 |**Playbook Name**| Enter the playbook name here (Eg: CarbonBlack-QuarantineDevice-Nested-Remediation)|
 |**Connector Name**|Enter the name of Carbon Black Connector.|
 |**Organization Key**| Enter the Organization key|
-    
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize CarbonBlack connection.
 1.	Click the CarbonBlack connection
@@ -86,5 +86,3 @@ This action will construct the HTML table with Quarantined devices through playb
 
 ### Send Response with device information
 This action will send response to master playbook with devices information
-
-

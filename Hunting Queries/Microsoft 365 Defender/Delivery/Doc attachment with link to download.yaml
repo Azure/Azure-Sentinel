@@ -22,22 +22,22 @@ requiredDataConnectors:
   - DeviceFileEvents
 query: |
   let minTimeRange = ago(7d);
-  let wordLinks = 
+  let wordLinks =
       DeviceEvents
       // Filter on click on links from WinWord
       | where Timestamp > minTimeRange and ActionType == "BrowserLaunchedToOpenUrl" and isnotempty(RemoteUrl) and InitiatingProcessFileName =~ "winword.exe"
       | project ClickTime=Timestamp, DeviceId, DeviceName, ClickUrl=RemoteUrl;
-  let docAttachments = 
+  let docAttachments =
       DeviceFileEvents
-      | where Timestamp > minTimeRange 
+      | where Timestamp > minTimeRange
   			// Query for common document file extensions
               and (FileName endswith ".docx" or FileName endswith ".docm" or FileName endswith ".doc")
   			// Query for files saved from email clients such as the Office Outlook app or the Windows Mail app
               and InitiatingProcessFileName in~ ("outlook.exe", "hxoutlook.exe")
       | summarize AttachmentSaveTime=min(Timestamp) by AttachmentName=FileName, DeviceId;
-  let browserDownloads = 
+  let browserDownloads =
       DeviceFileEvents
-      | where Timestamp > minTimeRange 
+      | where Timestamp > minTimeRange
   			// Query for files created by common browsers
               and InitiatingProcessFileName in~ ("browser_broker.exe", "chrome.exe", "iexplore.exe", "firefox.exe")
               // Exclude JS files that are used for loading sites (but still query for JS files that are known to be downloaded)
@@ -48,7 +48,7 @@ query: |
   // Perf tip: start the joins from the smallest table (put it on the left-most side of the joins)
   wordLinks
   | join kind= inner (docAttachments) on DeviceId | where ClickTime - AttachmentSaveTime between (0min..3min)
-  | join kind= inner (browserDownloads) on DeviceId | where Timestamp - ClickTime between (0min..3min) 
+  | join kind= inner (browserDownloads) on DeviceId | where Timestamp - ClickTime between (0min..3min)
   // Aggregating multiple "attachments" together - because oftentimes the same file is stored multiple times under different names
   | summarize Attachments=makeset(AttachmentName), AttachmentSaveTime=min(AttachmentSaveTime), ClickTime=min(ClickTime)
       by // Downloaded file details

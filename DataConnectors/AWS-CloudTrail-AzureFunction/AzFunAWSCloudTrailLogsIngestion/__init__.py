@@ -32,7 +32,7 @@ fresh_event_timestamp = os.environ.get('FreshEventTimeStamp')
 
 logAnalyticsUri = os.environ.get('LAURI')
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
@@ -53,7 +53,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Starting program')
-    
+
     cli = S3Client(aws_access_key_id, aws_secret_acces_key, aws_region_name, aws_s3_bucket)
     ts_from, ts_to = cli.get_time_interval()
     print("From:{0}".format(ts_from))
@@ -75,8 +75,8 @@ def main(mytimer: func.TimerRequest) -> None:
     eventSources = []
 
     for obj in obj_list:
-        log_events = cli.process_obj(obj)       
-        
+        log_events = cli.process_obj(obj)
+
         for log in log_events:
             logDetails={}
             logDetails1={}
@@ -85,7 +85,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 for col in eventobjectlist:
                     if col in log:
                         logDetails1[col]=log[col]
-                
+
                 ec2Header = logEventSource + '_Header'
                 if ec2Header not in groupEvents:
                     groupEvents[ec2Header]=[]
@@ -95,7 +95,7 @@ def main(mytimer: func.TimerRequest) -> None:
                     groupEvents[ec2Header].append(logDetails1)
 
                 ec2Request = logEventSource + '_Request'
-                
+
                 if ec2Request not in groupEvents:
                     groupEvents[ec2Request]=[]
                     eventSources.append(ec2Request)
@@ -143,35 +143,35 @@ def main(mytimer: func.TimerRequest) -> None:
             else:
                 if logEventSource not in groupEvents:
                     groupEvents[logEventSource]=[]
-                    eventSources.append(logEventSource)                    
+                    eventSources.append(logEventSource)
                     groupEvents[logEventSource].append(log)
-                else: 
+                else:
                     groupEvents[logEventSource].append(log)
 
             for col in eventobjectlist:
                 if col in log:
-                    logDetails[col]=log[col]      
-            
+                    logDetails[col]=log[col]
+
             coreEvents.append(logDetails)
 
     if (isCoreFieldsAllTable == "true" and isSplitAWSResourceTypes == "true"):
         file_events = 0
-        t0 = time.time()    
+        t0 = time.time()
         for event in coreEvents:
             sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ALL' , queue_size=10000, bulks_number=10)
             with sentinel:
                 sentinel.send(event)
-            file_events += 1 
+            file_events += 1
             failed_sent_events_number += sentinel.failed_sent_events_number
-            successfull_sent_events_number += sentinel.successfull_sent_events_number                
-        
+            successfull_sent_events_number += sentinel.successfull_sent_events_number
+
         for resource_type in eventSources:
             resource_type_events_collection = groupEvents[resource_type]
             for resource_type_event in resource_type_events_collection:
                 sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_' + resource_type, queue_size=10000, bulks_number=10)
                 with sentinel:
-                    sentinel.send(resource_type_event)       
-        
+                    sentinel.send(resource_type_event)
+
     elif (isCoreFieldsAllTable == "true" and isSplitAWSResourceTypes == "false"):
         file_events = 0
         t0 = time.time()
@@ -182,7 +182,7 @@ def main(mytimer: func.TimerRequest) -> None:
             file_events += 1
             failed_sent_events_number += sentinel.failed_sent_events_number
             successfull_sent_events_number += sentinel.successfull_sent_events_number
-            
+
     elif (isCoreFieldsAllTable == "false" and isSplitAWSResourceTypes == "true"):
         file_events = 0
         t0 = time.time()
@@ -194,8 +194,8 @@ def main(mytimer: func.TimerRequest) -> None:
                     sentinel.send(resource_type_event)
                 file_events += 1
                 failed_sent_events_number += sentinel.failed_sent_events_number
-                successfull_sent_events_number += sentinel.successfull_sent_events_number                      
-        
+                successfull_sent_events_number += sentinel.successfull_sent_events_number
+
     if failed_sent_events_number:
         logging.info('{} events have not been sent'.format(failed_sent_events_number))
 
@@ -212,7 +212,7 @@ class S3Client:
         self.aws_secret_acces_key = aws_secret_acces_key
         self.aws_region_name = aws_region_name
         self.aws_s3_bucket = self._get_s3_bucket_name(aws_s3_bucket)
-        self.aws_s3_prefix = self._get_s3_prefix(aws_s3_bucket)        
+        self.aws_s3_prefix = self._get_s3_prefix(aws_s3_bucket)
         self.total_events = 0
         self.input_date_format = '%Y-%m-%d %H:%M:%S'
         self.output_date_format = '%Y-%m-%dT%H:%M:%SZ'
@@ -222,15 +222,15 @@ class S3Client:
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_acces_key,
             region_name=self.aws_region_name
-        )       
-       
+        )
+
     def _get_aws_account_id(self):
         self.sts = boto3.client(
-            "sts", 
-            aws_access_key_id=self.aws_access_key_id, 
+            "sts",
+            aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_acces_key,
             region_name=self.aws_region_name
-        )    
+        )
         return self.sts.get_caller_identity()["Account"]
 
     def _get_s3_bucket_name(self, aws_s3_bucket):
@@ -262,11 +262,11 @@ class S3Client:
         ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         ts_from = ts_from.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
         ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        return ts_from, ts_to                   
-    
+        return ts_from, ts_to
+
     def _make_objects_list_request(self, marker='', prefix=''):
         response = self.s3.list_objects(
-            Bucket=self.aws_s3_bucket, 
+            Bucket=self.aws_s3_bucket,
             Marker=marker,
             Prefix=prefix
         )
@@ -282,15 +282,15 @@ class S3Client:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = self.s3.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix, Delimiter='/')        
-       
+        folders = self.s3.list_objects(Bucket=self.aws_s3_bucket, Prefix=self.aws_s3_prefix, Delimiter='/')
+
 
         marker_end = (ts_from - datetime.timedelta(minutes=60)).strftime("/%Y-%m-%d/%Y-%m-%d-%H-%M")
-        
-        for o in folders.get('CommonPrefixes'):        
-            marker = o.get('Prefix') + cloud_trail_folder + marker_end   
-            folder = o.get('Prefix') + cloud_trail_folder           
-            while True:                
+
+        for o in folders.get('CommonPrefixes'):
+            marker = o.get('Prefix') + cloud_trail_folder + marker_end
+            folder = o.get('Prefix') + cloud_trail_folder
+            while True:
                 response = self._make_objects_list_request(marker=marker, prefix=folder)
                 for file_obj in response.get('Contents', []):
                     if ts_to > file_obj['LastModified'] >= ts_from:
@@ -332,7 +332,7 @@ class S3Client:
         except Exception as err:
             logging.error('Error while unpacking file {} - {}'.format(key, err))
 
-  
+
     @staticmethod
     def format_date(date_string, input_format, output_format):
         try:
@@ -340,14 +340,14 @@ class S3Client:
             date_string = date.strftime(output_format)
         except Exception:
             pass
-        return date_string    
+        return date_string
 
     @staticmethod
     def sort_files_by_date(ls):
         return sorted(ls, key=lambda k: k['LastModified'])
 
-    def process_obj(self, obj):        
-        key = obj['Key']        
+    def process_obj(self, obj):
+        key = obj['Key']
         if '.json.gz' in key.lower():
             downloaded_obj = self.download_obj(key)
             json_file = self.unpack_file(downloaded_obj, key)
@@ -410,7 +410,7 @@ class AzureSentinelConnector:
     def _build_signature(self, customer_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
         string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")  
+        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
         encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
         authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
@@ -426,7 +426,7 @@ class AzureSentinelConnector:
         content_length = len(body)
         signature = self._build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
         uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
-        
+
         headers = {
             'content-type': content_type,
             'Authorization': signature,

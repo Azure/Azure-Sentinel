@@ -4,10 +4,10 @@ By every day reccurence, this playbook gets triggered and performs the following
  1. Gets [list](https://docs.abuseipdb.com/#blacklist-endpoint) of the most reported IP addresses form the Blacklist Endpoint.
 
 <img src="./playbook_screenshot.png" width="80%"/><br>
-### Prerequisites 
+### Prerequisites
 1. AbuseIPDB Custom Connector has to be deployed prior to the deployment of this playbook under the same subscription.
 
-### Deployment instructions 
+### Deployment instructions
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
@@ -15,7 +15,7 @@ By every day reccurence, this playbook gets triggered and performs the following
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDB-BlacklistIpToThreatIntelligence%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAbuseIPDB%2FPlaybooks%2FAbuseIPDB-BlacklistIpToThreatIntelligence%2Fazuredeploy.json)
 
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, authorize each connection.
 1. Open playbook which has been deployed

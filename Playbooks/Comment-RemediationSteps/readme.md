@@ -1,7 +1,7 @@
 # Comment-RemediationSteps
 authors: Jordan Ross and Nicholas DiCola
 
-This playbook will provide analysts with guidance to properly respond to an incident. This will add a comment to a Sentinel Incident with the remediation steps for alerts related to Microsoft Defender for Endpoint and Azure Security Center / Azure Defender. With these steps users will be able to respond to threats and prevent similar suspicious activity from occurring in the future. 
+This playbook will provide analysts with guidance to properly respond to an incident. This will add a comment to a Sentinel Incident with the remediation steps for alerts related to Microsoft Defender for Endpoint and Azure Security Center / Azure Defender. With these steps users will be able to respond to threats and prevent similar suspicious activity from occurring in the future.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)

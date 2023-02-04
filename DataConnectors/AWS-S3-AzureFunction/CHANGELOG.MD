@@ -13,4 +13,3 @@
 	- JSON.GZ
 - ARM template to deploy Azure Function for both Azure Commercial and Azure Gov
 - README.MD with instructions
-

@@ -17,7 +17,7 @@ This custom connector connects to OpenCTI service end point to runs any OpenCTI 
 | **Run GraphQL query** | Run any supported GraphQL query and get the response in json format |
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
     * Custom Connector Name : Enter the Custom connector name (ex:OpenCTICustomConnector)

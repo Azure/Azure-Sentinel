@@ -15,37 +15,37 @@ tactics:
 - Initial access
 query: |
   // Some URL are wrapped with a safelink
-  // Let's get the the unwrapped url and clicks 
+  // Let's get the the unwrapped url and clicks
   AlertInfo
   | where ServiceSource == "Office 365 ATP"
   | join (
           AlertEvidence
           | where EntityType =="Url"
-          | project AlertId, RemoteUrl 
+          | project AlertId, RemoteUrl
       )
       on AlertId
   | join (
           AlertEvidence
           | where EntityType =="MailMessage"
-          | project AlertId, NetworkMessageId 
+          | project AlertId, NetworkMessageId
       )
       on AlertId
   // Get the unique NetworkMessageId for the email containing the Url
   | distinct RemoteUrl, NetworkMessageId
   | join EmailEvents on NetworkMessageId
-  // Get the email RecipientEmailAddress and ObjectId from the email 
+  // Get the email RecipientEmailAddress and ObjectId from the email
   | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId
-  | join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId 
+  | join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId
   // get the UserSid of the Recipient
-  | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, OnPremSid 
+  | distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, OnPremSid
   // Get the Url click event on the recipient device.
-  | join kind = inner  
-      (DeviceEvents 
-      | where ActionType == "BrowserLaunchedToOpenUrl"| where isnotempty(RemoteUrl) 
-      | project UrlDeviceClickTime = Timestamp , UrlClickedByUserSid = RemoteUrl, 
+  | join kind = inner
+      (DeviceEvents
+      | where ActionType == "BrowserLaunchedToOpenUrl"| where isnotempty(RemoteUrl)
+      | project UrlDeviceClickTime = Timestamp , UrlClickedByUserSid = RemoteUrl,
                   InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName
-      ) 
+      )
      on $left.OnPremSid == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid
-  | distinct UrlDeviceClickTime, RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId, 
-      OnPremSid, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName 
-  | sort by UrlDeviceClickTime desc 
+  | distinct UrlDeviceClickTime, RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,
+      OnPremSid, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName
+  | sort by UrlDeviceClickTime desc

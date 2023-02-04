@@ -40,7 +40,7 @@ I've also added sample datasets for `ApplicationRule` and `NetworkRule` events. 
 There's currently some confusion about the proper way to deploy "saved queries" to you Sentinel/Log Analytics workspaces. These can be stored directly inside the workspace (savedQueries) but apparantly this is considered _"legacy"_ now since [Microsoft introduced Query Packs @ Build 2021](https://techcommunity.microsoft.com/t5/azure-monitor-blog/what-s-new-in-azure-monitor-build-2021/ba-p/2366286).
 Query Packs are a new type of Azure resource in where you can store KQL queries. Query Packs can be shared across multiple workspaces and even across multiple subscriptions.
 
-BUT! Query Packs **cannot** facilitate the automated deployments of functions! So for this use (like with parsers) the _tried-and-true_ method is this advised. 
+BUT! Query Packs **cannot** facilitate the automated deployments of functions! So for this use (like with parsers) the _tried-and-true_ method is this advised.
 
 To deploy these parsers as functions automatically, click the button below:
 

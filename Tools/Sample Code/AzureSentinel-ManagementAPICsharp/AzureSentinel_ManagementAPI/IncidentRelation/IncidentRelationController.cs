@@ -106,7 +106,7 @@ namespace AzureSentinel_ManagementAPI.IncidentRelation
                 var response = await http.SendAsync(request);
 
                 if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
-                
+
                 if (response.StatusCode == HttpStatusCode.NotFound)
                     throw new Exception("Not found, please create a new incident relation first...");
 

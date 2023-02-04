@@ -1,23 +1,23 @@
-# SlashNext Web Access Log Assessment Playbook 
+# SlashNext Web Access Log Assessment Playbook
 <img src="../logo/slashnext-logo.png" alt="drawing" width="50%"/><br>
 
 ## Overview
 
-Designed to analyze Web Access logs from Web Gateways and Firewalls. 
+Designed to analyze Web Access logs from Web Gateways and Firewalls.
 Scan your logs for continuous detection of phishing and malicious threat URLs clicked by end users.
 Identify threats missed by current security layers
 
 The playbook shall extract all the URLs from the logs to perform analysis using SlashNext Connector
 and create an incident for each unique malicious URL found in the web logs.
 
-## SlashNext Web Access Log Assessment Playbook 
+## SlashNext Web Access Log Assessment Playbook
 
 ### Prerequisites
 
-**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key. 
+**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key.
 To acquire SlashNext API key, please contact us at [support@slashnext.com](mailto:support@slashnext.com) or visit [SlashNext.com](www.slashnext.com)
 
-### Deployment Instructions 
+### Deployment Instructions
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
     * Playbook Name: Enter playbook name here

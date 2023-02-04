@@ -25,7 +25,7 @@ The script will prompt you for the following parameter values:
 * *triggerName* - name of the Logic App trigger [Optional, if not specified, the default trigger name "When_a_response_to_an_Azure_Sentinel_alert_is_triggered" is used]
 <br/><br/>
 
-#### Running the script 
+#### Running the script
 After your have downloaded the sample script, you can run the script with parameters as follows:
 ```powershell
 .\addAzureSentinelAlertAction.ps1 -subscriptionId "0c8c4515-d563-4eb7-96fa-a5a2b8f6806c" -sentinelRG "mySentinelRG" -workspaceName "Sentinelworkspace" -logicAppName "SentinelAlerts"

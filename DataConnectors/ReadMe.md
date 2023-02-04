@@ -59,13 +59,13 @@ Once you have decided on the type of data connector you plan to support, set the
     1. Ensure the data you send is complete and contains the same fields available in your product.
     2. Ensure the data is valid and easy to query using Log Analytics.
 
-### Codeless Connector Platform (CCP) (Preview) / Native Microsoft Sentinel Polling  
+### Codeless Connector Platform (CCP) (Preview) / Native Microsoft Sentinel Polling
 
-1. [Follow documentation](https://docs.microsoft.com/azure/sentinel/create-codeless-connector?tabs=deploy-via-arm-template%2Cconnect-via-the-azure-portal) to create a data connector using CCP. Use the template (ARM template) in step 2 of the *Build the connector* section below for quick start. Download and update for integrating with your API endpoint. 
+1. [Follow documentation](https://docs.microsoft.com/azure/sentinel/create-codeless-connector?tabs=deploy-via-arm-template%2Cconnect-via-the-azure-portal) to create a data connector using CCP. Use the template (ARM template) in step 2 of the *Build the connector* section below for quick start. Download and update for integrating with your API endpoint.
 2. Ensure the schema used for structuring the data in Log Analytics is locked. Any changes to the schema after the data connector is published will have a compatibility impact, hence need to have a new name for the connector data type.
-3. Use the [ARM deploy mechanism](https://docs.microsoft.com/azure/azure-resource-manager/templates/quickstart-create-templates-use-the-portal) to upload the ARM template from step 1 for testing. 
-4. Pass the parameters in the configuration setting and establish connectivity. 
-5. These logs will appear in a Custom Log Analytics table **CustomLogs** -> **&lt;log name&gt;** where the log name is what you have as data type name in the template.  
+3. Use the [ARM deploy mechanism](https://docs.microsoft.com/azure/azure-resource-manager/templates/quickstart-create-templates-use-the-portal) to upload the ARM template from step 1 for testing.
+4. Pass the parameters in the configuration setting and establish connectivity.
+5. These logs will appear in a Custom Log Analytics table **CustomLogs** -> **&lt;log name&gt;** where the log name is what you have as data type name in the template.
 5. Design and validate a few key queries that lands the value of the data stream using Kusto Query Language. Share these as sample queries in the data connector.
 
 **Example connectors to refer to** : GitHub, [Lastpass](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/LastPass/Data%20Connectors/LastPassAPIConnector.json) (check in Content hub for the solution that has these data connectors)
@@ -75,7 +75,7 @@ Once you have decided on the type of data connector you plan to support, set the
 2. From a data quality perspective,
     1. Ensure the data you send is complete and contains the same fields available in your product.
     2. Ensure the data is valid and easy to query using Log Analytics.
-    3. Ensure the schema aligns with [ASIM schema](https://docs.microsoft.com/azure/sentinel/normalization-about-schemas) as much as possible. Other non-mappable fields can land in as-is for complete product integration value to customers. 
+    3. Ensure the schema aligns with [ASIM schema](https://docs.microsoft.com/azure/sentinel/normalization-about-schemas) as much as possible. Other non-mappable fields can land in as-is for complete product integration value to customers.
 
 ### CEF Connector
 
@@ -176,13 +176,13 @@ Once you have a working POC, you are ready to build, validate the data connector
    * [Connector_REST_API_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_template.json)
    * [Connector_Syslog_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json)
    * [DataConnector_API_AzureFunctionApp_template.json](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_REST_API_AzureFunctionApp_template/DataConnector_API_AzureFunctionApp_template.json)
-  
+
 3. **Validate the Connector UX** – Follow these steps to render and validate the connector UX you just built
     1.	The test utility can be accessed by this URL - https://aka.ms/sentineldataconnectorvalidateurl
-    2.  Go to Microsoft Sentinel -> Data Connectors 
+    2.  Go to Microsoft Sentinel -> Data Connectors
     3.	Click the “import” button and select the json file you created as follows.
     ![Import button](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/validateUX_stepc.png)
-    4. The json file you just created is loaded (example as follows) - Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos and formatting.  Update the json as needed and reload to revalidate. 
+    4. The json file you just created is loaded (example as follows) - Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos and formatting.  Update the json as needed and reload to revalidate.
     ![Validate connector](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/validateUX_stepd.png)
 
 >>**Note**: This json is loaded only in your session and not shared out. The logo won’t show up since it’s not part of the json. Connector logo will be included when Microsoft builds and deploys the data connector.
@@ -191,7 +191,7 @@ Once you have a working POC, you are ready to build, validate the data connector
     1.  The extension for the file can be .json (for API based Data Connector) / .txt (for Syslog/CEF based data Connectors) with the column names / property names adhering to the data type property names.
 
     2. Submit the Sample Data via a GitHub PR. All sample data files must reside inside a folder called "Sample Data" within the Solution folder. Example folder structure - "Azure-Sentinel/Solutions/<ProductName>/Sample Data/".
-    
+
     3. Important: Please ensure all sample data has been scrubbed to remove all sensitive PII information that may exist in the logs. The intent is to understand the "what" and "how" from the logs not the "who".
 
     _**IMPORTANT!:** Detailed guidance on Sample Data contribution including expected file names, format, file extensions and extraction method is available [here](https://github.com/Azure/Azure-Sentinel/blob/master/Sample%20Data/README.md).
@@ -201,10 +201,10 @@ Once you have a working POC, you are ready to build, validate the data connector
     2.	The sample data file in the right folder. Example folder structure - "Azure-Sentinel/Solutions/<ProductName>/Sample Data/"
     3.	The company logo adhering to the following requirements in the ['Logo' folder](https://aka.ms/azuresentinelgithublogos)
         1.	Logo needs to be in SVG format and under 5 Kb
-        2.	Ensure raw file of logo does **not** have any of the following: 
-            * cls and style formats 
-            * embedded png formats 
-            * xmlns:xlink  
+        2.	Ensure raw file of logo does **not** have any of the following:
+            * cls and style formats
+            * embedded png formats
+            * xmlns:xlink
             * data-name
         3. Do not use xlink:href - use inline instead
         4. Do not use title tag
@@ -214,7 +214,7 @@ Once you have a working POC, you are ready to build, validate the data connector
     4.  For Syslog data connector, the Kusto function parser is in the right subfolder (PROVIDERNAME) of ['Parsers' folder](https://aka.ms/sentinelgithubparsers)
     5.  If you are bringing in detections or hunting queries, requiredDataConnectors section of the YAML template must be populated.  Details of what to reference in the YAML template from the connector JSON are in the Query Style Guide under [requiredDataConnectors](https://github.com/Azure/Azure-Sentinel/wiki/Query-Style-Guide#requireddataconnectors)
 
-6. **Prepare and submit your data connector documentation** – Besides Microsoft Sentinel gallery discoverability, the connectors can also be discovered out of product in documentation. 
+6. **Prepare and submit your data connector documentation** – Besides Microsoft Sentinel gallery discoverability, the connectors can also be discovered out of product in documentation.
     1.	Download one of the following templates depending on the type of data connector and <i>PROVIDER NAME APPLIANCE NAME.md</i> and fill out the template per the guidance mentioned in the template. Replace the guidance in the template with relevant steps.
     2. Validate the md file for formatting and ensure all links resolve appropriately. You can use VS Code or any other editor that supports md file editing.
       * [Doc_Template_CEF_Connector.md](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Doc_Template_CEF_Connector.md)
@@ -225,33 +225,33 @@ Once you have a working POC, you are ready to build, validate the data connector
 ## Validate and sign off in production
 Once the connector is deployed in production, we will share a link for you to privately access your data connector. Validate your connector:
 1.	Ensure data flows as expected and the data appears in the expected format in the right Log Analytics table
-2.	Ensure sample queries shared with the connector execute as expected and all the other queries that appear in the json file like the graphQueries, dataTypes etc. 
-3.	Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos, formatting and logo rendering aspects. 
+2.	Ensure sample queries shared with the connector execute as expected and all the other queries that appear in the json file like the graphQueries, dataTypes etc.
+3.	Validate connector UX by ensuring all links resolve appropriately with no errors (including query links) in both the main and ‘next steps’ page, check for content accuracy, grammar, typos, formatting and logo rendering aspects.
 4.	If you have Kusto functions included / your sample queries and workbooks take a dependency on certain Kusto function, ensure those work as expected and that dependency is called out in the connector UX (in the Configuration at the beginning and in the next steps section of the connector as a banner)<p>
 Once everything looks as expected, send an email to [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) of your sign off to get your connector shipped in public preview.
 
 ## Connector ships in public preview
-Promote your connector to get installs and get customer feedback. Support connector issues reported by the customer. These can be in generic data flow aspects which you can handle on provider side. There may be connector UX issues or queries etc. issues that you can update by doing a PR on the respective file and inform [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) for deployment. 
+Promote your connector to get installs and get customer feedback. Support connector issues reported by the customer. These can be in generic data flow aspects which you can handle on provider side. There may be connector UX issues or queries etc. issues that you can update by doing a PR on the respective file and inform [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) for deployment.
 ### Exit criteria for connector GA
-Once the data connector is in public preview for at least a month, send an email with the following info to [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) to get the connector to GA. 
-*	The data connector has at least sample queries and workbooks to visualize and use the data effectively in Microsoft Sentinel. 
-*	The data connector has at least 10 unique customers  
+Once the data connector is in public preview for at least a month, send an email with the following info to [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) to get the connector to GA.
+*	The data connector has at least sample queries and workbooks to visualize and use the data effectively in Microsoft Sentinel.
+*	The data connector has at least 10 unique customers
 *	No major unresolved customer reported incidents with the data connector in a month after release
 *   Support for government cloud (.us in addition to .com).
 
-## Evolve the data experience 
-### Workbooks 
-[Follow the steps](https://aka.ms/azuresentinelgithubworkbooks) to build your workbook and submit your workbook json file, two screenshots of the workbook view one each in white and black background theme settings, logo and entry in the ‘workbooksMetadata.json’ file by a PR as mentioned in the instructions. 
+## Evolve the data experience
+### Workbooks
+[Follow the steps](https://aka.ms/azuresentinelgithubworkbooks) to build your workbook and submit your workbook json file, two screenshots of the workbook view one each in white and black background theme settings, logo and entry in the ‘workbooksMetadata.json’ file by a PR as mentioned in the instructions.
 
 ### Analytic Rule Templates
-[Follow the steps](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries) to build and submit your analytic rule template or detection pertaining to this data connector. Ensure to fill in the requiredDataConnectors parameter with the right data connector ID(s) to establish relation of this analytic rule template with the data connector. 
+[Follow the steps](https://github.com/Azure/Azure-Sentinel/wiki/Contribute-to-Sentinel-GitHub-Community-of-Queries) to build and submit your analytic rule template or detection pertaining to this data connector. Ensure to fill in the requiredDataConnectors parameter with the right data connector ID(s) to establish relation of this analytic rule template with the data connector.
 
 ### Logic Apps Connectors
 Build logic apps connectors to enable automation capabilities for customers in the following areas:
 1.	Incident management – for e.g. assign a ticket to an analyst, keep ticket status in sync, …
 2.	Enrichment and Investigation – for e.g. geo lookup for an IP, sending investigation emails, …
 3.	Remediation – for e.g. block an IP address, block user access, isolate machine, …
-4.	Any other automation capabilities unique to your appliance. 
+4.	Any other automation capabilities unique to your appliance.
 
 Follow the steps in the Azure Logic Apps [building custom connectors documentation](https://docs.microsoft.com/connectors/custom-connectors/) to create, certify and ship an Azure Logic App connector. This not only discoverable for Microsoft Sentinel customers, but also visible in the Azure Logic Apps gallery for Azure Logic Apps and Microsoft Flow customers too. Inform [AzureSentinelPartner@microsoft.com](mailto:AzureSentinelPartner@microsoft.com) if you are thinking of building a custom connector for your security appliance.
 

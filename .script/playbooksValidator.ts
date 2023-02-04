@@ -12,9 +12,9 @@ import { validatePlaybookResource } from "./utils/playbookCheckers/playbookResou
 
 export async function IsValidTemplate(filePath: string): Promise<ExitCode> {
   let playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata> = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  
+
   validateARMTemplateSchema(playbookARMTemplate);
-  
+
   // Some ARM template files deploy external resources required by playbooks (e.g custom connector) and not the actual playbook, so they don't require playbook-specific validations
   let templatePlaybookResources: ArmTemplateResource[] = getTemplatePlaybookResources(playbookARMTemplate);
   if (templatePlaybookResources.length > 0) {
@@ -27,7 +27,7 @@ export async function IsValidTemplate(filePath: string): Promise<ExitCode> {
 function validateARMTemplateSchema(playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata>): void {
     let schema = JSON.parse(fs.readFileSync(".script/utils/schemas/ARM_DeploymentTemplateSchema.json", "utf8"));
 
-    isValidSchema(playbookARMTemplate, schema);  
+    isValidSchema(playbookARMTemplate, schema);
 }
 
 function validateARMTemplateWithPlaybookResource(filePath: string, playbookARMTemplate: ArmTemplate<PlaybookTemplateMetadata>): void {

@@ -21,7 +21,7 @@ Our Enterprise Scale deployment is fully automated and repeatable accross differ
     - AdxDBName
     - LAExportTablesToADX (specify tables you want to export like AzureActivity,SecurityRecommendation)
 
-![VariableGroup](../images/VariableGroup.PNG)  
+![VariableGroup](../images/VariableGroup.PNG)
 
 ## Script
 

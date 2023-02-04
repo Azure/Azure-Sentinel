@@ -24,7 +24,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 2. Cisco ASA custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.
 3. Cisco ASA needs to have an extended Access Control List configured. Create a new ACL or retrieve the name of an existing ACL. To use Cisco ASDM to configure Extended ACLs, see [Configure Extended ACLs](https://www.cisco.com/c/en/us/td/docs/security/asa/asa914/asdm714/firewall/asdm-714-firewall-config/access-acls.html#ID-2069-0000016d)
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Depoly to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoASA%2FCiscoASA-CreateACEInACL%2Fazuredeploy.json" target="_blank">
@@ -32,7 +32,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 </a>
 
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoASA%2FCiscoASA-CreateACEInACL%2Fazuredeploy.json" target="_blank">
-   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
 2. Fill in the required paramteres:
@@ -40,7 +40,7 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
     * Cisco ASA Connector name : Enter the name of the Cisco ASA custom connector (default value:CiscoASAConnector)
     * Interface ID : The name of the interface you want to create the access rules on.
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource

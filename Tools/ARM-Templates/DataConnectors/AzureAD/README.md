@@ -2,13 +2,13 @@
 
 Author: Javier Soriano
 
-This template enables the Azure AD connector on your Sentinel workspace. 
+This template enables the Azure AD connector on your Sentinel workspace.
 
 Azure Active Directory Audit/SignIn logs requires permissions to deploy at tenant scope. Assign Owner or Contributor to the principal that needs to deploy the templates (details [here](https://docs.microsoft.com/azure/azure-resource-manager/templates/deploy-to-tenant?tabs=azure-cli#required-access)):
 
 `az role assignment create --role Owner --scope "/" --assignee {user object ID}`
 
-Required template parameter is workspaceResourceId in format: 
+Required template parameter is workspaceResourceId in format:
 
 `/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/providers/microsoft.operationalinsights/workspaces/{workspaceName}`
 

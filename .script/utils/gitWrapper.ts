@@ -21,7 +21,7 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
     console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
     return;
   }
- 
+
   let changedFiles = await pr.diff();
   console.log(`${changedFiles.length} files changed in current PR`);
 
@@ -33,7 +33,7 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
     .filter(filePath => filePath.indexOf(".script/tests") === -1);
 
   if (filterChangedFiles.length === 0) {
-    logger.logWarning(`No changed files in current PR after files filter. File type filter: ${fileTypeSuffixes ? fileTypeSuffixes.toString() : null}, 
+    logger.logWarning(`No changed files in current PR after files filter. File type filter: ${fileTypeSuffixes ? fileTypeSuffixes.toString() : null},
         File path filter: ${filePathFolderPreffixes ? filePathFolderPreffixes.toString() : null}`);
     return;
   }

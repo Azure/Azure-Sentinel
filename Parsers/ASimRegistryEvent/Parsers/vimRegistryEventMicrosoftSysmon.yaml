@@ -15,56 +15,56 @@ References:
 Description: |
       This ASIM parser supports normalizing Microsoft Sysmon events (event number 12, 13, 14) from "Event" and "WindowsEvent" tables, to the ASIM Registry Event normalized schema.
 ParserName: vimRegistryEventMicrosoftSysmon
-ParserQuery: | 
+ParserQuery: |
  let RegistryAction = datatable (EventType:string, NewEventType:string)
               [
                 "CreateKey", "RegistryKeyCreated",
                 "DeleteKey",	"RegistryKeyDeleted",
-                "DeleteValue",  "RegistryValueDeleted", 
+                "DeleteValue",  "RegistryValueDeleted",
                 "SetValue",	"RegistryValueSet",
                 "RenameKey",	"RegistryKeyRenamed"
-              ];     
+              ];
               let Hives = datatable (KeyPrefix:string,Hive:string)
               [
                 "HKLM", "HKEY_LOCAL_MACHINE",
-                "HKU", "HKEY_USERS", 
-                "HKCR", "HKEY_LOCAL_MACHINE\\Classes" 
+                "HKU", "HKEY_USERS",
+                "HKCR", "HKEY_LOCAL_MACHINE\\Classes"
               ];
           // this is the parser for sysmon from Event table
               // Create the raw table from the raw XML file structure
              let ParsedRegistryEvent_Event=(){
-              Event 
+              Event
               | where Source == "Microsoft-Windows-Sysmon" and EventID in (12, 13, 14)
-              | parse EventData with 
-                      * '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readibliy 
+              | parse EventData with
+                      * '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readibliy
                       '</Data><Data Name="EventType">'EventType
                       '</Data><Data Name="UtcTime">'UtcTime
                       '</Data><Data Name="ProcessGuid">{'ProcessGuid
                       '}</Data><Data Name="ProcessId">'ProcessId
                       '</Data><Data Name="Image">'Image
                       '</Data><Data Name="TargetObject">'TargetObject
-                      '</Data>' EventDataRemainder 
+                      '</Data>' EventDataRemainder
               | parse EventDataRemainder with '<Data Name="Details">' Parameter '</Data><Data Name="User">' ActorUsername '</Data>' *
               | project-away EventDataRemainder
               // End of XML parse
-              | extend 
-                      EventStartTime = todatetime(TimeGenerated), 
-                      EventEndTime = todatetime(TimeGenerated), 
-                      EventCount = int(1), 
+              | extend
+                      EventStartTime = todatetime(TimeGenerated),
+                      EventEndTime = todatetime(TimeGenerated),
+                      EventCount = int(1),
                       EventVendor = "Microsoft",
-                      EventSchemaVersion = "0.1.0", 
+                      EventSchemaVersion = "0.1.0",
                       EventProduct = "Sysmon",
-                      EventOriginalType = tostring(EventID), 
+                      EventOriginalType = tostring(EventID),
                       DvcOs = "Windows",
                       ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', '')
-              | project-rename 
-                      EventMessage = RenderedDescription, 
-                      DvcHostName = Computer, 
+              | project-rename
+                      EventMessage = RenderedDescription,
+                      DvcHostName = Computer,
                       ActingProcessId = ProcessId,
-                      ActingProcessGuid = ProcessGuid, 
-                      ActingProcessName = Image 
+                      ActingProcessGuid = ProcessGuid,
+                      ActingProcessName = Image
               // Lookup Event Type
-              | lookup RegistryAction on EventType 
+              | lookup RegistryAction on EventType
               | project-rename EventOriginalSubType = EventType
               | project-rename EventType = NewEventType
               // Normalize Key Hive
@@ -75,7 +75,7 @@ ParserQuery: |
               | lookup Hives on KeyPrefix
               | extend NewName = strcat (Hive, "\\", KeyMain)
               | project-away KeyPrefix, KeyMain, Hive
-              // Split Key and Value for relevant events 
+              // Split Key and Value for relevant events
               | extend ParsedKey = extract_all (@"^(.+)\\(.+)$", Key)
               | extend Key = iff (EventType in ("RegistryValueSet", "RegistryValueDeleted"), ParsedKey[0][0], Key)
               | extend Value = iff (EventType in ("RegistryValueSet", "RegistryValueDeleted"), ParsedKey[0][1], "")
@@ -99,19 +99,19 @@ ParserQuery: |
               };
           // this is the parser for sysmon from WindowsEvent table
           let ParsedRegistryEvent_WindowsEvent=(){
-         WindowsEvent 
+         WindowsEvent
         | where Provider == "Microsoft-Windows-Sysmon" and EventID in (12,13,14)
-        | extend 
-            EventStartTime = todatetime(TimeGenerated), 
-            EventEndTime = todatetime(TimeGenerated), 
-            EventCount = int(1), 
+        | extend
+            EventStartTime = todatetime(TimeGenerated),
+            EventEndTime = todatetime(TimeGenerated),
+            EventCount = int(1),
             EventVendor = "Microsoft",
-            EventSchemaVersion = "0.1.0", 
+            EventSchemaVersion = "0.1.0",
             EventProduct = "Sysmon",
             EventOriginalType = tostring(EventID),
             EventType = tostring(EventData.EventType),
             DvcOs = "Windows",
-            EventMessage = tostring(EventData.RenderedDescription), 
+            EventMessage = tostring(EventData.RenderedDescription),
             ActorUsername = tostring(EventData.User),
             ActingProcessId = tostring(EventData.ProcessId),
             ActingProcessGuid = extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
@@ -119,7 +119,7 @@ ParserQuery: |
             TargetObject = tostring(EventData.TargetObject),
             Parameter = tostring(EventData.Parameter)
         | project-rename
-            DvcHostName = Computer 
+            DvcHostName = Computer
         | lookup RegistryAction on EventType
         | project-rename EventOriginalSubType = EventType
         | project-rename EventType = NewEventType
@@ -131,7 +131,7 @@ ParserQuery: |
         | lookup Hives on KeyPrefix
         | extend NewName = strcat (Hive, "\\", KeyMain)
         | project-away KeyPrefix, KeyMain, Hive
-        // Split Key and Value for relevant events 
+        // Split Key and Value for relevant events
         | extend ParsedKey = extract_all (@"^(.+)\\(.+)$", Key)
         | extend Key = iff (EventType in ("RegistryValueSet", "RegistryValueDeleted"), ParsedKey[0][0], Key)
         | extend Value = iff (EventType in ("RegistryValueSet", "RegistryValueDeleted"), ParsedKey[0][1], "")

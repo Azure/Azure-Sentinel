@@ -1,7 +1,7 @@
 # Input bindings are passed in via param block.
 param($Timer)
 
-# Get the current universal time in the default string format 
+# Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled
@@ -14,9 +14,9 @@ $logAnalyticsUri = $env:logAnalyticsUri
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
 
-# Get ENV parameters 
+# Get ENV parameters
 
-# Agari Client ID and Secret 
+# Agari Client ID and Secret
 $client_id = $env:clientID
 $client_secret = $env:clientSecret
 $apiToken = $false
@@ -61,13 +61,13 @@ if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-z
 if ($bpEnabled -Match "True"){
     $bpEnabled = $true
 } else {
-    $bpEnabled = $false 
+    $bpEnabled = $false
 }
 
 if ($apdEnabled -Match  "True"){
     $apdEnabled = $true
 } else {
-    $apdEnabled = $false 
+    $apdEnabled = $false
 }
 
 if ($aprEnabled -Match  "True"){
@@ -96,7 +96,7 @@ Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     $calculatedHash = $sha256.ComputeHash($bytesToHash)
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
     $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
-    
+
     # Dispose SHA256 from heap before return.
     $sha256.Dispose()
 
@@ -173,7 +173,7 @@ Function GetToken($client_id,$client_secret,$TokenURI) {
     $result = Try {Invoke-WebRequest -uri $TokenURI -Method 'POST' -Headers $GetTokenHeaders -Body "grant_type=client_credentials&client_id=$client_id&client_secret=$client_secret"} catch {Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__}
     # Really simple error check, if we get a 200 return the bearer token, ortherwise return false
     if ($result.StatusCode -eq 200) {
-        return ($result.Content | ConvertFrom-Json).access_token 
+        return ($result.Content | ConvertFrom-Json).access_token
     } else {
         return $false
     }
@@ -269,7 +269,7 @@ if ($bpEnabled){
         $revoke_api_token_uri = $revoke_bp_token_uri
     } else {
         $apiToken = $false
-        Write-Host "Error Fetching BP Token" 
+        Write-Host "Error Fetching BP Token"
         }
 }
 if ($apdEnabled){
@@ -288,7 +288,7 @@ if ($apdEnabled){
         $revoke_api_token_uri = $revoke_adp_token_uri
     } else {
         $apiToken = $false
-        Write-Host "Error Fetching APD Token" 
+        Write-Host "Error Fetching APD Token"
         }
 }
 if ($aprEnabled){
@@ -307,7 +307,7 @@ if ($aprEnabled){
         $revoke_api_token_uri = $revoke_apr_token_uri
     } else {
         $apiToken = $false
-        Write-Host "Error Fetching APR Token" 
+        Write-Host "Error Fetching APR Token"
         }
 }
 
@@ -330,7 +330,7 @@ $TimeStampField = "DateValue"
 if (($bpEnabled) -and ($apiToken)) {
     #Check to see if start time empty - usally first run, otherwise set the time from the env variable
     if ($BPlastLog){
-        $BPstartdate = $BPlastLog.substring(1)  
+        $BPstartdate = $BPlastLog.substring(1)
     } else {
         $BPstartdate = $fr_startdate
     }
@@ -359,7 +359,7 @@ if (($bpEnabled) -and ($apiToken)) {
         $Product = 'Brand Protection'
         #Get the Threat Feed ID
         $BP_TF_Url = "https://api.agari.com/v1/cp/threat_feeds"
-        Invoke-RestMethod -Uri $BP_TF_Url -Method 'GET' -Headers $bpHeaders | Out-Null 
+        Invoke-RestMethod -Uri $BP_TF_Url -Method 'GET' -Headers $bpHeaders | Out-Null
         # If there is a Threat ID, get the URIs in the feed
         if ($_.threat_feeds.id){
             $IoC_Type = 'URL'
@@ -367,7 +367,7 @@ if (($bpEnabled) -and ($apiToken)) {
                 $BP_SubmissionUrl = "https://api.agari.com/v1/cp/threat_feeds/$sub_id/submissions?start_date=$BPstartdate&end_date=$enddate"
                 Invoke-RestMethod -Uri $BP_SubmissionUrl -Method 'GET' -Headers $bpHeaders | ForEach-Object {
                     $bpBody = (Body-SentinelTI $GraphTenantId $IoC_Type $_.threat_feed_submissions.uri $Product $expiry)
-                    Invoke-WebRequest -Method POST -Uri $sgapi_uri -Headers $sgapi_headers -Body $bpBody 
+                    Invoke-WebRequest -Method POST -Uri $sgapi_uri -Headers $sgapi_headers -Body $bpBody
                 }
             }
         }
@@ -378,16 +378,16 @@ if (($bpEnabled) -and ($apiToken)) {
 # Below is for loading APD Logs into Sentinel. #
 # -------------------------------------------- #
 
-#Check if APD is enabled 
+#Check if APD is enabled
 if (($apdEnabled) -and ($apiToken)){
         #Check to see if start time empty - usally first run, otherwise set the time from the env variable
         if ($apdlastLog){
-            $APDstartdate = $APDlastLog.substring(1)  
+            $APDstartdate = $APDlastLog.substring(1)
         } else {
             $APDstartdate = $fr_startdate
         }
         #Reset the Offset
-        $offset = 0          
+        $offset = 0
         #Get the APD policy hits with the offset for paging
         do {
             $APDPolicyAPI = "https://api.agari.com/v1/ep/policy_events?limit=$limit&offset=$offset&sort=created_at%20DESC&policy_enabled=true&start_date=$APDstartdate&end_date=$enddate"
@@ -405,12 +405,12 @@ if (($apdEnabled) -and ($apiToken)){
         }
         #Get the Threat Categories and push to Sentinel
         #Reset the Offset
-        $offset = 0   
+        $offset = 0
         #Get the APD Threat Categories API call with the offset for paging
         do {
         $APDThreatCatAPI = "https://api.agari.com/v1/ep/messages?start_date=$APDstartdate&end_date=$enddate&fields=attack_types%2Cto%2Cfrom%2Cid%2Cfrom_domain%2Ctimestamp_ms&limit=$limit&offset=$offset&sort=timestamp_ms%20DESC&search=attack_types%20is%20not%20empty"
             Invoke-RestMethod -Uri $APDThreatCatAPI -Method 'GET' -Headers $apdHeaders | ForEach-Object {
-            $APDThreatCatData += $_.messages | Select-Object -Property to, from, from_domain, attack_types,id,timestamp_ms 
+            $APDThreatCatData += $_.messages | Select-Object -Property to, from, from_domain, attack_types,id,timestamp_ms
             $count = $_.count
             $apdLogSuccess = $true
             }
@@ -428,11 +428,11 @@ if (($apdEnabled) -and ($apiToken)){
 # ---------------------------------------------------------------------- #
 
 if ($sgEnabled){
-    # If APR enabled, get all malicious IoC verdicts from investigations 
+    # If APR enabled, get all malicious IoC verdicts from investigations
     if (($aprEnabled) -and ($apiToken)){
         #Check to see if start time empty - usally first run, otherwise set the time from the env variable
         if ($aprlastLog){
-            $APRstartdate = $APRlastLog.substring(1)  
+            $APRstartdate = $APRlastLog.substring(1)
         } else {
             $APRstartdate = $fr_startdate
         }

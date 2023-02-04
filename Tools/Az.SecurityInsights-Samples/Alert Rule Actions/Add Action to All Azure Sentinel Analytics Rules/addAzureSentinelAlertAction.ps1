@@ -19,7 +19,7 @@
     [string] $triggerName = "When_a_response_to_an_Azure_Sentinel_alert_is_triggered"
 )
 
-# PowerShell version detection, module detection, and subscription context logic used from: 
+# PowerShell version detection, module detection, and subscription context logic used from:
 # https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Az.SecurityInsights-Samples/Alert%20Rules/Export%20Analytics%20Rules/exportAzureSentinelRules.ps1
 
 $ErrorActionPreference = "Stop"
@@ -54,7 +54,7 @@ if ($AzSecurityInsightsModule -eq $null) {
 }
 
 #Check the Azure subscription context
-$subIdContext = (Get-AzContext).Subscription.Id 
+$subIdContext = (Get-AzContext).Subscription.Id
 if ($subIdContext -ne $subscriptionId) {
     $setSub = Set-AzContext -SubscriptionName $subscriptionId -ErrorAction SilentlyContinue
     if ($setSub -eq $Null) {
@@ -91,7 +91,7 @@ try {
                     break
                 }
             }
-            
+
             if($applyAction) {
                 #Apply the action to the rule
                 Write-Host "Adding action to $($rule.Name)"

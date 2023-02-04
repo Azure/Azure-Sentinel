@@ -13,12 +13,12 @@ When a new Microsoft Sentinel is created, this playbook gets triggered and perfo
 
 
 
-### Prerequisites 
+### Prerequisites
 - Sentinel IP block group should create in the VM
 - Function App needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the Function doc page
 
 
-### Deployment instructions 
+### Deployment instructions
 - Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2FPlaybooks%2FFortinet_IncidentEnrichment%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FFortinet-FortiGate%2FPlaybooks%2FFortinet_IncidentEnrichment%2Fazuredeploy.json)
@@ -30,7 +30,7 @@ When a new Microsoft Sentinel is created, this playbook gets triggered and perfo
     * Address Group: Pre-defined address group name which is created in VM
     * Managed Identities Name: Enter the managed identity name (ex: managed identities name)[Create user assigned manage identity](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal).
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.  Click the Microsoft Sentinel connection resource
@@ -59,8 +59,6 @@ Iterates on the IPs found in this incident (probably one) and performs the follo
 ## Enrich Incident with address object and address groups details look as follows
 
  ![Fortinet](./Inicdent_Enrichment.PNG)<br>
-    
+
 ## Known Issues and Limitations
 - When pre-defined group reaches the max limit user must create the new pre-defined group and change in the play book
-
-

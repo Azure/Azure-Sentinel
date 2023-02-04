@@ -27,45 +27,45 @@ relevantTechniques:
 tags:
   - KNOTWEED
 query: |
-  let DomainNames = dynamic(["acrobatrelay.com", "finconsult.cc", "realmetaldns.com"]); 
-  (union isfuzzy=true 
-  (CommonSecurityLog  
-  | parse Message with * '(' DNSName ')' *  
-  | where DNSName in~ (DomainNames) 
-  | extend Account = SourceUserID, Computer = DeviceName, IPAddress =  DestinationIP 
-  ), 
+  let DomainNames = dynamic(["acrobatrelay.com", "finconsult.cc", "realmetaldns.com"]);
+  (union isfuzzy=true
+  (CommonSecurityLog
+  | parse Message with * '(' DNSName ')' *
+  | where DNSName in~ (DomainNames)
+  | extend Account = SourceUserID, Computer = DeviceName, IPAddress =  DestinationIP
+  ),
   (_Im_Dns (domain_has_any=DomainNames)
-  | extend DNSName = DnsQuery 
+  | extend DNSName = DnsQuery
   | extend IPAddress =  SrcIpAddr, Computer = Dvc
-  ), 
+  ),
   (_Im_WebSession (url_has_any=DomainNames)
   | extend DNSName = tostring(parse_url(Url)["Host"])
   | extend IPAddress =  SrcIpAddr, Computer = Dvc
-  ), 
-  (VMConnection  
-  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' * 
-  | where isnotempty(DNSName) 
-  | where DNSName  in~ (DomainNames) 
-  | extend IPAddress = RemoteIp 
-  ), 
-  ( 
-   DeviceNetworkEvents 
-  | where isnotempty(RemoteUrl) 
-  | where RemoteUrl  has_any (DomainNames)  
-  | extend IPAddress = RemoteIP 
-  | extend Computer = DeviceName 
   ),
-  (AzureDiagnostics 
+  (VMConnection
+  | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
+  | where isnotempty(DNSName)
+  | where DNSName  in~ (DomainNames)
+  | extend IPAddress = RemoteIp
+  ),
+  (
+   DeviceNetworkEvents
+  | where isnotempty(RemoteUrl)
+  | where RemoteUrl  has_any (DomainNames)
+  | extend IPAddress = RemoteIP
+  | extend Computer = DeviceName
+  ),
+  (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (DomainNames)  
-  | extend DNSName = DestinationHost 
+  | where DestinationHost has_any (DomainNames)
+  | extend DNSName = DestinationHost
   | extend IPAddress = SourceHost
-  ) 
-  ) 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress 
+  )
+  )
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:

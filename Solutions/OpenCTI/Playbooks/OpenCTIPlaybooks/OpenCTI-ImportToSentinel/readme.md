@@ -4,18 +4,18 @@
 
 ![Playbook Designer view](./images/BatchImportToSentinel.png)<br>
 
-### Prerequisites 
+### Prerequisites
 1. None
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FOpenCTI%2FPlaybooks%2FOpenCTIPlaybooks%2FOpenCTI-ImportToSentinel%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FOpenCTI%2FPlaybooks%2F%2FOpenCTIPlaybooks%2FOpenCTI-ImportToSentinel%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (Ex: OpenCTI-ImportToSentinel)
-    
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 
 1. From your Azure portal navigate to "Azure Activity Directory" and identify your tenantId (this is your azure tenant id, that require while running below commands)
 
@@ -25,7 +25,7 @@
 
 ![LogicApp System Identity TenantId view](./images/LogicAppSystemIdentity.png)<br>
 
-NOTE: Only Azure Tenant admins have permissions to perform below activity. 
+NOTE: Only Azure Tenant admins have permissions to perform below activity.
 
 ```
 $AzureTenantId = "< Enter your Azure tenant id here >"
@@ -36,7 +36,7 @@ Connect-AzureAD -TenantId $AzureTenantId
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
 
 $GraphApIAppId = "00000003-0000-0000-c000-000000000000"
-$PermissionName = "ThreatIndicators.ReadWrite.OwnedBy" 
+$PermissionName = "ThreatIndicators.ReadWrite.OwnedBy"
 
 $GrphAPIServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphApIAppId'"
 $AppRole = $GrphAPIServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
@@ -46,5 +46,3 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 #### Configurations in Sentinel
 None
-
-

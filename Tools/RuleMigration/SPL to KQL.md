@@ -2,12 +2,12 @@
 <h2><u>Common Search Commands</u></h2>
 <br />
 
-<sub>**SPL Command** | <sub>**Description** | <sub>**SPL Example** | <sub>**KQL** | <sub>**KQL Example** | 
---- | --- | --- | --- | --- | 
-<sub>**chart/ timechart** | <sub>Returns results in a tabular output for (time-series) charting. | |<sub>[render](https://docs.microsoft.com/azure/data-explorer/kusto/query/renderoperator?pivots=azuredataexplorer) |<sub><pre> … \| render timechart</pre> 
-<sub>**dedup** | <sub>Removes subsequent results that match a specified criterion. | |<sub>[distinct](https://docs.microsoft.com/azure/data-explorer/kusto/query/distinctoperator) <br /> [summarize](https://docs.microsoft.com/azure/data-explorer/kusto/query/summarizeoperator)<sub/>  | <sub><pre>… \| summarize by Computer, EventID </pre>	
-<sub>**eval** | <sub>Calculates an expression.<br />See [Common Eval Commands](#common-eval-commands) for more Eval Commands. | | <sub>[extend](https://docs.microsoft.com/azure/data-explorer/kusto/query/extendoperator) | <sub><pre>T \| extend duration = endTime - startTime</pre> 
-<sub>**fields** | <sub>Removes fields from search results. | |<sub> [project](https://docs.microsoft.com/azure/data-explorer/kusto/query/projectoperator) <br /> [project-away](https://docs.microsoft.com/azure/data-explorer/kusto/query/projectawayoperator) |<sub> <pre>T \| project cost=price*quantity, price</pre>	
+<sub>**SPL Command** | <sub>**Description** | <sub>**SPL Example** | <sub>**KQL** | <sub>**KQL Example** |
+--- | --- | --- | --- | --- |
+<sub>**chart/ timechart** | <sub>Returns results in a tabular output for (time-series) charting. | |<sub>[render](https://docs.microsoft.com/azure/data-explorer/kusto/query/renderoperator?pivots=azuredataexplorer) |<sub><pre> … \| render timechart</pre>
+<sub>**dedup** | <sub>Removes subsequent results that match a specified criterion. | |<sub>[distinct](https://docs.microsoft.com/azure/data-explorer/kusto/query/distinctoperator) <br /> [summarize](https://docs.microsoft.com/azure/data-explorer/kusto/query/summarizeoperator)<sub/>  | <sub><pre>… \| summarize by Computer, EventID </pre>
+<sub>**eval** | <sub>Calculates an expression.<br />See [Common Eval Commands](#common-eval-commands) for more Eval Commands. | | <sub>[extend](https://docs.microsoft.com/azure/data-explorer/kusto/query/extendoperator) | <sub><pre>T \| extend duration = endTime - startTime</pre>
+<sub>**fields** | <sub>Removes fields from search results. | |<sub> [project](https://docs.microsoft.com/azure/data-explorer/kusto/query/projectoperator) <br /> [project-away](https://docs.microsoft.com/azure/data-explorer/kusto/query/projectawayoperator) |<sub> <pre>T \| project cost=price*quantity, price</pre>
 <sub>**head/tail** |<sub> Returns the first/last N results. |  | <sub>[top](https://docs.microsoft.com/azure/data-explorer/kusto/query/topoperator) |<sub> <pre> T \| top 5 by Name desc nulls last </pre>
 <sub>**lookup** | <sub>Adds field values from an external source. | | <sub>[externaldata](https://docs.microsoft.com/azure/data-explorer/kusto/query/externaldata-operator?pivots=azuredataexplorer) <br /> [lookup](https://docs.microsoft.com/azure/data-explorer/kusto/query/lookupoperator) | <sub><pre> Users <br /> \| where UserID in ((externaldata (UserID:string) [<br /> @"https://storageaccount.blob.core.windows.net/<br />storagecontainer/users.txt" <br /> h@"?...SAS..." // Secret token to access the blob <br /> ])) \| ... </pre>
 <sub>**rename** |<sub> Renames a field. Use wildcards to specify multiple fields. | | <sub>[project-rename](https://docs.microsoft.com/azure/data-explorer/kusto/query/projectrenameoperator) |<sub> <pre> T \| project-rename new_column_name = column_name </pre>
@@ -23,7 +23,7 @@
 <sub>**streamstats** | <sub>Find the cumulative sum of a field. | <sub>... \| streamstats sum(bytes) as bytes _ total \| timechart |<sub>[row_cumsum](https://docs.microsoft.com/azure/data-explorer/kusto/query/rowcumsumfunction) |<sub>...\| serialize cs=row_cumsum(bytes)
 <sub>**anomalydetection** |<sub> Find anomalies in the specified field. | <sub>sourcetype=nasdaq earliest=-10y <br />\| anomalydetection Close _ Price | <sub>[series_decompose_<br />anomalies()](https://docs.microsoft.com/azure/data-explorer/kusto/query/series-decompose-anomaliesfunction) | <sub><pre>let LookBackPeriod= 7d;<br />let disableAccountLogon=SignIn<br />\| where ResultType == "50057"<br />\| where ResultDescription has "account is disabled";<br />disableAccountLogon<br />\| make-series Trend=count() default=0 on TimeGenerated <br />in range(startofday(ago(LookBackPeriod)), now(), 1d)<br />\| extend (RSquare,Slope,Variance,RVariance,Interception,<br />LineFit)=series_fit_line(Trend)<br />\| extend (anomalies,score) = <br />series_decompose_anomalies(Trend)</pre>
 <sub>**where** | <sub>Filters search results using eval expressions. Used to  compare two different fields. | | <sub>[where](https://docs.microsoft.com/azure/data-explorer/kusto/query/whereoperator) | <sub><pre>T \| where fruit=="apple"</pre>
-  
+
 <br />
 <br />
 <br />
@@ -31,8 +31,8 @@
 <h2><u>Common Eval Commands</u></h2>
 <br />
 
-<sub>**SPL Command** | <sub>**Description** | <sub>**SPL Example** | <sub>**KQL** | <sub>**KQL Example** | 
---- | --- | --- | --- | --- | 
+<sub>**SPL Command** | <sub>**Description** | <sub>**SPL Example** | <sub>**KQL** | <sub>**KQL Example** |
+--- | --- | --- | --- | --- |
 <sub>**abs(X)** | <sub>Returns the absolute value of X. | <sub>abs(number) | <sub>[abs()](https://docs.microsoft.com/azure/data-explorer/kusto/query/abs-function) | <sub><pre>abs(X)</pre>
 <sub>**case(X,"Y",…)** | <sub>Takes pairs of arguments X and Y, where X arguments are Boolean expressions. <br />When evaluated to TRUE, the arguments return the corresponding Y argument. | <sub>case(error == 404, "Not found", <br />error == 500,"Internal Server Error", <br />error == 200, "OK") | <sub>[case](https://docs.microsoft.com/azure/data-explorer/kusto/query/casefunction) | <sub><pre>T<br />\| extend Message = case(error == 404, "Not found", <br />error == 500,"Internal Server Error", "OK") </pre>
 <sub>**ceil(X)** | <sub>Ceiling of a number X. | <sub>ceil(1.9) | <sub>[ceiling()](https://docs.microsoft.com/azure/data-explorer/kusto/query/ceilingfunction) | <sub><pre>ceiling(1.9)</pre>
@@ -87,8 +87,8 @@
 <br />
 
 
-<sub>**SPL Command** | <sub>**Description** | <sub>**KQL** | <sub>**KQL Example** | 
---- | --- | --- | --- | 
+<sub>**SPL Command** | <sub>**Description** | <sub>**KQL** | <sub>**KQL Example** |
+--- | --- | --- | --- |
 <sub>**avg(X)** | <sub>Returns the average of the values of field X. | <sub>[avg()](https://docs.microsoft.com/azure/data-explorer/kusto/query/avg-aggfunction) | <sub><pre>avg(X)</pre>
 <sub>**count(X)** | <sub>Returns the number of occurrences of the field X. To indicate a specific field value to match, format X as eval(field="value"). | <sub>[count()](https://docs.microsoft.com/azure/data-explorer/kusto/query/count-aggfunction) | <sub><pre>summarize count()</pre>
 <sub>**dc(X)** | <sub>Returns the count of distinct values of the field X. | <sub>[dcount()](https://docs.microsoft.com/azure/data-explorer/kusto/query/dcount-aggfunction) | <sub><pre>…\| summarize countries=dcount(country) by continent</pre>
@@ -106,7 +106,7 @@
 <sub>**sumsq(X)** | <sub>Returns the sum of the squares of the values of the field X. | | |
 <sub>**values(X)** |<sub> Returns the list of all distinct values of the field X as a multi-value entry. The order of the values is alphabetical. | <sub>[make_set()](https://docs.microsoft.com/azure/data-explorer/kusto/query/makeset-aggfunction) | <sub><pre>…\| summarize r = make_set(X)</pre>
 <sub>**var(X)** | <sub>Returns the sample variance of the field X. | <sub>[variance()](https://docs.microsoft.com/azure/data-explorer/kusto/query/variance-aggfunction) | <sub><pre>variance(X)</pre>
- 
+
 <br />
 <br />
 <br />

@@ -21,9 +21,9 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let parser = (disabled:bool=false) 
+  let parser = (disabled:bool=false)
   {
-    let DirectionLookup = datatable (direction:string, NetworkDirection:string) 
+    let DirectionLookup = datatable (direction:string, NetworkDirection:string)
     [
       'up', 'Inbound',
       'down', 'Outbound'
@@ -38,48 +38,48 @@ ParserQuery: |
       'allow_report', 'Allow', 'Informational', 'Success'
     ];
     let tcpupd_success = Syslog
-    | where 
+    | where
       ProcessName in ("cz-sessiond", "cz-vpnd")
       and SyslogMessage has_all ("[AUDIT]","ip_access",'"rule_name"')
-      and SyslogMessage has_any ('"protocol":"UDP"','"protocol":"TCP"') 
+      and SyslogMessage has_any ('"protocol":"UDP"','"protocol":"TCP"')
     | project TimeGenerated, SyslogMessage, Computer
     | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  SyslogMessage)
     | where type == "ip_access"
-    | parse-where SyslogMessage with 
+    | parse-where SyslogMessage with
         *
-        '"action":"' DvcOriginalAction:string '",' * 
+        '"action":"' DvcOriginalAction:string '",' *
         '"client_ip":"' SrcIpAddr:string '",' *
         '"client_port":' SrcPortNumber:int ',' *
         '"destination_ip":"' DstIpAddr:string '",' *
         '"destination_port":' DstPortNumber:int ',' *
-        '"direction":"' direction:string '",' * 
+        '"direction":"' direction:string '",' *
         '"distinguished_name_device_id":"' SrcDvcId:string '",' *
         '"distinguished_name_user":"' SrcUsername:string '",' *
         '"entitlement_token_id":"' NetworkSessionId:string '",' *
         '"packet_size":' SrcBytes:long ',' *
-        '"protocol":"' NetworkProtocol:string '",' *          
-        '"rule_name":"' NetworkRuleName:string '",' *  
+        '"protocol":"' NetworkProtocol:string '",' *
+        '"rule_name":"' NetworkRuleName:string '",' *
         '"source_ip":"' SrcNatIpAddr:string '",' *
-        '"source_port":' SrcNatPortNumber:int ',' * 
+        '"source_port":' SrcNatPortNumber:int ',' *
         '"version":' EventProductVersion:string '}' *
     ;
-    let tcpupd_fail = 
+    let tcpupd_fail =
       Syslog
-      | where 
+      | where
         ProcessName in ("cz-sessiond", "cz-vpnd")
         and SyslogMessage has_all ("[AUDIT]","ip_access",'"drop-reason"')
-        and SyslogMessage has_any ('"protocol":"UDP"','"protocol":"TCP"') 
+        and SyslogMessage has_any ('"protocol":"UDP"','"protocol":"TCP"')
       | project TimeGenerated, SyslogMessage, Computer
       | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  SyslogMessage)
       | where type == "ip_access"
-      | parse-where SyslogMessage with 
+      | parse-where SyslogMessage with
           *
-          '"action":"' DvcOriginalAction:string '",' * 
+          '"action":"' DvcOriginalAction:string '",' *
           '"client_ip":"' SrcIpAddr:string '",' *
           '"client_port":' SrcPortNumber:int ',' *
           '"destination_ip":"' DstIpAddr:string '",' *
           '"destination_port":' DstPortNumber:int ',' *
-          '"direction":"' direction:string '",' * 
+          '"direction":"' direction:string '",' *
           '"distinguished_name_device_id":"' SrcDvcId:string '",' *
           '"distinguished_name_user":"' SrcUsername:string '",' *
           '"drop-reason":"' EventOriginalResultDetails:string '",' *
@@ -87,51 +87,51 @@ ParserQuery: |
           '"packet_size":' SrcBytes:long ',' *
           '"protocol":"' NetworkProtocol:string '",' *
           '"source_ip":"' SrcNatIpAddr:string '",' *
-          '"source_port":' SrcNatPortNumber:int ',' * 
+          '"source_port":' SrcNatPortNumber:int ',' *
           '"version":' EventProductVersion:string '}' *
        ;
     let icmp_success = Syslog
-    | where 
+    | where
       ProcessName in ("cz-sessiond", "cz-vpnd")
-      and SyslogMessage has_all ("[AUDIT]","ip_access",'"protocol":"ICMP"') 
+      and SyslogMessage has_all ("[AUDIT]","ip_access",'"protocol":"ICMP"')
     | project TimeGenerated, SyslogMessage, Computer
     | extend type = extract (@'"event_type"\:\"(.*?)\"', 1,  SyslogMessage)
     | where type == "ip_access"
-    | parse-where SyslogMessage with 
+    | parse-where SyslogMessage with
         *
-        '"action":"' DvcOriginalAction:string '",' * 
+        '"action":"' DvcOriginalAction:string '",' *
         '"client_ip":"' SrcIpAddr:string '",' *
         '"client_port":' SrcPortNumber:int ',' *
         '"destination_ip":"' DstIpAddr:string '",' *
-        '"direction":"' direction:string '",' * 
+        '"direction":"' direction:string '",' *
         '"distinguished_name_device_id":"' SrcDvcId:string '",' *
         '"distinguished_name_user":"' SrcUsername:string '",' *
         '"entitlement_token_id":"' NetworkSessionId:string '",' *
         '"icmp_code":' NetworkIcmpSubCode:int ',' *
-        '"icmp_type":' NetworkIcmpCode:int ',' *  
+        '"icmp_type":' NetworkIcmpCode:int ',' *
         '"packet_size":' SrcBytes:long ',' *
-        '"protocol":"' NetworkProtocol:string '",' *          
-        '"rule_name":"' NetworkRuleName:string '",' *  
+        '"protocol":"' NetworkProtocol:string '",' *
+        '"rule_name":"' NetworkRuleName:string '",' *
         '"source_ip":"' SrcNatIpAddr:string '",' *
         '"version":' EventProductVersion:string '}' *
     ;
-    union  tcpupd_success, tcpupd_fail, icmp_success 
-    | parse SyslogMessage with 
+    union  tcpupd_success, tcpupd_fail, icmp_success
+    | parse SyslogMessage with
         *
         '"country_name":"' SrcGeoCountry:string '",' *
-        '"lat":' SrcGeoLatitude:real ',' *        
+        '"lat":' SrcGeoLatitude:real ',' *
         '"lon":' SrcGeoLongitude:real '}' *
-    | parse SyslogMessage with 
+    | parse SyslogMessage with
          *
         '"city_name":"' SrcGeoCity:string '",' *
         '"region_name":"' SrcGeoRegion:string '",' *
-    | extend 
+    | extend
         SrcDvcIdType = 'AppGateId',
         SrcUsernameType = 'UPN'
     // -- Event fields
-    | project-rename 
+    | project-rename
         DvcHostname = Computer
-    | extend 
+    | extend
         EventCount = int(1),
         EventEndTime = TimeGenerated,
         EventStartTime = TimeGenerated,
@@ -143,14 +143,14 @@ ParserQuery: |
     | lookup DirectionLookup on direction
     | lookup ActionLookup on DvcOriginalAction
     // -- Aliases
-    | extend 
+    | extend
         Src = SrcIpAddr,
         Dst = DstIpAddr,
         Dvc = DvcHostname,
         SessionId = NetworkSessionId,
         IpAddr = SrcIpAddr,
         Rule = NetworkRuleName
-    | project-away 
+    | project-away
         SyslogMessage, type, direction
   };
   parser (disabled)

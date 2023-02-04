@@ -9,7 +9,7 @@ In this folder we have two examples on how to achieve filtering: dropping fields
 This is about removing fields that don't add any value to our security operations. The way to achieve this in transformKql is very simple:
 
 ```
-source 
+source
 | project-away Version, InterfaceId
 ```
 
@@ -27,7 +27,7 @@ To achieve this in transformKql, we can use the following approach:
 
 ```
 source
-| extend DeviceFacility = iif(DeviceVendor in~ ('Palo Alto Networks','Fortinet'),'', DeviceFacility), 
+| extend DeviceFacility = iif(DeviceVendor in~ ('Palo Alto Networks','Fortinet'),'', DeviceFacility),
 ```
 
 In this example, we extend the *DeviceFacility* field and we assign an empty string if the *DeviceVendor* is Palo Alto or Fortinet.

@@ -17,7 +17,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/) needs to be deployed under the same subscription.
 2. Refer to [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/readme.md) documentation for deployment instructions.
-3. New or Existing Storage Account deployed under the same subscription. 
+3. New or Existing Storage Account deployed under the same subscription.
 
 ### Deployment instructions
 
@@ -44,7 +44,7 @@ Once deployment is complete, authorize each connection if required.
 
 #### b. Configurations in Sentinel
 
-1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains IP Addresses. In the *Entity maping* section of the analytics rule creation workflow, IP Address should be mapped to **Address** identitfier of the **IP** entity type. 
+1. In Azure sentinel, analytical rules should be configured to trigger an incident that contains IP Addresses. In the *Entity maping* section of the analytics rule creation workflow, IP Address should be mapped to **Address** identitfier of the **IP** entity type.
 
     Check the [documentation](https://docs.microsoft.com/azure/sentinel/map-data-fields-to-entities) to learn more about mapping entities.
 2. Configure the automation rules to trigger the playbook. Check the [documentation](https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook) to learn more about automation rules.
@@ -54,7 +54,7 @@ Once deployment is complete, authorize each connection if required.
 2. Click on +Container
 3. Give name **report-blob**
 4. Let the Public access level be deafault Private (no anonymous access)
-5. Click Create 
+5. Click Create
 
 #### d. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource

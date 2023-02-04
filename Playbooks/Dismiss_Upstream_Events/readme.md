@@ -16,7 +16,7 @@ The default interval and frequency is set to 6 hours.
 
 The Logic App uses a Managed System Identity to authenticate and authorize against management.azure.com to retrieve the data from the API. Be sure to turn on the System Assigned Identity in the Logic App.
 
-For MCAS you will need to generate an access token. 
+For MCAS you will need to generate an access token.
 
 Assign RBAC 'Log Analytic Reader' and 'Security Admin' to the Logic App at the required level.
 

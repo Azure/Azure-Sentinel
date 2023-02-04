@@ -25,7 +25,7 @@ query: |
   let threshold = 20;
   let ReasontoSubStatus = datatable(SubStatus:string,Reason:string) [
   "0xC000005E", "There are currently no logon servers available to service the logon request.",
-  "0xC0000064", "User logon with misspelled or bad user account", 
+  "0xC0000064", "User logon with misspelled or bad user account",
   "0xC000006A", "User logon with misspelled or bad password",
   "0xC000006D", "Bad user name or password",
   "0xC000006E", "Unknown user name or bad password",
@@ -46,7 +46,7 @@ query: |
   "0xC0000413", "Logon Failure: The machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine"
   ];
   (union isfuzzy=true
-  (SecurityEvent 
+  (SecurityEvent
   | where EventID == 4625
   | where AccountType =~ "User"
   | where SubStatus !='0xc0000064' and Account !in ('\\', '-\\-')
@@ -54,14 +54,14 @@ query: |
   | extend ResourceId = column_ifexists("_ResourceId", _ResourceId), SourceComputerId = column_ifexists("SourceComputerId", SourceComputerId)
   | lookup ReasontoSubStatus on SubStatus
   | extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by EventID, 
-  Activity, Computer, Account, TargetAccount, TargetUserName, TargetDomainName, 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by EventID,
+  Activity, Computer, Account, TargetAccount, TargetUserName, TargetDomainName,
   LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
   | where FailedLogonCount >= threshold
   | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress
   ),
   (
-  (WindowsEvent 
+  (WindowsEvent
   | where EventID == 4625 and not(EventData has '0xc0000064')
   | extend TargetAccount = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
   | extend TargetUserSid = tostring(EventData.TargetUserSid)
@@ -82,8 +82,8 @@ query: |
   | extend WorkstationName = tostring(EventData.WorkstationName)
   | extend IpAddress = tostring(EventData.IpAddress)
   | extend LogonTypeName=case(LogonType==2,"2 - Interactive", LogonType==3,"3 - Network", LogonType==4, "4 - Batch",LogonType==5, "5 - Service", LogonType==7, "7 - Unlock", LogonType==8, "8 - NetworkCleartext", LogonType==9, "9 - NewCredentials", LogonType==10, "10 - RemoteInteractive", LogonType==11, "11 - CachedInteractive",tostring(LogonType))
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by EventID, 
-  Activity, Computer,  TargetAccount, TargetUserName, TargetDomainName, 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by EventID,
+  Activity, Computer,  TargetAccount, TargetUserName, TargetDomainName,
   LogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress
   | where FailedLogonCount >= threshold
   | extend timestamp = StartTime, AccountCustomEntity = TargetAccount, HostCustomEntity = Computer, IPCustomEntity = IpAddress

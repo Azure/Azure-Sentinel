@@ -47,7 +47,7 @@ To provide access to our application, we have to create a Service Principal in A
 
    ![App secret](media/appRegistrations04.png)
 
-1. Provide a name for the secret and a validity period.  
+1. Provide a name for the secret and a validity period.
    **Important**: when the secret will expire, you’ll have to create a new one and update the ServiceNow configuration
 
    ![App secret validity](media/appRegistrations05.png)
@@ -112,7 +112,7 @@ The application is now imported.
 
 ## Configure the application
 
-Now that we have installed the application, we must configure the details to connect to the Microsoft Sentinel Management API.  
+Now that we have installed the application, we must configure the details to connect to the Microsoft Sentinel Management API.
 All configuration steps are accessible through the Microsoft Sentinel menu.
 
 ![Open studio](media/menu01.png)
@@ -121,7 +121,7 @@ All configuration steps are accessible through the Microsoft Sentinel menu.
 
 ### Configure the Microsoft Sentinel workspace(s) details
 
-The “Workspaces Configuration” section table contains the Microsoft Sentinel workspaces configuration.  
+The “Workspaces Configuration” section table contains the Microsoft Sentinel workspaces configuration.
 You will find in this section a default workspace to configure, or create new configurations to access multiple workspaces.
 
 Open the current row to edit its configuration. You will need the workspace name, its subscription and resource group.
@@ -173,7 +173,7 @@ To call the Microsoft Sentinel Management API from ServiceNow, we must configure
 
 ### Verify the “Sentinel Severity to ServiceNow” table mapping
 
-This table is used to map the Sentinel severity to the ServiceNow value, when creating or updating AzureSentinel incidents.  
+This table is used to map the Sentinel severity to the ServiceNow value, when creating or updating AzureSentinel incidents.
 Note that in our case, because Sentinel has four different severities values, while we have only three in ServiceNow, both _“Informational”_ and _“Low”_ have been assigned the value **3**:
 
 ![Sentinel severity to ServiceNow](media/sentinelToSnowSev01.png)
@@ -186,7 +186,7 @@ You can view your environment's values using the following technique:
 
 ### Verify the “Sentinel State to ServiceNow” table mapping
 
-This table is used to map the Sentinel state/status to the ServiceNow value, when creating or updating Microsoft Sentinel incidents.  
+This table is used to map the Sentinel state/status to the ServiceNow value, when creating or updating Microsoft Sentinel incidents.
 Note that Sentinel has probably less states than ServiceNow, so you must select the initial ServiceNow value used by the application.
 
 ![Sentinel state to ServiceNow](media/sentinelToSnowState01.png)
@@ -199,7 +199,7 @@ You can view your environment's values using the following technique:
 
 ### Verify the “ServiceNow Severity to Sentinel” table mapping
 
-This table is used to map the ServiceNow severity to the Sentinel value, when updating ServiceNow incidents and synchronising the changes to Sentinel.  
+This table is used to map the ServiceNow severity to the Sentinel value, when updating ServiceNow incidents and synchronising the changes to Sentinel.
 Review the values to validate that they map your environment's configuration.
 
 ![ServiceNow severity to Sentinel](media/snowToSentinelSev01.png)
@@ -208,7 +208,7 @@ Review the values to validate that they map your environment's configuration.
 
 ### Verify the “ServiceNow State to Sentinel” table mapping
 
-This table is used to map the ServiceNow state to the Sentinel value, when updating ServiceNow incidents and synchronising the changes to Sentinel.  
+This table is used to map the ServiceNow state to the Sentinel value, when updating ServiceNow incidents and synchronising the changes to Sentinel.
 Review the values to validate that they map your environment's configuration. Note that because Sentinel has less states than ServiceNow, you will have multiple ServiceNow state mapped to the same Sentinel state.
 
 ![ServiceNow state to Sentinel](media/snowToSentinelState01.png)
@@ -217,7 +217,7 @@ Review the values to validate that they map your environment's configuration. No
 
 ## Review and validate the system properties
 
-In addition to the configuration stored in the tables, the app keeps some information in system properties.  
+In addition to the configuration stored in the tables, the app keeps some information in system properties.
 Review the default values and change it to match your environment.
 
 ![System properties](media/sysProperties.png)
@@ -240,7 +240,7 @@ The available properties are:
 
 ### Verify the “Closure classification” table entries
 
-This table is used to map Sentinel and ServiceNow closure codes and should match the closure codes you are using when closing your incidents.  
+This table is used to map Sentinel and ServiceNow closure codes and should match the closure codes you are using when closing your incidents.
 To verify the values, open the "Closure code" section in the Microsoft Sentinel menu.
 
 ![Closure code menu](media/closurecodeMenu.gif)
@@ -251,7 +251,7 @@ You should update the provided values with your environment ones (the _label_ co
 
 ![Closure code menu](media/showClosureCode.gif)
 
-**IMPORTANT**: in this table, the last column, “_SourceIsSentinel_” contains Boolean values to define which values should be used in ServiceNow when a close status has been set in Sentinel incidents.  
+**IMPORTANT**: in this table, the last column, “_SourceIsSentinel_” contains Boolean values to define which values should be used in ServiceNow when a close status has been set in Sentinel incidents.
 You should have only one “true” row per Sentinel possible status:
 
 ![Closure code menu](media/closureCode03.png)
@@ -277,7 +277,7 @@ To create such mapping, follow the steps below:
 
 If you configured another incident table to store your Sentinel incidents, you must reflect this change to the two business rules being triggered by changes. You can also add additional filters if needed.
 
-⚠️ **IMPPORTANT** ⚠️  
+⚠️ **IMPPORTANT** ⚠️
 If you are running versions older than _Rome_, verify that the "When to run" value is using **async** and not **async_alway**:
 
 ![Async business rule](media/async.png)
@@ -288,7 +288,7 @@ The application uses the following business rules:
 
   ![Work notes business rule](media/ruleWorkNotes.png)
 
-- **update_changes_to_sentinel**: synchronizes severity, status, closure code, owner to Sentinel.  
+- **update_changes_to_sentinel**: synchronizes severity, status, closure code, owner to Sentinel.
   If you are using other fields than the default for unique identifier, severity and state, set the correct values in the filters
 
   ![Updates business rule](media/ruleChanges.png)

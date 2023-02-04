@@ -16,7 +16,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Prerequisites
 
 1. Prior to the deployment of this playbook, [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/) needs to be deployed under the same subscription.
-2. Refer to [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/readme.md) documentation for deployment instructions. 
+2. Refer to [Qualys Logic App Custom Connector](../../CustomConnector/QualysCustomConnector/readme.md) documentation for deployment instructions.
 3. New or Existing Storage Account deployed under the same subscription.
 
 ### Deployment instructions
@@ -56,7 +56,7 @@ Once deployment is complete, authorize each connection if required.
 2. Click on +Container
 3. Give name **report-blob**
 4. Let the Public access level be deafault Private (no anonymous access)
-5. Click Create 
+5. Click Create
 
 #### d. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource

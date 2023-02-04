@@ -34,7 +34,7 @@ To implement this solution, a few different steps need to be done:
 ## 1. Create Service Principal
 The tool requires a service principals for authentication to different services:
 * Authentication to AAD to retrieve user ID's (for assigning incidents in Sentinel)
-  
+
 ### AAD Service Principal
 This Service Principal needs to have User.Read.All application permissions.
 This Service Principal is used in the Logic app 'Sync-AssignedUser.
@@ -81,19 +81,19 @@ If you are not using this, you might encouter failures.
 Navigate to the project settings, then go to Automation to create rules.
 
 #### Sync Status
-This automation rule has a trigger 'Issue Transitioned' and will trigger the Logic App 'Sync-Status'. 
+This automation rule has a trigger 'Issue Transitioned' and will trigger the Logic App 'Sync-Status'.
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
 ![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Status.png)
 
 #### Sync Assigned User
-This automation rule has a trigger 'Issue Assigned' and will trigger the Logic App 'Sync-AssignedUser'. 
+This automation rule has a trigger 'Issue Assigned' and will trigger the Logic App 'Sync-AssignedUser'.
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
 ![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Assigned%20User.png)
 
 #### Create Link
-This automation rule has a trigger 'Issue created' and will trigger the Logic App 'Add-JIRALinkComment'. 
+This automation rule has a trigger 'Issue created' and will trigger the Logic App 'Add-JIRALinkComment'.
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
 ![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Create%20Link.png)
@@ -131,7 +131,7 @@ After deploying the Logic Apps, you can copy the HTTP trigger URLs and paste the
 A lot of JIRA Custom fields are used within these Logic Apps. It's important to create these custom fields in your own JIRA environment and change the correct ID's in the Logic Apps.
 For more information about the different custom fields used, please check the JIRA Configuration.
 
-### Sync Incidents from Sentinel to JIRA 
+### Sync Incidents from Sentinel to JIRA
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Incidents%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Incidents%2Fazuredeploy.json)

@@ -37,7 +37,7 @@ namespace AzureSentinel_ManagementAPI.Actions
         public async Task CreateAction(string ruleId, int insId, string logicAppResourceId = "")
         {
             ActionRequestPayload[] actions = Utils.LoadPayload<ActionRequestPayload[]>("ActionPayload.json", cliMode);
-            
+
             foreach (ActionRequestPayload payload in actions)
             {
                 try
@@ -108,11 +108,11 @@ namespace AzureSentinel_ManagementAPI.Actions
                 var response = await http.SendAsync(request);
 
                 if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
-                
+
                 if (response.StatusCode == HttpStatusCode.NotFound)
                     throw new Exception("Not found, please create a new Action first...");
-                
-                
+
+
                 var error = await response.Content.ReadAsStringAsync();
                 var formatted = JsonConvert.DeserializeObject(error);
                 throw new WebException("Error calling the API: \n" +
@@ -135,7 +135,7 @@ namespace AzureSentinel_ManagementAPI.Actions
             try
             {
                 var url = $"{azureConfigs[insId].BaseUrl}/alertRules/{ruleId}/actions/{actionId}?api-version={azureConfigs[insId].ApiVersion}";
-               
+
                 var request = new HttpRequestMessage(HttpMethod.Get, url);
                 await authenticationService.AuthenticateRequest(request, insId);
                 var http = new HttpClient();
@@ -199,7 +199,7 @@ namespace AzureSentinel_ManagementAPI.Actions
                     string res = await response.Content.ReadAsStringAsync();
                     JObject result = JsonConvert.DeserializeObject<JObject>(res);
                     var values = result["value"] as JArray;
-                    
+
                     if (values == null)
                     {
                         values = new JArray();
@@ -215,19 +215,19 @@ namespace AzureSentinel_ManagementAPI.Actions
                             request = new HttpRequestMessage(HttpMethod.Get, nextLink);
                             await authenticationService.AuthenticateRequest(request, insId);
                             var nextResponse = await http.SendAsync(request);
-                            
+
                             if (nextResponse.IsSuccessStatusCode)
                             {
                                 var newRes = await nextResponse.Content.ReadAsStringAsync();
                                 JObject newResult = JsonConvert.DeserializeObject<JObject>(newRes);
                                 result = newResult;
                                 var newValues = result["value"] as JArray;
-                                
+
                                 if (newValues == null)
                                 {
                                     newValues = new JArray();
                                 }
-                                
+
                                 foreach (var v in newValues)
                                 {
                                     values.Add(v);

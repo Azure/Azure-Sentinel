@@ -48,16 +48,16 @@ ParserParams:
 ParserQuery: |
   let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;
   let response = (
-    starttime:datetime=datetime(null), 
-    endtime:datetime=datetime(null), 
-    srcipaddr:string="*", 
-    domain_has_any:dynamic=dynamic([]), 
-    responsecodename:string="*", 
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr:string="*",
+    domain_has_any:dynamic=dynamic([]),
+    responsecodename:string="*",
     response_has_ipv4:string="*",
     response_has_any_prefix:dynamic=dynamic([]),
     eventtype:string="Query",
     disabled:bool=false
-  ) 
+  )
   {
     SyslogProjected
     | where not(disabled)
@@ -65,9 +65,9 @@ ParserQuery: |
     // -- Pre filtering
     | where
       (isnull(starttime) or TimeGenerated >= starttime)
-      and (isnull(endtime) or TimeGenerated <= endtime) 
+      and (isnull(endtime) or TimeGenerated <= endtime)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
-    | where 
+    | where
       (srcipaddr=="*" or has_ipv4(SyslogMessage, srcipaddr))
       and (array_length(domain_has_any) == 0 or SyslogMessage has_any (domain_has_any))
       and (responsecodename=="*" or SyslogMessage has responsecodename)
@@ -89,18 +89,18 @@ ParserQuery: |
     | project-away SyslogMessage, ProcessName, DnsResponseNameIndex
   };
   let request =(
-    starttime:datetime=datetime(null), 
-    endtime:datetime=datetime(null), 
-    srcipaddr:string="*", 
-    domain_has_any:dynamic=dynamic([]), 
-    responsecodename:string="*", 
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr:string="*",
+    domain_has_any:dynamic=dynamic([]),
+    responsecodename:string="*",
     response_has_ipv4:string="*",
     response_has_any_prefix:dynamic=dynamic([]),
     eventtype:string="Query",
     disabled:bool=false
-  ) 
+  )
   {
-    SyslogProjected 
+    SyslogProjected
     | where not(disabled)
     // -- Pre filtering
       and (eventtype in~ ('lookup', 'Query'))
@@ -109,15 +109,15 @@ ParserQuery: |
       and (response_has_ipv4=='*')
     | where
       (isnull(starttime) or TimeGenerated >= starttime)
-      and (isnull(endtime) or TimeGenerated <= endtime) 
+      and (isnull(endtime) or TimeGenerated <= endtime)
     | where ProcessName == "named" and SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
-    | where 
+    | where
       (srcipaddr=="*" or has_ipv4(SyslogMessage, srcipaddr))
       and (array_length(domain_has_any) == 0 or SyslogMessage has_any (domain_has_any))
     | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
     | extend SyslogMessage = iif(SyslogMessage startswith "@", (substring(SyslogMessage, indexof(SyslogMessage, " ")+1)), SyslogMessage)
     | extend SyslogMessage = replace_string(SyslogMessage,"\\ ","@@@")
-    | parse SyslogMessage with 
+    | parse SyslogMessage with
         SrcIpAddr: string
         "#" SrcPortNumber: int *
         "query: " DnsQuery: string
@@ -126,46 +126,46 @@ ParserQuery: |
         " " DnsFlags: string
     | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
     | extend DnsFlags= tostring((split(DnsFlags," "))[0])
-    | extend 
+    | extend
         EventSubType = "request",
         DnsResponseCodeName = "NA"
     | project-away SyslogMessage, ProcessName
   };
   let parser = (
-    starttime:datetime=datetime(null), 
-    endtime:datetime=datetime(null), 
-    srcipaddr:string="*", 
-    domain_has_any:dynamic=dynamic([]), 
-    responsecodename:string="*", 
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr:string="*",
+    domain_has_any:dynamic=dynamic([]),
+    responsecodename:string="*",
     response_has_ipv4:string="*",
     response_has_any_prefix:dynamic=dynamic([]),
     eventtype:string="Query",
     disabled:bool=false
-  ) 
+  )
   {
-    union 
+    union
       response (
-        starttime=starttime, 
-        endtime=endtime, 
+        starttime=starttime,
+        endtime=endtime,
         srcipaddr=srcipaddr,
         domain_has_any=domain_has_any,
-        responsecodename=responsecodename, 
-        response_has_ipv4=response_has_ipv4, 
-        response_has_any_prefix=response_has_any_prefix, 
-        eventtype=eventtype, 
+        responsecodename=responsecodename,
+        response_has_ipv4=response_has_ipv4,
+        response_has_any_prefix=response_has_any_prefix,
+        eventtype=eventtype,
         disabled=disabled
       ),
       request (
-        starttime=starttime, 
-        endtime=endtime, 
+        starttime=starttime,
+        endtime=endtime,
         srcipaddr=srcipaddr,
         domain_has_any=domain_has_any,
-        responsecodename=responsecodename, 
-        response_has_ipv4=response_has_ipv4, 
-        response_has_any_prefix=response_has_any_prefix, 
-        eventtype=eventtype, 
+        responsecodename=responsecodename,
+        response_has_ipv4=response_has_ipv4,
+        response_has_any_prefix=response_has_any_prefix,
+        eventtype=eventtype,
         disabled=disabled
-      )    
+      )
     // -- Post-filtering
     | where
         (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
@@ -181,7 +181,7 @@ ParserQuery: |
         EventVendor="Infoblox",
         EventSchema="Dns",
         EventSchemaVersion="0.1.3",
-        EventType="Query", 
+        EventType="Query",
         EventResult=iff(EventSubType=="request" or DnsResponseCodeName=="NOERROR","Success","Failure"),
         DvcIpAddr=iff (HostIP == "Unknown IP", "", HostIP)
     // -- Aliases
@@ -196,12 +196,12 @@ ParserQuery: |
     | project-away HostIP
   };
   parser  (
-    starttime=starttime, 
-    endtime=endtime, 
+    starttime=starttime,
+    endtime=endtime,
     srcipaddr=srcipaddr,
     domain_has_any=domain_has_any,
-    responsecodename=responsecodename, 
-    response_has_ipv4=response_has_ipv4, 
-    response_has_any_prefix=response_has_any_prefix, 
-    eventtype=eventtype, 
+    responsecodename=responsecodename,
+    response_has_ipv4=response_has_ipv4,
+    response_has_any_prefix=response_has_any_prefix,
+    eventtype=eventtype,
     disabled=disabled)

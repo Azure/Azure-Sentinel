@@ -1,6 +1,6 @@
 # Registration Data Access Protocol (RDAP) Query Engine
 ----
-Author:  Matt Egen 
+Author:  Matt Egen
 
 mattegen@microsoft.com
 
@@ -8,7 +8,7 @@ mattegen@microsoft.com
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FRDAP%2FRDAPQuery%2Fazuredeploy.json)
 
-With the ever increasing number of new domains on the Internet as well as all of the new Top Level Domains (TLD), it's often hard to know if a user has gone to a potentially malicious new site that has just popped up online.  To help with this, a SOC team or analyst could track for users accessing newly registered domains.  One way to do this is to query the Registration Data Access Protocol (RDAP).  RDAP allows you to access domain name registration data (much like its predecesor the WHOIS protocol does today) but via an API call and with a better, more machine readable structure to the data.  This Azure Function queries an Azure Sentinel environment, finds domain names of interest, and then conducts an RDAP lookup to retrieve information about the domain for investigators and analysts.  There is also an Azure Sentinel Analytic rule that can then alert if evidence of a domain that was registered in the last 30 days should be found.  
+With the ever increasing number of new domains on the Internet as well as all of the new Top Level Domains (TLD), it's often hard to know if a user has gone to a potentially malicious new site that has just popped up online.  To help with this, a SOC team or analyst could track for users accessing newly registered domains.  One way to do this is to query the Registration Data Access Protocol (RDAP).  RDAP allows you to access domain name registration data (much like its predecesor the WHOIS protocol does today) but via an API call and with a better, more machine readable structure to the data.  This Azure Function queries an Azure Sentinel environment, finds domain names of interest, and then conducts an RDAP lookup to retrieve information about the domain for investigators and analysts.  There is also an Azure Sentinel Analytic rule that can then alert if evidence of a domain that was registered in the last 30 days should be found.
 
 Please note:  This version only stores the registration date of the domains successfully resolved, but you could modify it to store more information such as who registered the domain, address information, contact data etc.
 
@@ -21,7 +21,7 @@ When deploying this Azure Function you will need some values to fill in the blan
 The name you want to give the Azure Function.  The Default is "RDAPQuery".  A unique string will be attached to this in order to deconflict with any potential pre-existing functions you may have.  For example, the template may create a name like "rdapquerytbdem24sevgdq"
 
 ### Azure AD App Permissions
-The Azure Function needs permission to read the Log Analytics Workspace that your Azure Sentinel instance is attached to.  For guidance on creating an Azure AD App Registration, please see [QuickStart: Register App](https://docs.microsoft.com/azure/active-directory/develop/quickstart-register-app).  For this application you will need the following permissions:  
+The Azure Function needs permission to read the Log Analytics Workspace that your Azure Sentinel instance is attached to.  For guidance on creating an Azure AD App Registration, please see [QuickStart: Register App](https://docs.microsoft.com/azure/active-directory/develop/quickstart-register-app).  For this application you will need the following permissions:
 ````
 Log Analytics API
 Data.Read
@@ -45,7 +45,7 @@ The name you want to use for your resolved domains.  The default is ResolvedDoma
 
 
 ### Post Template Configuration
-After deploying the ARM Template, you should go in to your Azure Sentinel instance and create the GetDomainsForRDAP function.  An example is included in this repo, but you can use any function you want so long as it returns a field named "Domain" that has the domain you are looking up information for.  
+After deploying the ARM Template, you should go in to your Azure Sentinel instance and create the GetDomainsForRDAP function.  An example is included in this repo, but you can use any function you want so long as it returns a field named "Domain" that has the domain you are looking up information for.
 
 ## Description and Workflow
 ----
@@ -97,8 +97,3 @@ The following are some issues I’ve run into on this project.  I am still worki
 
 ##### GetDomainsForRDAP returns IP addresses (both IPv4 and IPv6) and they don't resolve
 This is an artifact of the way that DeviceNetworkEvents returns data.  If the target was an IP address then DeviceNetworkEvents returns that information.  Since RDAP Query Engine doesn't process IP addresses at this time there are some remnants left in the GetDomainsForRDAP query.  These are ignored / error out in the subsequent RDAP query so they don't cause any issues.  Future plans are to clean up the GetDomainsForRDAP function to ignore these scenarios completely.
-
-
-
-
-

@@ -4,7 +4,7 @@ author: Benjamin Kovacevic
 This playbook will be sending email with basic incidents details (Incident title, severity, tactics, link,…) when incident is created in Azure Sentinel.
 <br/><br/>
 ## Pre-requisites:
-An O365 account to be used to send email notification 
+An O365 account to be used to send email notification
 (The user account will be used in O365 connector (Send an email).)
 <br/><br/>
 ## Deployment:

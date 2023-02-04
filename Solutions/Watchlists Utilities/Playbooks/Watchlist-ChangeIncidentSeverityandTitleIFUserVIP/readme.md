@@ -10,7 +10,7 @@ This playbook leverages Microsoft Sentinel Watchlists in order to adapt the inci
 For each User account included in the incident or alert (entities of type User):
 1. Check if User is included in the watchlist.
 2. If user is in the watchlist:
-a. change the incident severity to Critical  
+a. change the incident severity to Critical
 b. Modify the incident title that include the User name and the text- **VIP User!!!**
 
 

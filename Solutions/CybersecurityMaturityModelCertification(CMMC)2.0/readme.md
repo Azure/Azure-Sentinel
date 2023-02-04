@@ -11,7 +11,7 @@ You can deploy the solution by clicking on the buttons below:
 ![Workbook Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CybersecurityMaturityModelCertification(CMMC)2.0/Workbooks/Images/CybersecurityMaturityModelCertification(CMMC)Black1.png?raw=true)
 
 ## [Recommended Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Recommended Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions)
-| <strong> Roles </strong> | <strong> Rights </strong> | 
+| <strong> Roles </strong> | <strong> Rights </strong> |
 |:--|:--|
 |Security Reader | View Workbooks, Analytics, Hunting, Security Recommendations |
 |Security Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries, Apply Security Recommendations |
@@ -54,4 +54,4 @@ This Security Orchestration, Automation, & Response (SOAR) capability is designe
 </span>[<span style="font-family: Open Sans; font-weight: 620; font-size: 14px;font-style: bold;margin:-10px 0px 0px 0px;position: relative;top:-3px;left:-4px;"> click here. </span>](https://forms.office.com/r/hK7zcBDNp8)
 
 ## Disclaimer
-The Microsoft Sentinel CMMC 2.0 Solution demonstrates best practice guidance, but Microsoft does not guarantee nor imply compliance. The workbook outlines controls across Levels 1-2. All accreditation requirements and decisions are governed by the 💡[CMMC Accreditation Body](https://www.cmmcab.org/c3pao-lp). This solution provides visibility and situational awareness for control requirements delivered with Microsoft technologies in predominantly cloud-based environments. Customer experience will vary by user and some panels may require additional configurations and query modification for operation. Recommendations should be considered a starting point for planning full or partial coverage of respective control requirements. 
+The Microsoft Sentinel CMMC 2.0 Solution demonstrates best practice guidance, but Microsoft does not guarantee nor imply compliance. The workbook outlines controls across Levels 1-2. All accreditation requirements and decisions are governed by the 💡[CMMC Accreditation Body](https://www.cmmcab.org/c3pao-lp). This solution provides visibility and situational awareness for control requirements delivered with Microsoft technologies in predominantly cloud-based environments. Customer experience will vary by user and some panels may require additional configurations and query modification for operation. Recommendations should be considered a starting point for planning full or partial coverage of respective control requirements.

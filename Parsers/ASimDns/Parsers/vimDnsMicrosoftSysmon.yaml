@@ -45,7 +45,7 @@ ParserParams:
     Type: bool
     Default: false
 
-ParserQuery: | 
+ParserQuery: |
   let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
     // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-
     0, 'NOERROR'
@@ -74,14 +74,14 @@ ParserQuery: |
   let ParsedDnsEvent_Event =(
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
-    , domain_has_any:dynamic=dynamic([]) 
+    , domain_has_any:dynamic=dynamic([])
     , responsecodename:string='*', response_has_ipv4:string='*'
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
     , disabled:bool=false
-  ) 
+  )
   {
     Event | where not(disabled)
-      | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
+      | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId
       | where Source == "Microsoft-Windows-Sysmon" and EventID==22
       | project-away Source, EventID
       // -- Pre-parsing filtering (srcipaddr not available, responsecodename not optimizable)
@@ -96,7 +96,7 @@ ParserQuery: |
       // --
       | parse-kv EventData as (
           RuleName:string,
-          UtcTime:datetime, 
+          UtcTime:datetime,
           ProcessGuid:string,
           ProcessId:string,
           QueryName:string,
@@ -106,7 +106,7 @@ ParserQuery: |
           User:string
         )
         with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-      | project-rename 
+      | project-rename
           EventEndTime = UtcTime,
           SrcProcessId = ProcessId,
           SrcProcessGuid = ProcessGuid,
@@ -115,7 +115,7 @@ ParserQuery: |
           DnsResponseName = QueryResults,
           SrcProcessName = Image,
           SrcUsername = User
-      | project-away EventData      
+      | project-away EventData
       // -- Post-filtering tests differnt for Event and WindowsEvent
       | lookup RCodeTable on DnsResponseCode
       | where  (responsecodename=="*" or DnsResponseCodeName has responsecodename) // -- filter is not optimized
@@ -124,14 +124,14 @@ ParserQuery: |
   let ParsedDnsEvent_WindowsEvent =(
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
-    , domain_has_any:dynamic=dynamic([]) 
+    , domain_has_any:dynamic=dynamic([])
     , responsecodename:string='*', response_has_ipv4:string='*'
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
     , disabled:bool=false
-  ) 
+  )
   {
     WindowsEvent | where not(disabled)
-    | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Provider, Type //, _ItemId 
+    | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Provider, Type //, _ItemId
     | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
     | project-away Provider, EventID
       // -- Pre-parsing filtering (srcipaddr not available)
@@ -147,11 +147,11 @@ ParserQuery: |
     | lookup RCodeTable on DnsResponseCode
     | where  (responsecodename=="*" or DnsResponseCodeName has responsecodename) // -- filter is not optimized
     // --
-    | extend 
+    | extend
         RuleName = tostring(EventData.RuleName),
         EventEndTime = todatetime(EventData.UtcTime),
         SrcProcessGuid = tostring(EventData.ProcessGuid),
-        SrcProcessId = tostring(EventData.ProcessId),  
+        SrcProcessId = tostring(EventData.ProcessId),
         DnsQuery = tostring(EventData.QueryName),
         DnsResponseName = tostring(EventData.QueryResults),
         SrcProcessName = tostring(EventData.Image),
@@ -162,13 +162,13 @@ ParserQuery: |
   let ParsedDnsEvent=(
     starttime:datetime=datetime(null), endtime:datetime=datetime(null)
     , srcipaddr:string='*'
-    , domain_has_any:dynamic=dynamic([]) 
+    , domain_has_any:dynamic=dynamic([])
     , responsecodename:string='*', response_has_ipv4:string='*'
     , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
     , disabled:bool=false
-  ) 
+  )
   {
-    union isfuzzy=true 
+    union isfuzzy=true
       ParsedDnsEvent_Event        (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled),
       ParsedDnsEvent_WindowsEvent (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)
   // -- Post-filtering accurately now that message is parsed
@@ -177,7 +177,7 @@ ParserQuery: |
     and (response_has_ipv4=='*' or has_ipv4(DnsResponseName,response_has_ipv4) )
     and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix))
   // --
-  | project-rename 
+  | project-rename
       DvcHostname = Computer,
       //EventUid = _ItemId,
       DvcScopeId = _SubscriptionId,
@@ -200,7 +200,7 @@ ParserQuery: |
       DnsResponseCodeName = iff (DnsResponseCodeName == "", "NA", DnsResponseCodeName),
       DvcIdType = iff (DvcId != "", "AzureResourceId", "")
   // -- Aliases
-  | extend 
+  | extend
       EventResultDetails = DnsResponseCodeName,
       Domain = DnsQuery,
       Dvc = DvcHostname,

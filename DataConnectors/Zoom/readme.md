@@ -80,15 +80,15 @@ Note: You will need to prepare VS code for Azure function development.  See http
 
 ## Configure your Zoom API app.
 You also need to configure your Zoom account to sent events to your Function App. To do this go to https://marketplace.zoom.us/ and log in with a user who has admin access to your Zoom account.
-1. Select ‘Develop’ in the top right hand corner and click ‘Build App’. 
-2. Select ‘Webhook Only’ as your app type. 
+1. Select ‘Develop’ in the top right hand corner and click ‘Build App’.
+2. Select ‘Webhook Only’ as your app type.
 3. Give your app a name.
-4. Fill out the required Basic Information and click continue. 
-5. Under the Feature Tab enable the ‘Event Subscriptions’ toggle and click ‘Add new event subscription’. 
-6. Set a subscription name and in the Event notification endpoint URL enter your Function App URL. This will be in the format of https://<FunctionAppName>.azurewebsites.net/api/<FunctionName>. You can find this you app URL in the Azure Portal.  
-7. Click ‘Add Events’ and select the events you want to receive in Azure Sentinel. Then click done. 
-8. Copy your feature Verification token for your event subscription and save it. 
-9. Click ‘Save’ and ‘Continue’. 
+4. Fill out the required Basic Information and click continue.
+5. Under the Feature Tab enable the ‘Event Subscriptions’ toggle and click ‘Add new event subscription’.
+6. Set a subscription name and in the Event notification endpoint URL enter your Function App URL. This will be in the format of https://<FunctionAppName>.azurewebsites.net/api/<FunctionName>. You can find this you app URL in the Azure Portal.
+7. Click ‘Add Events’ and select the events you want to receive in Azure Sentinel. Then click done.
+8. Copy your feature Verification token for your event subscription and save it.
+9. Click ‘Save’ and ‘Continue’.
 
 Once you have done this you need to add your verification code to your previously deployed Function App. To do this go to the Function App in the Azure Portal.
 1. Click Platform Features Tab.

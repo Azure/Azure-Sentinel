@@ -59,7 +59,7 @@ def main(mytimer: func.TimerRequest):
     events_last_ts = events_state_manager.get()
     events_last_ts = parse_date_from(events_last_ts)
     logging.info(f'Getting events from {events_last_ts}')
-    
+
     for events in cli.get_events(events_last_ts):
         for event in events:
             sentinel.send(event)
@@ -87,7 +87,7 @@ class CiscoAMPClient:
         ]
         if host not in hosts_list:
             raise ValueError(f'Host {host} is not correct. Use one of {hosts_list}.')
-    
+
     def get_audit_logs(self, start_time: datetime.datetime):
         url = f'https://{self.host}/v1/audit_logs'
         params = {
@@ -110,7 +110,7 @@ class CiscoAMPClient:
             jsonData = json.loads(res.text)
             yield jsonData['data']
             next_link = jsonData['metadata']['links'].get('next')
-        
+
     def get_events(self, start_time: datetime.datetime):
         url = f'https://{self.host}/v1/events'
         params = {

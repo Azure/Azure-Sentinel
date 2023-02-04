@@ -14,7 +14,7 @@ using Teams.CustomConnector.Models;
 
 
 /// <summary>
-/// 
+///
 /// </summary>
 namespace Teams.CustomConnector.Processor
 {
@@ -45,7 +45,7 @@ namespace Teams.CustomConnector.Processor
         /// <returns></returns>
         public async Task<List<AuditDetailedReport>> Process(string startTime, string endTime)
         {
-            
+
 
             log.LogInformation(Constants.OMSRequestProcessStarted);
             string urlParameters = $"?contentType=Audit.General&PublisherIdentifier={publisherGuid}&startTime={startTime}&endTime={endTime}";
@@ -88,7 +88,7 @@ namespace Teams.CustomConnector.Processor
                         var logs = auditDetailReports.Where(x => x.RecordType == "25").ToList();
 
                         FinalAuditReports.AddRange(auditDetailReports);
-                      
+
                     });
                 } while (auditInitialDataObject.AuditNextPageUri != "");
 
@@ -248,12 +248,12 @@ namespace Teams.CustomConnector.Processor
             try
             {
                 log.LogInformation(Constants.OMSDetailHttpRequestSent);
-           
+
                 HttpClient client = new HttpClient();
                 client.BaseAddress = new Uri(url);
 
                 var AuthToken = await GetAuthToken();
-                
+
                 client.DefaultRequestHeaders.Add("Authorization", "Bearer " + AuthToken);
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 

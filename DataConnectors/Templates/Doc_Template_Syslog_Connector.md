@@ -6,7 +6,7 @@ This article explains how to connect your <<Partner Appliance Name>> appliance t
 > [!NOTE]
 > Data will be stored in the geographic location of the workspace on which you are running Azure Sentinel.
 
-## Forward <<Partner Appliance Name>> logs to the Syslog agent  
+## Forward <<Partner Appliance Name>> logs to the Syslog agent
 
 Configure <<Partner Appliance Name>> to forward Syslog messages to your Azure workspace via the Syslog agent.
 1. <Add specific steps on how customers can configure your appliance to send logs to Syslog. Adjust numbering below as needed for the last steps that follows.>
@@ -19,7 +19,7 @@ Configure <<Partner Appliance Name>> to forward Syslog messages to your Azure wo
 After a successful connection is established, the data appears in Log Analytics under Syslog.
 
 ## Validate connectivity
-It may take upwards of 20 minutes until your logs start to appear in Log Analytics. 
+It may take upwards of 20 minutes until your logs start to appear in Log Analytics.
 
 ## Next steps
 In this document, you learned how to connect <<Partner Appliance Name>> to Microsoft Sentinel. To learn more about Microsoft Sentinel, see the following articles:
@@ -29,9 +29,9 @@ In this document, you learned how to connect <<Partner Appliance Name>> to Micro
 
 <### Install as a solution (Preview)
 
-Include this section if you are planning on publishing your data connector as a Microsoft Sentinel solution. Microsoft Sentinel solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. For example, use solutions to deliver your data connector packaged with related analytics rules, workbooks, playbooks, and more. 
-         
-- When relevant, add instructions for installing your solution, either from the Azure Marketplace, or from the Microsoft Sentinel content hub. 
+Include this section if you are planning on publishing your data connector as a Microsoft Sentinel solution. Microsoft Sentinel solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. For example, use solutions to deliver your data connector packaged with related analytics rules, workbooks, playbooks, and more.
+
+- When relevant, add instructions for installing your solution, either from the Azure Marketplace, or from the Microsoft Sentinel content hub.
 - If your solution is being published to the content hub, also open a PR to have it listed in our [content hub catalog](https://docs.microsoft.com/azure/sentinel/sentinel-solutions-catalog). On the docs page, click Edit to open your PR.
-         
+
 For more information, see the [Microsoft Sentinel solution overview](https://docs.microsoft.com/azure/sentinel/sentinel-solutions) and our [Guide to Building Microsoft Sentinel Solutions](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions#readme).>

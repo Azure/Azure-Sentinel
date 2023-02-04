@@ -50,13 +50,13 @@ function UploadtoBlob {
     $Context = New-AzStorageContext -ConnectionString $connectionstring
     if((Get-AzStorageContainer -Context $Context).Name -eq $Container){
     #Set Storage Blob Content as inputfile parameter to Upload
-    Set-AzStorageBlobContent -file $InputFile -Container $Container -Context $Context -Force   
+    Set-AzStorageBlobContent -file $InputFile -Container $Container -Context $Context -Force
     }
     else{
     #create container
     New-AzStorageContainer -Name $Container -Context $Context
     #Set Storage Blob Content as inputfile parameter to Upload
-    Set-AzStorageBlobContent -file $InputFile -Container $Container -Context $Context -Force  
+    Set-AzStorageBlobContent -file $InputFile -Container $Container -Context $Context -Force
     }
 }
 
@@ -85,7 +85,7 @@ $azurepublicjson = ParseUrlfromHTML -Url $azurepublic -Pattern '*json'
 $msftpubliccsv = ParseUrlfromHTML -Url $msftpublic -Pattern '*csv'
 
 # Download Output URL to Temp directory and normalize file name with out Date
-Invoke-WebRequest -Uri $azurepublicjson -OutFile $env:TEMP\ServiceTags_Public.json 
+Invoke-WebRequest -Uri $azurepublicjson -OutFile $env:TEMP\ServiceTags_Public.json
 Invoke-WebRequest -Uri $msftpubliccsv -OutFile $env:TEMP\MSFT-Public-IPs.csv
 Invoke-WebRequest -Uri $awsipranges -OutFile $env:TEMP\AWS-IP-Ranges.json
 Invoke-WebRequest -Uri $officeworldwide -OutFile $env:TEMP\Office-WorldWide.json
@@ -94,7 +94,7 @@ Invoke-WebRequest -Uri $officeworldwide -OutFile $env:TEMP\Office-WorldWide.json
 UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\ServiceTags_Public.json
 UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\MSFT-Public-IPs.csv
 UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\AWS-IP-Ranges.json
-UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\Office-WorldWide.json    
+UploadtoBlob -ConnectionString $azstoragestring -Container $Container -InputFile $env:TEMP\Office-WorldWide.json
 
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"

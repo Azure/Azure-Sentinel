@@ -1,6 +1,6 @@
 # Scheduled CSV Exports to Email
 ----
-Author:  Matt Egen 
+Author:  Matt Egen
 
 mattegen@microsoft.com
 
@@ -12,7 +12,7 @@ Do you have a need to run scheduled exports of data from your Azure Sentinel env
 ----
 ###### SMTP Email
 
-This Playbook uses the built in SMTP connector for Azure Logic Apps.  Unlike the built-in Outlook mail connector, you do not need to have an O365 account to send email via the SMTP connector, but you need to do some configuration and make some decisions.  If you're using O365, you can send email via your public facing SMTP server endpoint (See:  https://docs.microsoft.com/exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365 for more details. You will need to decide if you are going to need to send *authenticated* or *unauthenticated* email. For example, if the email your sending is going to an internal only email address, then you can send it unauthenticated and do not even need a mailbox in O365.  However, if you want to send an email to an address outside of your domain, then you can **only** send it as an authenticated user and that will require that the user account have a mailbox. 
+This Playbook uses the built in SMTP connector for Azure Logic Apps.  Unlike the built-in Outlook mail connector, you do not need to have an O365 account to send email via the SMTP connector, but you need to do some configuration and make some decisions.  If you're using O365, you can send email via your public facing SMTP server endpoint (See:  https://docs.microsoft.com/exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365 for more details. You will need to decide if you are going to need to send *authenticated* or *unauthenticated* email. For example, if the email your sending is going to an internal only email address, then you can send it unauthenticated and do not even need a mailbox in O365.  However, if you want to send an email to an address outside of your domain, then you can **only** send it as an authenticated user and that will require that the user account have a mailbox.
 
 ###### Watchlist
 Report items are based on a schedule of daily, weekly, or monthly, stored in a watchlist called "Reporting".  The Playbook executes an Azure Monitor Logs query for the various reports using a query like this:  "\_GetWatchlist("Reporting") | where Schedule == "Daily"".  It then iterates through the returned values to run the reports and send the emails out.
@@ -33,15 +33,15 @@ Because of this you cannot use inline comments (e.g.: //my comment).
 ----
 The following are some issues I’ve run into on this Playbook.  I am still working on more elegant solutions for them, but for now the workarounds seem to work.
 ##### Issue:  Azure Monitor Logs cannot be configured via a JSON template
-I’m not sure if this is a technical limitation of the Azure Monitor Logs connector or if I am just doing something wrong, but while the template will correctly create the connector it will still give you an error and you will have to authorize the connector and then go into the Playbook and configure the connector to point to the correct subscription etc.  It is much much easier to open the Azure Monitor Logs connector from the Resource Group first , authorize the connector there, and then go into the Playbook to complete the configuration.  
- 
+I’m not sure if this is a technical limitation of the Azure Monitor Logs connector or if I am just doing something wrong, but while the template will correctly create the connector it will still give you an error and you will have to authorize the connector and then go into the Playbook and configure the connector to point to the correct subscription etc.  It is much much easier to open the Azure Monitor Logs connector from the Resource Group first , authorize the connector there, and then go into the Playbook to complete the configuration.
+
 
 ##### Issue: SMTP Connector throws an error in the UX configuration
 The SMTP connector really doesn’t like allowing you to configure unauthenticated email (or sometimes even any email) in the UX.  What I’ve found seems to work really well is to configure it using the template configuration (I’ve included fields for all of the relevant values (from, server, port, ssl, etc.) and then just leave it alone.  IF you do need to make changes though, configuring it in the Designer view seems to throw errors.  If you want to change it, again, using the Resource Group Edit API Connection seems to be the way to go and not get an error.
 
 
 ##### Issue:  O365 is categorizing my email as SPAM/PHISH and putting it in quarantine!
-When you send the email through your public facing MX endpoint it's still subject to the same rules as any other email.  If the sending infrastructure (in this case Azure) isn't in your SPF records, then it will look a possible spoof and depending on your policy configuration, this may mean the emails will go to quarantine.  
+When you send the email through your public facing MX endpoint it's still subject to the same rules as any other email.  If the sending infrastructure (in this case Azure) isn't in your SPF records, then it will look a possible spoof and depending on your policy configuration, this may mean the emails will go to quarantine.
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FExport-Report-CSV%2Fazuredeploy.json)

@@ -2,7 +2,7 @@
 
 ARM template for ASIM ProcessEvent schema parser for Microsoft Defender for IoT.
 
-This ASIM parser supports filtering and normalizing Microsoft Defender for IoT events to the ASIM Process Event normalized schema. 
+This ASIM parser supports filtering and normalizing Microsoft Defender for IoT events to the ASIM Process Event normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

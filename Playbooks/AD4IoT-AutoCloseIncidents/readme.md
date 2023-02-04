@@ -2,7 +2,7 @@
 Author: Amit Sheps
 
 In some cases, maintenance activities generate alerts in Sentinel which distracts the SOC team from handling the real problems, the playbook allows to input the time period in which the maintenance is expected and the assets IP (Excel file can be found). The playbook requires a watchlist which includes all the IP addresses of the assets on which alerts will handled automatically.<br>
-This playbook parses explicitly the IOT device entity fields. 
+This playbook parses explicitly the IOT device entity fields.
 
 
 ## Prerequisites

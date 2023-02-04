@@ -57,42 +57,42 @@ Ensure you have the following details:
 - Select **On** under the **System assigned** tab. Click **Save** and select **Yes** when prompted.
 
   <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Incident-Assignment-Shifts/readmeImages/Pic8.png" width="900" height="360">
-   <br />    
-   
+   <br />
+
 - Click on **Azure role assignments** to assign role to the Managed Identity.
 
  <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Incident-Assignment-Shifts/readmeImages/Pic9.png" width="900" height="280">
-   <br />  
-   
-- Click on **+ Add role assignment**. 
-- Select **Resource group** under Scope and select the **Subscription** and **Resource group** where the Azure Sentinel **Workspace** is located. 
+   <br />
+
+- Click on **+ Add role assignment**.
+- Select **Resource group** under Scope and select the **Subscription** and **Resource group** where the Azure Sentinel **Workspace** is located.
   Select **Azure Sentinel Responder** under Role and click **Save**.
 
 
 ### 2. Configure connections
 - Edit the Logic App or go to Logic app designer.
-- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Incident-Assignment-Shifts/readmeImages/Pic1.png" width="30" height="30">. 
+- Expand each step to find the following connectors (6 in total) with <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Incident-Assignment-Shifts/readmeImages/Pic1.png" width="30" height="30">.
   1. Incident Trigger
   2. Update Incident
   3. Add comment to incident
   4. List all shifts
   5. Run query and list results
-  6. Send an email  
+  6. Send an email
 - Fix these connectors by adding a new connection to each connector and sign in with the accounts described under pre-requisites.
 
 
 ### 3. Select the Shifts schedule
 - Edit the Logic App or go to Logic app designer.
 - Find the **List all shifts** connector, click on the **X** sign next to Team field for the drop-down list to appear.
-    
+
    <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Incident-Assignment-Shifts/images/Pic3.png" width="500" height="140">
-   <br />    
-   
-- Select the Teams channel with your Shifts schedule from the drop-down list. 
-   
+   <br />
+
+- Select the Teams channel with your Shifts schedule from the drop-down list.
+
    <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Incident-Assignment-Shifts/images/Pic7.png" width="500" height="200">
-   
-    
+
+
 - Save the Logic App once you have completed the above steps.
 
 
@@ -104,16 +104,16 @@ Ensure you have the following details:
 Incidents are assigned to users based on the following criteria:
 
 - Only users who have started their shifts during the time the Logic App runs will be considered.
-- Users who still have at least **1** hours left before going off shift. 
-  
+- Users who still have at least **1** hours left before going off shift.
+
   You can change this value by modifying the below variable:
 
     <img src="https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Incident-Assignment-Shifts/images/Pic4.png" width="500" height="180">
 
 - User with the least incidents assigned on the current Shift will be assigned incident first.
 
-    
-    
+
+
 ## Email Notification:
 
 - When an incident is assigned, the incident owner will be notified via email.

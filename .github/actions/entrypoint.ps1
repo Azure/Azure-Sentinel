@@ -2,7 +2,7 @@
 $mainTemplateChanged = (Get-Item env:mainTemplateChanged).value
 $createUiChanged = (Get-Item env:createUiChanged).value
 
-Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
+Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1'
 $PackageFolderPath = './dist/Package'
 
 # RUN FOR MAINTEMPLATE.JSON FILE
@@ -18,7 +18,7 @@ if ($mainTemplateChanged -eq $true)
     if ($MainTemplateTestFailures) {
         Write-Host "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!"
         exit 1
-    } 
+    }
     else {
         Write-Host "All tests passed for the 'MainTemplate.json' file!"
     }

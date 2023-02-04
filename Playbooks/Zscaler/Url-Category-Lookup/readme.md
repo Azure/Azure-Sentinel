@@ -14,7 +14,7 @@
 
 ## Summary
 
-This folder contains 1 playbook: 
+This folder contains 1 playbook:
 * Url Category lookup: Get Zscaler categories for one or more Urls
 
 ![Playbook](../Images/Url-Category-Lookup.png)
@@ -31,7 +31,7 @@ The playbook is used to respond to an incident in Azure Sentinel and uses the Zs
 
 <a name="deployment"></a>
 
-## Deployment instructions 
+## Deployment instructions
 
 You can choose to deploy one ore more playbooks.
 
@@ -64,7 +64,7 @@ Please note: The [authentication playbook](../authentication/) must is a mandato
 
 <a name="postdeployment"></a>
 
-## Post-Deployment instructions 
+## Post-Deployment instructions
 ### a. Authorize connections
 Once the deployment is completed, you will need to authorize each connection. There are connection for Azure KeyVault and Azure Sentinel. For each connection complete the following steps:
  1. Click edit API connection

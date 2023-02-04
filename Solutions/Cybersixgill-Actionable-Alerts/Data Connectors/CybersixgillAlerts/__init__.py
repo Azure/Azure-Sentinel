@@ -12,7 +12,7 @@ from .utils import remove_patterns, save_to_sentinel
 
 from sixgill.sixgill_actionable_alert_client import SixgillActionableAlertClient
 
-customer_id = environ['WorkspaceID'] 
+customer_id = environ['WorkspaceID']
 shared_key = environ['WorkspaceKey']
 connection_string = environ['AzureWebJobsStorage']
 client_id = environ['ClientID']
@@ -42,7 +42,7 @@ def get_from_and_to_date(date_format="%Y-%m-%d %H:%M:%S"):
         from_date_time = datetime.strptime(last_run_date_time, date_format)
     else:
         from_date_time = current_date_time - timedelta(days=LAST_X_DAYS)
-    
+
     return format(from_date_time, date_format), format(current_date_time, date_format)
 
 
@@ -51,7 +51,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info(str(environ))
     utc_timestamp = datetime.utcnow().replace(
         tzinfo=timezone.utc).isoformat()
-    
+
     if mytimer.past_due:
         logging.info('The timer is past due!')
         return
@@ -87,7 +87,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 }
             # Sub alerts logic
             alert_info = actionable_alerts_client.get_actionable_alert(alert_id)
-            # Merging assets to a single list 
+            # Merging assets to a single list
             if "matched_assets" in alert_info and isinstance(alert_info["matched_assets"], dict):
                 assets = []
                 for _, v in alert_info["matched_assets"].items():
@@ -108,7 +108,7 @@ def main(mytimer: func.TimerRequest) -> None:
             sub_alerts = actionable_alert.pop("sub_alerts", [])
             for sub_alert in filter(None, sub_alerts):
                 unique_id = f'{alert_id}__{int(sub_alert.get("aggregate_alert_id"))}'
-                # Merging assets to a single list 
+                # Merging assets to a single list
                 sub_alert_assets = []
                 if "matched_assets" in sub_alert and isinstance(sub_alert["matched_assets"], dict):
                     for _, v in sub_alert["matched_assets"].items():

@@ -1,46 +1,46 @@
 print Topic = "l33tSpeak: Advanced hunting in Microsoft 365 Defender", Presenters = "Michael Melone, Tali Ash", Company = "Microsoft", Date = todatetime("17 NOV 2020")
- 
+
 // -------------------------
 // Topic 1: Advanced Hunting, KQL, and performance
 // Advanced hunting query best practices in Microsoft Threat Protection - Microsoft 365 security | Microsoft Docs
 // -------------------------
- 
+
 // Advanced Hunting is built on Azure Data Explorer, which is a Write Once Read Many (WORM)
 // technology. When you write a query against Advanced Hunting:
 // - Data is based on recent activity (usually delayed just a few minutes)
 // - There is never any impact to the endpoint
 // - Queries may be throttled or limited based on how they're written to limit impact to other sessions
 // Recommended documentation https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-best-practices?view=o365-worldwide
- 
+
 // #1 best way to improve query performance: reduce timeframe
 // Visualized filter at the top right
 
 IdentityInfo
 | where Department == "Finance"
-| distinct AccountObjectId 
-| join IdentityLogonEvents on AccountObjectId 
+| distinct AccountObjectId
+| join IdentityLogonEvents on AccountObjectId
 | where Application == "Office 365"
 
 // Filter timestamp in the query using “ago”
 IdentityInfo
 | where Department == "Finance"
-| distinct AccountObjectId 
-| join (IdentityLogonEvents | where Timestamp > ago(10d)) on AccountObjectId 
+| distinct AccountObjectId
+| join (IdentityLogonEvents | where Timestamp > ago(10d)) on AccountObjectId
 | where Application == "Office 365"
 
 // Filter timestamp in the query using “between”
 let selectedTimestamp = datetime(2020-11-12T19:35:03.9859771Z);
 IdentityInfo
 | where Department == "Finance"
-| distinct AccountObjectId 
-| join (IdentityLogonEvents | where Timestamp between ((selectedTimestamp - 2h) .. (selectedTimestamp + 2h))) on AccountObjectId 
+| distinct AccountObjectId
+| join (IdentityLogonEvents | where Timestamp between ((selectedTimestamp - 2h) .. (selectedTimestamp + 2h))) on AccountObjectId
 | where Application == "Office 365"
 
 AlertInfo
 | where AlertId  == "caC27D7C90-E9E7-3207-9FF8-94335F0E27D3"
 
-| project AlertTime = Timestamp , Title, Severity, AlertId  
-| join AlertEvidence on AlertId 
+| project AlertTime = Timestamp , Title, Severity, AlertId
+| join AlertEvidence on AlertId
 | where EntityType == "User"
 | project AccountObjectId , AlertTime
 | join IdentityLogonEvents on AccountObjectId
@@ -73,7 +73,7 @@ DeviceNetworkEvents
 // Get latest information on user/device
 DeviceInfo
 | where DeviceName == "alexw-pc" and isnotempty(OSPlatform)
-| summarize arg_max(Timestamp, *) by DeviceId 
+| summarize arg_max(Timestamp, *) by DeviceId
 
 IdentityInfo
 | where Department == "Finance"
@@ -85,7 +85,7 @@ IdentityInfo
 // - If you use too many resources you may be put in 'time out' for a bit
 
 EmailEvents
-| project NetworkMessageId, Subject, Timestamp, SenderFromAddress , SenderIPv4 , RecipientEmailAddress , AttachmentCount 
+| project NetworkMessageId, Subject, Timestamp, SenderFromAddress , SenderIPv4 , RecipientEmailAddress , AttachmentCount
 | join kind=leftouter(EmailAttachmentInfo
 | project NetworkMessageId,FileName, FileType, ThreatTypes, SHA256, RecipientEmailAddress )
 on NetworkMessageId
@@ -94,12 +94,12 @@ on NetworkMessageId
 // Key for the join should be accurate as possible
 EmailEvents
 | where AttachmentCount > 0
-|project NetworkMessageId, Subject, Timestamp, SenderFromAddress , SenderIPv4 , RecipientEmailAddress , AttachmentCount 
+|project NetworkMessageId, Subject, Timestamp, SenderFromAddress , SenderIPv4 , RecipientEmailAddress , AttachmentCount
 | join kind=inner (EmailAttachmentInfo
 | project NetworkMessageId,FileName, FileType, ThreatTypes, SHA256, RecipientEmailAddress )
-on NetworkMessageId, RecipientEmailAddress 
+on NetworkMessageId, RecipientEmailAddress
 
-// Smaller table on the left side, with kind = inner, as default join (innerunique) 
+// Smaller table on the left side, with kind = inner, as default join (innerunique)
 // will remove left side duplications, so if a single email has more than one attachments we will miss it
 EmailAttachmentInfo
 | project NetworkMessageId, FileName, FileType, ThreatTypes, SHA256, RecipientEmailAddress
@@ -107,19 +107,19 @@ EmailAttachmentInfo
 (EmailEvents
 | where AttachmentCount > 0
 |project NetworkMessageId, Subject, Timestamp, SenderFromAddress , SenderIPv4 , RecipientEmailAddress , AttachmentCount)
-on NetworkMessageId, RecipientEmailAddress 
+on NetworkMessageId, RecipientEmailAddress
 
 // Check for specific alerts
 AlertInfo
 | join AlertEvidence on AlertId
 | where EntityType == "Machine"
 // Attempts to clear security event logs.
-| where Title in("Event log was cleared", 
+| where Title in("Event log was cleared",
 // List alerts flagging attempts to delete backup files.
 "File backups were deleted",
 // Potential Cobalt Strike activity - Note that other threat activity can also
 // trigger alerts for suspicious decoded content
-"Suspicious decoded content", 
+"Suspicious decoded content",
 // Cobalt Strike activity
 "\'Atosev\' malware was detected",
 "\'Ploty\' malware was detected",
@@ -137,12 +137,12 @@ AccountName, AccountSid, AlertTime, AlertId, RemoteIP, RemoteDeviceName
 // Check for specific alerts
 AlertInfo
 // Attempts to clear security event logs.
-| where Title in("Event log was cleared", 
+| where Title in("Event log was cleared",
 // List alerts flagging attempts to delete backup files.
 "File backups were deleted",
 // Potential Cobalt Strike activity - Note that other threat activity can also
 // trigger alerts for suspicious decoded content
-"Suspicious decoded content", 
+"Suspicious decoded content",
 // Cobalt Strike activity
 "\'Atosev\' malware was detected",
 "\'Ploty\' malware was detected",
@@ -159,12 +159,12 @@ AlertInfo
 AccountName, AccountSid, AlertTime, AlertId, RemoteIP, RemoteDeviceName
 
 // - Queries are limited to 10k results through the web UI, 100k results via API
- 
- 
+
+
 // -----------------------------
 // Topic 2: Ransomware tips / recommendations (3 examples)
 
-// Ransomware is a very real challenge in today’s enterprise. 
+// Ransomware is a very real challenge in today’s enterprise.
 
 // -----------------------------
 
@@ -175,15 +175,15 @@ AccountName, AccountSid, AlertTime, AlertId, RemoteIP, RemoteDeviceName
 
 AlertEvidence
 | where DeviceId == 'eb610cc67fe0b99300a076324f5f4cd409324872'
-| join kind=rightsemi AlertInfo on AlertId 
+| join kind=rightsemi AlertInfo on AlertId
 | order by Timestamp asc
 
 // Much of the ransomware that makes the news is what we refer to as human operated
-// ransomware. This differs from other forms of ransomware in that it typically begins 
+// ransomware. This differs from other forms of ransomware in that it typically begins
 // with an attacker compromising a vulnerability, performing credential theft until they
 // attain enough authorization to deploy ransomware broadly, then doing so.
 
-// …in other words, it is a targeted attack and should be treated as such. To track and 
+// …in other words, it is a targeted attack and should be treated as such. To track and
 // eliminate this activity you will want to use the ABC method discussed in Tracking the
 // Adversary episode 4. Its not about the malware, but rather the persistence mechanisms
 // implemented by the attacker and any credentials they control.
@@ -207,37 +207,37 @@ ProcessCommandLine matches regex @'\s+-((?i)encod?e?d?c?o?m?m?a?n?d?|e|en|enc|ec
 // -----------------------------
 // Topic 3: Handling JSON and the dynamic type
 // -----------------------------
- 
-// Many tables in Advanced Hunting are JSON strings. While you can parse these as strings, 
-// turning them into dynamic type columns is usually a lot more effective. 
-DeviceEvents 
-| summarize arg_max(Timestamp, *) by ActionType 
+
+// Many tables in Advanced Hunting are JSON strings. While you can parse these as strings,
+// turning them into dynamic type columns is usually a lot more effective.
+DeviceEvents
+| summarize arg_max(Timestamp, *) by ActionType
 | project-reorder ActionType, AdditionalFields
 
-// Let's look at the AdditionalFields column of a PnpDeviceConnected event 
-DeviceEvents 
-| where ActionType == 'PnpDeviceConnected' 
-| take 10 
-| project-reorder AdditionalFields 
+// Let's look at the AdditionalFields column of a PnpDeviceConnected event
+DeviceEvents
+| where ActionType == 'PnpDeviceConnected'
+| take 10
+| project-reorder AdditionalFields
 
 
-// Imagine we wanted to audit which plug and play devices were used on the network. To 
-// accomplish this we need to turn this string into (a much more useful) dynamic. 
+// Imagine we wanted to audit which plug and play devices were used on the network. To
+// accomplish this we need to turn this string into (a much more useful) dynamic.
 // From there we can access individual properties of the object using dotted notation.
-DeviceEvents 
-| where ActionType == 'PnpDeviceConnected' 
-| project ATDynamic = parse_json(AdditionalFields) 
-| extend ClassName = ATDynamic.ClassName, ClassId = ATDynamic.ClassId, DeviceId = ATDynamic.DeviceId, DeviceDescription = ATDynamic.DeviceDescription 
-| project-reorder ClassName, ClassId, DeviceDescription 
-| take 10 
+DeviceEvents
+| where ActionType == 'PnpDeviceConnected'
+| project ATDynamic = parse_json(AdditionalFields)
+| extend ClassName = ATDynamic.ClassName, ClassId = ATDynamic.ClassId, DeviceId = ATDynamic.DeviceId, DeviceDescription = ATDynamic.DeviceDescription
+| project-reorder ClassName, ClassId, DeviceDescription
+| take 10
 
 
 // ...but that takes forever to type, right? Enter bag_unpack()!
-DeviceEvents 
-| where ActionType == 'PnpDeviceConnected' 
+DeviceEvents
+| where ActionType == 'PnpDeviceConnected'
 | take 100
-| project ATDynamic = parse_json(AdditionalFields) 
-| evaluate bag_unpack(ATDynamic) 
+| project ATDynamic = parse_json(AdditionalFields)
+| evaluate bag_unpack(ATDynamic)
 
 
 // Lists can be indexed too. For example, let's take a look at signature versions reported
@@ -251,7 +251,7 @@ DeviceTvmSecureConfigurationAssessment
 
 
 // Here we have a list within a list. The inner list has three values (for machines running
-// Defender Antimalware): 
+// Defender Antimalware):
 // - Signature version
 // - Engine version
 // - Update date
@@ -265,39 +265,39 @@ DeviceTvmSecureConfigurationAssessment
 | project DeviceId, DeviceName, SignatureVersion = x[0][0], EngineVerision = x[0][1], UpdateDate = x[0][2]
 // Now let's say you wanted to generate a report that has a count of the number of different
 // plug and play devices added per machine, but also lists out all of the ClassId's from
-// each of the plug and play devices. 
+// each of the plug and play devices.
 
 
 // First, we need to change that project to an extend so that we can get the DeviceId back.
 
 
-DeviceEvents 
-| where ActionType == 'PnpDeviceConnected' 
+DeviceEvents
+| where ActionType == 'PnpDeviceConnected'
 | take 100
-| extend ATDynamic = parse_json(AdditionalFields) 
-| evaluate bag_unpack(ATDynamic) 
+| extend ATDynamic = parse_json(AdditionalFields)
+| evaluate bag_unpack(ATDynamic)
 
 
 // Error! It looks like we have a field in the Additional Fields column called DeviceId already.
 // To work around this we can use the second parameter of bag_unpack() to assign a prefix.
 
 
-DeviceEvents 
-| where ActionType == 'PnpDeviceConnected' 
+DeviceEvents
+| where ActionType == 'PnpDeviceConnected'
 | take 100
-| extend ATDynamic = parse_json(AdditionalFields) 
+| extend ATDynamic = parse_json(AdditionalFields)
 | evaluate bag_unpack(ATDynamic, 'AdditionalFields_')
 
 
-// Perfect. Now we need to turn the ClassId into a string so that we can use it in summary 
+// Perfect. Now we need to turn the ClassId into a string so that we can use it in summary
 // operations, such as dcount(). After that, we will use a new operator, make_set(), to create
 // a new deduplicated list of ClassIds associated with the device.
 
 
-DeviceEvents 
-| where ActionType == 'PnpDeviceConnected' 
+DeviceEvents
+| where ActionType == 'PnpDeviceConnected'
 | take 100
-| extend ATDynamic = parse_json(AdditionalFields) 
+| extend ATDynamic = parse_json(AdditionalFields)
 | evaluate bag_unpack(ATDynamic, 'AdditionalFields_')
 | extend ClassId = tostring(AdditionalFields_ClassId)
 
@@ -325,7 +325,7 @@ print x = pack('foo','bar','wibble','wobble')
 
 EmailEvents
 | take 100
-| extend packed = pack_all() 
+| extend packed = pack_all()
 | project-reorder packed
 
 
@@ -337,12 +337,12 @@ EmailEvents
 
 EmailEvents
 | take 100
-| project SenderFromDomain, SenderFromAddress, packed = pack_all() 
-| summarize makelist(packed) by SenderFromDomain, SenderFromAddress 
+| project SenderFromDomain, SenderFromAddress, packed = pack_all()
+| summarize makelist(packed) by SenderFromDomain, SenderFromAddress
 
 
 // -----------------------------
-// Topic 4: externaldata operator 
+// Topic 4: externaldata operator
 // externaldata operator allows importing data from externally stored files and use it inside a query.
 // externaldata operator - https://docs.microsoft.com/azure/data-explorer/kusto/query/externaldata-operator
 // In our docs: https://docs.microsoft.com/microsoft-365/security/mtp/advanced-hunting-best-practices?view=o365-worldwide#ingest-data-from-external-sources
@@ -362,5 +362,3 @@ covidIndicators
 | join (DeviceFileEvents
 | where ActionType == 'FileCreated'
 | take 100) on $left.FileHashValue  == $right.SHA256
-
-

@@ -1,6 +1,6 @@
-# Advanced Security Information Model (ASIM) ProcessEvent parsers 
+# Advanced Security Information Model (ASIM) ProcessEvent parsers
 
-This folder includes the the Advanced Security Information Model (ASIM)  ProcessEvent parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes. 
+This folder includes the the Advanced Security Information Model (ASIM)  ProcessEvent parsers. The parsers are provided in YAML and in ARM template formats. The latter can be used to deploy the parsers, while the former is provided for educational purposes.
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
@@ -27,11 +27,11 @@ This template deploys the following parsers:
 
 * Source specific parsers:
   * **Microsoft 365 Defender for Endpoints** - vimProcessEventMicrosoft365D
-  * **Sysmon for Windows** (Events 1 and 5) - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon 
+  * **Sysmon for Windows** (Events 1 and 5) - vimProcessCreateMicrosoftSysmon, vimProcessTerminateMicrosoftSysmon
   * **Sysmon for Linux** - vimProcessCreateLinuxSysmon, vimProcessTerminateLinuxSysmon
   * **Windows Security Events**, collecting using the Log Analytics Agent or Azure Monitor Agent - vimProcessCreateMicrosoftSecurityEvents, vimProcessTerminateMicrosoftSecurityEvents
   * **Windows Events** collecting using the Azure Monitor Agent - vimProcessCreateMicrosoftWindowsEvents, vimProcessCreationMicrosoftWindowsEvents. Note that those are the same original events as Windows Security events, but collected to the WindowsEvent table, for example when collecting using Windows Event Forwarding.
-  * **Microsoft Defender for IoT - Endpoint (MD4IoT)** - vimProcessEventMD4IoT  
+  * **Microsoft Defender for IoT - Endpoint (MD4IoT)** - vimProcessEventMD4IoT
 
 ## Analytics rules
 
@@ -65,4 +65,3 @@ By deploying these parsers, you enable the following out of the box Hunting Quer
  - [Uncommon processes - bottom 5% (Normalized Process Events)](https://github.com/Azure/Azure-Sentinel/blob/master/Hunting%20Queries/ASimProcess/imProcess_uncommon_processes.yaml)
  - [Unicode Obfuscation in Command Line](https://github.com/Azure/Azure-Sentinel/blob/master/Hunting%20Queries/MultipleDataSources/UnicodeObfuscationInCommandLine.yaml)
 <br>
-

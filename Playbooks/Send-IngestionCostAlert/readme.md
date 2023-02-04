@@ -113,7 +113,7 @@ Managing cost for cloud services is an essential part of ensuring that you get m
 ![16-teamsapisave](../Send-IngestionCostAlert/images/16-teamsapisave.png)
 
 
-21. In the Azure search box type Logic App 
+21. In the Azure search box type Logic App
 
 ![17-logicappsearch](../Send-IngestionCostAlert/images/17-logicappsearch.png)
 
@@ -190,7 +190,7 @@ These 3 costs should be added together
 
 ![30-teamsaddress](../Send-IngestionCostAlert/images/30-teamsaddress.png)
 
-43. In the message box type You have exceeded your daily budget 
+43. In the message box type You have exceeded your daily budget
 
 44. Click the Dynamic content -> Max_per_day
 
@@ -200,7 +200,7 @@ When complete this section should look as follows:
 
 ![32-teamsthresh](../Send-IngestionCostAlert/images/32-teamsthresh.png)
 
-45. Click Save 
+45. Click Save
 
 ![33-saveapp](../Send-IngestionCostAlert/images/33-saveapp.png)
 
@@ -230,9 +230,9 @@ In the final step below sends out an e-mail to the specified recipient list and 
   ![35-sendmessage](../Send-IngestionCostAlert/images/35-sendmessage.png)
 
   <em>Additional information on cost management can be found in [this document](https://docs.microsoft.com/azure/azure-monitor/platform/manage-cost-storage)</em>
-  
+
   <em>Special thanks to Damon Neal for his documentation template</em>
- 
+
 
 
 

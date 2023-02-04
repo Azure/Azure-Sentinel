@@ -395,7 +395,7 @@ THIS INSTALLATION SCRIPT WILL USE ROOT ACCESS TO:
 3. RUN THE CONNECTOR AS A DOCKER CONTAINER ON THE HOST
 
 *************************************************************
-The Azure Sentinel SAP solution is currently in PREVIEW. 
+The Azure Sentinel SAP solution is currently in PREVIEW.
 
 The Azure Preview Supplemental Terms include additional legal terms that apply to Azure features that are in beta, preview, or otherwise not yet released into general availability.
 
@@ -417,7 +417,7 @@ Configure the following SAP Log change requests to enable support for ingesting 
 - SAP Basis version 7.4:  install NPLK900179
 - To create your SAP role in any SAP version: install NPLK900163
 
-Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
+Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system.
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
 
 SAP notes required for versions earlier than SAP Basis 7.5 SP13:
@@ -531,7 +531,7 @@ else
 		tagver=':mc-latest'
 		az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 	fi
-	
+
 	if [ $PREVIEW ]; then
 		tagver="$tagver-preview"
 	fi

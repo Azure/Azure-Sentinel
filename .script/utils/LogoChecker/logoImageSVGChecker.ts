@@ -4,7 +4,7 @@ export function isValidLogoImageSVGContent(LogoImagesContent: string) {
   if (isLogoSVGHasillegalAttribute(LogoImagesContent)) {
       throw new LogoValidationError(errorMessage);
   }
-  
+
   if (isLogoSVGHasTitleTag(LogoImagesContent)) {
     throw new LogoValidationError(`Ensure raw file of logo does not have title tag`);
   }
@@ -45,7 +45,7 @@ function isValidGuid(guidId: string): boolean {
       const validRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
      return validRegex.test(guidId);
   }
- 
+
  function isLogoSVGHasValidId(LogoImagesContent: string)
  {
   var regex = /id=\"/g;
@@ -56,7 +56,7 @@ function isValidGuid(guidId: string): boolean {
   while ((current = regex.exec(instr)) != null)
   {
     var value= instr.substring(current.index+4,current.index+4+36);
-  
+
     AllGuid.push(value);
     if(!isValidGuid(value))
     {
@@ -70,10 +70,7 @@ function isValidGuid(guidId: string): boolean {
   if(AllGuid.length !== setArray.size)
   {
     result= false;
-  } 
+  }
   }
   return result;
  }
-
-
- 

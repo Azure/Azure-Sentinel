@@ -1,12 +1,12 @@
 ﻿# Created On: 9/13/2021 3:36 PM
 # Created By: Nathan Swift - nathan.swift@swiftsolves.com
-# This script is as is and not supported by Microsoft 
+# This script is as is and not supported by Microsoft
 # Microsoft does not assume any risk of data loss
 # Use it at your own risk
 ################################################################################
 
 <#  Possible Futures:
- 
+
 1. rewrite into Functions with Parameter inputs
 2. logic checks on the string inputs
 3. Bug: fix output file there is an extra line seperator between externaldata() and open array
@@ -45,7 +45,7 @@ $containernamesearch = "am-" + $tablename + "*"
 
 # generate filepath for kql table query lookup
 $file = Get-Date -Format "yyyyMMddhhmmss"
-$filepath = $containername + $file + ".yaml" #"c:\temp\" + 
+$filepath = $containername + $file + ".yaml" #"c:\temp\" +
 
 # Start date to find log files for
 $startdate = Read-Host -Prompt "Enter your start date using this format as an ex. 09/11/2021 02:00 AM"
@@ -63,7 +63,7 @@ $azstorekey = (Get-AzStorageAccountKey -Name $storageaccount -ResourceGroupName 
 $context = New-AzStorageContext -StorageAccountName $storageaccount -StorageAccountKey $azstorekey
 
 # Obtain storage blobs from within the start and end date ranges
-$blobs = Get-AzStorageContainer -Name $containernamesearch -Context $context | Get-AzStorageBlob 
+$blobs = Get-AzStorageContainer -Name $containernamesearch -Context $context | Get-AzStorageBlob
 $blobs = $blobs | Where-Object {$_.LastModified -ge $startdate -and $_.LastModified -le $enddate}
 
 
@@ -77,7 +77,7 @@ $firststring = Invoke-WebRequest -UseBasicParsing $url
 #Build Error handling for generic lookup with no schema found
 
 
-$lineinsert = ($firststring.Content).Split('[')[0] 
+$lineinsert = ($firststring.Content).Split('[')[0]
 Echo $lineinsert | Out-File $filepath -Append
 
 
@@ -93,22 +93,22 @@ $counter = 1
 
 #For each of the SAS Blobs generate a SAS Uri and KQL Query insert
 Foreach ($blob in $blobs){
-    
+
     #generate blob uri
     $bloburi = New-AzStorageBlobSASToken -Context $context -Container $containername -Blob $blob.Name -Permission r -ExpiryTime $expiredattime -FullUri
-    
+
     # KQL Query insert SAS Uri
     if ($counter -lt $numblobs) {
         $lineinsert = 'h@"' + $bloburi + '",'
         Echo $lineinsert | Out-File $filepath -Append
     }
-    
+
     if ($counter -ge $numblobs) {
         $lineinsert = 'h@"' + $bloburi + '"'
         Echo $lineinsert | Out-File $filepath -Append
     }
 
-    # update counter 
+    # update counter
     $counter++
 }
 

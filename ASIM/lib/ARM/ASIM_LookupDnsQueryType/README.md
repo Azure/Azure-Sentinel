@@ -2,7 +2,7 @@
 
 ARM template for deploying the Log Analytics KQL function An ASIM function to returns the DNS query type name (resource record type) based on a numerical query type
 
-This ASIM function returns the DNS query type name (also called the resource record, or RR) associated with the RR numerical value provided as a parameter. For example, for the RR code 16, the function returns TXT.  
+This ASIM function returns the DNS query type name (also called the resource record, or RR) associated with the RR numerical value provided as a parameter. For example, for the RR code 16, the function returns TXT.
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

@@ -20,12 +20,12 @@ The playbook, presented below, works as follows:
 •	Subscription
 •	Workspace
 •	resource group
-•	watchlist name. 
-3.	Run SQL Select statement against Azure SQL DB (can be change this logic app to run against SQL On-prem with logic app getaway feature 
+•	watchlist name.
+3.	Run SQL Select statement against Azure SQL DB (can be change this logic app to run against SQL On-prem with logic app getaway feature
 4.	Parse the results as JSON (if you are running different SQL query, you should adapt the Parse json schema)
-5.	Create CSV payload from the results. 
+5.	Create CSV payload from the results.
 6.	Check if the watchlist exists.
-7.	Based on the result, create, or update the watchlist with the result set from the SQL query 
+7.	Based on the result, create, or update the watchlist with the result set from the SQL query
 
 <br><br>
 
@@ -35,7 +35,7 @@ The playbook, presented below, works as follows:
 
 
 Step 1: Deploy the Logic App on Azure Sentinel.
- 
+
 1.	Open the link to the playbook.  Scroll down on the page and Click on “Deploy to Azure” or "Deploy to Azure Gov" button depending on your need.
 2.	Fill the parameters:
 

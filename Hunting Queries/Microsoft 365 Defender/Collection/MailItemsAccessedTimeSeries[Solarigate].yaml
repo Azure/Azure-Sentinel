@@ -21,13 +21,13 @@ query: |
   let percentthreshold = 50;
   // Preparing the time series data aggregated hourly count of MailItemsAccessd Operation in the form of multi-value array to use with time series anomaly function.
   let TimeSeriesData =
-      CloudAppEvents 
+      CloudAppEvents
       | where Timestamp   between (startofday(ago(starttime))..startofday(ago(endtime)))
       | where ActionType =~ "MailItemsAccessed"
       | where Application has "Exchange"
       | extend RawEventData = parse_json(RawEventData)
-      | where RawEventData.ResultStatus == "Succeeded"  
-      | project Timestamp, ActionType, RawEventData.MailboxOwnerUPN    
+      | where RawEventData.ResultStatus == "Succeeded"
+      | project Timestamp, ActionType, RawEventData.MailboxOwnerUPN
       | make-series Total=count() on Timestamp from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe;
   let TimeSeriesAlerts =
     TimeSeriesData
@@ -37,13 +37,13 @@ query: |
     | project Timestamp, Total, baseline, anomalies, score;
     // Joining the flagged outlier from the previous step with the original dataset to present contextual information
     // during the anomalyhour to analysts to conduct investigation or informed decisions.
-    TimeSeriesAlerts | where Timestamp > ago(2d)  
+    TimeSeriesAlerts | where Timestamp > ago(2d)
     // Join against base logs since specified timeframe to retrive records associated with the hour of anomoly
     | join (
-        CloudAppEvents 
+        CloudAppEvents
           | where Timestamp > ago(2d)
           | where ActionType =~ "MailItemsAccessed"
           | where Application has "Exchange"
           | extend RawEventData = parse_json(RawEventData)
-          | where RawEventData.ResultStatus == "Succeeded"  
+          | where RawEventData.ResultStatus == "Succeeded"
     ) on Timestamp

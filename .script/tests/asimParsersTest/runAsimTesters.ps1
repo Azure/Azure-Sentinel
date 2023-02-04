@@ -58,16 +58,16 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
             $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
             if ($rawResults.Results) {
                 $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
-                if ($resultsArray.count) {  
-                    $errorMessage = "`r`n$($name) $($kind)- test failed with $($resultsArray.count) errors:`r`n"        
-                    $resultsArray | ForEach-Object { $errorMessage += "$($_.Result)`r`n" } 
+                if ($resultsArray.count) {
+                    $errorMessage = "`r`n$($name) $($kind)- test failed with $($resultsArray.count) errors:`r`n"
+                    $resultsArray | ForEach-Object { $errorMessage += "$($_.Result)`r`n" }
                     Write-Host $errorMessage
                     $global:failed = 1
                 }
                 else {
                     Write-Host "  -- $($name) $($kind) test done successfully"
                 }
-            }    
+            }
         }
         catch {
             Write-Host "  -- $_"

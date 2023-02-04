@@ -16,7 +16,7 @@ query: |
   // Find attempts to stop processes using taskkill.exe
   let taskKill = DeviceProcessEvents
   | where Timestamp > ago(1d)
-  | where FileName =~ "taskkill.exe" 
+  | where FileName =~ "taskkill.exe"
   | summarize taskKillCount = dcount(ProcessCommandLine), TaskKillList = make_set(ProcessCommandLine) by DeviceId, bin(Timestamp, 2m)
   | where taskKillCount > 10;
   // Find attempts to stop processes using net stop
@@ -28,12 +28,12 @@ query: |
   // Look for cipher.exe deleting data from multiple drives
   let cipher = DeviceProcessEvents
   | where Timestamp > ago(1d)
-  | where FileName =~ "cipher.exe" 
-  // cipher.exe /w flag used for deleting data 
-  | where ProcessCommandLine has "/w" 
-  | summarize CipherCount = dcount(ProcessCommandLine), 
-  CipherList = make_set(ProcessCommandLine) by DeviceId, bin(Timestamp, 1m) 
-  // cipher.exe accessing multiple drives in a short timeframe 
+  | where FileName =~ "cipher.exe"
+  // cipher.exe /w flag used for deleting data
+  | where ProcessCommandLine has "/w"
+  | summarize CipherCount = dcount(ProcessCommandLine),
+  CipherList = make_set(ProcessCommandLine) by DeviceId, bin(Timestamp, 1m)
+  // cipher.exe accessing multiple drives in a short timeframe
   | where CipherCount > 1;
   // Look for use of wevtutil to clear multiple logs
   let wevtutilClear = DeviceProcessEvents
@@ -54,7 +54,7 @@ query: |
   or FileName =~ "fsutil.exe" and ProcessCommandLine has "usn" and ProcessCommandLine has "deletejournal"
   or ProcessCommandLine has("bcdedit") and ProcessCommandLine has_any("recoveryenabled no", "bootstatuspolicy ignoreallfailures")
   or ProcessCommandLine has "wbadmin" and ProcessCommandLine has "delete" and ProcessCommandLine has_any("backup", "catalog", "systemstatebackup")
-  or (ProcessCommandLine has "wevtutil" and ProcessCommandLine has "cl") 
+  or (ProcessCommandLine has "wevtutil" and ProcessCommandLine has "cl")
   or (ProcessCommandLine has "wmic" and ProcessCommandLine has "shadowcopy delete")
   or (ProcessCommandLine has "sc" and ProcessCommandLine has "config" and ProcessCommandLine has "disabled")
   | extend Bcdedit = iff(ProcessCommandLine has "bcdedit" and ProcessCommandLine has_any("recoveryenabled no", "bootstatuspolicy ignoreallfailures"), 1, 0)
@@ -79,7 +79,7 @@ query: |
   // Format results
   | summarize BcdEdit = iff(make_set(Bcdedit) contains "1" , 1, 0), NetStop10PlusCommands = iff(make_set(NetStopUse) contains "1", 1, 0), Wevtutil10PlusLogsCleared = iff(make_set(WevtutilUse) contains "1", 1, 0),
   CipherMultipleDrives = iff(make_set(CipherUse) contains "1", 1, 0), Fsutil = iff(make_set(Fsutil) contains "1", 1, 0), ShadowCopyDelete = iff(make_set(ShadowCopyDelete) contains "1", 1, 0),
-  Wbadmin = iff(make_set(Wbadmin) contains "1", 1, 0), TaskKill10PlusCommand = iff(make_set(TaskkillUse) contains "1", 1, 0), VssAdminShadow = iff(make_set(VssAdminShadows) contains "1", 1, 0), 
+  Wbadmin = iff(make_set(Wbadmin) contains "1", 1, 0), TaskKill10PlusCommand = iff(make_set(TaskkillUse) contains "1", 1, 0), VssAdminShadow = iff(make_set(VssAdminShadows) contains "1", 1, 0),
   ScDisable = iff(make_set(ScDisableUse) contains "1", 1, 0), TotalEvidenceCount = count(CommandList), EvidenceList = make_set(Commands), StartofBehavior = min(FirstActivity) by DeviceId, bin(Timestamp, 1d)
   | extend UniqueEvidenceCount = BcdEdit + NetStop10PlusCommands + Wevtutil10PlusLogsCleared + CipherMultipleDrives + Wbadmin + Fsutil + TaskKill10PlusCommand + VssAdminShadow + ScDisable + ShadowCopyDelete
   | where UniqueEvidenceCount > 2

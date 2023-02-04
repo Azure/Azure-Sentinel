@@ -12,7 +12,7 @@ import threading
 from .mes_request import MESRequest
 
 #Azure WorkSpace credentials, if not saved by an Keyerror Exception has been raised
-customer_id = os.environ['WorkspaceID'] 
+customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 
 #Azure Secret client setting
@@ -81,15 +81,15 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
     '''
     logging.info("Events fetching for ent_name %s..." % str(ent_name))
     mes = MESRequest(lookout_mes_uri, ent_name, api_key, KVUri, ent_index)
-    
+
     events = mes.get_events()
     if events and len(events) > 0:
-        logging.info("Got events")        
+        logging.info("Got events")
         logging.info("Processing {} events".format(len(events)))
         processed_events = []
         for event in events:
             event['enterprise_name'] = ent_name
-            event['time_collected'] = event["eventTime"] 
+            event['time_collected'] = event["eventTime"]
             processed_events.append(event)
 
         post_status_code = post_data(json.dumps(processed_events))
@@ -97,19 +97,19 @@ def single_ent_events(KVUri= None, ent_name= None, api_key= None, lookout_mes_ur
             logging.info("Events processed to Sentinel successfully")
         else:
             logging.info("Failed to Post Events to Sentinel")
-            
+
 def main(mytimer: func.TimerRequest)  -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
-    
+
     logging.info("Application starting")
 
     #Check for MES credentials and fetch events using RISK API
     if api_key and ent_name:
         logging.info("Fetching RISK API Events")
-        # For now we are passing hardcoded ent index to 0 
+        # For now we are passing hardcoded ent index to 0
         #threading mechanism is not supported in Azure function
-        
+
         single_ent_events(KVUri, ent_name, api_key, lookout_mes_uri, 0)
     else:
         logging.info("No API key or Enterprise name found in Key Vault")

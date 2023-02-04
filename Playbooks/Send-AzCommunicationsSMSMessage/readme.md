@@ -25,7 +25,7 @@ After deployment, you can run this playbook manually on an alert or attach it to
 ![Telephone Number](./images/ACSTeleNumber.png)
 
 ## Screenshots
-**Incident Trigger**<br>  
-![Incident Trigger](./incident-trigger/images/Send-AzCommunicationsSMSMessage_incident.png)  
-**Alert Trigger**<br>  
-![Alert Trigger](./alert-trigger/images/Send-AzCommunicationsSMSMessage_alert.png)  
+**Incident Trigger**<br>
+![Incident Trigger](./incident-trigger/images/Send-AzCommunicationsSMSMessage_incident.png)
+**Alert Trigger**<br>
+![Alert Trigger](./alert-trigger/images/Send-AzCommunicationsSMSMessage_alert.png)

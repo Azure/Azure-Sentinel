@@ -17,7 +17,7 @@ You can deploy the workbook by clicking on the buttons below:
 This workbook leverages Azure Policy, Azure Resource Graph, and Azure Log Analytics to align directly with the Azure Security Benchmark. A filter set in guide, subscription, workspace, time, and ASB control are available for customized reporting and review. The documentation below provides getting started recommendations for centralizing log analytics data and enabling Microsoft Defender for Cloud Continuous Export. This offering There is telemetry from 25+ Microsoft Security products included in this offering. Common use cases include conducting ASB assessments which custom reporting, time filtering, subscription filtering, workspace filtering, and guides. The report is exportable for print or PDF with the Print Workbook feature. The workbook is organized by ASB control areas, each area has multiple control cards. Control cards include ASB logging over time, current ASB assessment recommendations, ASB status, documentation guides, recommendations, and links to product pages, documentation, and portals for all referenced products.<br>
 
 ## [Recommended Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Recommended Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions)
-| <strong> Roles </strong> | <strong> Rights </strong> | 
+| <strong> Roles </strong> | <strong> Rights </strong> |
 |:--|:--|
 |Security Reader | View Workbooks, Analytics, Hunting, Security Recommendations |
 |Security Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries, Apply Security Recommendations |

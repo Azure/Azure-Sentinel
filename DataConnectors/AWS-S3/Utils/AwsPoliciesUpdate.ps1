@@ -1,8 +1,8 @@
 function Update-SQSPolicy
 {
     <#
-    .SYNOPSIS 
-       Update the SQS policy 
+    .SYNOPSIS
+       Update the SQS policy
     #>
     Write-Log -Message "Updating the SQS policy to allow S3 notifications, and ARN to read/delete/change visibility of SQS messages and get queue url" -LogFileName $LogFileName -LinePadding 2
     Write-Log -Message "Changes S3: SQS SendMessage permission to '${bucketName}' s3 bucket" -LogFileName $LogFileName -Indent 2
@@ -15,10 +15,10 @@ function Update-SQSPolicy
     if ($null -ne $currentSqsPolicy)
     {
         Write-Log -Message $currentSqsPolicy -LogFileName $LogFileName -Severity Verbose
-        $sqsRequiredPoliciesObject = $sqsRequiredPolicies | ConvertFrom-Json 
-        $currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json 	
-        $currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json 
-        
+        $sqsRequiredPoliciesObject = $sqsRequiredPolicies | ConvertFrom-Json
+        $currentSqsPolicyObject = $currentSqsPolicy | ConvertFrom-Json
+        $currentSqsPolicies = ($currentSqsPolicyObject.Attributes.Policy) | ConvertFrom-Json
+
         $sqsRequiredPoliciesThatNotExistInCurrentPolicy =  $sqsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentSqsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
         if ($null -ne $sqsRequiredPoliciesThatNotExistInCurrentPolicy)
         {
@@ -43,14 +43,14 @@ function Update-S3Policy
     <#
     .SYNOPSIS
         Updates S3 policy to allow Sentinel access to read data.
-    
+
     .PARAMETER RequiredPolicy
         Specifies the policy to customize
     .PARAMETER CustomMessage
         Specifies the message to include in customized policy
-    
+
     #>
-    
+
     param
     (
          [Parameter(Mandatory=$true)][string]$RequiredPolicy,
@@ -63,16 +63,16 @@ function Update-S3Policy
     {
         Write-Output $CustomMessage
     }
-    
+
     Write-Log -Message "Executing: aws s3api get-bucket-policy --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
     $currentBucketPolicy = aws s3api get-bucket-policy --bucket $bucketName 2>&1
     $isBucketPolicyExist = $lastexitcode -eq 0
     if ($isBucketPolicyExist)
-    {	
-        $s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json 
-        $currentBucketPolicyObject = $currentBucketPolicy | ConvertFrom-Json 	
-        $currentBucketPolicies = ($currentBucketPolicyObject.Policy) | ConvertFrom-Json 
-        
+    {
+        $s3RequiredPolicyObject = $s3RequiredPolicy | ConvertFrom-Json
+        $currentBucketPolicyObject = $currentBucketPolicy | ConvertFrom-Json
+        $currentBucketPolicies = ($currentBucketPolicyObject.Policy) | ConvertFrom-Json
+
         $s3RequiredPolicyThatNotExistInCurrentPolicy = $s3RequiredPolicyObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentBucketPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json  -Depth 5}  )}
         if ($null -ne $s3RequiredPolicyThatNotExistInCurrentPolicy)
         {
@@ -96,12 +96,12 @@ function Update-KmsPolicy
     <#
     .SYNOPSIS
         Updates Kms policy to allow Sentinel access to read data.
-    
+
     .PARAMETER RequiredPolicy
         Specifies the policy to customize
     .PARAMETER CustomMessage
         Specifies the message to include in customized policy
-    
+
     #>
     param
     (
@@ -110,7 +110,7 @@ function Update-KmsPolicy
     )
     Write-Log -Message "Updating KMS policy to allow Sentinel read the data." -LogFileName $LogFileName -LinePadding 1
     Write-Log -Message "Changes Role: Kms Encrypt, Decrypt, ReEncrypt*, GenerateDataKey* and DescribeKey  permissions to '${roleName}' rule" -LogFileName $LogFileName -Indent 2
-    
+
     if ($CustomMessage -ne $null)
     {
         Write-Log -Message $CustomMessage -LogFileName $LogFileName -LinePadding 1
@@ -120,10 +120,10 @@ function Update-KmsPolicy
     $currentKmsPolicy = aws kms get-key-policy --policy-name default --key-id $kmsKeyId
     if ($null -ne $currentKmsPolicy)
     {
-        $kmsRequiredPoliciesObject = $RequiredPolicy | ConvertFrom-Json 
-        $currentKmsPolicyObject = $currentKmsPolicy | ConvertFrom-Json 	
+        $kmsRequiredPoliciesObject = $RequiredPolicy | ConvertFrom-Json
+        $currentKmsPolicyObject = $currentKmsPolicy | ConvertFrom-Json
         $currentKmsPolicies = ($currentKmsPolicyObject.Policy) | ConvertFrom-Json
-        
+
         $kmsRequiredPoliciesThatNotExistInCurrentPolicy =  $kmsRequiredPoliciesObject.Statement | Where-Object { ($_ | ConvertTo-Json -Depth 5) -notin ($currentKmsPolicies.Statement | ForEach-Object { $_ | ConvertTo-Json -Depth 5}  )}
         if ($null -ne $kmsRequiredPoliciesThatNotExistInCurrentPolicy)
         {

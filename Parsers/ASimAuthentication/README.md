@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) Authentication parsers 
+# Advanced Security Information Model (ASIM) Authentication parsers
 
 This template deploys all ASIM Authentication parsers.
 

@@ -28,11 +28,11 @@ ParserQuery: |
         W3CIISLog
         | extend
                 EventResult = iff ( toint(scStatus) < 400, "Success", "Failure"),
-                EventResultDetails = tostring(scStatus), 
+                EventResultDetails = tostring(scStatus),
                 csUriQuery = iff(csUriQuery == "-", "", csUriQuery),
                 csUserName = iff(csUserName == "-", "", csUserName),
                 HttpVersion = iff((csVersion has "HTTP"), split(csVersion, "/")[1], "") // there is a limited chance that something connects over non-HTTP
-        | project-rename 
+        | project-rename
                 HttpHost = sSiteName,
                 HttpRequestMethod = csMethod,
                 HttpReferrer = csReferer,
@@ -54,18 +54,18 @@ ParserQuery: |
                 ThreatFirstReportedTime = todatetime(FirstReportedDateTime),
                 ThreatLastReportedTime = todatetime(LastReportedDateTime),
                 SrcUsername = iff ( User == "-", "", User)
-        | extend 
-                SrcUsernameType = case( 
+        | extend
+                SrcUsernameType = case(
                                         SrcUsername contains "@" , "UPN"
                                       , SrcUsername contains "\\", "Windows"
                                       , (SrcUsername has "CN=" or SrcUsername has "OU=" or SrcUsername has "DC="), "DN"
                                       , "Simple"
                                       ),
                 DstNatIpAddr = iff(csHost <> "", Dst, ""),
-                EventType = 'WebServerSession',            
+                EventType = 'WebServerSession',
                 EventVendor = 'Microsoft',
                 EventSchemaVersion = '0.2.5',
-                EventSchema = 'WebSession', 
+                EventSchema = 'WebSession',
                 EventProduct = 'IIS',
                 DvcOs = 'Windows',
                 EventCount = int(1),
@@ -73,7 +73,7 @@ ParserQuery: |
                 IpAddr = Src,
                 HttpUserAgent = UserAgent,
                 HttpStatusCode = tostring(EventResultDetails),
-                EventStartTime = ( (TimeGenerated) - (TimeTaken * 1ms)), // TimeTaken field is in Milliseconds 
+                EventStartTime = ( (TimeGenerated) - (TimeTaken * 1ms)), // TimeTaken field is in Milliseconds
                 EventEndTime =  TimeGenerated,
                 EventSeverity = iff(EventResult == "Success", "Low", "Informational"),
                 tempURLconstruct = iff(csUriQuery == "", csUriStem, strcat(csUriStem,"?",csUriQuery)),
@@ -81,33 +81,33 @@ ParserQuery: |
                 HttpHost = iff ( HttpHost == "-", "", HttpHost),
                 csHost = iff ( csHost == "-", "", csHost),  //remove empty values
                 EventOriginalResultDetails = iff(scSubStatus <> "0", strcat (scStatus, ".", scSubStatus), scStatus)
-        | extend 
+        | extend
                 ipv6_parts = extract_all (@'^\[(.+)\](?:\:(\d+))?$',csHost)[0],
                 ipv4_parts = extract_all (@'^(\d+\.\d+\.\d+\.\d+)(?:\:(\d+))?$',csHost)[0],
                 host_parts = extract_all (@'^([^\\\d:]+)(?:\:(\d+))?$',csHost)[0]
-        | extend         
+        | extend
                 DstIpAddr = tostring(coalesce(ipv4_parts[0], ipv6_parts[0])),
                 DstPortNumber = toint(coalesce(ipv4_parts[1], ipv6_parts[1], host_parts[1])),
                 HttpHost = tostring(coalesce(host_parts[0], HttpHost))
-        | project-away ipv4_parts, ipv6_parts, host_parts              
-        | extend 
+        | project-away ipv4_parts, ipv6_parts, host_parts
+        | extend
                 port = strcat (":", sPort),
-                host = case ( 
+                host = case (
                 HttpHost == "Default Web Site", Dst,
                 HttpHost <> "" and HttpHost <> "Default Web Site", HttpHost,
                 Dst
                )
-         | extend 
+         | extend
                  Url = strcat (host, port, tempURLconstruct)
         | project-away host, port, tempURLconstruct
-        | extend 
+        | extend
                  ThreatField = case(
                                     ThreatIpAddr <> "" and ThreatIpAddr == SrcIpAddr, "SrcIpAddr"
                                    ,ThreatIpAddr <> "" and ThreatIpAddr == DstIpAddr, "DstIpAddr"
                                    ,"")
         | project-rename
                         DstHostname = sComputerName
-        | project-away 
+        | project-away
                 AdditionalInformation,
                 AzureDeploymentID,
                 Date,
@@ -115,7 +115,7 @@ ParserQuery: |
                 DvcOs,
                 FileOffset,
                 FileUri,
-                MG, 
+                MG,
                 ManagementGroupName,
                 Role*,
                 SourceSystem,

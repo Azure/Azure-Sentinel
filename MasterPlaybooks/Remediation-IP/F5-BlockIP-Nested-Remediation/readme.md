@@ -28,14 +28,14 @@
  Deploy the base playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FF5BigIP%2FPlaybooks%2FBasePlaybook-F5BigIP%2Fazuredeploy.json)
-[![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FF5BigIP%2FPlaybooks%2FBasePlaybook-F5BigIP%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FF5BigIP%2FPlaybooks%2FBasePlaybook-F5BigIP%2Fazuredeploy.json)
 
 
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
  [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FF5-BlockIP-Nested-Remediation%2Fazuredeploy.json)
- [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FF5-BlockIP-Nested-Remediation%2Fazuredeploy.json) 
+ [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FF5-BlockIP-Nested-Remediation%2Fazuredeploy.json)
 
  2. Fill in the required parameters for deploying the playbook.
 
@@ -46,7 +46,7 @@
 | **IP Address List Name** | Enter IP Address List name to block IP |
 
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## Configurations in Sentinel
 - In Azure sentinel HTTP trigger should be configured to have body with IP addresses.
 
@@ -72,6 +72,5 @@
 
 - Update the incident with status close.
 
-## Incident comment 
+## Incident comment
 ![F5 BIG-IP](./Images/IncidentCommentLight.png)
-

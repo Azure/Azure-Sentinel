@@ -12,8 +12,8 @@ References:
   Link: https://aka.ms/ASimProcessEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
-Description: | 
-  This ASIM parser supports filtering and normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema. 
+Description: |
+  This ASIM parser supports filtering and normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema.
 ParserName: vimProcessCreateLinuxSysmon
 EquivalentBuiltInParser: _Im_ProcessCreate_LinuxSysmon
 ParserParams:
@@ -56,7 +56,7 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-ParserQuery: | 
+ParserQuery: |
     let ParsedProcessEvent=(){
         Syslog
         // --------------------------------------------------------------------------------------
@@ -65,24 +65,24 @@ ParserQuery: |
         and (isnull(endtime) or TimeGenerated <= endtime )
         and not(disabled)
         and (eventtype=='*' or eventtype=='ProcessCreated')
-        and (array_length(commandline_has_all)==0 or SyslogMessage has_all (commandline_has_all)) 
-        and (array_length(commandline_has_any)==0 or SyslogMessage has_any (commandline_has_any)) 
-        and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, commandline_has_any_ip_prefix) ) 
-        and (array_length(actingprocess_has_any)==0 or SyslogMessage has_any (actingprocess_has_any)) 
-        and (array_length(targetprocess_has_any)==0 or SyslogMessage has_any (targetprocess_has_any)) 
+        and (array_length(commandline_has_all)==0 or SyslogMessage has_all (commandline_has_all))
+        and (array_length(commandline_has_any)==0 or SyslogMessage has_any (commandline_has_any))
+        and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, commandline_has_any_ip_prefix) )
+        and (array_length(actingprocess_has_any)==0 or SyslogMessage has_any (actingprocess_has_any))
+        and (array_length(targetprocess_has_any)==0 or SyslogMessage has_any (targetprocess_has_any))
         and (array_length(parentprocess_has_any)==0)  /// ????
-        and (targetusername=='*' or SyslogMessage has targetusername)  
+        and (targetusername=='*' or SyslogMessage has targetusername)
         and (array_length(dvcipaddr_has_any_prefix)==0 or has_any_ipv4_prefix(HostIP,dvcipaddr_has_any_prefix) )
-        and (array_length(dvcname_has_any)==0 or SyslogMessage has_any (dvcname_has_any))   
+        and (array_length(dvcname_has_any)==0 or SyslogMessage has_any (dvcname_has_any))
         // --------------------------------------------------------------------------------------
         | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>1</EventID>')
-        | parse SyslogMessage with 
+        | parse SyslogMessage with
                 *
                 '<EventRecordID>' EventRecordId:int '</EventRecordID>'
                 *
                 '<Computer>' SysmonComputer:string '</Computer>'
                 *
-                '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readability 
+                '<Data Name="RuleName">'RuleName // parsing the XML using the original fields name - for readability
                 '</Data><Data Name="UtcTime">'UtcTime
                 '</Data><Data Name="ProcessGuid">{'ProcessGuid
                 '}</Data><Data Name="ProcessId">'ProcessId:string
@@ -92,7 +92,7 @@ ParserQuery: |
                 '</Data><Data Name="Product">'Product
                 '</Data><Data Name="Company">'Company'</Data>' *
         // --------------------------------------------------------------------------------------
-        | where 
+        | where
             (array_length(dvcname_has_any)==0 or SysmonComputer has_any (dvcname_has_any))
             and (array_length(targetprocess_has_any)==0 or Image has_any (targetprocess_has_any))
         // --------------------------------------------------------------------------------------
@@ -111,21 +111,21 @@ ParserQuery: |
                 '</Data><Data Name="ParentImage">'ParentImage
                 '</Data><Data Name="ParentCommandLine">'ParentCommandLine '</Data>'*
         // --------------------------------------------------------------------------------------
-        | where 
+        | where
             (array_length(commandline_has_all)==0 or CommandLine has_all (commandline_has_all))
-        and (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any)) // 
+        and (array_length(commandline_has_any)==0 or CommandLine has_any (commandline_has_any)) //
         and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(CommandLine, commandline_has_any_ip_prefix) )
         and (array_length(actingprocess_has_any)==0 or ParentImage has_any (actingprocess_has_any))
         and (targetusername=='*' or User has targetusername)
         // --------------------------------------------------------------------------------------
-        | parse SyslogMessage with *'<Data Name="ParentUser">'ActorUsername '</Data>' *// this field appears in newer versions of Sysmon 
+        | parse SyslogMessage with *'<Data Name="ParentUser">'ActorUsername '</Data>' *// this field appears in newer versions of Sysmon
         | extend    TargetProcessSHA1=extract(@'SHA1=(\w+)',1, tostring(Hashes)),
                     TargetProcessSHA256=extract(@'SHA256=(\w+)',1, tostring(Hashes)),
                     TargetProcessIMPHASH=extract(@'IMPHASH=(\w+)',1,tostring(Hashes)), // add to the empty schema + Excel file
                     TargetProcessMD5=extract(@'MD5=(\w+)',1, tostring(Hashes))
         // End of XML parse
         | project-away SyslogMessage, Hashes
-        | extend 
+        | extend
                     EventType = "ProcessCreated",
                     EventStartTime = TimeGenerated,
                     EventEndTime = TimeGenerated,
@@ -137,18 +137,18 @@ ParserQuery: |
                     EventResult = 'Success',
                     EventOriginalUid = tostring(EventRecordId),
                     DvcOs = "Linux",
-                    TargetUserSessionId = tostring(LogonId)  ,           
+                    TargetUserSessionId = tostring(LogonId)  ,
                     TargetUsernameType = "Simple",
                     TargetUsername = User,
                     TargetProcessCommandLine = CommandLine,
                     TargetProcessCurrentDirectory = CurrentDirectory,
                     ActorUsernameType = "Simple",
                     EventOriginalType = '1' // Set with a constant value to avoid parsing
-        | project-rename 
+        | project-rename
                     // EventMessage = RenderedDescription, // field not available in Linux
-                    DvcHostName = SysmonComputer, // Computer may be different than HostName, in which case HostIP may be incorrect. 
-                    DvcIpAddr = HostIP, 
-                    TargetUserSessionGuid = LogonGuid, 
+                    DvcHostName = SysmonComputer, // Computer may be different than HostName, in which case HostIP may be incorrect.
+                    DvcIpAddr = HostIP,
+                    TargetUserSessionGuid = LogonGuid,
                     TargetProcessId = ProcessId,
                     TargetProcessGuid = ProcessGuid,
                     TargetProcessName = Image,
@@ -158,7 +158,7 @@ ParserQuery: |
                     TargetProcessFileVersion = FileVersion,
                     TargetProcessFileProduct = Product,
                     ActingProcessId = ParentProcessId,
-                    ActingProcessGuid = ParentProcessGuid,                          
+                    ActingProcessGuid = ParentProcessGuid,
                     ActingProcessCommandLine = ParentCommandLine,
                     ActingProcessName = ParentImage
         | extend // aliases

@@ -4,7 +4,7 @@ Authors: Sreedhar Ande, Håkon Drange, Truls Dahlsveen
 
 ## Introduction
 
-AWS SecurityHub is a service that centralizes and organizes alerts and findings from across services. Services include GuardDuty, Macie, IAM Access Analyzer, and AWS Firewall Manager. You can use SecurityHub to continuously monitor your environment and perform automated compliance checks.  
+AWS SecurityHub is a service that centralizes and organizes alerts and findings from across services. Services include GuardDuty, Macie, IAM Access Analyzer, and AWS Firewall Manager. You can use SecurityHub to continuously monitor your environment and perform automated compliance checks.
 
 Security Hub is region-specific by default, which means you need to turn it on and configure it separately for every region in your account. You can also [enable cross-region aggregation.](https://docs.aws.amazon.com/securityhub/latest/userguide/finding-aggregation.html)
 Ingest all the SecurityHub findings returned by SecurityHub API, ingests only fresh findings based on the LastObservedAt timestamp
@@ -13,7 +13,7 @@ Ingest all the SecurityHub findings returned by SecurityHub API, ingests only fr
 
 ### Azure
 
-1. Click  "Deploy To Azure" (For both Commercial & Azure GOV)  
+1. Click  "Deploy To Azure" (For both Commercial & Azure GOV)
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FAWS-SecurityHubFindings%2Fazuredeploy_awssecurityhub.json)
 
 2. Fill in the required fields:
@@ -25,7 +25,7 @@ AWSRoleArn = RoleArn is a combination of AWSAccountNumber and RoleName ("arn:aws
 AWSRoleSessionName = Name of the session variable. //Leave default
 ```
 3. In the function under Settings, go to Identity and turn on Managed Identity.
-4. Go to Azure AD, Enterprise Applications and find the Managed Identity. 
+4. Go to Azure AD, Enterprise Applications and find the Managed Identity.
    * Note the ApplicationId (ClientId).
 6. Under Settings, go to Configuration and paste the ApplicationId (ClientId) into the ClientID parameter.
 
@@ -54,23 +54,23 @@ The `TimerTrigger` makes it incredibly easy to have your functions executed on a
 
 ```
    a.	Go to your Resource Group --> Click on Function App `awssecurityhub<<uniqueid>>`
-   b.	Click on Function App "Configuration" under Settings 
+   b.	Click on Function App "Configuration" under Settings
    c.	Click on "Schedule" under "Application Settings"
    d.	Update your own schedule using cron expression.
 ```
 
 **Note: For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expression](https://en.wikipedia.org/wiki/Cron#CRON_expression)(See the link for full details). A cron expression is a string with 6 separate expressions which represent a given schedule via patterns. The pattern we use to represent every 10 minutes is `0 */10 * * * *`. This, in plain text, means: "When seconds is equal to 0, minutes is divisible by 10, for any hour, day of the month, month, day of the week, or year".**
-   
+
 ### 2. Edit Filter-parameter
 
 Parameterized finding attributes using a environment variable "SecurityHubFilters" which is used to define a condition to filter the returned findings. You can filter by up to 10 finding attributes. For each attribute, you can provide up to 20 filter values.
 
 **Current configured filter:**
 
- ```json 
- {"SeverityLabel": [{"Value": "HIGH", "Comparison": "EQUALS"},{"Value": "CRITICAL", "Comparison": "EQUALS"}],"RecordState": [{"Value": "ACTIVE", "Comparison": "EQUALS"}]}  
+ ```json
+ {"SeverityLabel": [{"Value": "HIGH", "Comparison": "EQUALS"},{"Value": "CRITICAL", "Comparison": "EQUALS"}],"RecordState": [{"Value": "ACTIVE", "Comparison": "EQUALS"}]}
  ```
- 
+
 **Another filter:**
 
 ```json
@@ -95,20 +95,20 @@ Parameterized finding attributes using a environment variable "SecurityHubFilter
 }
 ```
 
-**Note**  
+**Note**
 If you want to update/change SecurityHubFilters environment variable, please convert the filter value into single line
-   
+
 ### 3. Edit FreshEventTimeStamp
 
-Parameterized SecurityHub fresh event duration using environment variable "FreshEventTimeStamp". Value must be in minutes.  
-   
-**Note**  
-Azure Function trigger schedule and FreshEventTimeStamp  
-Ex: If you want to trigger function every 30 min then values must be  
-**FreshEventTimeStamp=30**  
-Schedule=0 */30 * * * *  
-   
-      
+Parameterized SecurityHub fresh event duration using environment variable "FreshEventTimeStamp". Value must be in minutes.
+
+**Note**
+Azure Function trigger schedule and FreshEventTimeStamp
+Ex: If you want to trigger function every 30 min then values must be
+**FreshEventTimeStamp=30**
+Schedule=0 */30 * * * *
+
+
 ### 4. Secret management
 
 All secrets will be placed as "Secrets" in the Azure KeyVault `awssecurityhub<<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,

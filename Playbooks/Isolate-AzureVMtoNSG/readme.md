@@ -8,7 +8,7 @@ This playbook will take host entites from triggered incident and search for matc
 
 **Additional Post Install Notes:**
 
-The Logic App creates and uses a Managed System Identity (MSI) to search the Azure Resource Graph, Generate a NSG, Update the VM with NSG, and Restart the VM. 
+The Logic App creates and uses a Managed System Identity (MSI) to search the Azure Resource Graph, Generate a NSG, Update the VM with NSG, and Restart the VM.
 
 Assign RBAC 'Reader' role to the Logic App at the root Management Group level.
 Assign RBAC 'Network Contributor' role to the Logic App at the root Management Group level.

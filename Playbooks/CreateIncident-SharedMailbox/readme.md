@@ -23,13 +23,13 @@ This playbook will create a new Microsoft Incident when a new email arrives in t
 1. The email subject must contain "incident" in the name. If this needs to be changed, please update the trigger:<br>
 ![SubjectUpdate](./images/EmailSubjectUpdateDark.jpg)<br><br>
 2. The email body must be in this order:
-    - Incident Title: 
-    - Incident Description: 
+    - Incident Title:
+    - Incident Description:
     - Incident Severity: (Informational/Low/Medium/High)
     - Incident Status: (New/Active/Closed)
-    - Incident Tag: 
+    - Incident Tag:
     - Assign Incident: (Assign/Unassign)
-    - Assign Incident to: 
+    - Assign Incident to:
 3. If the order or value of each or any line is changed, it is necessary to adjust that change to the playbook itself. For example - for the "Title" field in the playbook, we are trimming value from the email body that is between "Incident Title: " and "Incident Description: ". For that we are using expression "trim(first(split(last(split(body('Email_body_to_text'),'Incident Title: ')),'Incident Description: ')))"<br><br>
 If you change the order in email body and move "Incident Title" after "Incident Description" update expression for field Title to "trim(first(split(last(split(body('Email_body_to_text'),'<strong>Incident Title: </strong>')),'<strong>Incident Severity: </strong>')))" and fild "Description" to "trim(first(split(last(split(body('Email_body_to_text'),'<strong>Incident Description: </strong>')),'<strong>Incident Title: </strong>')))"<br><br>
 If you rename any field, an expression update is also needed. If you change line "Incident Title: " to "Title - ", update expressions to "trim(first(split(last(split(body('Email_body_to_text'),',<strong>Title - </strong>')),'Incident Description: ')))"

@@ -28,7 +28,7 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-ParserQuery: |  
+ParserQuery: |
   let LogonEvents=dynamic([4624,4625]);
   let LogoffEvents=dynamic([4634,4647]);
   let LogonTypes=datatable(LogonType:int, EventSubType:string)[
@@ -42,7 +42,7 @@ ParserQuery: |
       10, 'RemoteInteractive',
       11, 'CachedInteractive'];
   // https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/quick-reference-troubleshooting-netlogon-error-codes/ba-p/256000
-  let LogonStatus=datatable 
+  let LogonStatus=datatable
       (EventStatus:string,EventOriginalResultDetails:string, EventResultDetails:string)[
       '0x80090325', 'SEC_E_UNTRUSTED_ROOT','Other',
       '0xc0000064', 'STATUS_NO_SUCH_USER','No such user or password',
@@ -85,18 +85,18 @@ ParserQuery: |
       '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE','Other',
       '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT','User locked',
       '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED','Other'];
-      let WinLogon=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){ 
+      let WinLogon=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
           WindowsEvent | where not(disabled)
-          // ************************************************************************* 
+          // *************************************************************************
           //       <Prefilterring>
           // *************************************************************************
-          | where 
+          | where
             (isnull(starttime)   or TimeGenerated >= starttime)
             and (isnull(endtime)     or TimeGenerated <= endtime)
             and (targetusername_has=='*' or EventData.TargetUserName has targetusername_has)
-          // ************************************************************************* 
+          // *************************************************************************
           //       </Prefilterring>
-          // ************************************************************************* 
+          // *************************************************************************
           | where Provider == 'Microsoft-Windows-Security-Auditing'
           | where     EventID in (LogonEvents) or EventID in (LogoffEvents)
           | extend    LogonProtocol = tostring(EventData.AuthenticationPackageName),
@@ -118,18 +118,18 @@ ParserQuery: |
                       TargetUsername = tostring(iff (EventData.TargetDomainName in ('-',''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName)))
           // ***************      <Postfilterring>  **********************************
           | where (targetusername_has=='*' or TargetUsername has targetusername_has)
-          // ***************      <Postfilterring>  ********************************** 
-          | extend 
+          // ***************      <Postfilterring>  **********************************
+          | extend
             SrcDvcHostname = tostring(EventData.WorkstationName),
             EventProduct = "Security Events"
           | extend EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
           // -- creating EventMessage matching EventMessage in SecurityEvent table
-          | extend EventMessage = case(EventID == 4634, "4634 - An account was logged off.", 
+          | extend EventMessage = case(EventID == 4634, "4634 - An account was logged off.",
                                       EventID == 4625, "4625 - An account failed to log on.",
                                       EventID == 4624 ,"4624 - An account was successfully logged on.",
                                       "4647 - User initiated logoff."),
                   EventResult = iff(EventID == 4625, 'Failure', 'Success')
-          | project-rename 
+          | project-rename
               TargetDvcHostname = Computer
           // , TargetUserType=AccountType - no AccountType in windowsEvents
              , EventOriginalUid = EventOriginId
@@ -138,17 +138,17 @@ ParserQuery: |
                   , EventSchemaVersion='0.1.0'
                   , ActorUserIdType='SID'
                   , TargetUserIdType='SID'
-                  , EventVendor='Microsoft'  
+                  , EventVendor='Microsoft'
                   , EventStartTime =TimeGenerated
                   , EventEndTime=TimeGenerated
-                  , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')                  
-                  , ActorUsernameType= iff(EventData.SubjectDomainName in ('-',''),'Simple', 'Windows' )                  
+                  , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')
+                  , ActorUsernameType= iff(EventData.SubjectDomainName in ('-',''),'Simple', 'Windows' )
                   , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
                   , SrcDvcOs = 'Windows'
                   , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
           | lookup LogonStatus on EventStatus
           | lookup LogonTypes on LogonType
-              /// ** Aliases 
+              /// ** Aliases
               | extend
                   User=TargetUsername
                   , LogonTarget=TargetDvcHostname
@@ -156,19 +156,19 @@ ParserQuery: |
               };
   let SecEventLogon =(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
     SecurityEvent | where not(disabled)
-    // ************************************************************************* 
+    // *************************************************************************
     //       <Prefilterring>
     // *************************************************************************
-    | where 
+    | where
       (isnull(starttime)   or TimeGenerated >= starttime)
       and (isnull(endtime)     or TimeGenerated <= endtime)
       and (targetusername_has=='*' or TargetUserName has targetusername_has)
-    // ************************************************************************* 
+    // *************************************************************************
     //       </Prefilterring>
-    // ************************************************************************* 
-    | where EventID in (LogonEvents) or 
+    // *************************************************************************
+    | where EventID in (LogonEvents) or
             EventID in (LogoffEvents)
-    | project-rename 
+    | project-rename
          EventMessage = Activity
        , ActorSessionId=SubjectLogonId
        , TargetSessionId=TargetLogonId
@@ -187,7 +187,7 @@ ParserQuery: |
       , EventProduct = "Security Events"
       , ActorUserIdType='SID'
       , TargetUserIdType='SID'
-      , EventVendor='Microsoft' 
+      , EventVendor='Microsoft'
       , EventStartTime =TimeGenerated
       , EventEndTime=TimeGenerated
       , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')
@@ -200,7 +200,7 @@ ParserQuery: |
     | project-away TargetUserName
     | lookup LogonStatus on EventStatus
     | lookup LogonTypes  on LogonType
-    /// ** Aliases 
+    /// ** Aliases
     | extend
          User=TargetUsername
         , LogonTarget=TargetDvcHostname

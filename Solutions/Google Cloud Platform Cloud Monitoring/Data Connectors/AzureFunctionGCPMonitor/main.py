@@ -62,7 +62,7 @@ async def main(mytimer: func.TimerRequest):
         for project in projects:
             for metric in metrics:
                 cors.append(process_metric(client, project, metric, time_interval, session))
-        
+
         await asyncio.gather(*cors)
 
     logging.info('Saving last timestamp: {}'.format(last_ts))
@@ -92,7 +92,7 @@ def gen_time_interval(last_ts: int):
     else:
         start_time = now -  DEFAULT_SEARCH_PERIOD_MINUTES * 60
         logging.info('Last timestamp is not known. Getting data from {}'.format(start_time))
-    
+
     end_time = now - 30
 
     interval = {

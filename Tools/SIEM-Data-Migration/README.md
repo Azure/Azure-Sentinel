@@ -17,7 +17,7 @@ This tool is deployed through an ARM template and performs the following steps:
 - Deploys the target platform that will host your historical logs. To choose from:
 
     + Azure Storage account
-    
+
     + Azure Data Explorer cluster and database
 
     + Azure Monitor Logs workspace (enabled with Microsoft Sentinel)

@@ -1,10 +1,10 @@
-<p align="left">  
+<p align="left">
 <img width="300" height="100" src="./Images/logo.jpg"> </a>
 </p>
 
 # Illusive Incident Enrichment Playbook
 
-The Incident Enrichment playbook leverages Sentinel analytic rules to discover Illusive-based alerts and report the associated data and forensics as Sentinel incident sets. 
+The Incident Enrichment playbook leverages Sentinel analytic rules to discover Illusive-based alerts and report the associated data and forensics as Sentinel incident sets.
 
 Use this playbook to enrich Sentinel security incidents originating from Illusive with Illusive incident and forensics information. Illusive continues to enrich relevant Sentinel incidents as new events are detected. This is done using the Illusive API resource.
 
@@ -40,22 +40,22 @@ Deploying the Illusive Incident Enrichment playbook requires a custom deployment
 Before deploying the custom template, download the **azuredeploy.json** for the *Incident Enrichment* playbook from the GitHub repository [using this link](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/blob/2f67abd268398e63da0071b5f7027a49829a5dbd/Solutions/Illusive%20Active%20Defense/Playbooks/Illusive-SentinelIncident-Enrichment/azuredeploy.json).
 
 1. On the Azure home page, filter for Deploy a custom template.
-       <p align="center">  
+       <p align="center">
           <img src="./Images/deploy-custom-template-search.png"> </a>
        </p>
 2. Under **Custom Deployment>Select a template**, click **Build your own template in the editor**.
-       <p align="center">  
+       <p align="center">
           <img src="./Images/deploy-custom-template-page.png"> </a>
        </p>
 3. From **Edit template,** click **Load file,** load the **azuredeploy.json** file you downloaded, and click **Save.**
-       <p align="center">  
+       <p align="center">
           <img src="./Images/deploy-custom-template-load-file.png"> </a>
        </p>
-       <p align="center">  
+       <p align="center">
           <img src="./Images/deploy-custom-template-edit-template-incident-enrichment.png"> </a>
        </p>
  1. Under **Custom Deployment>Basics:**
-    - Specify the **Subscription** that contains the dedicated Azure app that will run the Illusive Sentinel solution 
+    - Specify the **Subscription** that contains the dedicated Azure app that will run the Illusive Sentinel solution
     - Specify the **Resource group** that contains the Workspace where you want to install the playbook.
     - Under **Instance details:**
       <table>
@@ -81,14 +81,14 @@ Before deploying the custom template, download the **azuredeploy.json** for the 
         <td>Supply the authentication parameters required to access the Azure-Sentinel API</td>
        </tr>
       </table>
-      <p align="center">  
+      <p align="center">
          <img src="./Images/custom-deployment-basics-incident-enrichment.png"> </a>
       </p>
 4. When finished entering details, click **Review + Create**.
-      <p align="center">  
+      <p align="center">
          <img src="./Images/custom-deployment-review-create.png"> </a>
       </p>
-5. On successful validation, click **Create**.  
+5. On successful validation, click **Create**.
 This completes the playbook deployment.
 
    <p align="center">
@@ -99,13 +99,13 @@ This completes the playbook deployment.
 
 ## Connect the playbook to Azure Sentinel
 
-Connect the playbook to Azure Sentinel by configuring the playbook's API connection. 
-     <p align="center">  
+Connect the playbook to Azure Sentinel by configuring the playbook's API connection.
+     <p align="center">
        <img src="./Images/api-connection-setup.png"> </a>
      </p>
 
-  1. From **Your custom deployment is complete**, click **Go to all resources**. 
-     - If there is only one installed playbook in the workspace, clicking on **Go to resource group** will take you to the playbook page. 
+  1. From **Your custom deployment is complete**, click **Go to all resources**.
+     - If there is only one installed playbook in the workspace, clicking on **Go to resource group** will take you to the playbook page.
      - If there are multiple installed playbooks in the workspace, clicking on **Go to resource group** will take you to the All resources page. The playbook will be available in the list.
   2. Click the deployed playbook and then click **API connections.**
   3. Under API connections, click **azuresentinel**.
@@ -156,7 +156,7 @@ You can view and manage the playbook as well as review the playbook run history.
 3. Select any executed playbook to view the results.
 
 Sample playbook history:
-<p align="center">  
+<p align="center">
    <img src="./Images/playbook-history-incident-enrichment.png"> </a>
 </p>
 
@@ -164,7 +164,7 @@ Sample playbook history:
 
 ## Playbook retry mechanism
 
-<p align="center">  
+<p align="center">
    <img src="./Images/playbook-retry-mechanism.png"> </a>
 </p>
 

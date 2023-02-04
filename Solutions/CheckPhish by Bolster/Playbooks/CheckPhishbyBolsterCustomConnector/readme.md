@@ -17,7 +17,7 @@ This custom connector connects to CheckPhish API service to run actions that are
 | **Get Scan Result** | Get the scan result from CheckPhish |
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
     * Custom Connector Name : Enter the Custom connector name (ex:CheckPhishbyBolsterCustomConnector)

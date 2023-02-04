@@ -7,7 +7,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 1. Create case in TheHive instance with and enrich it with description and title
 2. Gets Hosts, IPs entities.
 3. Create task and bind it to case.
-4. Creates obsarvebles with hosts and IPs for created case. 
+4. Creates obsarvebles with hosts and IPs for created case.
 
 <img src="./playbook_screenshot.PNG" width="50%"/><br>
 

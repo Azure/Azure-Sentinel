@@ -27,7 +27,7 @@ CrowdStrike is a SaaS solution that leverages advanced EDR applications and tech
 
 This package includes 4 playbook templates leverage Crowdstrike API's.
 You can choose to deploy the whole package (Four playbook templates) from the Deploy To Azure buttons below, or each one separately from it's specific folder.
-* [Base playbook](./Playbooks/CrowdStrike_Base) is a nested playbook that handles authentication for any of the othe playbooks. 
+* [Base playbook](./Playbooks/CrowdStrike_Base) is a nested playbook that handles authentication for any of the othe playbooks.
 * [Contain Host playbook](./Playbooks/CrowdStrike_ContainHost) will automatically contain hosts found in the incident.
 * [Enrichment playbook](./Playbooks/CrowdStrike_Enrichment_GetDeviceInformation) will post a comment to the incident with device information and related detections found in CrowdStrike.
 * [Response from Teams playbook](./Playbooks/CrowdStrike_ResponsefromTeams) will send the SOC Channel interactive cards with host information, allowing taking action on the host: Running a script or contain the host in CrowdStrike.
@@ -40,7 +40,7 @@ You can choose to deploy the whole package (Four playbook templates) from the De
 [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCrowdStrike%2Fazuredeploy.json)
 
 
-# Crowdstrike playbooks documentation 
+# Crowdstrike playbooks documentation
 
 <a name="authentication">
 
@@ -63,7 +63,7 @@ Authentication methods this end point supports- [oauth2 authentication](https://
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters for deploying  playbooks
 
@@ -75,15 +75,15 @@ Authentication methods this end point supports- [oauth2 authentication](https://
 |**ClientSecret** | Enter the ClientSecret key name |
 |**CrowdStrike_Base_Playbook_Name**|  Enter the playbook name here (e.g. CrowdStrike_Base)|
 |**Crowdstrike_ContainHost_Playbook_Name** |Enter the playbook name here (e.g. Crowdstrike_ContainHost)|
-|**Crowdstrike_Enrichment_GetDeviceInformation_Playbook_Name** | Enter the playbook name here (e.g. Crowdstrike_Enrichment)| 
-|**Crowdstrike-ResponsefromTeams_Playbook_Name** | Enter the playbook name here (e.g. Crowdstrike-ResponsefromTeams)| 
+|**Crowdstrike_Enrichment_GetDeviceInformation_Playbook_Name** | Enter the playbook name here (e.g. Crowdstrike_Enrichment)|
+|**Crowdstrike-ResponsefromTeams_Playbook_Name** | Enter the playbook name here (e.g. Crowdstrike-ResponsefromTeams)|
 |**Teams GroupId** | Enter the Teams channel id to send the adaptive card|
 |**Teams ChannelId** | Enter the Teams Group id to send the adaptive card [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)|
 
 
 <a name="postdeployment">
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 The base playbook should be added in the access policies of Key vault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
@@ -95,7 +95,7 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for Teams connection as well
 
 #### b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky host. 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky host.
 2. Configure the automation rules to trigger the playbooks.
 
 <a name="limitations">

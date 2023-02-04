@@ -29,7 +29,7 @@ This custom connector connects to CarbonBlack cloud end point and performs diffe
 | **Search for processes events by process GUID and (optional) event query** | Get relevant events of a watchlist hint |
 | **Dismiss an alert** |Dismiss the alert in Carbon Black Cloud with comments. If an analyst looks in the CBC console, they will not longer see that alert and mistakenly triage it|
 | **Add a note to an alert** | Add a comment to provide context, in the case someone looks in the CBC console |
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required parameters:
     * Custom Connector Name: Enter the Custom connector name (e.g. CarbonBlackCloudConnector)

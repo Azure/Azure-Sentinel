@@ -73,16 +73,16 @@ foreach ($record in $LambdaInput.Records) {
         Write-Verbose -Message ('DateTimeKind:' + $dateTime.kind)
         Write-Verbose -Message "Type: $type"
         write-Verbose -Message "LogData: $logdata"
-    
+
         #region Workspace ID and Key
         # Workspace ID for the workspace
         #$CustomerID = 'ENTER WORKSPACE ID HERE'
-    
+
         # Shared key needs to be set for environment
         #$SharedKey = 'ENTER WORKSPACE KEY HERE'
-    
+
         #endregion
-    
+
         # Supporting Functions
         # Function to create the auth signature
         function Build-signature ($CustomerID, $SharedKey, $Date, $ContentLength, $method, $ContentType, $resource) {
@@ -123,28 +123,28 @@ foreach ($record in $LambdaInput.Records) {
             Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
             return $response.statuscode
         }
-    
+
         # Check if time is UTC, Convert to UTC if not.
         # $dateTime = (Get-Date)
         if ($dateTime.kind.tostring() -ne 'Utc') {
             $dateTime = $dateTime.ToUniversalTime()
             Write-Verbose -Message $dateTime
         }
-    
+
         # Add DateTime to hashtable
         #$logdata.add("DateTime", $dateTime)
         $logdata | Add-Member -MemberType NoteProperty -Name "DateTime" -Value $dateTime
-    
+
         #Build the JSON file
         $logMessage = ConvertTo-Json $logdata -Depth 20
         Write-Verbose -Message $logMessage
-    
+
         #Submit the data
         $returnCode = Post-LogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body ([System.Text.Encoding]::UTF8.GetBytes($logMessage)) -Type $type
         Write-Verbose -Message "Post Statement Return Code $returnCode"
         return $returnCode
     }
-    
+
     $bucket = $record.s3.bucket.name
     $key = $record.s3.object.key
 
@@ -198,7 +198,7 @@ foreach ($record in $LambdaInput.Records) {
                 $CEFExtension = $line.split("|")[7] -split '([^=\s]+=(?:[\\]=|[^=])+)(?:\s|$)'
                 foreach ($extenstion in $CEFExtension) {
                     if ($extenstion -like "*=*") { $cefmsg += @{$extenstion.Split("=")[0] = $extenstion.Split("=")[1] } }
-                }      
+                }
                 $CEFmsg += @{TimeGenerated = $CEFtimegenerated }
                 $CEFmsg += @{DeviceVendor = $CEFDeviceVendor }
                 $CEFmsg += @{DeviceProduct = $CEFDeviceProduct }
@@ -246,4 +246,3 @@ foreach ($record in $LambdaInput.Records) {
 
     Remove-Item $FileName -Force
 }
-

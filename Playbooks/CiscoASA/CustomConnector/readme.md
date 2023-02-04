@@ -43,7 +43,7 @@ General info about this product and the core values of this integration. <br>
 
 <a name="deployment"></a>
 
-## Deployment instructions 
+## Deployment instructions
 Prior using this custom connector, it should be deployed in the Resource Group where the playbooks that will include it are located. There are two options for the custom connector, one not connecting via on-premises data gateway and one connecting via on-premises data gateway.
 <br>
 

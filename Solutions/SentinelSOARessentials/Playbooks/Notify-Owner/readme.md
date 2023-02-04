@@ -13,8 +13,8 @@ Microsoft Teams account that allows to send messages.
 <br><br>
 
 # Post-deployment
-Add playbook as an action to the automation rule 
-- Trigger = When incident is updated;  
+Add playbook as an action to the automation rule
+- Trigger = When incident is updated;
 - Condition = Owner changed.<br>
 
 

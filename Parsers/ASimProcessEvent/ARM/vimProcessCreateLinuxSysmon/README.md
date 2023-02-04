@@ -2,7 +2,7 @@
 
 ARM template for ASIM ProcessEvent schema parser for Sysmon for Linux.
 
-This ASIM parser supports filtering and normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema. 
+This ASIM parser supports filtering and normalizing Sysmon for Linux process create events (event 1) collected using the Syslog connector to the ASIM Process Event normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

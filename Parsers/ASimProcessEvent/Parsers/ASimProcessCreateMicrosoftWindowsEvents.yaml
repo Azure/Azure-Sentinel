@@ -1,5 +1,5 @@
 Parser:
-  Title: Process Create Event ASIM parser for WEF Security Events 
+  Title: Process Create Event ASIM parser for WEF Security Events
   Version: '1.0.2'
   LastUpdated: Sep 1 2022
 Product:
@@ -9,11 +9,11 @@ Normalization:
   Version: '0.1.0'
 References:
 - Title: ASIM Process Schema
-  Link: https://aka.ms/ASimProcessEventDoc 
+  Link: https://aka.ms/ASimProcessEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-    This ASIM parser supports normalizing Windows process create events (event 4688) collected using the WEF connector (WindowsEvent table) to the ASIM Process Event normalized schema. 
+    This ASIM parser supports normalizing Windows process create events (event 4688) collected using the WEF connector (WindowsEvent table) to the ASIM Process Event normalized schema.
 ParserName: ASimProcessCreateMicrosoftWindowsEvents
 EquivalentBuiltInParser: _ASim_ProcessEvent_CreateMicrosoftWindowsEvents
 ParserParams:
@@ -21,17 +21,17 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-    let ASIM_GetWindowsUserType = (username:string, sid:string) { 
-        case ( 
-            username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", 
-            isempty(username) or sid in ("S-1-0-0"), "", 
+    let ASIM_GetWindowsUserType = (username:string, sid:string) {
+        case (
+            username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine",
+            isempty(username) or sid in ("S-1-0-0"), "",
             "Regular"
         )
     };
     let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\')[-1]) };
-    let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
-        T 
-        | extend 
+    let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) {
+        T
+        | extend
              type = case (
                 username == "-", "",
                 domain == "-", "Simple",
@@ -71,8 +71,8 @@ ParserQuery: |
         EventType = 'ProcessCreated',
         EventOriginalType = tostring(EventID),
         DvcOs = 'Windows'
-    | extend 
-        ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
+    | extend
+        ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName),
         ActorUserId = tostring(EventData.SubjectUserSid),
         ActorUserIdType = "SID",
         ActorUsernameType = "Windows",
@@ -84,15 +84,15 @@ ParserQuery: |
         TargetUsernameType = "Windows"
     | project-away
         username
-    | extend 
+    | extend
         TargetUserSid = TargetUserId,
         ActorUserSid = ActorUserId,
         ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId),
         TargetUserType = ASIM_GetWindowsUserType(TargetUsername, TargetUserId)
     | extend
         ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
-        TargetUserSessionId = tostring(toint(EventData.TargetLogonId)),    
-        // Processes 
+        TargetUserSessionId = tostring(toint(EventData.TargetLogonId)),
+        // Processes
         ActingProcessId = tostring(toint(tolong(EventData.ProcessId))),
         ActingProcessName = tostring(EventData.ParentProcessName),
         TargetProcessId = tostring(toint(tolong(EventData.NewProcessId))),
@@ -100,7 +100,7 @@ ParserQuery: |
         TargetProcessCommandLine = tostring(EventData.CommandLine),
         TargetProcessTokenElevation = tostring(EventData.TokenElevationType),
         MandatoryLabel = tostring(EventData.MandatoryLabel)
-    | extend 
+    | extend
         ActingProcessFilename = ASIM_GetFilenamePart(ActingProcessName),
         TargetProcessFilename = ASIM_GetFilenamePart(TargetProcessName)
     | lookup MandatoryLabelLookup on MandatoryLabel
@@ -111,5 +111,5 @@ ParserQuery: |
         Process = TargetProcessName,
         CommandLine = TargetProcessCommandLine
     | project-away Channel, EventData, Data, EventID, EventLevelName, EventLevel, Provider, RawEventData, Task, TenantId, ManagementGroupName, SourceSystem, EventOriginId
-    }; 
+    };
     parser(disabled=disabled)

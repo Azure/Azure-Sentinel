@@ -19,7 +19,7 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 - Create the security policy rule in the Palo Alto PAN-OS VM.
 
 
-# Deployment instructions 
+# Deployment instructions
 - Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-Wildfire%2FPlaybooks%2FWildfire_URL_Verdict_on_Teams%2Fazuredeploy.json)
@@ -32,12 +32,12 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 | Parameter  | Description |
 | ------------- | ------------- |
 | **Playbook Name** | Enter the Playbook Name |
-| **Wildfire API Key**  | Enter the WildFire API Key | 
+| **Wildfire API Key**  | Enter the WildFire API Key |
 | **Security Policy Rule** | Enter the Security Policy Rule which is created in PAN-OS |
 | **Wildfire Custom Connector Name** | Enter the name of WildFire custom connector |
-| **PAN-OS Custom Connector Name**  | Enter the name of PAN-OS custom connector|  
+| **PAN-OS Custom Connector Name**  | Enter the name of PAN-OS custom connector|
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## a. Authorize connections
 * Once deployment is complete, authorize each API connection.
   - Click the Wildfire API Connection resource
@@ -47,7 +47,7 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 * In Logic App designer authorize Teams channel connection as well, for playbooks posting adaptive cards.
 
 ## b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with filehash and URL. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with filehash and URL.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook Steps
@@ -63,7 +63,7 @@ When a new Azure Sentinel incident is created, this playbook gets triggered and 
 ## Enrich Incident with verdict or verdict report details as follows
  ![wildfire](./Images/IncidentCommentLight.jpg)
  ![wildfire](./Images/IncidentCommentDark.jpg)
- 
+
 ## Adaptive card recieved by SOC
  ![Wildfire](./Images/AdaptiveCard2.png)
 

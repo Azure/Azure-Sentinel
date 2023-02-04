@@ -9,7 +9,7 @@ https://dotnet.microsoft.com/download
 dotnet build .\UploadToLogAnalytics.csproj
 ```
 ```
-bin\Debug\netcoreapp3.1\UploadToLogAnalytics.exe 
+bin\Debug\netcoreapp3.1\UploadToLogAnalytics.exe
 ```
 
 # Run

@@ -18,7 +18,7 @@
  ## Pre-requisites for deployment
 1. Deploy the Cisco Meraki Custom Connector before the deployment of this playbook under the same subscription and same resource group. Capture the name of the connector during deployment.
 2. Cisco Meraki API Key should be known to establish a connection with Cisco Meraki Custom Connector. [Refer here](https://developer.cisco.com/meraki/api-v1/#!getting-started/authorization)
-3. Organization name should be known. [Refer here](https://developer.cisco.com/meraki/api-v1/#!getting-started/find-your-organization-id) 
+3. Organization name should be known. [Refer here](https://developer.cisco.com/meraki/api-v1/#!getting-started/find-your-organization-id)
 
 
  ## Deployment Instructions
@@ -37,16 +37,16 @@
 | **Organization Name** | Enter organization name |
 
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## a. Authorize API connection
-* Once deployment is complete, go under deployment details and authorize Cisco Meraki connection. 
+* Once deployment is complete, go under deployment details and authorize Cisco Meraki connection.
 1.  Click the Cisco Meraki connection
 2.  Click **Edit API connection**
 3.  Enter API Key
 4.  Click Save
 
 ## b. Configurations in Sentinel
-- In Microsoft sentinel analytical rules should be configured to trigger an incident with IP addresses. 
+- In Microsoft sentinel analytical rules should be configured to trigger an incident with IP addresses.
 - Configure the automation rules to trigger the playbook.
 
 
@@ -58,7 +58,7 @@ Captures potentially malicious or malware IP addresses incident information.
 Get the list of IPs as entities from the Incident.
 
 ## Check if Organization exists
- *  If organization name exists in list of organizations associated with the account, then get list of networks associated with the organization. 
+ *  If organization name exists in list of organizations associated with the account, then get list of networks associated with the organization.
  *  If organization name does not exist, then terminate with the error that organization not found.
 
 ## For each malicious IP received from the incident
@@ -68,7 +68,7 @@ Get the list of IPs as entities from the Incident.
    - If IP address is not part of either L3 firewall rule or L7 firewall rule, then Incident Comment is created saying IP address not found in any rule.
  - Add incident Comment from all the cases.
 
-## Incident comment 
+## Incident comment
 ![meraki](./Images/IncidentCommentLight.jpg)
 
 ![meraki](./Images/IncidentCommentDark.jpg)

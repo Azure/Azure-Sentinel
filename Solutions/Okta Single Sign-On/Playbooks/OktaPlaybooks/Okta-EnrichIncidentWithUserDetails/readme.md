@@ -8,19 +8,19 @@
 
 ![Playbook Designer view](./Okta-EnrichIncidentwithuserdetails.PNG)<br>
 
-### Prerequisites 
+### Prerequisites
 1. Okta Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.okta.com/docs/guides/create-an-api-token/overview/)
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FOkta%2FOktaPlaybooks%2FOkta-EnrichIncidentWithUserDetails%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FOkta%2FOktaPlaybooks%2FOkta-EnrichIncidentWithUserDetails%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (Ex:OktaPlaybook)
-    
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource
@@ -30,7 +30,7 @@ Once deployment is complete, you will need to authorize each connection.
 5.	Click Save
 6.	Repeat steps for Okta Api  Connection (For authorizing the Okta API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account
 2. Configure the automation rules to trigger this playbook
 
 
@@ -64,8 +64,7 @@ Iterates on the accounts found in this incident (probably one) and performs the 
      * User id, User name, User login, User email, User status, User created, User activated, User statusChanged, User lastLogin, User lastUpdated, User passwordChanged
 
 
-     
+
      b. User groups information collected by "Get User Groups" action from Okta such as
 
      * Group id,Group name and Group description
-

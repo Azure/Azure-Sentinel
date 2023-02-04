@@ -50,9 +50,9 @@ ParserParams:
 
 ParserQuery: |
   let parser=  (
-            starttime:datetime=datetime(null), 
+            starttime:datetime=datetime(null),
             endtime:datetime=datetime(null),
-            srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+            srcipaddr_has_any_prefix:dynamic=dynamic([]),
             eventresult:string='*',
             actorusername_has_any:dynamic=dynamic([]),
             eventtype_in:dynamic=dynamic([]),
@@ -61,13 +61,13 @@ ParserQuery: |
             newvalue_has_any:dynamic=dynamic([]),
             disabled:bool = false
     ){
-     let AzureActivityOperationLookup = datatable (op:string, EventType:string) 
+     let AzureActivityOperationLookup = datatable (op:string, EventType:string)
     [
       'ACTION', 'Execute',
       'WRITE', 'Set',
       'DELETE', 'Delete'
     ];
-    let AzureActivityStatusLookup = datatable (ActivityStatusValue:string, ActivitySubstatusValue:string, EventResult:string, EventResultDetails:string) 
+    let AzureActivityStatusLookup = datatable (ActivityStatusValue:string, ActivitySubstatusValue:string, EventResult:string, EventResultDetails:string)
     [
         "Accept","Accepted","Success","",
         "Accept","Created","Success","",
@@ -113,15 +113,15 @@ ParserQuery: |
         "Failed","Unauthorized","Failure","Unauthorized",
         "Cancel","","Failure","Cancelled"
     ];
-    AzureActivity 
+    AzureActivity
     | where not(disabled)
     | where
-        (isnull(starttime) or TimeGenerated >= starttime) 
+        (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
         and (array_length(newvalue_has_any) == 0)
     | where CategoryValue == "Administrative"
     | project-away HTTPRequest, Level, SourceSystem, EventSubmissionTimestamp, TenantId, OperationId, Hierarchy, Category, ResourceId, ResourceProvider, Resource
-    | where 
+    | where
         (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(CallerIpAddress,srcipaddr_has_any_prefix))
         and (array_length(actorusername_has_any) == 0 or Caller has_any (actorusername_has_any))
         and (array_length(operation_has_any) == 0 or OperationNameValue has_any (operation_has_any))
@@ -137,17 +137,17 @@ ParserQuery: |
     // Calculate EventResult, EventResultDetails, and EventResultOriginalDetails
     | extend
         EventOriginalResultDetails = strcat (
-            ActivityStatusValue, 
+            ActivityStatusValue,
             iff (ActivitySubstatusValue !="", strcat(' [', ActivitySubstatusValue, ']'), "")
         )
-    | extend 
+    | extend
         ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex "\\d+", "", ActivitySubstatusValue)
     | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue
     | extend EventResult = iff(EventResult == "", "Other", EventResult)
     | where eventresult == "*" or (EventResult == eventresult) // Not optimized
     | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-    | project-away ActivityStatus*, ActivitySubstatus*    // 
-    | project-rename 
+    | project-away ActivityStatus*, ActivitySubstatus*    //
+    | project-rename
         Operation = OperationNameValue,
         SrcIpAddr = CallerIpAddress,
         EventOriginalUid = EventDataId,
@@ -155,7 +155,7 @@ ParserQuery: |
         EventOriginalType = CategoryValue
     | extend
         EventCount = int(1),
-        EventStartTime = TimeGenerated, 
+        EventStartTime = TimeGenerated,
         EventEndTime= TimeGenerated,
         EventProduct = 'Azure',
         EventVendor = 'Microsoft',
@@ -166,11 +166,11 @@ ParserQuery: |
         TargetAppType = "CSP"
     // --
     // Calculate Actor
-    | extend 
+    | extend
         Caller = iff(Caller == "Microsoft.RecoveryServices", "", Caller)
-    | extend 
+    | extend
         ActorUsernameType = iff (Caller has "@", "UPN", "")
-    | extend 
+    | extend
         ActorUsername = iff (ActorUsernameType == "UPN", Caller, ""),
         ActorUserId = iff (ActorUsernameType != "UPN", Caller, "")
     | extend
@@ -178,18 +178,18 @@ ParserQuery: |
     | project-away Caller
     // --
     // Calculate Object
-    | extend 
-        entity = tostring(Properties_d.entity), 
+    | extend
+        entity = tostring(Properties_d.entity),
         resource = tostring(Properties_d.resource),
         entity_name = tostring(Properties_d.["Entity Name"])
-    | extend Object = case ( 
+    | extend Object = case (
             entity != "", entity,
             strcat ("/subscriptions/", SubscriptionId, "/resourceGroups/", ResourceGroup, "/providers/", ResourceProviderValue, "/",resource, iff (entity_name != "", strcat("/", entity_name), ""))
         )
     | project-away entity, resource,entity_name, _SubscriptionId, SubscriptionId, ResourceGroup, ResourceProviderValue
     // Aliases
     | extend AdditionalFields = pack_dictionary("Authorization", Authorization_d, "Claims", Claims_d, "Error", Properties_d.statusMessage)
-    | extend 
+    | extend
         IpAddr = SrcIpAddr,
         User = ActorUsername,
         ActorUserAadId = ActorUserId,

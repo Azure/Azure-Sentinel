@@ -10,7 +10,7 @@ Enhance your security with threat hunting and incident investigation using this 
 
 ### Prerequisites
 
-**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key. 
+**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key.
 To acquire SlashNext API key, please contact us at [support@slashnext.com](mailto:support@slashnext.com) or visit [SlashNext.com](www.slashnext.com)
 
 ### Deployment Instructions
@@ -22,7 +22,7 @@ To acquire SlashNext API key, please contact us at [support@slashnext.com](mailt
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinekl%2Fmaster%2FSolutions%2FSlashNext%2FPlaybooks%2FSlashNextPhishingIncidentInvestigation%2Fdeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSlashNext%2FPlaybooks%2FSlashNextPhishingIncidentInvestigation%2Fdeploy.json)
 
-### Post-Deployment Instructions 
+### Post-Deployment Instructions
 
 #### a. Authorize Connection
 
@@ -32,5 +32,3 @@ Once deployment is complete, authorize SlashNext Logic Apps Connector connection
 2. Click **Edit** API connection
 3. Enter API key acquired from SlashNext
 4. Click **Save**
-
-

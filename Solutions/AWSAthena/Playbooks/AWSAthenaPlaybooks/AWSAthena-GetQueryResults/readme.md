@@ -4,7 +4,7 @@
 
 When a new sentinel incident is created, this playbook gets triggered and performs the following actions:
 
-1. It executes the query specified during playbook setup on given database. 
+1. It executes the query specified during playbook setup on given database.
 2. Downloads the query result and adds as a comment to the incident.
 
 <img src="./images/Playbook_AWSAthena.jpg" width="50%"/><br>
@@ -13,7 +13,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Prerequisites
 
 1. Prior to the deployment of this playbook, [AWS Athena API Function App Connector](../../CustomConnector/AWSAthena_FunctionAppConnector/) needs to be deployed under the same subscription.
-2. Refer to [AWS Athena API Function App Connector](../../CustomConnector/AWSAthena_FunctionAppConnector/readme.md) documentation to obtain AWS Access Key ID, Secret Access Key and Region. 
+2. Refer to [AWS Athena API Function App Connector](../../CustomConnector/AWSAthena_FunctionAppConnector/readme.md) documentation to obtain AWS Access Key ID, Secret Access Key and Region.
 
 ### Deployment instructions
 

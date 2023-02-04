@@ -35,7 +35,7 @@ Click on the below button to deploy WildFire Custom Connector in your Azure subs
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FPaloAlto-Wildfire%2FConnectores%2FWildFireConnector%2Fazuredeploy.json)
 
 
-# Deployment Instructions 
+# Deployment Instructions
 1. Deploy the WildFire custom connector by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters for deploying WildFire custom connector.
 

@@ -4,7 +4,7 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com
 
-This ARM template will deploy an Integration Account and a Playbook. It will pull domains from Sentinel Incidents and add them to a Zscaler URL Category of your choice. URL Categories can be configured to Block and Allow domains in the Zscaler Access Policies. This is extremely useful when a Sentinel Incident identifies a malicious domain communication and you want to quickly add it to your Zscaler Block list. 
+This ARM template will deploy an Integration Account and a Playbook. It will pull domains from Sentinel Incidents and add them to a Zscaler URL Category of your choice. URL Categories can be configured to Block and Allow domains in the Zscaler Access Policies. This is extremely useful when a Sentinel Incident identifies a malicious domain communication and you want to quickly add it to your Zscaler Block list.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZscaler-add-Domains-to-URL-Category%2Fazuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
@@ -14,24 +14,24 @@ This ARM template will deploy an Integration Account and a Playbook. It will pul
 
 #
 
-Subdomains are parsed from a url string by first removing the following substrings, if found: "https://", "http://", and "ww<span></span>w.". 
-The result is saved in a new string and then a search is performed on said string for the first occurring "/". 
+Subdomains are parsed from a url string by first removing the following substrings, if found: "https://", "http://", and "ww<span></span>w.".
+The result is saved in a new string and then a search is performed on said string for the first occurring "/".
 If found, all characters starting at this position to the end of the string are removed.
 
 For example:
 
 **ht<span></span>tps://w<span></span>ww.example.<span></span>com/example-subfolder/gate.php**
 
-would result in:  
+would result in:
 
 **.example.com**
 
-The **.** before the TDL and subdomains is added after parsing as a wildcard per Zscaler documentation to include subdomains of the TLD.  
-                                                
-                                                 
+The **.** before the TDL and subdomains is added after parsing as a wildcard per Zscaler documentation to include subdomains of the TLD.
+
+
 #
 
-You will need the following items to enter in to the template settings during deployment: 
+You will need the following items to enter in to the template settings during deployment:
 
 * URL for your Zscaler instance.
 * A Zscaler Local Admin Account configured for this API access.
@@ -43,9 +43,9 @@ This deployment template contains two resources: An integration account and a lo
 
  #
 
-First we will need to configure the Zscaler API Roles, API Admin Accounts, and gather the necessary information to fill in the ARM deployment template.  
+First we will need to configure the Zscaler API Roles, API Admin Accounts, and gather the necessary information to fill in the ARM deployment template.
 
-For this Playbook to add URLs to your Zscaler custom domain list you will need a local ZScaler admin account that has access to read and modify policy. To limit the access to the account we will need to make a Custom Administrator Role. 
+For this Playbook to add URLs to your Zscaler custom domain list you will need a local ZScaler admin account that has access to read and modify policy. To limit the access to the account we will need to make a Custom Administrator Role.
 
 In the Zscaler administration console hover over **Administration then click on Role Management**
 
@@ -71,7 +71,7 @@ Click on **Add Administrator**
 
 ![](Images/zgit5.png)
 
-Enter a **Login ID** for the API Administrator account you want to create. 
+Enter a **Login ID** for the API Administrator account you want to create.
 In the **Email** box you can enter a service account that exists in your domain for this purpose or just make up an email that you will not use in your domain. There is no need for email access for this account.
 Enter a name for the account and in the drop-down box below that select the Role you created in the previous step.
 Make sure **Password Based Login** is checked and create a secure password for this API account.
@@ -95,38 +95,38 @@ The last thing we will need from the Zscaler Portal is the Custom URL category. 
 ![](Images/URLcat.png)
 
 
- # 
-Up Next is the ARM template configuration and deployment. 
- 
+ #
+Up Next is the ARM template configuration and deployment.
+
 Click the “Deploy to Azure” button and this will bring you to the Custom Deployment Template.
 
-In the **BASICS** section:  
+In the **BASICS** section:
 
-* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.  
+* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.
 
-In the **SETTINGS** section:   
+In the **SETTINGS** section:
 
-* **Integration Account Name**: This can be left as “Zscaler-Logicapp” or you may change it.  
+* **Integration Account Name**: This can be left as “Zscaler-Logicapp” or you may change it.
 
-* **Integration Account Pricing Tier**: You will need to select your Integration Account pricing tier here. Note that there are a limited number of free Integration Accounts you are allotted and you will need to select a higher tier if you have used these up.  
+* **Integration Account Pricing Tier**: You will need to select your Integration Account pricing tier here. Note that there are a limited number of free Integration Accounts you are allotted and you will need to select a higher tier if you have used these up.
 
-* **Playbook Name**: This can be left as “Zscaler-add-Domains-to-URL-Category” or you may change it.  
+* **Playbook Name**: This can be left as “Zscaler-add-Domains-to-URL-Category” or you may change it.
 
 * **ZscalerURL**: Enter your Zscaler tenant URL here.
 
-* **Zscaler Username**:  Replace text with username of the Zscaler Admin account you want to use. 
+* **Zscaler Username**:  Replace text with username of the Zscaler Admin account you want to use.
 
-* **Zscaler Password**: Replace text with password of the Zscaler Admin account you want to use. 
+* **Zscaler Password**: Replace text with password of the Zscaler Admin account you want to use.
 
-* **Zscaler API Key**: Replace text with API Key of your Zscaler org. 
+* **Zscaler API Key**: Replace text with API Key of your Zscaler org.
 
-* **Zscaler Custom URL Category Name**: Replace text with a Zscaler Custom URL Category Name. 
+* **Zscaler Custom URL Category Name**: Replace text with a Zscaler Custom URL Category Name.
 
-Towards the bottom ensure you check the box accepting the terms and conditions and then click on “Purchase”. 
+Towards the bottom ensure you check the box accepting the terms and conditions and then click on “Purchase”.
 
 ![Template](Images/template.png)
 
-The resources should take around a minute to deploy. Once the deployment is complete, you should see two resources. One is an Integration Account and the other is the Logic App.  
+The resources should take around a minute to deploy. Once the deployment is complete, you should see two resources. One is an Integration Account and the other is the Logic App.
 Click the "Go to resource group" button.
 
 ![Success](Images/success.png)
@@ -139,7 +139,7 @@ Click on the “Edit” button. This will bring us into the Logic Apps Designer.
 
 ![Edit](Images/logicappedit.png)
 
-Click on the bar labled “Connections”.  
+Click on the bar labled “Connections”.
 
 ![Logicapp1](Images/logicapp1.png)
 
@@ -155,7 +155,7 @@ Click the save button.
 
 To run your new Logic App, navigate to the Azure Sentinel workspace you used during deployment.
 
-Here you can select an Incident that has an associated URL. Note that this Logic App will not work if no URL is associated with the Incident (item 2). 
+Here you can select an Incident that has an associated URL. Note that this Logic App will not work if no URL is associated with the Incident (item 2).
 
 Click the "View full details" button.
 
@@ -169,7 +169,7 @@ Click the "Run" button.
 
 ![run3](Images/run3.png)
 
-As you can see below - the domain/subdomains were parsed from the URL Entity in the Incident and added to the the Custom URL Category. 
+As you can see below - the domain/subdomains were parsed from the URL Entity in the Incident and added to the the Custom URL Category.
 
 ![](Images/gitinc.png)
 ![](Images/gitinc1.png)

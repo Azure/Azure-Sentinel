@@ -34,7 +34,7 @@ You can choose to deploy the whole package : two connectors + all six playbook t
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2Fazuredeploy.json)
 
 
-# ForcepointNGFW documentation 
+# ForcepointNGFW documentation
 
 <a name="authentication">
 
@@ -55,7 +55,7 @@ No Authentication
 
 <a name="deployment">
 
-# Deployment instructions 
+# Deployment instructions
 1. Deploy the Custom Connectors and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters for deploying custom connector and playbooks
 
@@ -68,7 +68,7 @@ No Authentication
 |**Block URL PlaybookName**|Enter the Block URL Playbook Name here without spaces.|
 |**Enrichment IP PlaybookName**|Enter the Enrichment IP Playbook Name here without spaces.|
 |**Enrichment URL PlaybookName**|Enter the Enrichment URL Playbook Name here without spaces.|
-| **Forcepoint SMC Api Key**  | Enter the SMC API Key. | 
+| **Forcepoint SMC Api Key**  | Enter the SMC API Key. |
 | **SMC Version Number** | Enter the version number of SMC. |
 |**IP List Name**|Enter IP List Name.|
 |**URL List Name**|Enter URL List Name.|
@@ -79,9 +79,9 @@ No Authentication
 
 <a name="postdeployment">
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## a. Authorize API connections
-* Once deployment is complete, go under deployment details and authorize teams connection. 
+* Once deployment is complete, go under deployment details and authorize teams connection.
 1.  Click the Teams connection resource
 2.  Click **Edit API connection**
 3.  Click Authorize
@@ -89,10 +89,10 @@ No Authentication
 5.  Click Save
 
 * In Logic App designer, go to "Post an adaptive card to teams channel" action and select your Teams name and Channel name from the dropdown.
-*  In In Logic App designer again, go to "Post adaptive card in a chat or channel" action and select your Teams name, Channel name, and "Flow bot" for "Post as" parameter from the dropdown. 
+*  In In Logic App designer again, go to "Post adaptive card in a chat or channel" action and select your Teams name, Channel name, and "Flow bot" for "Post as" parameter from the dropdown.
 
 ## b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky IP address or URL. 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky IP address or URL.
 2. Configure the automation rules to trigger the playbooks.
 
 
@@ -116,6 +116,3 @@ Playbooks
 
 # Known Issues and Limitations
 * We need to authorize the teams connection after deploying the playbooks.
-
-
-

@@ -117,7 +117,7 @@ namespace RDAPQuery
         {
             string queryTLD = requestedTLD;
             string responseMessage = string.Empty;
-           
+
 
             //Log the request
             log.LogInformation(string.Format("BootStrapDNS function processed a request for TLD '{0}'", queryTLD));
@@ -249,7 +249,7 @@ namespace RDAPQuery
         [JsonPropertyName("version")]
         public string Version { get; set; }
     }
-    // Root myDeserializedClass = JsonConvert.DeserializeObject<Root>(myJsonResponse); 
+    // Root myDeserializedClass = JsonConvert.DeserializeObject<Root>(myJsonResponse);
     /// <summary>
     /// Class Link.
     /// </summary>
@@ -479,4 +479,3 @@ namespace RDAPQuery
         public DateTime registrationDate { get; set; }
     }
 }
-

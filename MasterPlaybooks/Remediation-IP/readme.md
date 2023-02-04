@@ -1,16 +1,16 @@
-# Master Playbook Block IP Remediation 
+# Master Playbook Block IP Remediation
 
 Master playbook is integrated with multiple firewall end products like AzureFirewall ,Forcepoint ,Fortinet-Fortigate, Cisco Meraki and PaloAlto-PAN-OS.
 
 Firewall end products are deployed as child/nested playbooks.
 
-If a malicious IP is detected from the Azure sentinel, master playbook calls all the child/nested playbooks and each firewall product will take remidiation steps needed on that Ip Address and comments will be passed on the master playbook from the child/nested playbooks involving multiple products. 
+If a malicious IP is detected from the Azure sentinel, master playbook calls all the child/nested playbooks and each firewall product will take remidiation steps needed on that Ip Address and comments will be passed on the master playbook from the child/nested playbooks involving multiple products.
 
 ## Summary
  When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious IP addresses.
  2. Each nested playbook receives the list of IP addresses and performs respective defined automated actions on it.
- 3. Response from individual playbooks are returned to master playbook for incident comment. 
+ 3. Response from individual playbooks are returned to master playbook for incident comment.
 
 ![Master](./Images/PlaybookDesignerLight.png)
 
@@ -20,10 +20,10 @@ If a malicious IP is detected from the Azure sentinel, master playbook calls all
  ## Pre-requisites for deployment
 At least one of the below-mentioned nested playbooks must be deployed prior to deployment of this playbook under same subscription and same resource group and the same location/region. Capture the name of all the deployed playbooks during deployment.
 
-- [AzureFirewall-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/AzureFirewall-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for AzureFirewall.  
-- [Forcepoint-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/ForcepointNGFW-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Forcepoint. 
-- [Fortinet-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/Fortinet-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Fortinet. 
-- [Meraki-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/Meraki-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Meraki. 
+- [AzureFirewall-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/AzureFirewall-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for AzureFirewall.
+- [Forcepoint-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/ForcepointNGFW-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Forcepoint.
+- [Fortinet-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/Fortinet-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Fortinet.
+- [Meraki-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/Meraki-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for Meraki.
 - [PaloAlto-PAN-OS-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/PaloAlto-PAN-OS-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
 
 - [CiscoASA-BlockIP-Nested-Remediation](/MasterPlaybook-IP-Remediation/CiscoASA-BlockIP-Nested-Remediation/azuredeploy.json) is a nested playbook that handles remidiation for PaloAlto.
@@ -53,8 +53,8 @@ The image below shows example of input schema for CiscoMeraki nested playbook.
 Each of the nested playbooks of IP Remediation gives following outputs:
 
 - Status code: Status code tells the success or failure status of nested playbook run results. The status code value is displayed in incident comment.
-- Body: Body provides with all the output values that nested playbook returns. It varies according to the nested playbook. 
-- Incident Comment: It contains output body from nested playbook in tabular format. 
+- Body: Body provides with all the output values that nested playbook returns. It varies according to the nested playbook.
+- Incident Comment: It contains output body from nested playbook in tabular format.
 
 For example, taking reference of CiscoMeraki incident comment image below, CiscoMeraki logo is composed for incident comment.
 Also, table is populated with values such as Incident IP address, Source, Source Port, Destination, Destination Port, Policy, Protocol, Previous status, Current status and Action.
@@ -102,7 +102,7 @@ To add new nested playbook to master playbook:
 # Post-Deployment Instructions
 
 ### Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses.
 - Configure the automation rules to trigger the playbook which calls multiple nested playbooks.
 
 # Playbook steps explained

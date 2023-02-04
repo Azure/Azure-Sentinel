@@ -36,7 +36,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
         /// </summary>
         /// <returns></returns>
         public async Task CreateFusionAlertRule(int insId = -1)
-        {            
+        {
             if (insId != -1)
             {
                 await CreateFusionAlertRuleByInstance(insId);
@@ -58,7 +58,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
         public async Task CreateFusionAlertRuleByInstance(int i)
         {
             var alertRules = Utils.LoadPayload<FusionAlertRulePayload[]>("FusionAlertRulePayload.json", cliMode);
-            
+
             foreach (var payload in alertRules)
             {
                 try
@@ -109,7 +109,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
         /// </summary>
         /// <returns></returns>
         public async Task CreateMicrosoftSecurityIncidentCreationAlertRule(int insId = -1)
-        {            
+        {
             if (insId != -1)
             {
                 await CreateMSSecurityIncidentAlertRuleByInstance(insId);
@@ -131,7 +131,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
         public async Task CreateMSSecurityIncidentAlertRuleByInstance(int i)
         {
             var alertRules = Utils.LoadPayload<SecurityIncidentCreationAlertRulePayload[]>("SecurityAlertRulePayload.json", cliMode);
-            
+
             foreach (var payload in alertRules)
             {
                 try
@@ -182,7 +182,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
         /// </summary>
         /// <returns></returns>
         public async Task CreateScheduledAlertRule(ActionsController actionsController, int insId = -1)
-        {           
+        {
             if (insId != -1)
             {
                 await CreateScheduledAlertRuleByInstance(insId, actionsController);
@@ -204,7 +204,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
         public async Task CreateScheduledAlertRuleByInstance(int i, ActionsController actionsController)
         {
             var alertRules = Utils.LoadPayload<ScheduledAlertRulePayload[]>("ScheduledAlertRulePayload.json", cliMode);
-            
+
             foreach (var payload in alertRules)
             {
                 try
@@ -281,7 +281,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
                 var response = await http.SendAsync(request);
 
                 if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
-                
+
                 if (response.StatusCode == HttpStatusCode.NotFound)
                     throw new Exception("Not found, please create a new Alert first...");
 
@@ -359,7 +359,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules
         /// </summary>
         /// <returns></returns>
         public async Task GetAlertRules(int insId = -1)
-        {           
+        {
             if (insId != -1)
             {
                 await GetAlertRulesByInstance(insId);
@@ -394,14 +394,14 @@ namespace AzureSentinel_ManagementAPI.AlertRules
                     string res = await response.Content.ReadAsStringAsync();
                     JObject result = JsonConvert.DeserializeObject<JObject>(res);
                     var values = result["value"] as JArray;
-                    
+
                     if (values == null)
                     {
                         values = new JArray();
                     }
 
                     int callTimes = 1;
-                    
+
                     while (result.ContainsKey("nextLink") && callTimes < 100)
                     {
                         try
@@ -410,19 +410,19 @@ namespace AzureSentinel_ManagementAPI.AlertRules
                             request = new HttpRequestMessage(HttpMethod.Get, nextLink);
                             await authenticationService.AuthenticateRequest(request, i);
                             var nextResponse = await http.SendAsync(request);
-                            
+
                             if (nextResponse.IsSuccessStatusCode)
                             {
                                 var newRes = await nextResponse.Content.ReadAsStringAsync();
                                 JObject newResult = JsonConvert.DeserializeObject<JObject>(newRes);
                                 result = newResult;
                                 var newValues = result["value"] as JArray;
-                                
+
                                 if (newValues == null)
                                 {
                                     newValues = new JArray();
                                 }
-                                
+
                                 foreach (var v in newValues)
                                 {
                                     values.Add(v);

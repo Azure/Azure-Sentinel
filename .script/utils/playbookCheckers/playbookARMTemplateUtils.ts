@@ -17,7 +17,7 @@ export function isPlaybookUsingGalleryMetadata(armTemplate: ArmTemplate<any>): b
 }
 
 export function isNullOrUndefined(value: any): boolean {
-    return value === undefined || value === null; 
+    return value === undefined || value === null;
 }
 
 export function isNullOrWhitespace(value: string): boolean {

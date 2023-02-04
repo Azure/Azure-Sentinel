@@ -8,7 +8,7 @@ Check if WebCtrl SQL service is running and if yes then install Audit Pull Task 
 .DESCRIPTION
 1. Checks if the ALC WebCtrl Service is installed on the server.
 2. Checks if SQL Service is installed and running on the server.
-2. If Yes, Execute statement to pull data from audit table 
+2. If Yes, Execute statement to pull data from audit table
 
 .NOTES
 Assumptions:
@@ -72,7 +72,7 @@ else
 
     #################################################################################################################
     # Read time stamp at which the script last ran
-    # 
+    #
     # The time stamp is saved/logged in a file(see constant $lastReadTimeStampFile) when the script runs.
     # If file exists then value is read, else use current local time stamp minus 30 minutes is set as default
     # The schedule is editable based on the requirement.

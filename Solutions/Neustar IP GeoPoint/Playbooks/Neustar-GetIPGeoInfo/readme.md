@@ -14,7 +14,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 ### Prerequisites
 
 1. Prior to the deployment of this playbook, [Neustar IP GeoPoint API Function App Connector](../NeustarIPGeoPoint_FunctionAppConnector/) needs to be deployed under the same subscription.
-2. Refer to [Neustar IP GeoPoint API Function App Connector](../NeustarIPGeoPoint_FunctionAppConnector/readme.md) documentation to obtain Neustar IP GeoPoint API Key and Shared Secret. 
+2. Refer to [Neustar IP GeoPoint API Function App Connector](../NeustarIPGeoPoint_FunctionAppConnector/readme.md) documentation to obtain Neustar IP GeoPoint API Key and Shared Secret.
 
 ### Deployment instructions
 

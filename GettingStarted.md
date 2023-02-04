@@ -4,9 +4,9 @@
 
 author: Dennis Pike
 
-Disclaimer: There are lots of ways to do this.  This document describes how to use Visual Studio Code (VS Code) blended with some command line Git. You can do everything just within VS Code using built in GitHub extensions.  Many people code in whatever platform and use GitHub Desktop to handle all the Git parts of the process. 
+Disclaimer: There are lots of ways to do this.  This document describes how to use Visual Studio Code (VS Code) blended with some command line Git. You can do everything just within VS Code using built in GitHub extensions.  Many people code in whatever platform and use GitHub Desktop to handle all the Git parts of the process.
 
-**GitHub account**: 
+**GitHub account**:
 
 Get a GitHub account – ([www.github.com](http://www.github.com) ) - Free account works fine.
 
@@ -98,7 +98,7 @@ For demonstration purposes, I have right clicked on Playbooks > New Folder and a
 
 ![](.github/Media/AzureSentinelCommunityStage2.png)
 
-When you are ready to commit your changes click on the Source Control icon on the left, enter a Message summarizing your changes and hit “+”. This stages the changes. Next click the checkmark to commit your changes. These are still local to your machine. 
+When you are ready to commit your changes click on the Source Control icon on the left, enter a Message summarizing your changes and hit “+”. This stages the changes. Next click the checkmark to commit your changes. These are still local to your machine.
 
 ![](.github/Media/AzureSentinelCommunityStage3.png)
 
@@ -114,15 +114,15 @@ And you should see the changes:
 
 ![](.github/Media/AzureSentinelCommunityStage6.png)
 
-If you are done with all your work and ready to submit to the main repository, then you need to do a Pull Request. This request will kick off a set of automated checks and if those pass then it goes to a board of reviewers – one of whom has to check your work and accept the request and merge it to the master branch. 
+If you are done with all your work and ready to submit to the main repository, then you need to do a Pull Request. This request will kick off a set of automated checks and if those pass then it goes to a board of reviewers – one of whom has to check your work and accept the request and merge it to the master branch.
 
 You do this by going to your forked repository (ie <your account>/Azure-Sentinel) > making sure the branch you are working on is selected and then clicking Pull request (or compare & pull request) if that is showing:
 
 ![](.github/Media/AzureSentinelCommunityStage7.png)
 
-The top portion of the "Open a pull request" page is critical. This shows from which repository and branch are you pulling from and to which repository are you pulling to. So on the left you want to see the Azure/Azure-Sentinel repository and the master branch. On the right you want to see your repository (<your account>/Azure-Sentinel) and your branch (not master unless that is what you are working off of). 
+The top portion of the "Open a pull request" page is critical. This shows from which repository and branch are you pulling from and to which repository are you pulling to. So on the left you want to see the Azure/Azure-Sentinel repository and the master branch. On the right you want to see your repository (<your account>/Azure-Sentinel) and your branch (not master unless that is what you are working off of).
 
-You do want to fill in the comments section with a meaningful name and a list of what you have done since the reviewer will be reading this. 
+You do want to fill in the comments section with a meaningful name and a list of what you have done since the reviewer will be reading this.
 
 Then click “Create pull request”
 
@@ -134,7 +134,7 @@ You can then check the status of your Pull Request in Azure/Azure-Sentinel by cl
 
 **Clean-up**
 
-After your Pull Request has been merged, you will want to check to make sure it got into the main repository. I recommend checking both in the GitHub website as well as by doing a sync to my local repo and verifying it there.  You want to be certain that everything looks right before you delete anything. 
+After your Pull Request has been merged, you will want to check to make sure it got into the main repository. I recommend checking both in the GitHub website as well as by doing a sync to my local repo and verifying it there.  You want to be certain that everything looks right before you delete anything.
 
 In the website you just go to the Azure/Azure-Sentinel repository under the master branch and make sure you see your new code there.
 

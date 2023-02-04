@@ -1,7 +1,7 @@
 id: 26a3b261-b997-4374-94ea-6c37f67f4f39
 name: Known GALLIUM domains and hashes
 description: |
-  'GALLIUM command and control domains and hash values for tools and malware used by GALLIUM. 
+  'GALLIUM command and control domains and hash values for tools and malware used by GALLIUM.
    Matches domain name IOCs related to the GALLIUM activity group with CommonSecurityLog, DnsEvents, VMConnection and SecurityEvents dataTypes.
    References: https://www.microsoft.com/security/blog/2019/12/12/gallium-targeting-global-telecom/ '
 severity: High
@@ -13,7 +13,7 @@ requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
       - DnsEvents
-  - connectorId: AzureMonitor(VMInsights) 
+  - connectorId: AzureMonitor(VMInsights)
     dataTypes:
       - VMConnection
   - connectorId: CiscoASA
@@ -26,7 +26,7 @@ requiredDataConnectors:
     dataTypes:
       - SecurityEvent
   - connectorId: AzureFirewall
-    dataTypes: 
+    dataTypes:
       - AzureDiagnostics
       - AZFWApplicationRule
       - AZFWDnsQuery
@@ -34,19 +34,19 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
   - connectorId: InfobloxNIOS
-    dataTypes: 
+    dataTypes:
       - Syslog
   - connectorId: GCPDNSDataConnector
-    dataTypes: 
+    dataTypes:
       - GCP_DNS_CL
   - connectorId: NXLogDnsLogs
-    dataTypes: 
+    dataTypes:
       - NXLog_DNS_Server_CL
   - connectorId: CiscoUmbrellaDataConnector
-    dataTypes: 
+    dataTypes:
       - Cisco_Umbrella_dns_CL
   - connectorId: Corelight
-    dataTypes: 
+    dataTypes:
       - Corelight_CL
 
 queryFrequency: 1d
@@ -62,8 +62,8 @@ query: |
   let SHA256Hash = dynamic (["9ae7c4a4e1cfe9b505c3a47e66551eb1357affee65bfefb0109d02f4e97c06dd", "7772d624e1aed327abcd24ce2068063da0e31bb1d5d3bf2841fc977e198c6c5b", "657fc7e6447e0065d488a7db2caab13071e44741875044f9024ca843fe4e86b5", "2ef157a97e28574356e1d871abf75deca7d7a1ea662f38b577a06dd039dbae29", "52fd7b90d7144ac448af4008be639d4d45c252e51823f4311011af3207a5fc77", "a370e47cb97b35f1ae6590d14ada7561d22b4a73be0cb6df7e851d85054b1ac3", "5bf80b871278a29f356bd42af1e35428aead20cd90b0c7642247afcaaa95b022", "6f690ccfd54c2b02f0c3cb89c938162c10cbeee693286e809579c540b07ed883", "3c884f776fbd16597c072afd81029e8764dd57ee79d798829ca111f5e170bd8e", "1922a419f57afb351b58330ed456143cc8de8b3ebcbd236d26a219b03b3464d7", "fe0e4ef832b62d49b43433e10c47dc51072959af93963c790892efc20ec422f1", "7ce9e1c5562c8a5c93878629a47fe6071a35d604ed57a8f918f3eadf82c11a9c", "178d5ee8c04401d332af331087a80fb4e5e2937edfba7266f9be34a5029b6945", "51f70956fa8c487784fd21ab795f6ba2199b5c2d346acdeef1de0318a4c729d9", "889bca95f1a69e94aaade1e959ed0d3620531dc0fc563be9a8decf41899b4d79", "332ddaa00e2eb862742cb8d7e24ce52a5d38ffb22f6c8bd51162bd35e84d7ddf", "44bcf82fa536318622798504e8369e9dcdb32686b95fcb44579f0b4efa79df08", "63552772fdd8c947712a2cff00dfe25c7a34133716784b6d486227384f8cf3ef", "056744a3c371b5938d63c396fe094afce8fb153796a65afa5103e1bffd7ca070"]);
   let SigNames = dynamic(["TrojanDropper:Win32/BlackMould.A!dha", "Trojan:Win32/BlackMould.B!dha", "Trojan:Win32/QuarkBandit.A!dha", "Trojan:Win32/Sidelod.A!dha"]);
   (union isfuzzy=true
-  (CommonSecurityLog 
-  | parse Message with * '(' DNSName ')' * 
+  (CommonSecurityLog
+  | parse Message with * '(' DNSName ')' *
   | where isnotempty(FileHash)
   | where FileHash in (SHA256Hash) or DNSName in~ (DomainNames)
   | extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP
@@ -72,7 +72,7 @@ query: |
   | extend DNSName = DnsQuery
   | extend IPAddress = SrcIpAddr
   ),
-  (VMConnection 
+  (VMConnection
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | where isnotempty(DNSName)
   | where DNSName  in~ (DomainNames)
@@ -84,9 +84,9 @@ query: |
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
   | extend Hashes = EventDetail.[16].["#text"]
-  | parse Hashes with * 'SHA1=' SHA1 ',' * 
+  | parse Hashes with * 'SHA1=' SHA1 ',' *
   | where isnotempty(Hashes)
-  | where Hashes in (SHA1Hash) 
+  | where Hashes in (SHA1Hash)
   | extend Account = UserName
   ),
   (SecurityAlert
@@ -96,13 +96,13 @@ query: |
   | where ThreatName has_any (SigNames)
   | extend Computer = tostring(parse_json(Entities)[0].HostName)
   ),
-  (AzureDiagnostics 
+  (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (DomainNames)  
-  | extend DNSName = DestinationHost 
+  | where DestinationHost has_any (DomainNames)
+  | extend DNSName = DestinationHost
   | extend IPAddress = SourceHost
   ),
   (AzureDiagnostics
@@ -116,8 +116,8 @@ query: |
   ),
   (AZFWApplicationRule
   | where isnotempty(Fqdn)
-  | where Fqdn has_any (DomainNames)  
-  | extend DNSName = Fqdn 
+  | where Fqdn has_any (DomainNames)
+  | extend DNSName = Fqdn
   | extend IPAddress = SourceIp
   ),
   (AZFWDnsQuery

@@ -10,7 +10,7 @@ PARAM(
 # Download telemetry data and convert from CSV
 #Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Telemetry/solarigate_event.csv" -OutFile "query_data.csv"
 #$file = "query_data.csv"
-#$payload = Import-Csv $file 
+#$payload = Import-Csv $file
 
 # Create the function to create the authorization signature
 Function Write-OMSLogfile {
@@ -37,7 +37,7 @@ Function Write-OMSLogfile {
     Version:        2.0
     Author:         Travis Roberts
     Creation Date:  7/9/2018
-    Purpose/Change: Crating a stand alone function    
+    Purpose/Change: Crating a stand alone function
     #>
     [cmdletbinding()]
     Param(
@@ -55,7 +55,7 @@ Function Write-OMSLogfile {
     Write-Verbose -Message "DateTime: $dateTime"
     Write-Verbose -Message ('DateTimeKind:' + $dateTime.kind)
     Write-Verbose -Message "Type: $type"
-    write-Verbose -Message "LogData: $logdata"   
+    write-Verbose -Message "LogData: $logdata"
 
     # Supporting Functions
     # Function to create the auth signature
@@ -97,7 +97,7 @@ Function Write-OMSLogfile {
         $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $Body -UseBasicParsing
         Write-Verbose -message ('Post Function Return Code ' + $response.statuscode)
         return $response.statuscode
-    }   
+    }
 
     # Check if time is UTC, Convert to UTC if not.
     # $dateTime = (Get-Date)
@@ -107,7 +107,7 @@ Function Write-OMSLogfile {
     }
     #Build the JSON file
     $logMessage = ($logdata | ConvertTo-Json -Depth 20)
-    
+
     #Submit the data
     $returnCode = PostLogAnalyticsData -CustomerID $CustomerID -SharedKey $SharedKey -Body $logMessage -Type $type
     Write-Verbose -Message "Post Statement Return Code $returnCode"
@@ -124,14 +124,14 @@ catch
 Write-Host $_.Exception.Response
 }
 $eventsData = Import-Csv "query_data.csv"
-    
+
     #Test Size; Log A limit is 30MB
     $tempdata = @()
     $tempDataSize = 0
-    
-    if ((($eventsData |  Convertto-json -depth 20).Length) -gt 25MB) {        
-		Write-Host "Upload is over 25MB, needs to be split"									 
-        foreach ($record in $eventsData) {            
+
+    if ((($eventsData |  Convertto-json -depth 20).Length) -gt 25MB) {
+		Write-Host "Upload is over 25MB, needs to be split"
+        foreach ($record in $eventsData) {
             $tempdata += $record
             $tempDataSize += ($record | ConvertTo-Json -depth 20).Length
             if ($tempDataSize -gt 25MB) {
@@ -145,10 +145,10 @@ $eventsData = Import-Csv "query_data.csv"
         Write-Host "Sending left over data = $Tempdatasize"
         $postLAStatus = Write-OMSLogfile -dateTime (Get-Date) -type $eventsTable -logdata $tempdata -CustomerID $CustomerId -SharedKey $SharedKey
     }
-    Else {          
-        $postLAStatus = Write-OMSLogfile -dateTime (Get-Date) -type $eventsTable -logdata $eventsData -CustomerID $CustomerId -SharedKey $SharedKey        
+    Else {
+        $postLAStatus = Write-OMSLogfile -dateTime (Get-Date) -type $eventsTable -logdata $eventsData -CustomerID $CustomerId -SharedKey $SharedKey
     }
-    
+
     Remove-Item "query_data.csv"
 
     return $postLAStatus

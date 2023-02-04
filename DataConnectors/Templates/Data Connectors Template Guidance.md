@@ -91,7 +91,7 @@ A data connector can have multiple data types and these can be represented by co
   * For CEF and Syslog, leverage the existing text as-is and add anything custom as needed.
   * For REST API, either provide a link to your website/documentation that outlines the onboarding guidance to send data to Microsoft Sentinel **or** provide detailed guidance for customers to send data to Microsoft Sentinel.
   * If Connector is dependent on Kusto Function (Parser), **additionalRequirementBanner** and **instruction step** about Parser need to be added in Connector. <p>
-  
+
 # What is the format for redirection/Short links?
 1. Redirection link for **Parser** - https://aka.ms/sentinel-[connectorid]-parser
 2. Redirection link for **AzureDeploy** - https://aka.ms/sentinel-[connectorid]-azuredeploy
@@ -103,9 +103,9 @@ Expand and add multiple instructions as needed by adding more title and descript
 
 ## Next steps
 
-Currently in preview, you can also publish your data connector as a Microsoft Sentinel solution. 
+Currently in preview, you can also publish your data connector as a Microsoft Sentinel solution.
 
-Microsoft Sentinel solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. For example, use solutions to deliver your data connector packaged with related analytics rules, workbooks, playbooks, and more. 
+Microsoft Sentinel solutions provide an in-product experience for central discoverability, single-step deployment, and enablement of end-to-end product and/or domain and/or vertical scenarios in Microsoft Sentinel. For example, use solutions to deliver your data connector packaged with related analytics rules, workbooks, playbooks, and more.
 
 **Tip**: If your solution is being published to the content hub, also open a PR to have it listed in our [content hub catalog](https://docs.microsoft.com/azure/sentinel/sentinel-solutions-catalog). On the docs page, click Edit to open your PR.
 

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Trail (management and data events). 
+AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Trail (management and data events).
 
 This connector requires that each AWS service publish its logs to an S3 bucket in your account. In addition you must configure SQS notifications and permissions for the connector to retreive the logs.
 
@@ -30,12 +30,12 @@ You must have PowerShell and the AWS CLI installed before using these scripts.
 
 ## Using the scripts
 
-Download the scripts in this folder and subfolders or download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer. 
+Download the scripts in this folder and subfolders or download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer.
 Make sure that you have PowerShell and the AWS CLI installed.
 
-> IMPORTANT 
-> Downloaded PowerShell scripts must be marked safe to before being used. 
-> To mark the scripts safe, use the `Unblock-File` cmdlet or  
+> IMPORTANT
+> Downloaded PowerShell scripts must be marked safe to before being used.
+> To mark the scripts safe, use the `Unblock-File` cmdlet or
 > right-click on the script file(s), then click **Properties** and then click **Unblock**.
 
 Then run the following from PowerShell and follow the prompts to complete the configuration.
@@ -57,4 +57,3 @@ By default, a log is created in the directory where the script is executed.
 The `ConfigAwsConnector.ps1` script has two parameters:
 - `-LogPath` specifies a custom path to create the script activity log file.
 - `-AwsLogType` specifies the AWS log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty". If this parameter is specified, the user will not be prompted for this information.
-

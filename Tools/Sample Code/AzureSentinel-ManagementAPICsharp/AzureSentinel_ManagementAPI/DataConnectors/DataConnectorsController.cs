@@ -35,7 +35,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors
         /// </summary>
         /// <returns></returns>
         public async Task GetDataConnectors(int insId)
-        {            
+        {
             if (insId != -1)
             {
                 await GetDataConnectorsByInstance(insId);
@@ -74,7 +74,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors
                         values = new JArray();
                     }
                     int callTimes = 1;
-                    
+
                     while (result.ContainsKey("nextLink") && callTimes < 100)
                     {
                         try
@@ -83,19 +83,19 @@ namespace AzureSentinel_ManagementAPI.DataConnectors
                             request = new HttpRequestMessage(HttpMethod.Get, nextLink);
                             await authenticationService.AuthenticateRequest(request, i);
                             var nextResponse = await http.SendAsync(request);
-                            
+
                             if (nextResponse.IsSuccessStatusCode)
                             {
                                 var newRes = await nextResponse.Content.ReadAsStringAsync();
                                 JObject newResult = JsonConvert.DeserializeObject<JObject>(newRes);
                                 result = newResult;
                                 var newValues = result["value"] as JArray;
-                                
+
                                 if (newValues == null)
                                 {
                                     newValues = new JArray();
                                 }
-                                
+
                                 foreach (var v in newValues)
                                 {
                                     values.Add(v);
@@ -139,7 +139,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors
         /// </summary>
         /// <returns></returns>
         public async Task CreateDataConnector(int insId)
-        {           
+        {
             if (insId != -1)
             {
                 await CreateDataConnectorByInstance(insId);
@@ -161,7 +161,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors
         private async Task CreateDataConnectorByInstance(int i)
         {
             var dataConnectors = Utils.LoadPayload<ASCDataConnectorPayload[]>("DataConnectorPayload.json", cliMode);
-            
+
             foreach (var payload in dataConnectors)
             {
                 try
@@ -208,7 +208,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors
                 }
             }
         }
-        
+
         /// <summary>
         /// Delete a data connector by id
         /// </summary>
@@ -227,7 +227,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors
                 var response = await http.SendAsync(request);
 
                 if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
-                
+
                 if (response.StatusCode == HttpStatusCode.NotFound)
                     throw new Exception("Not found, please create a new DataConnector first...");
 

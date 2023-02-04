@@ -10,7 +10,7 @@
 
  ![Forcepoint](./Images/PlaybookdesignerLight.png)<br>
 ![Forcepoint](./Images/PlaybookdesignerDark.png)<br>
- 
+
  ## Pre-requisites for deployment
  1. Deploy the Forcepoint SMC Custom Connector before the deployment of this playbook under the same subscription and same resource group as will be used for this playbook. Capture the name of the connector during deployment.
  2. Forcepoint SMC API Key should be known to establish a connection with Forcepoint SMC. For API Key [Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )
@@ -21,7 +21,7 @@
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
- [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FPlaybooks%2FBlockIPAddress-ForcepointNGFW%2Fazuredeploy.json) 
+ [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FPlaybooks%2FBlockIPAddress-ForcepointNGFW%2Fazuredeploy.json)
   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FPlaybooks%2FBlockIPAddress-ForcepointNGFW%2Fazuredeploy.json)
 
 
@@ -31,14 +31,14 @@
 | ------------- | ------------- |
 | **Playbook Name** | Enter the Playbook Name here without spaces. (e.g. BlockIP-Forcepoint ) |
 | **SMC Connector name**|Enter the name of your Forcepoint SMC Connector without spaces.|
-| **SMC API Key**  | Enter the SMC API Key. | 
+| **SMC API Key**  | Enter the SMC API Key. |
 | **SMC Version Number** | Enter the version number of SMC. (e.g. 6.9) |
 | **IP List Name**|Enter IP address list name.|
 
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook steps explained
@@ -65,10 +65,8 @@ This action will compose the Forcepoint image to add to the incident comments.
 - The incident comments are shown below for reference.
 
 
-##Incident comment 
+##Incident comment
 
 ![forcepoint](./Images/IncidentCommentLight.png)
 
 ![forcepoint](./Images/IncidentCommentDark.png)
-
-

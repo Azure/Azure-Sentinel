@@ -1,7 +1,7 @@
 # Ingest-CanaryTokens
 author: Nathan Swift
 
-This Logic App connector will act as a Webhook listener, CanaryTokens can then send data upon an incident when the Canarytoken has been opened. This will send the data to Azure Sentinel - CanaryTokens_CL  
+This Logic App connector will act as a Webhook listener, CanaryTokens can then send data upon an incident when the Canarytoken has been opened. This will send the data to Azure Sentinel - CanaryTokens_CL
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIngest-CanaryTokens%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FIngest-CanaryTokens%2Fazuredeploy.json)
@@ -26,7 +26,7 @@ For further reading on HoneyPots and HoneyTokens I recommend Chris Sander's book
 ```id: 27dda424-1dbe-4236-9dd5-c484b23111a5
 name: Canarytoken Triggered
 description: |
-  'A Canarytoken has been triggered in your enviroment, this may be an early sign of attacker intent and activity, 
+  'A Canarytoken has been triggered in your enviroment, this may be an early sign of attacker intent and activity,
     please follow up with Azure Sentinel logs and incidents accordingly along with the Server this Canarytoken was hosted on.
     Reference: https://blog.thinkst.com/p/canarytokensorg-quick-free-detection.html'
 severity: High

@@ -1,6 +1,6 @@
 id: 677da133-e487-4108-a150-5b926591a92b
 name: NOBELIUM - Domain, Hash and IP IOCs - May 2021
-description: | 
+description: |
   'Identifies a match across various data feeds for domains, hashes and IP IOCs related to NOBELIUM.
   Ref: https://www.microsoft.com/security/blog/2021/05/27/new-sophisticated-email-based-attack-from-nobelium/'
 severity: Medium
@@ -18,32 +18,32 @@ requiredDataConnectors:
   - connectorId: MicrosoftSysmonForLinux
     dataTypes:
       - Syslog
-  - connectorId: DNS 
-    dataTypes: 
-      - DnsEvents 
-  - connectorId: AzureMonitor(VMInsights)  
-    dataTypes: 
-      - VMConnection 
-  - connectorId: F5 
-    dataTypes: 
-      - CommonSecurityLog       
-  - connectorId: CiscoASA 
-    dataTypes: 
-      - CommonSecurityLog 
-  - connectorId: PaloAltoNetworks 
-    dataTypes: 
-      - CommonSecurityLog 
-  - connectorId: Fortinet 
-    dataTypes: 
-      - CommonSecurityLog 
-  - connectorId: CheckPoint 
-    dataTypes: 
-      - CommonSecurityLog   
-  - connectorId: CEF 
-    dataTypes: 
-      - CommonSecurityLog                   
-  - connectorId: MicrosoftThreatProtection 
-    dataTypes: 
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: F5
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
       - DeviceNetworkEvents
       - DeviceFileEvents
   - connectorId: SecurityEvents
@@ -53,7 +53,7 @@ requiredDataConnectors:
     dataTypes:
       - OfficeActivity
   - connectorId: AzureFirewall
-    dataTypes: 
+    dataTypes:
       - AzureDiagnostics
       - AZFWApplicationRule
       - AZFWDnsQuery
@@ -64,26 +64,26 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
   - connectorId: InfobloxNIOS
-    dataTypes: 
+    dataTypes:
       - Syslog
   - connectorId: GCPDNSDataConnector
-    dataTypes: 
+    dataTypes:
       - GCP_DNS_CL
   - connectorId: NXLogDnsLogs
-    dataTypes: 
+    dataTypes:
       - NXLog_DNS_Server_CL
   - connectorId: CiscoUmbrellaDataConnector
-    dataTypes: 
+    dataTypes:
       - Cisco_Umbrella_dns_CL
   - connectorId: Corelight
-    dataTypes: 
+    dataTypes:
       - Corelight_CL
-   
-queryFrequency: 6h 
-queryPeriod: 6h 
-triggerOperator: gt 
-triggerThreshold: 0 
-tactics: 
+
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
   - CommandAndControl
   - Execution
 relevantTechniques:
@@ -93,7 +93,7 @@ tags:
   - NOBELIUM
   - Schema: ASIMFileEvent
     SchemaVersion: 0.1.0
-query:  |  
+query:  |
   let iocs = externaldata(DateAdded:string,FirstSeen:string,IoC:string,Type:string,TLP:string)
   [@"https://raw.githubusercontent.com/microsoft/mstic/master/Indicators/May21-NOBELIUM/May21NOBELIUMIoCs.csv"] with (format="csv", ignoreFirstRecord=True);
   let sha256s = (iocs | where Type =~ "SHA256"| project IoC);
@@ -113,9 +113,9 @@ query:  |
   (union isfuzzy=true
   (CommonSecurityLog
   | where SourceIP in (IPList) or DestinationIP in (IPList) or DestinationHostName in~ (domains) or RequestURL has_any (domains) or Message has_any (IPList)
-  | parse Message with * '(' DNSName ')' * 
+  | parse Message with * '(' DNSName ')' *
   | extend MessageIP = extract(IPRegex, 0, Message)
-  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message", RequestURL in (domains), "RequestUrl", SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", MessageIP in (IPList), "Message", "NoMatch") 
+  | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message", RequestURL in (domains), "RequestUrl", SourceIP in (ips), "SourceIP", DestinationIP in (ips), "DestinationIP", MessageIP in (IPList), "Message", "NoMatch")
   | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "NoMatch"), AccountCustomEntity = SourceUserID
   ),
   (_Im_Dns (domain_has_any=todynamic(domain_list))
@@ -129,7 +129,7 @@ query:  |
   (VMConnection
   | where SourceIp in (IPList) or DestinationIp in (IPList) or SourceIp in (ips) or DestinationIp in (ips) or RemoteDnsCanonicalNames has_any (domains)
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP",  SourceIp in (ips), "SourceIP", DestinationIp in (ips), "DestinationIP", "None") 
+  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP",  SourceIp in (ips), "SourceIP", DestinationIp in (ips), "DestinationIP", "None")
   | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "NoMatch"), HostCustomEntity = Computer
   ),
   (OfficeActivity
@@ -154,12 +154,12 @@ query:  |
   (_Im_WebSession(srcipaddr_has_any_prefix=full_ip_list)
     | extend timestamp=TimeGenerated, HostCustomEntity=Dvc , DNSName=tostring(parse_url(Url)["Host"]), AccountCustomEntity=User
   ),
-  (AzureDiagnostics 
+  (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (domains)  
+  | where DestinationHost has_any (domains)
   | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost
   ),
   (AZFWApplicationRule
@@ -213,7 +213,7 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity 
+        columnName: IPCustomEntity
   - entityType: DNS
     fieldMappings:
       - identifier: DomainName

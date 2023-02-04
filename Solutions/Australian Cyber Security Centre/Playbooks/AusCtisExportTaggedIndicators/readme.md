@@ -5,8 +5,8 @@
 This playbook gets triggered every day and perform the following actions:
 
 1. Get all the threat intelligence indicators from Sentinel Workspace with given tag.
-2. Filter all the indicators whose export in not completed. 
-3. Export the indicators to provided TAXII server. 
+2. Filter all the indicators whose export in not completed.
+3. Export the indicators to provided TAXII server.
 
 <img src="./images/Playbook_AusCtisExportTaggedIndicators_light.jpg" width="50%"/><br>
 
@@ -41,10 +41,10 @@ Once deployment is complete, assign playbook Log Analytics contributor role.
 4. Select Contributor role
 5. In the Members tab choose "Assign access to" Managed Identity
 6. Click on "Select members"
-8. Provide correct Subscription and Managed Identity 
+8. Provide correct Subscription and Managed Identity
 7. Provide the playbook name in "Search by name" textbox
 8. Select the correct identity and click on Select
-9. Click on "Review + assign" 
+9. Click on "Review + assign"
 
 
 #  References

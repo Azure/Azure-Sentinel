@@ -146,7 +146,7 @@ def main(wbMsg: func.QueueMessage, rcaMsg: func.Out[typing.List[str]]) -> None:
 
         # get workbench detail
         workbench_detail = get_workbench_detail(token, workbench_id)
-        
+
         if not workbench_detail:
             logging.warning(
                 f'Could not get workbench data. Workbench id: {workbench_id}.'
@@ -166,7 +166,7 @@ def main(wbMsg: func.QueueMessage, rcaMsg: func.Out[typing.List[str]]) -> None:
         rca_tasks = []
         rac_task_log = []
 
-    
+
         # get rca task
         rca_raw_tasks = get_rca_task(token, workbench_id,)
 
@@ -177,7 +177,7 @@ def main(wbMsg: func.QueueMessage, rcaMsg: func.Out[typing.List[str]]) -> None:
                     f'Get rca task with status: {task_status}, Workbench id: {workbench_id}. No need to get rca detail.'
                 )
                 continue
-            
+
             # process prca task info
             rac_task_log.append(transform_utils.transform_rca_task(clp_id, workbench_id  ,task))
 

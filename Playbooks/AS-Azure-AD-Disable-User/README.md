@@ -1,10 +1,10 @@
 # AS-Azure-AD-Disable-User
 Author: Accelerynt
 
-For any technical questions, please contact info@accelerynt.com  
+For any technical questions, please contact info@accelerynt.com
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Azure-AD-Disable-User%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Azure-AD-Disable-User%2Fazuredeploy.json)    
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Azure-AD-Disable-User%2Fazuredeploy.json)
 
 This playbook is intended to be run from a Microsoft Sentinel incident. It will disable the Azure AD user accounts associated with the entities from Microsoft Sentinel incidents.
 
@@ -27,13 +27,13 @@ Click the “**Deploy to Azure**” button at the bottom and it will bring you t
 
 In the **Project Details** section:
 
-* Select the “**Subscription**” and “**Resource Disable_User**” from the dropdown boxes you would like the playbook deployed to.  
+* Select the “**Subscription**” and “**Resource Disable_User**” from the dropdown boxes you would like the playbook deployed to.
 
-In the **Instance Details** section:  
-                                                  
-* **Playbook Name**: This can be left as "**AS-Azure-AD-Disable-User**" or you may change it. 
+In the **Instance Details** section:
 
-Towards the bottom, click on “**Review + create**”. 
+* **Playbook Name**: This can be left as "**AS-Azure-AD-Disable-User**" or you may change it.
+
+Towards the bottom, click on “**Review + create**”.
 
 ![Azure_AD_Disable_User_Deploy_1](Images/Azure_AD_Disable_User_Deploy_1.png)
 
@@ -55,8 +55,8 @@ Before the playbook can be run, the Azure AD connection will either need to be a
 ![Azure_AD_Disable_User_Deploy_5](Images/Azure_AD_Disable_User_Deploy_5.png)
 
 Expand the "**Connections**" step and click the exclamation point icon next to the name matching the playbook.
-                                                                                                
+
 ![Azure_AD_Disable_User_Deploy_6](Images/Azure_AD_Disable_User_Deploy_6.png)
 
-When prompted, sign in to validate the connection.                                                                                                
+When prompted, sign in to validate the connection.
 ![Azure_AD_Disable_User_Deploy_7](Images/Azure_AD_Disable_User_Deploy_7.png)

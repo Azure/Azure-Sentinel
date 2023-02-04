@@ -16,8 +16,8 @@ References:
     Link: https://www.watchguard.com/help/docs/help-center/en-US/Content/en-US/Fireware/_intro/fireware_help_front.html?tocpath=Fireware%7C_____0
 Description: |
   This ASIM parser supports filtering and normalizing WatchGuard Fireware OS logs produced by the Microsoft Sentinel Syslog connector to the ASIM Network Session normalized schema.
-ParserName: vimNetworkSessionWatchGuardFirewareOS                                  
-EquivalentBuiltInParser: _Im_NetworkSession_WatchGuardFirewareOS                                  
+ParserName: vimNetworkSessionWatchGuardFirewareOS
+EquivalentBuiltInParser: _Im_NetworkSession_WatchGuardFirewareOS
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -51,9 +51,9 @@ ParserParams:
     Default: false
 ParserQuery: |
   let Parser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
-    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
     let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
-    let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
     let EventLookup=datatable(DvcAction:string,EventResult:string,EventSeverity:string)
     [
         "Allow","Success","Informational"
@@ -105,7 +105,7 @@ ParserQuery: |
         temp_DstMatch, "DstIpAddr",
         "No match"
       )
-    | where ASimMatchingIpAddr != "No match" 
+    | where ASimMatchingIpAddr != "No match"
     | project-away temp_*
     };
     let HostParser = (Syslog:(SrcDomain:string,DstDomain:string)){
@@ -119,15 +119,15 @@ ParserQuery: |
         temp_DstMatch, "DstDomain",
         "No match"
       )
-    | where ASimMatchingHostname != "No match" 
+    | where ASimMatchingHostname != "No match"
     | project-away temp_*
     };
-    let AllSyslog = 
+    let AllSyslog =
     Syslog
     | where not(disabled)
     | where (isnull(starttime) or TimeGenerated>=starttime) and (isnull(endtime) or TimeGenerated<=endtime)
-    | where SyslogMessage has_any('msg_id="3000-0148"' 
-        , 'msg_id="3000-0149"' 
+    | where SyslogMessage has_any('msg_id="3000-0148"'
+        , 'msg_id="3000-0149"'
         , 'msg_id="3000-0150"'
         , 'msg_id="3000-0151"'
         , 'msg_id="3000-0173"'
@@ -140,7 +140,7 @@ ParserQuery: |
     | where  (eventresult=="*" or (DvcAction=="Allow" and eventresult=="Success") or (eventresult=="Failure"))
     | project TimeGenerated, SyslogMessage, HostName, DvcAction, EventResult, EventSeverity
     ;
-    let Parse1 = 
+    let Parse1 =
     AllSyslog
     | where SyslogMessage !has "icmp" and SyslogMessage !has "igmp" and SyslogMessage !has "3000-0151"
     | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} (tcp|udp) \d{2,5} \d{2,5} " SrcIpAddr " " DstIpAddr " " SrcPortNumber:int @" " DstPortNumber:int @" " *
@@ -149,7 +149,7 @@ ParserQuery: |
     | invoke IPParser()
     | invoke HostParser()
     ;
-    let Parse2 = 
+    let Parse2 =
     AllSyslog
     | where SyslogMessage !has "icmp" and SyslogMessage !has "igmp" and SyslogMessage has "3000-0151"
     | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" (tcp|udp) " SrcIpAddr " " DstIpAddr " " SrcPortNumber:int @" " DstPortNumber:int @" " *
@@ -158,26 +158,26 @@ ParserQuery: |
     | invoke IPParser()
     | invoke HostParser()
     ;
-    let Parse3 = 
+    let Parse3 =
     AllSyslog
     | where SyslogMessage has "icmp" and SyslogMessage !has "3000-0151"
-    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} icmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " * 
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} icmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " *
     | invoke SyslogParser()
     | invoke IPParser()
     | invoke HostParser()
     ;
-    let Parse4 = 
+    let Parse4 =
     AllSyslog
     | where SyslogMessage has "icmp" and SyslogMessage has "3000-0151"
-    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" icmp " SrcIpAddr " " DstIpAddr " " * 
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" icmp " SrcIpAddr " " DstIpAddr " " *
     | invoke SyslogParser()
     | invoke IPParser()
     | invoke HostParser()
     ;
-    let Parse5 = 
+    let Parse5 =
     AllSyslog
     | where SyslogMessage has "igmp" and SyslogMessage !has "3000-0151"
-    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} igmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " * 
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} igmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " *
     | invoke SyslogParser()
     | invoke IPParser()
     | invoke HostParser()

@@ -98,7 +98,7 @@ Go back to Overview page of the playbook and click on Enable to enable the playb
 It will run automatically first time. <br>
 <br>
 
-# Troubleshooting 
+# Troubleshooting
 - Make sure that all API permissions and user/application roles are assigned.
 - Make sure that Logic App connectors are authorized with correct identity
 - If using user identity, make sure that user has needed permissions

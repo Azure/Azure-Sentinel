@@ -15,7 +15,7 @@
 
 # Overview
 
-Rapid7 InsightVM is a vulnerability management tool that brings together Rapid7’s library of vulnerability research, exploit knowledge, global attacker behavior, Internet-wide scanning data, exposure analytics, and real-time reporting. 
+Rapid7 InsightVM is a vulnerability management tool that brings together Rapid7’s library of vulnerability research, exploit knowledge, global attacker behavior, Internet-wide scanning data, exposure analytics, and real-time reporting.
 
 <a name="deployall">
 
@@ -35,7 +35,7 @@ You can choose to deploy the whole package: connectors + all three playbook temp
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRapid7InsightVM%2FPlaybooks%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRapid7InsightVM%2FPlaybooks%2Fazuredeploy.json)
 
-# Rapid7 InsightVM connectors documentation 
+# Rapid7 InsightVM connectors documentation
 
 <a name="authentication">
 
@@ -51,7 +51,7 @@ To get Rapid7 InsightVM API key, follow the instructions in the [documentation](
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 
 1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters for deploying Custom Connectors and Playbooks

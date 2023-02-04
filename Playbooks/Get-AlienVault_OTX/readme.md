@@ -3,7 +3,7 @@ author: Andrew Blumhardt
 
 This is a Logic App to import threat indicators from AlienVault into Azure Sentinel using the Graph Security API.
 
-Refer to the following link for a more detailed description: https://azurecloudai.blog/2020/11/19/how-to-connect-alienvault-otx-to-azure-sentinel/ 
+Refer to the following link for a more detailed description: https://azurecloudai.blog/2020/11/19/how-to-connect-alienvault-otx-to-azure-sentinel/
 
 The connector "Threat Intelligence Platforms (Preview)" is needed to activate the integration with Microsoft Graph Security API.
 
@@ -53,5 +53,5 @@ During testing the provider returned some incorrectly formatted records. This wa
 </ul>
 </li>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlienVault_OTX%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlienVault_OTX%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FGet-AlienVault_OTX%2Fazuredeploy.json)

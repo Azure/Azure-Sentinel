@@ -22,7 +22,7 @@ We will need following data to make Jira connector:<br>
 - Issue Type Id (Microsoft Sentinel incident issue type in Jira - Task, Story, Bug,...).<br>
 2. Assign Microsoft Sentinel Responder role to playbook's managed identity. To do so, choose Identity blade under Settings of the Logic App.
 3. Add playbook as an action to the automation rule, ex.:
-- Trigger = When incident is updated;  
+- Trigger = When incident is updated;
 - Condition = Staus > Changed To > Closed;.<br>
 **Automation rule example**<br>
 ![Automation Rule Example](./images/AutomationRuleExampleDark.jpg)

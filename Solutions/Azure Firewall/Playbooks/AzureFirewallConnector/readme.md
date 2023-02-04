@@ -44,7 +44,7 @@ I contains actions that work on: IP Groups, Azure Firewall and Azure Firewall Po
 
 <a name="deployment">
 
-## Deployment instructions 
+## Deployment instructions
 
 Prior using this custom connector, it should be deployed in the Resource Group where the playbooks that will include it are located.
 <br>

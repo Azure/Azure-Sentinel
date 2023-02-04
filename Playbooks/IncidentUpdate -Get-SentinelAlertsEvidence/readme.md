@@ -15,5 +15,3 @@ https://docs.microsoft.com/azure/event-hubs/event-hubs-create  or use an existin
 3.	Once the playbook is deployed; modify the required connection to Azure Monitor Logs <br>(This means configuring the connection to your workspace so we can query for the updated Azure Sentinel incidents).<br>
 
 4.	Next, configure the connection to your event hub (in the "send event" actions; use your Event Hub from step 1.) <br>
-
-

@@ -1,7 +1,7 @@
 # Revoke-AADSignInSessions
 author: Nicholas DiCola
 
-This playbook will revoke all signin sessions for the user using Graph API. It will send and email to the user's manager. 
+This playbook will revoke all signin sessions for the user using Graph API. It will send and email to the user's manager.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
@@ -41,7 +41,7 @@ $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
 
 $GraphAppId = "00000003-0000-0000-c000-000000000000"
-$PermissionName = "User.ReadWrite.All" 
+$PermissionName = "User.ReadWrite.All"
 
 $GraphServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphAppId'"
 $AppRole = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
@@ -55,4 +55,3 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 ![Incident Trigger](./incident-trigger/images/Revoke-AADSignInSessions_incident.png)<br>
 **Alert Trigger**<br>
 ![Alert Trigger](./alert-trigger/images/Revoke-AADSignInSessions_alert.png)<br>
-

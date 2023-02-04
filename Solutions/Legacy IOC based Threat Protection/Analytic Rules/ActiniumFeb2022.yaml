@@ -1,10 +1,10 @@
 id: 825991eb-ea39-4590-9de2-ee97ef42eb93
 name: ACTINIUM Actor IOCs - Feb 2022
-description: | 
+description: |
   'Identifies a match across various data feeds for domains, hashes and commands related to an actor tracked by Microsoft as Actinium.'
 severity: High
 status: Available
-requiredDataConnectors: 
+requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
       - DnsEvents
@@ -15,20 +15,20 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
   - connectorId: CiscoASA
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: PaloAltoNetworks
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: Fortinet
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: CheckPoint
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: CEF
-    dataTypes: 
-      - CommonSecurityLog               
+    dataTypes:
+      - CommonSecurityLog
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceNetworkEvents
@@ -37,15 +37,15 @@ requiredDataConnectors:
     dataTypes:
       - SecurityEvent
   - connectorId: AzureFirewall
-    dataTypes: 
+    dataTypes:
       - AzureDiagnostics
       - AZFWApplicationRule
       - AZFWDnsQuery
-queryFrequency: 6h 
-queryPeriod: 6h 
-triggerOperator: gt 
-triggerThreshold: 0 
-tactics: 
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
   - Persistence
 relevantTechniques:
   - T1137
@@ -53,13 +53,13 @@ tags:
    - ACTINIUM
    - Schema: ASIMFileEvent
      SchemaVersion: 0.1.0
-query:  |  
+query:  |
   let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ActiniumIOC.csv"] with (format="csv", ignoreFirstRecord=True);
   let domains = (iocs | where Type =~ "domainname"| project IoC);
   let sha256Hashes = (iocs | where Type =~ "sha256" | project IoC);
   (union isfuzzy=true
   (DeviceProcessEvents
-  | where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or  (ProcessCommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ProcessCommandLine has ('/tr "wscript.exe') and ProcessCommandLine has ('"%PUBLIC%\\Pictures\\') and ProcessCommandLine has ('//e:VBScript //b" /F')) or (ProcessCommandLine has ('wscript.exe C:\\Users\\') and ProcessCommandLine has ('.wav') and  ProcessCommandLine has ('//e:VBScript //b') 
+  | where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or  (ProcessCommandLine has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ProcessCommandLine has ('/tr "wscript.exe') and ProcessCommandLine has ('"%PUBLIC%\\Pictures\\') and ProcessCommandLine has ('//e:VBScript //b" /F')) or (ProcessCommandLine has ('wscript.exe C:\\Users\\') and ProcessCommandLine has ('.wav') and  ProcessCommandLine has ('//e:VBScript //b')
   or (ProcessCommandLine has_all ("schtasks.exe", "create", "wscript", "e:vbscript", ".wav")))
   | project TimeGenerated, ActionType, DeviceId, DeviceName, ProcessCommandLine, InitiatingProcessAccountName, InitiatingProcessCommandLine, FolderPath, InitiatingProcessFolderPath, ProcessId, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256, FileName
   | extend Account = AccountName, Computer = DeviceName,  FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), "InitiatingProcessSHA256", SHA256 in (sha256Hashes), "SHA256", "No Match")
@@ -77,7 +77,7 @@ query:  |
   | extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID
   ),
   ( imFileEvent
-  | where Hash in~ (sha256Hashes) or  (ActingProcessCommandLine  has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ActingProcessCommandLine  has ('/tr "wscript.exe') and ActingProcessCommandLine  has ('"%PUBLIC%\\Pictures\\') and ActingProcessCommandLine  has ('//e:VBScript //b" /F')) or (ActingProcessCommandLine  has ('wscript.exe C:\\Users\\') and ActingProcessCommandLine  has ('.wav') and  ActingProcessCommandLine  has ('//e:VBScript //b') 
+  | where Hash in~ (sha256Hashes) or  (ActingProcessCommandLine  has ('schtasks.exe /CREATE /sc minute /mo 12 /tn')  and ActingProcessCommandLine  has ('/tr "wscript.exe') and ActingProcessCommandLine  has ('"%PUBLIC%\\Pictures\\') and ActingProcessCommandLine  has ('//e:VBScript //b" /F')) or (ActingProcessCommandLine  has ('wscript.exe C:\\Users\\') and ActingProcessCommandLine  has ('.wav') and  ActingProcessCommandLine  has ('//e:VBScript //b')
    or (ActingProcessCommandLine has_all ("schtasks.exe", "create", "wscript", "e:vbscript", ".wav")))
   | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = Hash
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
@@ -97,9 +97,9 @@ query:  |
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = Hashes
   ),
   (DnsEvents
-  | where Name in~ (domains)  
+  | where Name in~ (domains)
   | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
-  | extend DestinationIPAddress = IPAddresses, DNSName = Name, Computer 
+  | extend DestinationIPAddress = IPAddresses, DNSName = Name, Computer
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress
   ),
   (VMConnection
@@ -108,13 +108,13 @@ query:  |
   | project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, RemoteDnsQuestions, DNSName,BytesSent, BytesReceived, RemoteCountry, Type
   | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIp, File = ProcessName
   ),
-  (AzureDiagnostics 
+  (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | project TimeGenerated,Resource, msg_s, Type
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (domains)  
+  | where DestinationHost has_any (domains)
   | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost
   ),
   (AzureDiagnostics
@@ -127,7 +127,7 @@ query:  |
   ),
   (AZFWApplicationRule
   | where isnotempty(Fqdn)
-  | where Fqdn has_any (domains)  
+  | where Fqdn has_any (domains)
   | extend timestamp = TimeGenerated, DNSName = Fqdn, IPCustomEntity = SourceIp
   ),
   (AZFWDnsQuery
@@ -135,9 +135,9 @@ query:  |
   | where QueryName has_any (domains)
   | extend timestamp = TimeGenerated, DNSName = QueryName, IPCustomEntity = SourceIp
   ),
-  (DeviceNetworkEvents 
-  | where isnotempty(RemoteUrl) 
-  | where RemoteUrl  in~ (domains)  
+  (DeviceNetworkEvents
+  | where isnotempty(RemoteUrl)
+  | where RemoteUrl  in~ (domains)
   | project Type, TimeGenerated, DeviceName, RemoteIP, RemoteUrl, InitiatingProcessAccountName
   | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, DNSName = RemoteUrl, IPCustomEntity = RemoteIP
   )

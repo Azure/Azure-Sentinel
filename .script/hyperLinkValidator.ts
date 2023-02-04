@@ -4,14 +4,14 @@ import { ExitCode } from "./utils/exitCode";
 import { GetPRDetails } from "./utils/gitWrapper";
 import * as logger from "./utils/logger";
 
-export async function ValidateHyperlinks(filePath: string): Promise<ExitCode> 
+export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 {
     let splitPath = filePath.split("/")
     if (splitPath[0] === "Solutions")
     {
         let dataFolderName = splitPath[2] === "Data" || splitPath[2] === "data" ? splitPath[2] : null
         let dataConnectorFolderName = splitPath[2] === "DataConnectors" || splitPath[2] === "Data Connectors" ? splitPath[2] : null
-        if (dataFolderName == null && dataConnectorFolderName == null) 
+        if (dataFolderName == null && dataConnectorFolderName == null)
         {
             console.log(`Skipping Hyperlink validation for file path : '${filePath}' as change is not in 'Data' and/or 'Data Connectors' folder`)
             return ExitCode.SUCCESS;
@@ -26,16 +26,16 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
         const content = fs.readFileSync(filePath, "utf8");
         const links = content.match(/(http|https):\/\/([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:\/~+#-]*[\w@?^=%&\/~+#-])+/g);
-        if (links) 
+        if (links)
         {
             var invalidLinks = new Array();
-            for (var link of links) 
+            for (var link of links)
             {
                 link = link.replace(/["']/g, "")
 
                 //check if the link is valid
                 const isValid = await isValidLink(link);
-                if (!isValid) 
+                if (!isValid)
                 {
                     // CHECK IF LINK IS A GITHUB LINK
                     var isGithubLink = false;
@@ -53,7 +53,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                     if (isGithubLink)
                     {
                         const pr = await GetPRDetails();
-                        if (typeof pr === "undefined") 
+                        if (typeof pr === "undefined")
                         {
                             console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
                             return ExitCode.ERROR;
@@ -61,7 +61,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
 
                         const changedFiles = await pr.diff();
                         const imageIndex = link.lastIndexOf('/');
-                        const imageName = link.substring(imageIndex + 1);                        
+                        const imageName = link.substring(imageIndex + 1);
                         const searchedFiles = changedFiles.map(change => change.path).filter(changedFilePath => changedFilePath.indexOf(imageName) > 0);
                         var searchedFilesLength = searchedFiles.length;
                         if (searchedFilesLength <= 0)
@@ -96,9 +96,9 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
     }
 
   //create a function to check if the link is valid
-    async function isValidLink(link: string): Promise<boolean> 
+    async function isValidLink(link: string): Promise<boolean>
     {
-        try 
+        try
         {
             //import XMLHttpRequest from "xmlhttprequest"
             const XMLHttpRequest = require("xmlhttprequest").XMLHttpRequest;
@@ -123,7 +123,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
                 // TIMEOUT STATUS IS 0
                 return false;
             }
-            else 
+            else
             {
                 var responseContent = request.responseText
 
@@ -133,7 +133,7 @@ export async function ValidateHyperlinks(filePath: string): Promise<ExitCode>
             }
 
             return true;
-        } catch (error) 
+        } catch (error)
         {
             console.log(error);
             return false;

@@ -38,7 +38,7 @@ module LogStash
             #check if file was written during the wait
             if @was_file_written ||
                @events_buffer.length == 0 ||
-               (@events_buffer.length <= @maximum_events_to_sample && !force) 
+               (@events_buffer.length <= @maximum_events_to_sample && !force)
               return
             end
 

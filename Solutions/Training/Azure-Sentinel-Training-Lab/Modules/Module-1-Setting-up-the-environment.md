@@ -11,7 +11,7 @@ This module guides you through the deployment of the Microsoft Sentinel Training
 
 To get started with Microsoft Sentinel, you must have a Microsoft Azure subscription. If you do not have a subscription, you can sign up for a free account [here](https://azure.microsoft.com/en/free).
 
-Permissions to create a resource group in your Azure subscription. 
+Permissions to create a resource group in your Azure subscription.
 
 ### Exercise 1: The Microsoft Sentinel workspace
 

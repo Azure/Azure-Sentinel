@@ -1,4 +1,4 @@
-﻿<#  
+﻿<#
     Title:          Okta Data Connector
     Language:       PowerShell
     Version:        1.2
@@ -7,7 +7,7 @@
     Comment:        Added Domain field to log record
 
     DESCRIPTION
-    This Function App calls the Okta System Log API (https://developer.okta.com/docs/reference/api/system-log/) to pull the Okta System logs. The response from the Okta API is recieved in JSON format. This function will build the signature and authorization header 
+    This Function App calls the Okta System Log API (https://developer.okta.com/docs/reference/api/system-log/) to pull the Okta System logs. The response from the Okta API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post the Okta logs to the Okta_CL table in the Log Analytics workspace.
 #>
 
@@ -91,7 +91,7 @@ if ($recordCount -gt 0) {
     $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
     $response | Add-Member -MemberType NoteProperty -Name "Domain" -Value $domain
     $json = $response | ConvertTo-Json -Depth 5
-    Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $LogType  
+    Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType $LogType
 }
 else{
 
@@ -100,4 +100,3 @@ else{
 
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
-

@@ -2,7 +2,7 @@
 Author: Amit Sheps
 
 The following playbook will send mail to notify specific stake holders.<br>
-One example can be in the case of specific security team per product line or per physical location. The playbook requires a watchlist which maps between the sensors name and the mail addresses of the alerts stockholders, a sample is provide with the playbook.  
+One example can be in the case of specific security team per product line or per physical location. The playbook requires a watchlist which maps between the sensors name and the mail addresses of the alerts stockholders, a sample is provide with the playbook.
 
 ## Prerequisites
 * The playbook is applicable for Azure Defender for IoT incidents. Configure an Automation Rule to run a playbook on the relevant IoT incident creation rule.

@@ -25,10 +25,10 @@ aws ec2 --output text --query 'Vpcs[*].{VpcId:VpcId}' describe-vpcs
 Write-Log 'Enabling VPC flow Logs (default format)' -LogFileName $LogFileName -Severity Information -LinePadding 1
 
 Set-RetryAction({
-	
+
 	$vpcResourceIds = Read-ValidatedHost 'Please enter VPC Resource Id[s] from the above list (space separated)'
 	Write-Log -Message "Using Vpc Resource Ids: $vpcResourceIds" -LogFileName $LogFileName -Severity Information -Indent 2
-	
+
 	do
 	{
     	try

@@ -19,7 +19,7 @@
 
 # Overview
 
-Okta is an enterprise-grade, identity management service, built for the cloud, but compatible with many on-premises applications. 
+Okta is an enterprise-grade, identity management service, built for the cloud, but compatible with many on-premises applications.
 With Okta, IT can manage any employee's access to any application or device. Okta runs in the cloud, on a secure, reliable, extensively audited platform, which integrates deeply with on-premises applications, directories, and identity management systems.
 
 ## Deploy Custom Connector + 3 Playbook templates
@@ -34,7 +34,7 @@ You can choose to deploy the whole package : connector + all three playbook temp
 
 
 
-# Okta connector documentation 
+# Okta connector documentation
 
 <a name="authentication">
 
@@ -51,7 +51,7 @@ Authentication methods this connector supports- [API Key authentication](https:/
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required parameteres:
 
@@ -60,11 +60,11 @@ Authentication methods this connector supports- [API Key authentication](https:/
 * Custom Connector name : Enter the Custom connector name (ex:contoso Okta connector)
 
 * Service Endpoint : Enter the okta service end point (ex:https://{yourOktaDomain})
-    
+
 #### b. For Okta-EnrichIncidentWithUserDetails playbook :
 
 * Enrich Incident Playbook Name : Enter the playbook name here (Ex:OktaPlaybook)
-    
+
 #### c. For Okta-PromptUser playbook :
 
 * Prompt User Playbook Name : Enter the playbook name here (Ex:OktaPlaybook)
@@ -77,11 +77,11 @@ Authentication methods this connector supports- [API Key authentication](https:/
 #### d. For Okta-ResponseFromTeams playbook :
 
  * Response From Teams Playbook Name : Enter the playbook name here (Ex:OktaPlaybook)
- 
+
 
 <a name="postdeployment">
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource
@@ -91,7 +91,7 @@ Once deployment is complete, you will need to authorize each connection.
 5.	Click Save
 6.	Repeat steps for other connections such as Teams connection and Okta Api  Connection (For authorizing the Okta API connection, API Key needs to be provided)
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky user account
 2. Configure the automation rules to trigger the playbooks
 
 
@@ -106,6 +106,3 @@ Playbooks
 * [Okta-Response From Teams : Playbook to perform different actions on user on Okta and add user deatils to incident](https://github.com/Azure/Azure-Sentinel/master/Playbooks/Okta/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
 * [Okta-Enrich incident with user details : Playbook to enrich incident with user deatils and user groupdetails ](https://github.com/Azure/Azure-Sentinel/master/Playbooks/Okta/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
 * [Okta-PromptUser : Playbook to prompt risky user about the malicious activity](https://github.com/Azure/Azure-Sentinel/master/Playbooks/Okta/OktaPlaybooks/Okta-PromptUser)
-
-
-

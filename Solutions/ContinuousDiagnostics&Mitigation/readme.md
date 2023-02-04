@@ -1,7 +1,7 @@
 # Overview
 ---
 ## Microsoft Sentinel: Continuous Diagnostics & Mitigation (CDM) Solution
-This Solution enables Compliance Teams, Architects, SecOps Analysts, and Consultants to gain situational awareness for cloud workload security posture. This solution is designed to augment staffing through automation, visibility, assessment, monitoring and remediation. This solution includes (1) Workbook for build/design/reporting, (1) Analytics rule for monitoring and (1) Hunting query for assessment. "The Cybersecurity and Infrastructure Security Agency (CISA) Continuous Diagnostics and Mitigation (CDM) Program is a dynamic approach to fortifying the cybersecurity of government networks and systems. The CDM Program provides cybersecurity tools, integration services, and dashboards to participating agencies to help them improve their respective security postures by delivering better visibility and awareness of their 
+This Solution enables Compliance Teams, Architects, SecOps Analysts, and Consultants to gain situational awareness for cloud workload security posture. This solution is designed to augment staffing through automation, visibility, assessment, monitoring and remediation. This solution includes (1) Workbook for build/design/reporting, (1) Analytics rule for monitoring and (1) Hunting query for assessment. "The Cybersecurity and Infrastructure Security Agency (CISA) Continuous Diagnostics and Mitigation (CDM) Program is a dynamic approach to fortifying the cybersecurity of government networks and systems. The CDM Program provides cybersecurity tools, integration services, and dashboards to participating agencies to help them improve their respective security postures by delivering better visibility and awareness of their
 networks and defending against cyber adversaries." For more information, see 💡[Continuous Diagnostics and Mitigation (CDM)](https://www.cisa.gov/cdm).
 
 ## Try on Portal
@@ -16,14 +16,14 @@ You can deploy the solution by clicking on the buttons below:
 This Solution enables Compliance Teams, Architects, SecOps Analysts, and Consultants to gain situational awareness for cloud workload security posture. This solution is designed to augment staffing through automation, visibility, assessment, monitoring and remediation. This Solution demonstrates best practice guidance, but Microsoft does not guarantee nor imply compliance. All CDM requirements, validations, and controls are governed by the 💡[Cybersecurity & Infrastructure Security Agency](https://www.cisa.gov/cdm). This solution provides visibility and situational awareness for security capabilities delivered with Microsoft technologies in predominantly cloud-based environments. Customer experience will vary by user and some panels may require additional configurations for operation. Recommendations do not imply coverage of respective controls as they are often one of several courses of action for approaching requirements which is unique to each customer.<br>
 
 ### [Microsoft Sentinel Roles](https://docs.microsoft.com/azure/sentinel/roles) / [Microsoft Defender for Cloud Roles](https://docs.microsoft.com/azure/defender-for-cloud/permissions#roles-and-allowed-actions) / [Microsoft Defender for Endpoint Roles](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/user-roles)
-| <strong> Roles </strong> | <strong> Rights </strong> | 
+| <strong> Roles </strong> | <strong> Rights </strong> |
 |:--|:--|
 |Security Reader | View Workbooks, Analytics, Hunting, Security Recommendations |
 |Security Contributor| Deploy/Modify Workbooks, Analytics, Hunting Queries, Apply Security Recommendations |
 |Security Admin| Onboard & Configure Endpoints |
 |Owner| Assign Regulatory Compliance Initiatives|
 
-### Onboarding Prerequisites 
+### Onboarding Prerequisites
 1️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)<br>
 2️⃣ [Onboard Microsoft Defender for Cloud](https://docs.microsoft.com/azure/security-center/security-center-get-started)<br>
 3️⃣ [Onboard Microsoft Defender for Endpoint](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/onboard-configure)<br>
@@ -52,4 +52,4 @@ This hunting query is designed to monitor Azure policies aligned with the Contin
 This alert is designed to monitor Azure policies aligned with the Continuous Diagnostics & Mitigation (CDM) Program. The alert triggers when policy compliance falls below 70% within a 1 week time-frame.<br>
 
 ## Disclaimer
-The Microsoft Sentinel CDM Solution is not endorsed, nor required by the CDM PMO or CISA. The offering is also not a replacement for the CDM program's requirement for agency dashboard integration. While the offering does have similar visibility metrics, the agency and service integrator are still responsible for ensuring relevant cloud and asset data are integrated into the agency dashboard in accordance with CDM Program requirements. Similar, while Microsoft Sentinel CDM may make data aggregation and availability more rapid and efficient, the offering should not be viewed as a replacement for any specific CDM capability, until independently validated by appropriate CISA CDM contractor or federal teams. 
+The Microsoft Sentinel CDM Solution is not endorsed, nor required by the CDM PMO or CISA. The offering is also not a replacement for the CDM program's requirement for agency dashboard integration. While the offering does have similar visibility metrics, the agency and service integrator are still responsible for ensuring relevant cloud and asset data are integrated into the agency dashboard in accordance with CDM Program requirements. Similar, while Microsoft Sentinel CDM may make data aggregation and availability more rapid and efficient, the offering should not be viewed as a replacement for any specific CDM capability, until independently validated by appropriate CISA CDM contractor or federal teams.

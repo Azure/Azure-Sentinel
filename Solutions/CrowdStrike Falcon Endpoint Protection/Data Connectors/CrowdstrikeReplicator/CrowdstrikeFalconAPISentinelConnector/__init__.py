@@ -46,9 +46,9 @@ drop_files_array = []
 def _create_sqs_client():
     sqs_session = get_session()
     return sqs_session.create_client(
-                                    'sqs', 
+                                    'sqs',
                                     region_name=AWS_REGION_NAME,
-                                    aws_access_key_id=AWS_KEY, 
+                                    aws_access_key_id=AWS_KEY,
                                     aws_secret_access_key=AWS_SECRET
                                     )
 
@@ -156,7 +156,7 @@ async def process_file(bucket, s3_path, client, semaphore, session):
                                                 LOG_ANALYTICS_URI,
                                                 WORKSPACE_ID,
                                                 SHARED_KEY,
-                                                LOG_TYPE, 
+                                                LOG_TYPE,
                                                 queue_size=MAX_BUCKET_SIZE
                                                 )
         try:

@@ -18,6 +18,6 @@ This playbook will execute using an incident based trigger and add the IP entiti
 - Attach this playbook to an **automation rule** so it runs when specified incidents are created.
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
-  
+
 ## Screenshots
 ![Designer](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Standalone/Playbooks/Add-IP-Entity-To-Named-Location/images/designer-light.jpg)

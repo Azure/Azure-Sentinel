@@ -20,7 +20,7 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
-ParserQuery: | 
+ParserQuery: |
     let parser = (disabled:bool=false) {
     let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
         // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-
@@ -49,12 +49,12 @@ ParserQuery: |
       ];
     let ParsedDnsEvent_Event =(disabled:bool=false) {
         Event | where not(disabled)
-        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId
         | where Source == "Microsoft-Windows-Sysmon" and EventID==22
         | project-away Source, EventID
         | parse-kv EventData as (
             RuleName:string,
-            UtcTime:datetime, 
+            UtcTime:datetime,
             ProcessGuid:string,
             ProcessId:string,
             QueryName:string,
@@ -64,7 +64,7 @@ ParserQuery: |
             User:string
           )
           with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-        | project-rename 
+        | project-rename
             EventEndTime = UtcTime,
             SrcProcessId = ProcessId,
             SrcProcessGuid = ProcessGuid,
@@ -77,15 +77,15 @@ ParserQuery: |
     };
     let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
         WindowsEvent | where not(disabled)
-        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId,  Provider, Type // , _ItemId 
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId,  Provider, Type // , _ItemId
         | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
-        | project-away Provider, EventID      
-        | extend 
+        | project-away Provider, EventID
+        | extend
             RuleName = tostring(EventData.RuleName),
             EventEndTime = todatetime(EventData.UtcTime),
             SrcProcessGuid = tostring(EventData.ProcessGuid),
             // extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
-            SrcProcessId = tostring(EventData.ProcessId),  
+            SrcProcessId = tostring(EventData.ProcessId),
             DnsQuery = tostring(EventData.QueryName),
             DnsResponseCode = toint(EventData.QueryStatus),
             DnsResponseName = tostring(EventData.QueryResults),
@@ -94,13 +94,13 @@ ParserQuery: |
         | project-away EventData
         | parse SrcProcessGuid with '{' SrcProcessGuid '}'
     };
-    union isfuzzy=true 
-        //ParsedDnsEvent_Event(disabled), 
+    union isfuzzy=true
+        //ParsedDnsEvent_Event(disabled),
         ParsedDnsEvent_WindowsEvent(disabled)
       | lookup RCodeTable on DnsResponseCode
-      | project-rename 
+      | project-rename
           DvcHostname = Computer,
-          // EventUid = _ItemId, 
+          // EventUid = _ItemId,
           DvcScopeId = _SubscriptionId,
           DvcId = _ResourceId
       | extend
@@ -121,7 +121,7 @@ ParserQuery: |
           DnsResponseCodeName = iff (DnsResponseCodeName == "", "NA", DnsResponseCodeName),
           DvcIdType = iff (DvcId != "", "AzureResourceId", "")
       // -- Aliases
-      | extend 
+      | extend
           EventResultDetails = DnsResponseCodeName,
           Domain = DnsQuery,
           Dvc = DvcHostname,

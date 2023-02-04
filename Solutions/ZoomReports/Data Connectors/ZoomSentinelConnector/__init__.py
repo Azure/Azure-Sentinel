@@ -98,7 +98,7 @@ class Sentinel:
         self.fail_processed = 0
         self.table_name = table_name
         self.chunksize = chunksize
-        
+
     def gen_chunks_to_object(self, data, chunksize=100):
         chunk = []
         for index, line in enumerate(data):

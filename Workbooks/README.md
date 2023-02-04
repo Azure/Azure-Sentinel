@@ -1,7 +1,7 @@
 # How to contribute new workbook
 
 This assumes you already have a workbook that you want to share as a Microsoft Sentinel template.<br/>
-Once this process is completed, Microsoft Sentinel users will be able to save an instance of your template that will visualize the data in their own workspace. 
+Once this process is completed, Microsoft Sentinel users will be able to save an instance of your template that will visualize the data in their own workspace.
 
 To learn how to create workbooks - go to [workbooks documentation](https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data).
 
@@ -31,31 +31,31 @@ This logo should be in SVG format.
    ```
    {
     "workbookKey": "YourWorkbookKey", // in the format of "<Name>Workbook" - not important what exactly is the name, just make sure it is unique and related to the workbook, for example PaloAltoOverviewWorkbook
-    
+
     "logoFileName": "",//If you added logo - its name goes here
-    
+
     "description": "description of the workbook.", // Will be displayed on the workbooks blade next to the logo and preview images
-    
+
     "dataTypesDependencies": [ "Datatype" ],//The data type(s) that your workbook queries
-    
+
     "dataConnectorsDependencies": [],//Relevant connectors
-    
+
     "previewImagesFileNames": [ ],//The relative path of the preview images you saved under workbooks/images/previews
-    
+
     "version": "1.0", // if this is a new workbook - this should be "1.0"
-    
+
     "title": "Workbook title",//This should be the name of the workbook which will be displayed in the main workbooks blade - for example "Palo Alto overview"
-    
-    "templateRelativePath": "MyNewWorkbook.json",//The relative path of the JSON of the template (the gallery template you saved) 
-    
+
+    "templateRelativePath": "MyNewWorkbook.json",//The relative path of the JSON of the template (the gallery template you saved)
+
     "subtitle": "",
-    
+
     "provider": "Microsoft" //The provider of the workbook
     }
-    
+
  Here is an example of the JSON of Palo Alto workbook:
-  
-    
+
+
        {
       "workbookKey": "PaloAltoOverviewWorkbook",
       "logoFileName": "paloalto_logo.svg",
@@ -69,11 +69,11 @@ This logo should be in SVG format.
       "subtitle": "",
       "provider": "Microsoft"
       },
-   
-  
-  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>  
-  
- 
+
+
+  After this PR is approved and completed, every 2 weeks the workbooks in Sentinel will be synced with the ones in github.<br/>
+
+
 # How to update an existing workbook
 
 Just create a pull request to this repository in which you change the version of the relevant workbook in the [WorkbooksMetadata.json](https://github.com/Azure/Azure-Sentinel/blob/master/Workbooks/WorkbooksMetadata.json) file and change the relevant JSON of the workbook you would like to update.

@@ -1,11 +1,11 @@
-/*  
-    Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel API 
+/*
+    Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel API
     Language:       Python
     Version:        1.0
     Last Modified:  5/30/2020
     Comment:        Inital Release
 
-    DESCRIPTION:    The following Python Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
+    DESCRIPTION:    The following Python Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the
                      Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the <PROVIDER NAME APPLIANCE NAME> API and format the data received into JSON format.
 */
 
@@ -31,21 +31,21 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
 
 
-# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <Data Source> API Key(s) or Token, URI, and/or Other variables. Reference:  https://docs.microsoft.com/azure/azure-functions/functions-reference-python 
+# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <Data Source> API Key(s) or Token, URI, and/or Other variables. Reference:  https://docs.microsoft.com/azure/azure-functions/functions-reference-python
 
 # The following variables are required by the Log Analytics Data Collector API functions below. Reference: https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api
-customer_id = os.environ['workspaceId'] 
+customer_id = os.environ['workspaceId']
 shared_key = os.envviron['workspaceKey']
 log_type = os.envviron['tableName']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customerId + '.ods.opinsights.azure.com'
 
 pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
 match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Invalid Log Analytics Uri.")
-    
+
 /* Used this block to build the <PROVIDER NAME APPLIANCE NAME> REQUEST header needed to call the API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
 
 For example:
@@ -82,7 +82,7 @@ body = json.dumps(json_data)
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
     x_headers = 'x-ms-date:' + date
     string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-    bytes_to_hash = bytes(string_to_hash).encode('utf-8')  
+    bytes_to_hash = bytes(string_to_hash).encode('utf-8')
     decoded_key = base64.b64decode(shared_key)
     encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest())
     authorization = "SharedKey {}:{}".format(customer_id,encoded_hash)

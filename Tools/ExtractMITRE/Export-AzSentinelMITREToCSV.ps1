@@ -52,7 +52,7 @@ param (
   [bool]$ShowZeroSimulatedRuleTemplates = $false,
 
   [bool]$ShowAllSimulatedRuleTemplates = $false
-  
+
 )
 
 Add-Type -AssemblyName System.Collections
@@ -68,7 +68,7 @@ $simulatedOutput = New-Object System.Data.DataTable
 [void]$simulatedOutput.Columns.Add('Tactic', [string]::empty.GetType() )
 [void]$simulatedOutput.Columns.Add('Technique', [string]::empty.GetType() )
 [void]$simulatedOutput.Columns.Add('Name', [string]::empty.GetType() )
-[void]$simulatedOutput.Columns.Add('RuleName', [string]::empty.GetType() ) 
+[void]$simulatedOutput.Columns.Add('RuleName', [string]::empty.GetType() )
 
 
 #[collections.generic.list[object]]$outputObject = @("Tactic" , "Technique" , "Name" , "Count" ,"Description" )
@@ -88,7 +88,7 @@ $tacticHash = [ordered]@{
   "Collection"              = @("T1560", "T1123", "T1119", "T1115", "T1530", "T1602", "T1213", "T1005", "T1039", "T1025", "T1074", "T1114", "T1056", "T1185", "T1557", "T1113", "T1125", "T1609", "T1610", "T0802", "T0811", "T0887", "T0877", "T0830", "T0801", "T0868", "T0852", "T0861", "T0845")
   "CommandAndControl"       = @("T1071", "T1092", "T1132", "T1001", "T1568", "T1573", "T1008", "T1105", "T1104", "T1095", "T1571", "T1572", "T1090", "T1219", "T1205", "T1102", "T0884", "T0869", "T0885")
   "Exfiltration"            = @("T1020", "T1030", "T1048", "T1041", "T1011", "T1052", "T1567", "T1029", "T1537")
-  "Impact"                  = @("T1531", "T1485", "T1486", "T1565", "T1491", "T1561", "T1499", "T1495", "T1490", "T1498", "T1496", "T1489", "T1529", "T0882", "T0813", "T0879", "T0880", "T0815", "T0837", "T0826", "T0832", "T0828", "T0831", "T0829", "T0827")  
+  "Impact"                  = @("T1531", "T1485", "T1486", "T1565", "T1491", "T1561", "T1499", "T1495", "T1490", "T1498", "T1496", "T1489", "T1529", "T0882", "T0813", "T0879", "T0880", "T0815", "T0837", "T0826", "T0832", "T0828", "T0831", "T0829", "T0827")
   "ImpairProcessControl"    = @("T0836", "T0839", "T0806", "T0855", "T0856", "T0857")
   "InhibitResponseFunction" = @("T0838", "T0805", "T0804", "T0814", "T0851", "T0878", "T0835", "T0809", "T0816", "T0800", "T0803", "T0881", "T0857")
 }
@@ -625,7 +625,7 @@ $techniqueDescriptionHash = @{
   T0867 = "Adversaries may transfer tools or other files from one system to another to stage adversary tools or other files over the course of an operation.1 Copying of files may also be performed laterally between internal victim systems to support Lateral Movement with remote Execution using inherent file sharing protocols such as file sharing over SMB to connected network shares.1."
   T0873 = "Adversaries may attempt to infect project files with malicious code. These project files may consist of objects, program organization units, variables such as tags, documentation, and other configurations needed for PLC programs to function.1 Using built in functions of the engineering software, adversaries may be able to download an infected program to a PLC in the operating environment enabling further execution and persistence techniques."
   T0890 = "Adversaries may exploit software vulnerabilities in an attempt to elevate privileges. Exploitation of a software vulnerability occurs when an adversary takes advantage of a programming error in a program, service, or within the operating system software or kernel itself to execute adversary-controlled code. Security constructs such as permission levels will often hinder access to information and use of certain techniques, so adversaries will likely need to perform privilege escalation to include use of software exploitation to circumvent those restrictions."
-} 
+}
 Function Export-AzSentineMITREtoCSV ($workspaceName, $resourceGroupName, $filename, $includeDisabled, $ShowZeroSimulatedRuleTemplates, $ShowAllSimulatedRuleTemplates) {
 
   #Setup the Authentication header needed for the REST calls
@@ -634,10 +634,10 @@ Function Export-AzSentineMITREtoCSV ($workspaceName, $resourceGroupName, $filena
   $profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($Profile)
   $token = $profileClient.AcquireAccessToken($context.Subscription.TenantId)
   $authHeader = @{
-    'Content-Type'  = 'application/json' 
-    'Authorization' = 'Bearer ' + $token.AccessToken 
+    'Content-Type'  = 'application/json'
+    'Authorization' = 'Bearer ' + $token.AccessToken
   }
-    
+
   $subscriptionId = (Get-AzContext).Subscription.Id
 
   #Load the templates so that we can copy the information as needed
@@ -654,7 +654,7 @@ Function Export-AzSentineMITREtoCSV ($workspaceName, $resourceGroupName, $filena
       else {
         $count = ($results.properties | Where-Object { ($_.techniques -eq $technique) -and ($_.tactics -eq $tactic) -and ($_.enabled -eq $true) }).count
       }
-     
+
       #[void]$outputObject.add([pscustomobject]@{"Tactic" = $tactic; "Technique" = $technique; "Name"=$techniqueNameHash[$technique]; "Count" = $count; "Description" = $techniqueDescriptionHash[$technique] })
       $newRow = $outputObject.NewRow()
       $newRow.Tactic = $tactic

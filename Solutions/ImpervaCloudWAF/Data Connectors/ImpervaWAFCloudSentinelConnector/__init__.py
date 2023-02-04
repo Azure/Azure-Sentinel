@@ -13,11 +13,11 @@ import re
 import logging
 from .state_manager import StateManager
 
-customer_id = os.environ['WorkspaceID'] 
+customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
-imperva_waf_api_id = os.environ['ImpervaAPIID'] 
-imperva_waf_api_key = os.environ['ImpervaAPIKey'] 
-imperva_waf_log_server_uri = os.environ['ImpervaLogServerURI'] 
+imperva_waf_api_id = os.environ['ImpervaAPIID']
+imperva_waf_api_key = os.environ['ImpervaAPIKey']
+imperva_waf_log_server_uri = os.environ['ImpervaLogServerURI']
 logs_encryption_private_key = ""
 
 connection_string = os.environ['AzureWebJobsStorage']
@@ -142,7 +142,7 @@ class ImpervaFilesHandler:
                     events_arr.append(event_message)
         for chunk in self.gen_chunks_to_object(events_arr, chunksize=1000):
             self.sentinel.post_data(json.dumps(chunk), len(chunk), file_name)
-    
+
     def parse_cef(self,cef_raw):
         rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
         parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
@@ -157,7 +157,7 @@ class ImpervaFilesHandler:
                 parsed_cef.pop(f'{elem}Label')
                 parsed_cef.pop(elem)
         return parsed_cef
-                
+
     def gen_chunks_to_object(self, object, chunksize=100):
         chunk = []
         for index, line in enumerate(object):

@@ -16,7 +16,7 @@ import re
 
 from .sentinel_connector import AzureSentinelConnector
 
-customer_id = os.environ['WorkspaceID'] 
+customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 cluster_id = os.environ['ProofpointClusterID']
 _token = os.environ['ProofpointToken']
@@ -24,7 +24,7 @@ time_delay_minutes = 60
 event_types = ["maillog","message"]
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
@@ -140,9 +140,9 @@ class Proofpoint_api:
                 ws.close()
             except Exception as err:
                 logging.error('Error while closing socket: {}'.format(err))
-                print('Error while closing socket: {}'.format(err))                
+                print('Error while closing socket: {}'.format(err))
             if sent_events > 0:
-                self.gen_chunks(events,event_type)           
+                self.gen_chunks(events,event_type)
         logging.info('Total events sent: {}. Type: {}. Period(UTC): {} - {}'.format(sent_events, event_type,
                                                                                             self.after_time,
                                                                                             self.before_time))

@@ -4,24 +4,24 @@
 
 1. [Overview](#overview)
 1. [Prerequisites](#prerequisites)
-1. [Deploy Palo Alot XDR playbook](#deployall) 
+1. [Deploy Palo Alot XDR playbook](#deployall)
 1. [Deployment Instructions](#instructions)
 1. [Post-Deployment Instructions](#postdeployment)
 1. [References](#references)
 
 <a name="overview">
 
-# Overview 
+# Overview
 
 Palo Alto XDR playbook is used in Alert triaging and executing the automated response towards issue, and it also helps in evidence collection.
 
 <a name="prerequisites">
 
-# Prerequisites 
+# Prerequisites
 - This playbook uses Microsoft Teams connector and VirusTotal connector to enrich the investigation, so you should set up your account if not already to use the Microsoft ID to authorize the teams connector and you will also have to visit this VirusTotal site create your free account, After successful account creation you shall get a standard free public API Key. This key will be required to authorize the VT connector. Reference link - https://www.virustotal.com/
 This Video demonstarte on how to obtain the API Key https://youtu.be/9ftKViq71eQ.
 
-  
+
 <a name="deployall">
 
 # Deploy the Playbook
@@ -33,14 +33,14 @@ This Video demonstarte on how to obtain the API Key https://youtu.be/9ftKViq71eQ
 
 <a name="instructions">
 
-# Deployment Instructions 
+# Deployment Instructions
 - Deploy the Palo Alto XDR Playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill in the required parameters and then proceed with review and create.
 
 
 <a name="postdeployment">
 
-# Post Deployment Instructions 
+# Post Deployment Instructions
 ## Authorize Connections
 * Once deployment is complete, you will need to authorize each connection.
   - Click the Teams connection resource
@@ -58,4 +58,4 @@ This Video demonstarte on how to obtain the API Key https://youtu.be/9ftKViq71eQ
 <a name="references">
 
 # References
-https://docs.microsoft.com/power-automate/create-adaptive-cards-teams 
+https://docs.microsoft.com/power-automate/create-adaptive-cards-teams

@@ -7,7 +7,7 @@ namespace AzureSentinel_ManagementAPI.DataConnectors.Models
         public string SubscriptionId { get; set; }
 
         public string TenantId { get; set; }
-        
+
         [JsonProperty("dataTypes")]
         public ASCDataConnectorDataTypesPayload DataTypesPayload { get; set; }
     }

@@ -4,7 +4,7 @@
 
 When a new sentinel alerts is created, this playbook gets triggered and performs the following actions:
 
-1. Parse alert extended properties 
+1. Parse alert extended properties
 2. Parse alert custom details
 3. Creates alert in TheHive with description, source, sourceRef, title and type passed.
 

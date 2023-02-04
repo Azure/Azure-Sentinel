@@ -38,7 +38,7 @@ Click on the below button to deploy Cisco Meraki Custom Connector in your Azure 
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FConnector%2FMerakiConnector%2Fazuredeploy.json)
 
 
-# Deployment Instructions 
+# Deployment Instructions
 1. Deploy the Cisco Meraki custom connector by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 2. Fill in the required parameters for deploying Cisco Meraki custom connector.
 

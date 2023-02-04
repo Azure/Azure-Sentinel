@@ -50,7 +50,7 @@ class SOne():
             past_time = (current_time - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         state.post(current_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
         return (past_time, current_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
-    
+
     def get_report(self, report_type_suffix, report_type_name, params = None):
         try:
             r = requests.get(self.domain + report_type_suffix, headers = self.header, params = params)
@@ -174,7 +174,7 @@ def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.info("The timer is past due!")
     logging.info("Python timer trigger function ran at %s", utc_timestamp)
-    logging.info("Starting program") 
+    logging.info("Starting program")
     SO = SOne()
     sentinel = Sentinel()
     SO.reports_list()

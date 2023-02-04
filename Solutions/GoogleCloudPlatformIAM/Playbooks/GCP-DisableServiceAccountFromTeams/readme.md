@@ -11,11 +11,11 @@
  4. Adds comment to the incident with information about the actions taken.
 
 <img src="./playbook_screenshot.png" width="80%"/><br>
-### Prerequisites 
+### Prerequisites
 1. Prior to the deployment of this playbook, GoogleCloudPlatformIAM Connector needs to be deployed under the same subscription.
 2. GCP credentials are required. Refer to the GoogleCloudPlatformIAM Custom Connector documentation.
 
-### Deployment instructions 
+### Deployment instructions
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here
@@ -40,5 +40,5 @@ Once deployment is complete, authorize each connection.
 
 #### b. Configurations in Sentinel
 
-1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the *gcp_project_id* and *gcp_service_account* custom entities. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents. 
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the *gcp_project_id* and *gcp_service_account* custom entities. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
 2. Configure the automation rules to trigger the playbook.

@@ -11,5 +11,5 @@ With the introduction of the new Search, Archive, and Restoration features withi
 
 ## Tools
 
-1. PowerShell Script  
+1. PowerShell Script
 2. Workbook

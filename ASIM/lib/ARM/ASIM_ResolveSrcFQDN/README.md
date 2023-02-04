@@ -2,7 +2,7 @@
 
 ARM template for deploying the Log Analytics KQL function An ASIM function sets SrcHostname, SrcDomain, SrcDomainType and SrcFQDN based for an FQDN or hostname provided as a parameter
 
-This ASIM tabular function is intended for use in ASIM parsers and sets the SrcHostname entity fields based on an FQDN or hostname provided as a parameter. The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field. 
+This ASIM tabular function is intended for use in ASIM parsers and sets the SrcHostname entity fields based on an FQDN or hostname provided as a parameter. The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

@@ -73,8 +73,8 @@ const AzureFunctionPermissions = {
     ]
 };
 
-export function isValidPermissions(permissions: RequiredConnectorPermissions, connectorCategory: any) {   
-    
+export function isValidPermissions(permissions: RequiredConnectorPermissions, connectorCategory: any) {
+
     switch(connectorCategory)
     {
         case ConnectorCategory.CEF:
@@ -111,6 +111,6 @@ function isValidCustomPermission(permissions:RequiredConnectorPermissions)
     {
         return true;
     }
-    
+
     return false;
 }

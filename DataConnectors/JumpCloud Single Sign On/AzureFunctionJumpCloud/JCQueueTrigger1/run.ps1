@@ -1,4 +1,4 @@
-<#  
+<#
     Title:          JumpCloud Data Connector
     Language:       PowerShell
     Version:        1.0.1
@@ -7,7 +7,7 @@
     Comment:        First Release
 
     DESCRIPTION
-    This Function App calls the JumpCloud Directory Insights API (https://jumpcloud-insights.api-docs.io/1.0/api-overview/directory-insights) to pull the JumpCloud logs. The response from the JumpCloud API is recieved in JSON format. This function will build the signature and authorization header 
+    This Function App calls the JumpCloud Directory Insights API (https://jumpcloud-insights.api-docs.io/1.0/api-overview/directory-insights) to pull the JumpCloud logs. The response from the JumpCloud API is recieved in JSON format. This function will build the signature and authorization header
     needed to post the data to the Log Analytics workspace via the HTTP Data Connector API. The Function App will post the JumpCloud logs to the JumpCloud_CL table in the Log Analytics workspace.
 #>
 
@@ -39,7 +39,7 @@ $JCStartTime = $DateFix.ToString('yyyy-MM-ddT00:00:00Z')
 # Retrieve JumpCloud last retrieved record and Date-time or if first run create table
 $JCstorage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $StorageTable = Get-AzStorageTable -Name $JCTablename -Context $JCStorage -ErrorAction Ignore
-if($null -eq $storageTable.Name){  
+if($null -eq $storageTable.Name){
     $result = New-AzStorageTable -Name $JCTablename -Context $JCstorage
     $JCTable = (Get-AzStorageTable -Name $JCTablename -Context $JCstorage.Context).cloudTable
     $result = Add-AzTableRow -table $JCTable -PartitionKey $JCapiToken -RowKey $JCService -property @{'SearchAfter' = "'"+$JCSearchAfter+"'";"StartTime"=$JCStartTime} -UpdateExisting
@@ -64,8 +64,8 @@ do {
     $headers.Add("Content-Type", "application/json")
     $headers.Add("x-api-key", "$JCapiToken")
     #create $body for request
-    $body = '{"service": ["'+ $JCService + '"], ' 
-    if ('' -ne $JCSearchAfter){ 
+    $body = '{"service": ["'+ $JCService + '"], '
+    if ('' -ne $JCSearchAfter){
         $body = $body + ' "search_after": '+ $JCSearchAfter + ', '
     }
     $body = $body + '"start_time": "' + $JCStartTime +'"}'
@@ -125,7 +125,7 @@ do {
     write-output " Limit: $JCLimit; ResultCount: $JCResultCount; Totalsofar: $totalrecordcount"
 } until($JCResultCount -lt $JCLimit)
 
-#store details in function storage table to retrieve next time function runs 
+#store details in function storage table to retrieve next time function runs
 if($response.Headers.ContainsKey("X-Search_after")){
     if($response.Headers["X-Search_after"] -ne ''){
         #if($LastRecordTimestamp -eq ''){

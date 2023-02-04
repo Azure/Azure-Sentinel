@@ -18,7 +18,7 @@ This folder has resources to generate MITRE ATT&CK coverage for Microsoft Sentin
 
 
 **Raw Csv file for Microsoft Sentinel Detections and hunting Queries**
- 
+
  ***KQL Query:***
  ```
  let SentinelGithub = (externaldata(Tactic: string, TechniqueId: string, Platform: string, DetectionType: string, DetectionService: string, DetectionId: guid, DetectionName: string, DetectionDescription: string, ConnectorId: string, DataTypes: string, Query: string, QueryFrequency: string, QueryPeriod: string, TriggerOperator: string, TriggerThreshold: real, DetectionSeverity: string, DetectionUrl: string, IngestedDate: datetime)
@@ -28,7 +28,7 @@ SentinelGithub
 ```
 
 **Raw Csv file for Microsoft Threat Protection Portfolio Services**
-  
+
 ***KQL Query***
 ```
 let MSFTBuiltinAlerts = (externaldata(Alert: string, Description: string, Tactics:string, Severity:string, Provider:string, DetectionService: string)

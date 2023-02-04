@@ -20,7 +20,7 @@ The connector supports all the actions of [URLhaus API](https://urlhaus-api.abus
 
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Faverbn%2FAzure-Sentinel%2FURLhaus-Connector-and-Playbooks%2FSolutions%2FURLhaus%2FPlaybooks%2FURLhausAPIConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Faverbn%2FAzure-Sentinel%2FURLhaus-Connector-and-Playbooks%2FSolutions%2FURLhaus%2FPlaybooks%2FURLhausAPIConnector%2Fazuredeploy.json)

@@ -3,8 +3,8 @@
 - Updated ARM template to support both Commercial and Azure Gov
 - Removed previously added logic
 	- Environment variables to provide additional support for users to supply their own values for Table names
-	
-	
+
+
 
 ## 1.2
 - Fixed issues raised on Sentinel GitHub Repo on AuditLogs

@@ -3,7 +3,7 @@
 Author: Yaniv Shasha
 
 This playbook will add a IP entity to a new or existing watchlist.
- 
+
 ## Logical flow to use this playbook
 
 	1. The analyst finished investigating an incident and one of its findings is a suspicious IP entity.

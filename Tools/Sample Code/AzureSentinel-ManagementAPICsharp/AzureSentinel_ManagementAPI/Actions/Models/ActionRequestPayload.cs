@@ -6,7 +6,7 @@ namespace AzureSentinel_ManagementAPI.Actions.Models
     {
         [JsonProperty("etag")]
         public string ETag { get; set; }
-        
+
         [JsonProperty("properties")]
         public ActionRequestPropertiesPayload PropertiesPayload { get; set; }
     }

@@ -8,7 +8,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules.Models
         {
             Kind = AlertRuleKind.Scheduled;
         }
-        
+
         [JsonProperty("properties")]
         public ScheduledAlertRulePropertiesPayload PropertiesPayload { get; set; }
 

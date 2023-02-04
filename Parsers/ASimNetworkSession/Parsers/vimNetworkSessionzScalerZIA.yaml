@@ -65,7 +65,7 @@ ParserQuery: |
     'Block ICMP', 'Drop ICMP',
     'Drop', 'Drop'
   ];
-  let parser=  
+  let parser=
     (starttime:datetime=datetime(null)
     , endtime:datetime=datetime(null)
     , srcipaddr_has_any_prefix:dynamic=dynamic([])
@@ -76,17 +76,17 @@ ParserQuery: |
     , dvcaction:dynamic=dynamic([])
     , eventresult:string='*'
     , disabled:bool=false) {
-    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-  CommonSecurityLog 
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+  CommonSecurityLog
   | where (isnull(starttime) or TimeGenerated >= starttime)
      and  (isnull(endtime) or TimeGenerated <= endtime)
   | where not(disabled)
   | where DeviceVendor == "Zscaler"
   | where DeviceProduct == "NSSFWlog"
   |where
-    (array_length(hostname_has_any) == 0) // No host name information, so always filter out if hostname filter used. 
-    and   (isnull(dstportnumber) or dstportnumber == DestinationPort) 
+    (array_length(hostname_has_any) == 0) // No host name information, so always filter out if hostname filter used.
+    and   (isnull(dstportnumber) or dstportnumber == DestinationPort)
   | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any), temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
   | extend ASimMatchingIpAddr=case(
                                   array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
@@ -99,47 +99,47 @@ ParserQuery: |
   | where ASimMatchingIpAddr != "No match"
   | project-away temp_*
   | project-rename DvcOriginalAction = DeviceAction
-  | lookup ActionLookup on DvcOriginalAction 
+  | lookup ActionLookup on DvcOriginalAction
   | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
-  | extend EventResult = iff (DvcOriginalAction == "Allow", "Success", "Failure") 
+  | extend EventResult = iff (DvcOriginalAction == "Allow", "Success", "Failure")
   | where (eventresult=='*' or EventResult == eventresult)
   // -- Event fields
-  | extend 
-    EventStartTime=TimeGenerated, 
-    EventVendor = "Zscaler", 
-    EventProduct = "ZIA Firewall", 
-    EventSchema = "NetworkSession", 
-    EventSchemaVersion="0.2.3", 
-    EventType = 'NetworkSession', 
+  | extend
+    EventStartTime=TimeGenerated,
+    EventVendor = "Zscaler",
+    EventProduct = "ZIA Firewall",
+    EventSchema = "NetworkSession",
+    EventSchemaVersion="0.2.3",
+    EventType = 'NetworkSession',
     EventSeverity = 'Informational',
-    EventEndTime=TimeGenerated 
+    EventEndTime=TimeGenerated
   | project-rename
-    DvcHostname = Computer, 
-    EventProductVersion = DeviceVersion, 
-    NetworkProtocol = Protocol, 
-    DstIpAddr = DestinationIP, 
-    DstPortNumber = DestinationPort, 
-    DstNatIpAddr = DestinationTranslatedAddress, 
-    DstNatPortNumber = DestinationTranslatedPort, 
-    DstAppName = DeviceCustomString3, 
-    NetworkApplicationProtocol = DeviceCustomString2, 
-    SrcIpAddr = SourceIP, 
-    SrcPortNumber = SourcePort, 
+    DvcHostname = Computer,
+    EventProductVersion = DeviceVersion,
+    NetworkProtocol = Protocol,
+    DstIpAddr = DestinationIP,
+    DstPortNumber = DestinationPort,
+    DstNatIpAddr = DestinationTranslatedAddress,
+    DstNatPortNumber = DestinationTranslatedPort,
+    DstAppName = DeviceCustomString3,
+    NetworkApplicationProtocol = DeviceCustomString2,
+    SrcIpAddr = SourceIP,
+    SrcPortNumber = SourcePort,
     SrcUsername = SourceUserName,
-    SrcNatIpAddr= SourceTranslatedAddress, 
-    SrcNatPortNumber = SourceTranslatedPort, 
+    SrcNatIpAddr= SourceTranslatedAddress,
+    SrcNatPortNumber = SourceTranslatedPort,
     SrcUserDepartment = DeviceCustomString1,  // Not in standard schema
     SrcUserLocation = SourceUserPrivileges,  // Not in standard schema
-    ThreatName = DeviceCustomString6, 
-    ThreatCategory = DeviceCustomString5, 
+    ThreatName = DeviceCustomString6,
+    ThreatCategory = DeviceCustomString5,
     NetworkRuleName = Activity,
     EventOriginalSeverity = LogSeverity,
-    EventMessage = Message 
+    EventMessage = Message
   // -- Calculated fields
   | extend
     // -- Adjustment to support both old and new CSL fields.
     EventCount=coalesce(
-      toint(column_ifexists("fieldDeviceCustomNumber2", int(null))), 
+      toint(column_ifexists("fieldDeviceCustomNumber2", int(null))),
       toint(column_ifexists("DeviceCustomNumber2",int(null)))
     ),
     NetworkDuration = coalesce(
@@ -148,12 +148,12 @@ ParserQuery: |
     ),
     ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
     SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
-    DstBytes = tolong(ReceivedBytes), 
+    DstBytes = tolong(ReceivedBytes),
     SrcBytes = tolong(SentBytes)
   // -- Enrichment
   | extend
-    DstAppType = "Service", 
-    SrcUsernameType = "UPN" 
+    DstAppType = "Service",
+    SrcUsernameType = "UPN"
   // -- Aliases
   | extend
     Dvc = DvcHostname,

@@ -5,4 +5,3 @@ AnonymousRASampleData.ipynb - This notebook demonstrates the use of Anomalous Re
 AnonymousRATraining.ipynb - This Notebook trains and stores the model in Blob Storage.
 
 AnonymousRAScoring.ipynb - This Notebook schedules the scoring and writes the highest scored results into Log Analytics so the score can be used for hunting, detection, investigation in Azure Sentinel.
-

@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) {schema} parsers 
+# Advanced Security Information Model (ASIM) {schema} parsers
 
 This template deploys all ASIM {schema} parsers.
 

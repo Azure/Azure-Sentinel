@@ -22,7 +22,7 @@
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
- [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FPlaybooks%2FBlockURLs-ForcepointNGFW%2Fazuredeploy.json)  
+ [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FPlaybooks%2FBlockURLs-ForcepointNGFW%2Fazuredeploy.json)
  [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FPlaybooks%2FBlockURLs-ForcepointNGFW%2Fazuredeploy.json)
 
 
@@ -32,15 +32,15 @@
 | ------------- | ------------- |
 | **Playbook Name** | Enter the Playbook Name here without spaces. (e.g. Unblock-URL) |
 | **SMC Connector name**|Enter the name of your Forcepoint SMC Connector without spaces.|
-| **SMC API Key**  | Enter the SMC API Key.  | 
+| **SMC API Key**  | Enter the SMC API Key.  |
 | **SMC Version Number** | Enter the version number of SMC. (e.g. 6.9) |
 | **URL List Name**|Enter URL list name.|
 
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 
 ## Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with URLs. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with URLs.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook steps explained
@@ -67,10 +67,8 @@ This action will compose the Forcepoint image to add to the incident comments.
 - The incident comments are shown below for reference.
 - The incident comments are shown below for reference.
 
-##Incident comment 
+##Incident comment
 
 ![forcepoint](./Images/IncidentCommentLight.png)
 
 ![forcepoint](./Images/IncidentCommentDark.png)
-
-

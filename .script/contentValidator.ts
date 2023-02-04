@@ -3,7 +3,7 @@ import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
 import { ExitCode } from "./utils/exitCode";
 import * as logger from "./utils/logger";
 
-export async function ValidateFileContent(filePath: string): Promise<ExitCode> 
+export async function ValidateFileContent(filePath: string): Promise<ExitCode>
 {
     if (!filePath.includes("azure-pipelines"))
     {

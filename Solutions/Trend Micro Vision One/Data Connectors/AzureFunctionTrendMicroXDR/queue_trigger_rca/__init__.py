@@ -32,8 +32,8 @@ def main(rcaMsg: func.QueueMessage) -> None:
             raise GeneralException(f'Token not found for clp: {clp_id}')
 
         rca_task_detail = get_rca_task_detail(token, task_id, target_guid)
-        
-        
+
+
         target_info = {
             'xdrCustomerID': clp_id,
             'taskId': task_id,

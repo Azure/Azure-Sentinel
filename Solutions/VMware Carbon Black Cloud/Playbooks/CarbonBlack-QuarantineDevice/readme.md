@@ -11,17 +11,17 @@
 
 ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight2.png)
 
-### Prerequisites 
+### Prerequisites
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
 3. Find Organization key by referring this link [ Find Organization key by referring this link ](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex:CarbonBlack-QuarantineDevice)
     * OrganizationKey : Enter the Organization key
-    
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 #### Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource
@@ -32,7 +32,7 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat step 2&3 while for CarbonBlack connector Connection to authorize connector API of the playbook (For authorizing the CarbonBlack API connection, API Key needs to be provided. API Key Value is the combination of API Key / API ID)
 
 #### Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky device 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky device
 2. Configure the automation rules to trigger this playbook
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json)

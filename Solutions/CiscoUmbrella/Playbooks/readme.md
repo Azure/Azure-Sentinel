@@ -40,7 +40,7 @@ You can choose to deploy the whole package: connectors + all three playbook temp
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2Fazuredeploy.json)
 
-# Cisco Umbrella connectors documentation 
+# Cisco Umbrella connectors documentation
 
 <a name="authentication">
 
@@ -56,7 +56,7 @@ Each Logic Apps Custom Connector requires different type of credentials. Check d
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 
 1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters for deploying Custom Connectors and Playbooks

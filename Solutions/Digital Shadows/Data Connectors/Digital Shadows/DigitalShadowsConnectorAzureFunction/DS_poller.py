@@ -11,10 +11,10 @@ logger = logging.getLogger("DS_poller")
 class poller:
 
     def __init__(self, function_name, ds_id, ds_key, secret, as_id, as_key, connection_string, historical_days, url):
-        """ 
-            initializes all necessary variables from other classes for polling 
         """
-        
+            initializes all necessary variables from other classes for polling
+        """
+
         self.DS_obj = DS_api.api(ds_id, ds_key, secret, url)
         self.AS_obj = AS_api.logs_api(as_id, as_key)
         self.date = State(connection_string, function_name)
@@ -55,7 +55,7 @@ class poller:
                 raise Exception(f'Triage item missing expected source ID field: {item}')
 
         for item in alerts_and_incidents:
-            # Replacing None in the list with the incident/alert corresponding to respective triage item. 
+            # Replacing None in the list with the incident/alert corresponding to respective triage item.
             if item['id'] in data:
                 data[item['id']][1] = item
             else:
@@ -69,7 +69,7 @@ class poller:
             alert_or_incident['triage_id'] = triage_item['id']
             alert_or_incident['triage_raised_time'] = triage_item['raised']
             alert_or_incident['triage_updated_time'] = triage_item['updated']
-            
+
             #creating a custom json data to post into azure
             azure_obj = {
                 **alert_or_incident,
@@ -119,23 +119,23 @@ class poller:
                 max_event_num = max([e['event-num'] for e in event_data])
                 logger.info("First poll from event number " + str(event_data[0]['event-num']))
                 logger.info("Total number of events are " + str(len(event_data)))
-        
+
         for event in event_data:
             if event is not None and event['triage-item-id'] not in triage_id:
                 triage_id.append(event['triage-item-id'])
 
         logger.info(triage_id)
-        
+
         if triage_id:
             item_data = self.DS_obj.get_triage_items(triage_id)
-        
+
         return item_data, max_event_num
 
     def poll(self, classification_filter_operation, classification_list):
         """
-            main polling function, 
+            main polling function,
             makes api calls in following fashion:
-            triage-events --> triage-items --> incidents and alerts 
+            triage-events --> triage-items --> incidents and alerts
         """
         try:
             #sending data to sentinel
@@ -147,16 +147,16 @@ class poller:
                 #creating list of ids by alert and incidents
                 alert_triage_items = list(filter(lambda item: item['source']['alert-id'] is not None, item_data))
                 inc_triage_items = list(filter(lambda item: item['source']['incident-id'] is not None, item_data))
-                
+
                 #getting data from DS and posting to Sentinel
                 if inc_triage_items:
                     inc_ids = [item['source']['incident-id'] for item in inc_triage_items]
                     response_inc = self.DS_obj.get_incidents(inc_ids)
-                        
+
                 if alert_triage_items:
                     alert_ids = [item['source']['alert-id'] for item in alert_triage_items]
                     response_alert = self.DS_obj.get_alerts(alert_ids)
-                    
+
                 if inc_triage_items:
                     self.post_azure(response_inc, inc_triage_items, classification_filter_operation)
                 if alert_triage_items:
@@ -169,4 +169,3 @@ class poller:
             self.date.post_event(max_event_num)
         except Exception:
             logger.exception("Error polling: ")
-            

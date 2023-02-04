@@ -32,23 +32,23 @@ query: |
       DeviceFileEvents
       | where Timestamp > minTime
           and FileName in~ (accessibilityProcessNames)
-          and FolderPath contains @"Windows\System32" 
+          and FolderPath contains @"Windows\System32"
       | project Technique="OverwriteFile", Timestamp, DeviceName, FileName, SHA1, InitiatingProcessCommandLine;
   // Query for unexpected hashes of processes with names matching the accessibility processes.
   // Specifically, query for hashes matching cmd.exe and powershell.exe, as these MS-signed general-purpose consoles are often used with this technique.
   let executedProcessIsPowershellOrCmd =
-      DeviceProcessEvents 
-      | project Technique="PreviousOverwriteFile", Timestamp, DeviceName, FileName, SHA1 
+      DeviceProcessEvents
+      | project Technique="PreviousOverwriteFile", Timestamp, DeviceName, FileName, SHA1
       | where Timestamp > minTime
       | where FileName in~ (accessibilityProcessNames)
       | join kind=leftsemi(
-          DeviceProcessEvents  
+          DeviceProcessEvents
           | where Timestamp > ago(14d) and (FileName =~ "cmd.exe" or FileName =~ "powershell.exe")
-          | summarize MachinesCount = dcount(DeviceName) by SHA1  
+          | summarize MachinesCount = dcount(DeviceName) by SHA1
           | where MachinesCount > 5
           | project SHA1
       ) on SHA1;
-  // Union all results together. 
+  // Union all results together.
   // An outer union is used because the schemas are a bit different between the tables - and we want to get the superset of all tables combined.
   attachedDebugger
   | union kind=outer fileOverwiteOfAccessibilityFiles

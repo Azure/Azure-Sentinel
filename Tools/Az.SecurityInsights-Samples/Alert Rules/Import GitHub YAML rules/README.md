@@ -47,18 +47,9 @@ $GitHubYAMLRulesToExport = @(
 ```
 <br/>
 
-#### Running the script 
+#### Running the script
 After your have downloaded the sample script, you can run the script with parameters as follows:
 ```powershell
 .\ImportGitHubYAMLrules.ps1 -subscriptionId "12345678-c53c-4092-8d4a-12345678900c" -resourceGroupName "myResourceGroupName" -workspaceName "mySentinelworkspaceName" `
 -YAMLimportPath "C:\Sentinel\YAMLimport" -GitHubPath "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Detections/"
 ```
-
-
-
-
-
-
-
-
-

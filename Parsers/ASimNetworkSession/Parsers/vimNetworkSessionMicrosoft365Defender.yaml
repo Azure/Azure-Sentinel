@@ -66,42 +66,42 @@ ParserQuery: |
     ,'ConnectionRequest','Outbound', true
     ,'InboundConnectionAccepted', 'Inbound', false
     ,'ConnectionFound', 'Unknown', false
-    ,'ListeningConnectionCreated', 'Listen', false 
+    ,'ListeningConnectionCreated', 'Listen', false
   ];
-  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
+  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
   // -- Common preprocessing to both input and outbound events
   let RawNetworkEvents = (select_outbound:boolean) {
-    DeviceNetworkEvents 
-    | where    (isnull(starttime) or TimeGenerated>=starttime) 
-           and (isnull(endtime) or TimeGenerated<=endtime) 
+    DeviceNetworkEvents
+    | where    (isnull(starttime) or TimeGenerated>=starttime)
+           and (isnull(endtime) or TimeGenerated<=endtime)
     | where not(disabled)
     | lookup DirectionLookup on ActionType
     | where Outbound == select_outbound
-    | project-away AppGuardContainerId, LocalIPType, MachineGroup, RemoteIPType, Timestamp // , SourceSystem, TenantId, 
+    | project-away AppGuardContainerId, LocalIPType, MachineGroup, RemoteIPType, Timestamp // , SourceSystem, TenantId,
     // --  Pre-filtering
     |where  (array_length(dvcaction)==0 )     /// if filtered by action return nothing
            and (isnull(dstportnumber) or dstportnumber == LocalPort or dstportnumber == RemotePort)
-           and (array_length(hostname_has_any)==0 
+           and (array_length(hostname_has_any)==0
               or RemoteUrl has_any(hostname_has_any) or DeviceName has_any(hostname_has_any)
               )
     | extend temp_isSrcMatch=( // only one of each pair has_any_ipv4_prefix is calculated
                     (Outbound and has_any_ipv4_prefix(LocalIP,src_or_any))
                     or
                     (not(Outbound) and has_any_ipv4_prefix(RemoteIP,src_or_any))
-                    ) 
+                    )
            , temp_isDstMatch=(
                     (not(Outbound) and has_any_ipv4_prefix(LocalIP,dst_or_any))
                     or
                     (Outbound and has_any_ipv4_prefix(RemoteIP,dst_or_any))
-                    ) 
+                    )
     | extend ASimMatchingIpAddr = case(
             array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual
             , temp_isSrcMatch, "SrcIpAddr"
             , temp_isDstMatch, "DstIpAddr"
             , "No match"
-    ) 
+    )
     | where ASimMatchingIpAddr != "No match"
     | project-away temp_*
     | extend EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')
@@ -120,9 +120,9 @@ ParserQuery: |
       EventType = 'NetworkSession',
       EventSeverity = "Informational",
       DvcIdType = 'MDEid'
-    | project-away 
+    | project-away
         ReportId, Outbound
-    | project-rename 
+    | project-rename
         EventOriginalResultDetails = ActionType
     | extend
       RemoteUrl = extract (@"(?:https?://)?(.*)", 1, RemoteUrl)
@@ -137,7 +137,7 @@ ParserQuery: |
         toupper(Protocol)
       )
     | project-away Protocol
-    | extend  
+    | extend
       DvcHostname = tostring(SplitHostname[0]),
       DvcDomain = tostring(strcat_array(array_slice(SplitHostname, 1, -1), '.')),
       DvcFQDN = iif (DeviceName contains ".", DeviceName, ""),
@@ -150,12 +150,12 @@ ParserQuery: |
       UrlDomainType = iff(UrlFQDN != "", "FQDN", ""),
       DvcIpAddr = LocalIP
     | extend
-      Dvc = DvcHostname  
+      Dvc = DvcHostname
     | project-rename
       DvcId = DeviceId
     | project-away SplitUrl, SplitHostname
   };
-  let OutboundNetworkEvents = 
+  let OutboundNetworkEvents =
     RawNetworkEvents (true)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==RemotePort)
@@ -189,7 +189,7 @@ ParserQuery: |
        DstDomain = UrlDomain,
        DstFQDN = UrlFQDN,
        DstDomainType = UrlDomainType
-    | extend  
+    | extend
        SrcHostname = DvcHostname,
        SrcDomain = DvcDomain,
        SrcFQDN = DvcFQDN,
@@ -212,7 +212,7 @@ ParserQuery: |
        SrcAppName = SrcProcessName,
        SrcAppType = "Process"
   ;
-  let InboundNetworkEvents = 
+  let InboundNetworkEvents =
     RawNetworkEvents (false)
     // *************** Postfilterring *****************************************************************
     | where (isnull(dstportnumber) or dstportnumber==LocalPort)
@@ -241,7 +241,7 @@ ParserQuery: |
        DstDvcIdType = 'MDEid',
        DstUserIdType = 'SID',
        SrcHostname = UrlHostname
-    | extend  
+    | extend
        DstHostname = DvcHostname,
        DstDomain = DvcDomain,
        DstFQDN = DvcFQDN
@@ -263,11 +263,11 @@ ParserQuery: |
        DstAppType = "Process"
   ;
   union InboundNetworkEvents, OutboundNetworkEvents
-  | project-rename 
+  | project-rename
      Hostname = UrlHostname
   | extend // aliases
      IpAddr = SrcIpAddr,
      Src = SrcIpAddr,
-     Dst = DstIpAddr 
+     Dst = DstIpAddr
   };
   M365Defender (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

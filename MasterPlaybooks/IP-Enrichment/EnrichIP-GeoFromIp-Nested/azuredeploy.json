@@ -1,13 +1,17 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata":{
+    "metadata": {
         "title": "EnrichIP-GeoFromIp-Nested",
         "description": "This playbook will take the IP address entities from the Incident and query a Geo-IP API to geo-locate the IP Address.  It will write the City and Country to a tag on the Incident and more details to the comments.",
         "prerequisites": "None",
         "lastUpdateTime": "2022-08-29T10:43:00Z",
-        "entities": ["ip"],
-        "tags": ["Enrichment"],
+        "entities": [
+            "ip"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
         "support": {
             "tier": "microsoft"
         },
@@ -90,128 +94,128 @@
             "properties": {
                 "state": "Enabled",
                 "definition": {
-            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-            "contentVersion": "1.0.0.0",
-            "parameters": {
-                "$connections": {
-                    "defaultValue": {},
-                    "type": "Object"
-                }
-            },
-            "triggers": {
-                "manual": {
-                    "type": "Request",
-                    "kind": "Http",
-                    "inputs": {
-                        "method": "POST",
-                        "schema": {
-                            "properties": {
-                                "IPs": {
-                                    "items": {
-                                        "properties": {
-                                            "Address": {
-                                                "type": "string"
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "IPs": {
+                                            "items": {
+                                                "properties": {
+                                                    "Address": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "Address"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['IPs']",
+                            "actions": {
+                                "Append_to_string_variable": {
+                                    "runAfter": {
+                                        "Query_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Consolidated comment",
+                                        "value": "IP Address: @{items('For_each')?['Address']}\nCity: @{body('Query_IP')?['city']}\nCountry: @{body('Query_IP')?['country']}\nCountry Code: @{body('Query_IP')?['countryCode']}\nISP: @{body('Query_IP')?['isp']}\nORG: @{body('Query_IP')?['org']}\nLatitude: @{body('Query_IP')?['lat']}\nLongitude: @{body('Query_IP')?['lon']}"
+                                    }
+                                },
+                                "Query_IP": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['IP-API']['connectionId']"
                                             }
                                         },
-                                        "required": [
-                                            "Address"
-                                        ],
-                                        "type": "object"
-                                    },
-                                    "type": "array"
+                                        "method": "get",
+                                        "path": "/@{encodeURIComponent(items('For_each')?['Address'])}"
+                                    }
                                 }
                             },
-                            "type": "object"
-                        }
-                    }
-                }
-            },
-            "actions": {
-                "For_each": {
-                    "foreach": "@triggerBody()?['IPs']",
-                    "actions": {
-                        "Append_to_string_variable": {
                             "runAfter": {
-                                "Query_IP": [
+                                "Initialize_variable_Consolidated_comment": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "AppendToStringVariable",
-                            "inputs": {
-                                "name": "Consolidated comment",
-                                "value": "IP Address: @{items('For_each')?['Address']}\nCity: @{body('Query_IP')?['city']}\nCountry: @{body('Query_IP')?['country']}\nCountry Code: @{body('Query_IP')?['countryCode']}\nISP: @{body('Query_IP')?['isp']}\nORG: @{body('Query_IP')?['org']}\nLatitude: @{body('Query_IP')?['lat']}\nLongitude: @{body('Query_IP')?['lon']}"
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
                             }
                         },
-                        "Query_IP": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
+                        "Initialize_variable_Consolidated_comment": {
+                            "runAfter": {
+                                "Initialize_variable_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
                             "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['IP-API']['connectionId']"
+                                "variables": [
+                                    {
+                                        "name": "Consolidated comment",
+                                        "type": "string"
                                     }
-                                },
-                                "method": "get",
-                                "path": "/@{encodeURIComponent(items('For_each')?['Address'])}"
+                                ]
+                            }
+                        },
+                        "Initialize_variable_IPs": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IPs",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "@variables('Consolidated comment')",
+                                "statusCode": 200
                             }
                         }
                     },
-                    "runAfter": {
-                        "Initialize_variable_Consolidated_comment": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "Foreach",
-                    "runtimeConfiguration": {
-                        "concurrency": {
-                            "repetitions": 1
-                        }
-                    }
+                    "outputs": {}
                 },
-                "Initialize_variable_Consolidated_comment": {
-                    "runAfter": {
-                        "Initialize_variable_IPs": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "InitializeVariable",
-                    "inputs": {
-                        "variables": [
-                            {
-                                "name": "Consolidated comment",
-                                "type": "string"
-                            }
-                        ]
-                    }
-                },
-                "Initialize_variable_IPs": {
-                    "runAfter": {},
-                    "type": "InitializeVariable",
-                    "inputs": {
-                        "variables": [
-                            {
-                                "name": "IPs",
-                                "type": "array"
-                            }
-                        ]
-                    }
-                },
-                "Response": {
-                    "runAfter": {
-                        "For_each": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "Response",
-                    "kind": "Http",
-                    "inputs": {
-                        "body": "@variables('Consolidated comment')",
-                        "statusCode": 200
-                    }
-                }
-            },
-            "outputs": {}
-        },
                 "parameters": {
                     "$connections": {
                         "value": {

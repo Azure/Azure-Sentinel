@@ -2,19 +2,22 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Isolate endpoint - MDE",
+        "title": "Isolate-MDEMachine",
         "description": "This playbook will isolate (full) the machine in Microsoft Defender for Endpoint.",
-        "prerequisites": [
-            "You will need to grant Machine.Isolate permissions to the managed identity."
-        ],
+        "prerequisites": "You will need to grant Machine.Isolate permissions to the managed identity.",
         "lastUpdateTime": "2022-08-29T10:43:00Z",
-        "entities": [ "Host" ],
-        "tags": [ "Remediation" ],
+        "entities": [
+            "host"
+        ],
+        "tags": [
+            "Remediation",
+            "Incident management"
+        ],
         "support": {
             "tier": "microsoft"
         },
         "author": {
-            "name": "Microsoft"
+            "name": "microsoft"
         }
     },
     "parameters": {
@@ -26,7 +29,6 @@
     "variables": {
         "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "MDATPConnectionName": "[concat('wdatp-', parameters('PlaybookName'))]"
-
     },
     "resources": [
         {
@@ -79,157 +81,157 @@
             "properties": {
                 "state": "Enabled",
                 "definition": {
-            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-            "contentVersion": "1.0.0.0",
-            "parameters": {
-                "$connections": {
-                    "defaultValue": {},
-                    "type": "Object"
-                }
-            },
-            "triggers": {
-                "manual": {
-                    "type": "Request",
-                    "kind": "Http",
-                    "inputs": {
-                        "schema": {
-                            "properties": {
-                                "Hosts": {
-                                    "items": {
-                                        "properties": {
-                                            "Hostname": {
-                                                "type": "string"
-                                            }
-                                        },
-                                        "required": [
-                                            "Hostname"
-                                        ],
-                                        "type": "object"
-                                    },
-                                    "type": "array"
-                                }
-                            },
-                            "type": "object"
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
                         }
-                    }
-                }
-            },
-            "actions": {
-                "For_each": {
-                    "foreach": "@triggerBody()?['Hosts']",
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "Hosts": {
+                                            "items": {
+                                                "properties": {
+                                                    "Hostname": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "Hostname"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
                     "actions": {
-                        "Condition": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['Hosts']",
                             "actions": {
-                                "Actions_-_Isolate_machine": {
-                                    "runAfter": {},
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "body": {
-                                            "Comment": "Isolated from playbook for Azure Sentinel Incident:   - ",
-                                            "IsolationType": "Full"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                "Condition": {
+                                    "actions": {
+                                        "Actions_-_Isolate_machine": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Comment": "Isolated from playbook for Azure Sentinel Incident:   - ",
+                                                    "IsolationType": "Full"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/machines/@{encodeURIComponent(items('For_each')?['additionalData']?['MdatpDeviceId'])}/isolate"
                                             }
                                         },
-                                        "method": "post",
-                                        "path": "/api/machines/@{encodeURIComponent(items('For_each')?['additionalData']?['MdatpDeviceId'])}/isolate"
-                                    }
-                                },
-                                "Append_to_string_variable": {
-                                    "runAfter": {
-                                        "Actions_-_Isolate_machine": [
-                                            "Succeeded"
+                                        "Append_to_string_variable": {
+                                            "runAfter": {
+                                                "Actions_-_Isolate_machine": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Comment",
+                                                "value": "@{items('For_each')?['Hostname']}was isolated in MDE and the status was @{body('Actions_-_Isolate_machine')?['status']}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable_2": {
+                                                "runAfter": {},
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "Comment",
+                                                    "value": "@{items('For_each')?['Hostname']} does not have MDEDeviceID in the Entities list. \u00a0It was not isolated.\u00a0"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each')?['additionalData']?['MdatpDeviceId']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
                                         ]
                                     },
-                                    "type": "AppendToStringVariable",
-                                    "inputs": {
-                                        "name": "Comment",
-                                        "value": "@{items('For_each')?['Hostname']}was isolated in MDE and the status was @{body('Actions_-_Isolate_machine')?['status']}"
-                                    }
+                                    "type": "If"
                                 }
                             },
-                            "runAfter": {},
-                            "else": {
-                                "actions": {
-                                    "Append_to_string_variable_2": {
-                                        "runAfter": {},
-                                        "type": "AppendToStringVariable",
-                                        "inputs": {
-                                            "name": "Comment",
-                                            "value": "@{items('For_each')?['Hostname']} does not have MDEDeviceID in the Entities list.  It was not isolated. "
-                                        }
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "not": {
-                                            "equals": [
-                                                "@items('For_each')?['additionalData']?['MdatpDeviceId']",
-                                                "@null"
-                                            ]
-                                        }
-                                    }
+                            "runAfter": {
+                                "Initialize_variable_Comment": [
+                                    "Succeeded"
                                 ]
                             },
-                            "type": "If"
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_Comment": {
+                            "runAfter": {
+                                "Initialize_variable_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_Hosts": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Hosts",
+                                        "type": "object",
+                                        "value": "@triggerBody()?['Hosts']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "@variables('Comment')",
+                                "statusCode": 200
+                            }
                         }
                     },
-                    "runAfter": {
-                        "Initialize_variable_Comment": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "Foreach"
+                    "outputs": {}
                 },
-                "Initialize_variable_Comment": {
-                    "runAfter": {
-                        "Initialize_variable_Hosts": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "InitializeVariable",
-                    "inputs": {
-                        "variables": [
-                            {
-                                "name": "Comment",
-                                "type": "string"
-                            }
-                        ]
-                    }
-                },
-                "Initialize_variable_Hosts": {
-                    "runAfter": {},
-                    "type": "InitializeVariable",
-                    "inputs": {
-                        "variables": [
-                            {
-                                "name": "Hosts",
-                                "type": "object",
-                                "value": "@triggerBody()?['Hosts']"
-                            }
-                        ]
-                    }
-                },
-                "Response": {
-                    "runAfter": {
-                        "For_each": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "Response",
-                    "kind": "Http",
-                    "inputs": {
-                        "body": "@variables('Comment')",
-                        "statusCode": 200
-                    }
-                }
-            },
-            "outputs": {}
-        },
                 "parameters": {
                     "$connections": {
                         "value": {
@@ -258,19 +260,5 @@
                 }
             }
         }
-    ],
-        "metadata":{
-            "title": "Isolate-MDEMachine",
-            "description": "This playbook will isolate (full) the machine in Microsoft Defender for Endpoint.",
-            "prerequisites": "You will need to grant Machine.Isolate permissions to the managed identity.",
-            "lastUpdateTime": "2022-08-29T10:43:00Z",
-            "entities": ["host"],
-            "tags": ["Remediation", "Incident management"],
-            "support": {
-                "tier": "microsoft"
-            },
-            "author": {
-                "name": "microsoft"
-            }
-    }
+    ]
 }

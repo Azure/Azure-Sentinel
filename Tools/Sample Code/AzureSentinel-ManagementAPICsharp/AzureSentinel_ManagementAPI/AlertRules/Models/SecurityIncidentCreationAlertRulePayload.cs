@@ -8,7 +8,7 @@ namespace AzureSentinel_ManagementAPI.AlertRules.Models
         {
             Kind = AlertRuleKind.MicrosoftSecurityIncidentCreation;
         }
-        
+
         [JsonProperty("properties")]
         public SecurityIncidentCreationAlertRulePropertiesPayload PropertiesPayload { get; set; }
     }

@@ -1,7 +1,7 @@
 param (
     [parameter(Mandatory = $false)]
     [string]$FilesPath,
-    
+
     [parameter(Mandatory = $false)]
     [string]$logLevel
 )

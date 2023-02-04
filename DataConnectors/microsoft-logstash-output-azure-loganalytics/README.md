@@ -1,13 +1,13 @@
-# Azure Log Analytics output plugin for Logstash 
+# Azure Log Analytics output plugin for Logstash
 
 Azure Sentinel provides a new output plugin for Logstash. Using this output plugin, you will be able to send any log you want using Logstash to the Azure Sentinel/Log Analytics workspace
-Today you will be able to send messages to custom logs table that you will define in the output plugin. 
-[Getting started with Logstash](<https://www.elastic.co/guide/en/logstash/current/getting-started-with-logstash.html>) 
+Today you will be able to send messages to custom logs table that you will define in the output plugin.
+[Getting started with Logstash](<https://www.elastic.co/guide/en/logstash/current/getting-started-with-logstash.html>)
 
 Azure Sentinel output plugin uses the rest API integration to Log Analytics, in order to ingest the logs into custom logs tables [What are custom logs tables](<https://docs.microsoft.com/azure/azure-monitor/platform/data-sources-custom-logs>)
 
-Plugin version: v1.0.0 
-Released on: 2020-08-25 
+Plugin version: v1.0.0
+Released on: 2020-08-25
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -18,9 +18,9 @@ As the service type select- "Azure Sentinel"
 
 ## Installation
 
-Azure Sentinel provides Logstash output plugin to Log analytics workspace. 
-Install the microsoft-logstash-output-azure-loganalytics, use [Logstash Working with plugins](<https://www.elastic.co/guide/en/logstash/current/working-with-plugins.html>) document. 
-For offline setup follow [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
+Azure Sentinel provides Logstash output plugin to Log analytics workspace.
+Install the microsoft-logstash-output-azure-loganalytics, use [Logstash Working with plugins](<https://www.elastic.co/guide/en/logstash/current/working-with-plugins.html>) document.
+For offline setup follow [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).
 
 This plugin supports the following versions
 - Logstash 7 Between 7.0 and 7.17.6
@@ -30,16 +30,16 @@ Please note that when using Logstash 8, it is recommended to disable ECS in pipe
 
 ## Configuration
 
-in your Logstash configuration file, add the Azure Sentinel output plugin to the configuration with following values: 
-- workspace_id – your workspace ID guid 
+in your Logstash configuration file, add the Azure Sentinel output plugin to the configuration with following values:
+- workspace_id – your workspace ID guid
 - workspace_key (primary key) – your workspace primary key guid. You can find your workspace key and id the following path: Home > Log Analytics workspace > Advanced settings
-- custom_log_table_name – table name, in which the logs will be ingested, limited to one table, the log table will be presented in the logs blade under the custom logs label, with a _CL suffix. 
+- custom_log_table_name – table name, in which the logs will be ingested, limited to one table, the log table will be presented in the logs blade under the custom logs label, with a _CL suffix.
 	Table name must be only alpha characters, and shoud not exceed 100 characters.
-- endpoint – Optional field by default set as log analytics endpoint.  
-- time_generated_field – Optional field, this property is used to override the default TimeGenerated field in Log Analytics. Populate this property with the name of the sent data time field. 
-- key_names – list of Log analytics output schema fields. 
-- plugin_flash_interval – Optional filed, define the maximal time difference (in seconds) between sending two messages to Log Analytics. 
-- Max_items – Optional field, 2000 by default. this parameter will control the maximum batch size. This value will be changed if the user didn’t specify “amount_resizing = false” in the configuration. 
+- endpoint – Optional field by default set as log analytics endpoint.
+- time_generated_field – Optional field, this property is used to override the default TimeGenerated field in Log Analytics. Populate this property with the name of the sent data time field.
+- key_names – list of Log analytics output schema fields.
+- plugin_flash_interval – Optional filed, define the maximal time difference (in seconds) between sending two messages to Log Analytics.
+- Max_items – Optional field, 2000 by default. this parameter will control the maximum batch size. This value will be changed if the user didn’t specify “amount_resizing = false” in the configuration.
 
 Note: View the GitHub to learn more about the sent message’s configuration, performance settings and mechanism
 
@@ -120,7 +120,7 @@ output {
 
 Now you are able to run logstash with the example configuration and send mock data using the 'logger' command.
 
-For example: 
+For example:
 ```
 logger -p local4.warn -t CEF: "0|Microsoft|Device|cef-test|example|data|1|here is some more data for the example" -P 514 -d -n 127.0.0.1
 

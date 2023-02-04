@@ -18,8 +18,8 @@
     - Inside 'statedata' create a blob called 'state'. This is a semicolon separated file which contains the storage accounts to check and the time of last check.
         - XXXX=YYYY;XXXX=YYYY
         - For the first run create entries similar to test123=2020-01-01T01:01:01.8914445Z
-    - Obtain the Azure Storage connection string for the container. https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string 
-3. Create a new Azure Keyvault. 
+    - Obtain the Azure Storage connection string for the container. https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string
+3. Create a new Azure Keyvault.
 	- Add the following secrets
 		- BlobStorageAccountKeys - A semi-colon ';' separated list of storage accounts to check ie NAME:KEY;NAME:KEY
             - NAME is the name of the storage account
@@ -43,7 +43,7 @@ followed by
 
 ## Configure
 In the Azure Function Application settings set up a configuration mapping from environment variable to keyvault entry.
-You can find these settings in Platform features -> Configuration -> Application settings -> New application setting. 
+You can find these settings in Platform features -> Configuration -> Application settings -> New application setting.
 You can find the SECRETURI references below in the respective properies of the keyvault entries created earlier.
 * Name = BlobStorageAccountKeys Value = @Microsoft.KeyVault(SecretUri=https://SECRETURI)
 * Name = BlobStorageConnectionString Value = @Microsoft.KeyVault(SecretUri=https://SECRETURI)

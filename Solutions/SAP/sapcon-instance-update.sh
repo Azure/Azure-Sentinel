@@ -18,7 +18,7 @@ function log() {
 	echo "$@"
 	DATE=$(date)
 	echo "$DATE" "$@" | sudo tee -a  /var/log/sapcon-update.log > /dev/null
-}		
+}
 
 STARTPARAMS="$@"
 #global
@@ -163,7 +163,7 @@ while IFS= read -r contname; do
 	sysfileloc=$(docker inspect "$contname" --format '{{ .Mounts }}'| awk 'NR==1 {print $2}')
 	containerimage=$(docker inspect "$contname" --format '{{.Config.Image}}')
 	containerreleaseid=$(docker inspect "$contname" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.release.releaseid"}}')
-	log "Agent $contname release id is $containerreleaseid"	
+	log "Agent $contname release id is $containerreleaseid"
 
 	log 'Starting Docker image Pull'
 	docker pull "$dockerimage$tagver"
@@ -187,12 +187,12 @@ while IFS= read -r contname; do
 			log_update "Agent image for agent $contname is newer than the one in the container registry. Agent release id $containerreleaseid, release id of image available in container registry: $imagereleaseid. Not updating this agent"
 		fi
 		continue
-	elif [ "$imagereleaseid" -gt "$containerreleaseid" ] || [ "$FORCE" == 1 ]; then	
+	elif [ "$imagereleaseid" -gt "$containerreleaseid" ] || [ "$FORCE" == 1 ]; then
 		if [[ "$containerimage" == *"-preview"* ]] && [ ! $PREVIEW ] && [ "$imagereleaseid" -gt "$containerreleaseid" ]; then
 			#Non-preview version of the image is newer than current
 			log "Current agent is in preview branch, however a release branch has a newer build (current release id is $containerreleaseid, latest is $imagereleaseid). Switching agent to release branch"
 		fi
-		
+
 		log "Inspecting $contname"
 
 		if [ -z "$sysfileloc" ]; then
@@ -221,16 +221,16 @@ while IFS= read -r contname; do
 				envstring+="-e $variable "
 			fi
 		done
-			
+
 		ContainerNetworkSetting=$(docker inspect "$contname" --format '{{.Config.Labels.ContainerNetworkSetting}}')
 		if [ "$ContainerNetworkSetting" == "<no value>" ]; then
 			ContainerNetworkSetting=""
 		fi
-			
+
 		RestartPolicy=$(docker inspect "$contname" --format '{{.HostConfig.RestartPolicy.Name}}')
-			
+
 		restartpolicystring="--restart $RestartPolicy"
-		
+
 		log "Agent $contname restart policy is set to $RestartPolicy"
 
 		isRunning=$(docker inspect "$contname" --format='{{.State.Running}}')
@@ -346,5 +346,5 @@ done \
 
 # Clearing old images
 if [ -z $NOIMAGEPRUNE ]; then
-	log "$(docker image prune --filter "label=com.visualstudio.msazure.image.build.repository.name=ASI-Sentinel4SAP" -a -f)"	
+	log "$(docker image prune --filter "label=com.visualstudio.msazure.image.build.repository.name=ASI-Sentinel4SAP" -a -f)"
 fi

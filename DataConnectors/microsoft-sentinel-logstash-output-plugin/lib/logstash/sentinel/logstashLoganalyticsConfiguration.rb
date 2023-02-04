@@ -16,15 +16,15 @@ class LogstashLoganalyticsOutputConfiguration
 	# Delay between each resending of a message
         @RETRANSMISSION_DELAY = 2
         @MIN_MESSAGE_AMOUNT = 100
-        # Maximum of 1 MB per post to Log Analytics Data Collector API V2. 
-        # This is a size limit for a single post. 
+        # Maximum of 1 MB per post to Log Analytics Data Collector API V2.
+        # This is a size limit for a single post.
         # If the data from a single post that exceeds 1 MB, you should split it.
         @loganalytics_api_data_limit = 1 * 1024 * 1024
 
         # Taking 4K safety buffer
         @MAX_SIZE_BYTES = @loganalytics_api_data_limit - 10000
     end
-	
+
 	def validate_configuration()
       if @create_sample_file
           begin
@@ -114,7 +114,7 @@ class LogstashLoganalyticsOutputConfiguration
     def decrease_factor
         @decrease_factor
     end
-	
+
 	def client_app_Id
         @client_app_Id
     end
@@ -154,7 +154,7 @@ class LogstashLoganalyticsOutputConfiguration
     def MIN_MESSAGE_AMOUNT
         @MIN_MESSAGE_AMOUNT
     end
-    
+
     def max_items=(new_max_items)
         @max_items = new_max_items
     end
@@ -166,7 +166,7 @@ class LogstashLoganalyticsOutputConfiguration
     def plugin_flush_interval=(new_plugin_flush_interval)
         @plugin_flush_interval = new_plugin_flush_interval
     end
-    
+
     def decrease_factor=(new_decrease_factor)
         @decrease_factor = new_decrease_factor
     end
@@ -178,7 +178,7 @@ class LogstashLoganalyticsOutputConfiguration
     def max_items=(new_max_items)
         @max_items = new_max_items
     end
-    
+
     def proxy=(new_proxy)
         @proxy = new_proxy
     end
@@ -211,4 +211,4 @@ class LogstashLoganalyticsOutputConfiguration
         @sample_file_path = new_sample_file_path
     end
 end
-end ;end ;end 
+end ;end ;end

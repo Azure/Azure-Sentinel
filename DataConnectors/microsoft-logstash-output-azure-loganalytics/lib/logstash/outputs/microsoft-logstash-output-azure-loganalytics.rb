@@ -8,7 +8,7 @@ require "logstash/logAnalyticsClient/logstashLoganalyticsConfiguration"
 class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
 
   config_name "microsoft-logstash-output-azure-loganalytics"
-  
+
   # Stating that the output plugin will run in concurrent mode
   concurrency :shared
 
@@ -18,7 +18,7 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
   # The primary or the secondary key used for authentication, required by Azure Loganalytics REST API
   config :workspace_key, :validate => :string, :required => true
 
-  # The name of the event type that is being submitted to Log Analytics. 
+  # The name of the event type that is being submitted to Log Analytics.
   # This must be only alpha characters, numbers and underscore.
   # This must not exceed 100 characters.
   # Table name under custom logs in which the data will be inserted
@@ -36,7 +36,7 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
 
   # # Max number of items to buffer before flushing. Default 50.
   # config :flush_items, :validate => :number, :default => 50
-  
+
   # Max number of seconds to wait between flushes. Default 5
   config :plugin_flush_interval, :validate => :number, :default => 5
 
@@ -46,7 +46,7 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
   # This will trigger message amount resizing in a REST request to LA
   config :amount_resizing, :validate => :boolean, :default => true
 
-  # Setting the default amount of messages sent                                                                                                    
+  # Setting the default amount of messages sent
   # it this is set with amount_resizing=false --> each message will have max_items
   config :max_items, :validate => :number, :default => 2000
 
@@ -57,13 +57,13 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
   config :retransmission_time, :validate => :number, :default => 10
 
   # Optional to override the resource ID field on the workspace table.
-  # Resource ID provided must be a valid resource ID on azure 
+  # Resource ID provided must be a valid resource ID on azure
   config :azure_resource_id, :validate => :string, :default => ''
 
   public
   def register
     @logstash_configuration= build_logstash_configuration()
-    # Validate configuration correctness 
+    # Validate configuration correctness
     @logstash_configuration.validate_configuration()
     @logger.info("Logstash Azure Loganalytics output plugin configuration was found valid")
 
@@ -78,22 +78,22 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
     events.each do |event|
       # creating document from event
       document = create_event_document(event)
-      # Skip if document doesn't contain any items  
+      # Skip if document doesn't contain any items
       next if (document.keys).length < 1
-      
+
       @logger.trace("Adding event document - " + event.to_s)
       @logstash_resizable_event_buffer.add_event_document(document)
 
     end
   end # def multi_receive
-  
-  #private 
+
+  #private
   private
 
   # In case that the user has defined key_names meaning that he would like to a subset of the data,
   # we would like to insert only those keys.
-  # If no keys were defined we will send all the data 
-   
+  # If no keys were defined we will send all the data
+
   def create_event_document(event)
     document = {}
     event_hash = event.to_hash()
@@ -116,7 +116,7 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
   # Building the logstash object configuration from the output configuration provided by the user
   # Return LogstashLoganalyticsOutputConfiguration populated with the configuration values
   def build_logstash_configuration()
-    logstash_configuration= LogstashLoganalyticsOutputConfiguration::new(@workspace_id, @workspace_key, @custom_log_table_name, @logger)    
+    logstash_configuration= LogstashLoganalyticsOutputConfiguration::new(@workspace_id, @workspace_key, @custom_log_table_name, @logger)
     logstash_configuration.endpoint = @endpoint
     logstash_configuration.time_generated_field = @time_generated_field
     logstash_configuration.key_names = @key_names
@@ -127,7 +127,7 @@ class LogStash::Outputs::AzureLogAnalytics < LogStash::Outputs::Base
     logstash_configuration.azure_resource_id = @azure_resource_id
     logstash_configuration.proxy = @proxy
     logstash_configuration.retransmission_time = @retransmission_time
-    
+
     return logstash_configuration
   end # def build_logstash_configuration
 

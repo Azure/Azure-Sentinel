@@ -10,4 +10,3 @@ The samples are divided into the following sections:
 * [Alert Rules Actions](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Az.SecurityInsights-Samples/Alert%20Rule%20Actions)
 * Data Connectors (coming soon)
 * Incidents (coming soon)
-

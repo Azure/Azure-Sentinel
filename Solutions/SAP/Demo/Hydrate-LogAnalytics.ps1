@@ -5,7 +5,7 @@
    Script iterates through folders in scenarios subfolder and for each scenario posts data to supplied Log Analytics workspace
    Script replaces markers {{}} with data supplied in replacements.json (global list of markers) and metadata.json
    Script skips folders that have .processed file in it
-   Replacements.json format: 
+   Replacements.json format:
    array of elements in the following form:
    {
 			"ReplacementName":"MarkerScriptLooksForIntheCSVFile",
@@ -19,7 +19,7 @@
 			"ReplacementValue":""
 	}
     Above scriptblock returns string User followed by a random 5 digit number, but can be any powershell scriptblock
-   
+
     metadata.json format:
    {
 	"Message":"Descriptive message of the scenario that is being processed",
@@ -48,18 +48,18 @@
    Log Analytics workspace primary or secondary access key
 #>
 
-[CmdletBinding(   SupportsShouldProcess=$false, 
+[CmdletBinding(   SupportsShouldProcess=$false,
                   PositionalBinding=$false,
                   HelpUri = 'http://www.microsoft.com/',
                   ConfirmImpact='Medium')]
     [Alias()]
     Param
     (
-        [Parameter(Mandatory=$true, 
+        [Parameter(Mandatory=$true,
                    HelpMessage="ID of the Log Analytics workspace",
                    ValueFromPipeline=$true,
-                   ValueFromPipelineByPropertyName=$true, 
-                   ValueFromRemainingArguments=$false, 
+                   ValueFromPipelineByPropertyName=$true,
+                   ValueFromRemainingArguments=$false,
                    Position=0)
                    ]
         [ValidateNotNull()]
@@ -75,11 +75,11 @@
         [string]
         $LogAnalyticsWorkspaceID,
 
-        [Parameter(Mandatory=$true, 
+        [Parameter(Mandatory=$true,
                    HelpMessage="Primary or secondary access key of the Log Analytics workspace",
                    ValueFromPipeline=$true,
-                   ValueFromPipelineByPropertyName=$true, 
-                   ValueFromRemainingArguments=$false, 
+                   ValueFromPipelineByPropertyName=$true,
+                   ValueFromRemainingArguments=$false,
                    Position=1)
                    ]
         [ValidateNotNull()]
@@ -91,16 +91,16 @@
                         }
                         else {
                             throw "$_ is an invalid value. Check the supplied"
-                        }                    
+                        }
                     })]
         [string]
         $LogAnalyticsWorkspaceKey,
 
-        [Parameter(Mandatory=$false, 
+        [Parameter(Mandatory=$false,
                    HelpMessage="URI location of the settings.json file",
                    ValueFromPipeline=$true,
-                   ValueFromPipelineByPropertyName=$true, 
-                   ValueFromRemainingArguments=$false, 
+                   ValueFromPipelineByPropertyName=$true,
+                   ValueFromRemainingArguments=$false,
                    Position=2)
                    ]
         [ValidateNotNull()]
@@ -128,10 +128,10 @@ Function Post-LogAnalyticsData($LogAnalyticsWorkspaceID, $LogAnalyticsWorkspaceK
     $contentType = "application/json"
     $resource = "/api/logs"
     $rfc1123date = [DateTime]::UtcNow.ToString("r")
-    
+
     $bodyAsJson = ConvertTo-Json $object
     $body = [System.Text.Encoding]::UTF8.GetBytes($bodyAsJson)
-    
+
     $contentLength = $body.Length
     $signature = Build-Signature `
         -customerId $LogAnalyticsWorkspaceID `
@@ -152,7 +152,7 @@ Function Post-LogAnalyticsData($LogAnalyticsWorkspaceID, $LogAnalyticsWorkspaceK
     $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     if ($response.StatusCode -ne 200) {
         Write-Warning "Error while posting to log analytics. logTableName: $logTableName"
-    }    
+    }
 }
 Function Get-SampleMetadata {
     param (
@@ -230,7 +230,7 @@ Function Make-LineReplacements {
         $line,
         $replacements
     )
-    process {        
+    process {
         foreach ($property in ($line.psobject.Members.Where({ ($_.MemberType -eq "NoteProperty") -and ($_.Value -match "{{.*}}") }))) {
             $property.Value | Select-String -pattern "{{(.*?)}}" -AllMatches |
             ForEach-Object { $_.Matches } |
@@ -290,7 +290,7 @@ foreach ($scenario in $config.Scenarios) {
     foreach ($lr in $localReplacementsarr) {
         $localReplacements.Add($lr.ReplacementName, @{ReplacementValueScriptBlock = ($lr.ReplacementValueScriptBlock); ReplacementValue = ($lr.ReplacementValue) })
     }
-    Init-Replacements -Replacements $localReplacements    
+    Init-Replacements -Replacements $localReplacements
 
     $outLines = New-Object 'system.collections.generic.dictionary[string,System.Collections.ArrayList]'
     $inLines = New-Object 'system.collections.generic.dictionary[string,PSCustomObject]'
@@ -334,7 +334,7 @@ foreach ($scenario in $config.Scenarios) {
                     Post-LogAnalyticsData @runparams
                     $outlines[$file].Clear()
                 }
-            }           
+            }
         }
     }
 

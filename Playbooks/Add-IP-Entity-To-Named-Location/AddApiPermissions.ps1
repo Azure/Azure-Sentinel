@@ -13,7 +13,7 @@ Start-Sleep -Seconds 5
 
 #Microsoft Graph API - Policy.Read.All
 $GraphAppId = "00000003-0000-0000-c000-000000000000"
-$PermissionName = "Policy.Read.All" 
+$PermissionName = "Policy.Read.All"
 $GraphServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphAppId'"
 $AppRole = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
 New-AzureAdServiceAppRoleAssignment -ObjectId $MSI.ObjectId -PrincipalId $MSI.ObjectId -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole.Id
@@ -22,7 +22,7 @@ Start-Sleep -Seconds 5
 
 #Microsoft Graph API - Policy.ReadWrite.ConditionalAccess
 $GraphAppId = "00000003-0000-0000-c000-000000000000"
-$PermissionName = "Policy.ReadWrite.ConditionalAccess" 
+$PermissionName = "Policy.ReadWrite.ConditionalAccess"
 $GraphServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphAppId'"
 $AppRole = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
 New-AzureAdServiceAppRoleAssignment -ObjectId $MSI.ObjectId -PrincipalId $MSI.ObjectId -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole.Id

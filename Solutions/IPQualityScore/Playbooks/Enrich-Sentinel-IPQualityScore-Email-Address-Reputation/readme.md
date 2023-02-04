@@ -1,7 +1,7 @@
 # Enrich-Sentinel-IPQualityScore-Email-Address-Reputation
 author: David Mackler, IPQualityScore
 
-This playbook uses the IPQS Fraud and Risk Scoring connector to automatically enrich Email Addresses found in the Sentinel incidents. This Playbook Template provides the Reputation such as **Critical, High Risk, Moderate Risk, Low Risk, Invalid, Clean** based on Fraud Score of the IP Address. 
+This playbook uses the IPQS Fraud and Risk Scoring connector to automatically enrich Email Addresses found in the Sentinel incidents. This Playbook Template provides the Reputation such as **Critical, High Risk, Moderate Risk, Low Risk, Invalid, Clean** based on Fraud Score of the IP Address.
 
 Learn more about the integration via the https://docs.microsoft.com/connectors/ipqsfraudandriskscor/ or visit https://www.ipqualityscore.com/contact-us to request a trial key.
 

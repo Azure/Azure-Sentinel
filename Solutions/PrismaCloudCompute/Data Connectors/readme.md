@@ -1,10 +1,10 @@
-# Prisma API Key Generation using service account 
+# Prisma API Key Generation using service account
 
 Step1:- Login to the Prisma console portal
 
 ![Prisma_console_portal](Images/console_portal.png)
 
-Step2: - Go to settings tab 
+Step2: - Go to settings tab
 
 ![Setting](Images/setting.png)
 

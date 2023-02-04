@@ -7,11 +7,11 @@ namespace AzureSentinel_ManagementAPI.Incidents.Models
     public class IncidentPropertiesPayload
     {
         [JsonConverter(typeof(StringEnumConverter))]
-        public Severity Severity { get; set; } 
+        public Severity Severity { get; set; }
 
         [JsonConverter(typeof(StringEnumConverter))]
         public IncidentStatus Status { get; set; }
-        
+
         public string Title { get; set; }
 
         public string Classification { get; set; }

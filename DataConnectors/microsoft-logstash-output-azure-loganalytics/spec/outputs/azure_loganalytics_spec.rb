@@ -17,8 +17,8 @@ describe LogStash::Outputs::AzureLogAnalytics do
   let(:plugin_flush_interval) {1}
 
   let(:azure_loganalytics_config) {
-    { 
-      "workspace_id" => workspace_id, 
+    {
+      "workspace_id" => workspace_id,
       "workspace_key" => workspace_key,
       "custom_log_table_name" => custom_log_table_name,
       "key_names" => key_names,
@@ -32,7 +32,7 @@ describe LogStash::Outputs::AzureLogAnalytics do
 
   before do
     azure_loganalytics.register
-  end 
+  end
 
   describe "#flush" do
     it "Should successfully send the event to Azure Log Analytics" do
@@ -65,8 +65,8 @@ describe LogStash::Outputs::AzureLogAnalytics do
         :eventtime => "2017-04-22T01:45:14Z"
       }
 
-      event1 =  LogStash::Event.new(log1) 
-      event2 =  LogStash::Event.new(log2) 
+      event1 =  LogStash::Event.new(log1)
+      event2 =  LogStash::Event.new(log2)
       events.push(event1)
       events.push(event2)
       expect {azure_loganalytics.multi_receive(events)}.to_not raise_error

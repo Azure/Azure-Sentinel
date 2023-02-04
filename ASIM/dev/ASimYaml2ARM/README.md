@@ -26,12 +26,12 @@ ftype Python.File=<full path of the python executable> "%1" %*
 
 ```
 KqlFuncYaml2Arm
-    [-h] 
-    [-m package, file, asim or asimdev] 
-    [-d destination folder] 
-    [-t templates folder] 
+    [-h]
+    [-m package, file, asim or asimdev]
+    [-d destination folder]
+    [-t templates folder]
     [-b branch]
-    [-u uri] 
+    [-u uri]
     [-l debug]
     [files and folders ...]
 ```
@@ -45,7 +45,7 @@ Optional arguments:
 | Parameters | Description |
 | ---------------------------- | ----------- |
 | -h, --help | Show a help message and exit |
-| -m, --mode | Select the mode:<br> - "files" to translate each input YAML files to an ARM template.<br> - "package" to create a full deployment package including readme files and a full deployment template.<br> -"asim" to create a full package using ASIM specific templates.<br> -"asimdev" is simliar to `asim` but does not use `aka.ms` links.<br><br> Defaults to "files". | 
+| -m, --mode | Select the mode:<br> - "files" to translate each input YAML files to an ARM template.<br> - "package" to create a full deployment package including readme files and a full deployment template.<br> -"asim" to create a full package using ASIM specific templates.<br> -"asimdev" is simliar to `asim` but does not use `aka.ms` links.<br><br> Defaults to "files". |
 | -d, --dest | The output folder. Defaults to the ARM subdirectory of the current working directory. |
 | -t,--templates | The path of the templates for ARM templates and readme files. Defaults to the script directory. |
 | -b, --branch | For `asim` and `asimdev` modes, the ARM templates links in the full deployment and readme files point to this github branch. The Github repository itself is embedded in the template files. Defaults to "master". |
@@ -78,7 +78,7 @@ The script has three modes:
   - Each input file is converted and stored in a sub-folder of the destination folder along side a README file. By default, the README file includes a button for one click deployment of the ARM template.
   - A full deployment template that will deploy all functions is created in the destination directory.
   - A README file for the package is created in the destination directory. By default the README file includes a button for one click deployment of the package.
-  
+
   The mandatory `uri` parameter is used by the default README and deployment templates as the location from which the package is intended to be available, enabling the nested ARM template and one click deployment buttons.
 
 - The `asim` mode is similar to the `package` mode, but the default README and deployment templates are geared towards an ASIM deployment from the Microsoft Sentinel GitHub. The `uri` is not provided as a parameter, but is rather embedded in the templates. the `branch` parameter can be used to control the branch that the package is intended ot be deployed from, especially for testing prior to merging to `master`.
@@ -92,7 +92,7 @@ The README files and ARM templates are generated from a template, that can inclu
 The templates support placeholders that are replaced with the relevant values when the target files are created. Those are (all in lowercase):
 
 - **filename**: The name (without folder) of the file converted.
-- Script parameters: 
+- Script parameters:
   - **branch**: The branch provided as parameter to the script.
   - **uri***: The uri provided as parameter to the script. Note that to README files, this value is provided after URL encoding.
 - YAML file values:

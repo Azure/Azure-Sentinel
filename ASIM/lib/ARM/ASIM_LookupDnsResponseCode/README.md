@@ -2,7 +2,7 @@
 
 ARM template for deploying the Log Analytics KQL function An ASIM function to returns the DNS response code name based on a numerical response code
 
-This ASIM function returns the DNS response code(RCode) name associated with the response code numerical value provided as a parameter. For example, for the RCode 3, the function returns NXDOMAIN.  
+This ASIM function returns the DNS response code(RCode) name associated with the response code numerical value provided as a parameter. For example, for the RCode 3, the function returns NXDOMAIN.
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

@@ -19,7 +19,7 @@ To deploy, users will need:
 2. Once in the Azure Portal, select the Subscription and Resource Group that Azure Sentinel is under.
 3. Click "Review and Create".
 4. Click "Create".
-5. Within a minute or two, the template should deploy and the Watchlist should appear within the Azure Sentinel environment. 
+5. Within a minute or two, the template should deploy and the Watchlist should appear within the Azure Sentinel environment.
 
 ## Option 2
 1. Enter the template within the GitHub folder.
@@ -32,6 +32,6 @@ To deploy, users will need:
 8. Select the Subscription and Resource Group that Azure Sentinel is under.
 9. Click "Review and Create".
 10. Click "Create".
-11. Within a minute or two, the template should deploy and the Watchlist should appear within the Azure Sentinel environment. 
+11. Within a minute or two, the template should deploy and the Watchlist should appear within the Azure Sentinel environment.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FWatchlists%2FNOBELIUM-TI%2Fazuredeploy.json)

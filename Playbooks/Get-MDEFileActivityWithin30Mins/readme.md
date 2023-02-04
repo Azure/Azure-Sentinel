@@ -27,4 +27,3 @@ The File Events are stored in a Log Analytics Workspace (preferable the one you 
 ### Necessary configuration steps
 
 Once this Playbooks template is deployed, you will need to go into the Logic App, edit it and click on each of the steps that require an authenticated connection to your tenant and complete the connection process.  These steps will have and exclamation point showing that the connection needs to be completed.  Make sure to also open the "For each" step and the "Condition 2" step within it which also contains steps that require authenticated connections.
-

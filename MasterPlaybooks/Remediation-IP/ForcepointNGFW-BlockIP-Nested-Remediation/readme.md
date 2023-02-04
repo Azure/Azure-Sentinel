@@ -8,7 +8,7 @@
 
  ![Forcepoint](./Images/PlaybookDesignerLight.png)<br>
 ![Forcepoint](./Images/PlaybookDesignerDark.png)<br>
- 
+
  ## Pre-requisites for deployment
  1. Deploy the Forcepoint SMC Custom Connector before the deployment of this playbook under the same subscription and same resource group as will be used for this playbook. Capture the name of the connector during deployment.
  2. Forcepoint SMC API Key should be known to establish a connection with Forcepoint SMC. For API Key [Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )
@@ -20,7 +20,7 @@
 To deploy ForcepointNGFW Custom connector click on the below button.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json)
 
 
  ## Deployment Instructions
@@ -35,7 +35,7 @@ To deploy ForcepointNGFW Custom connector click on the below button.
 | ------------- | ------------- |
 | **Playbook Name** | Enter the Playbook Name here without spaces. (e.g. BlockIP-Forcepoint ) |
 | **SMC Connector name**|Enter the name of your Forcepoint SMC Connector without spaces.|
-| **SMC API Key**  | Enter the SMC API Key. | 
+| **SMC API Key**  | Enter the SMC API Key. |
 | **SMC Version Number** | Enter the version number of SMC. (e.g. 6.9) |
 | **IP List Name**|Enter IP address list name.|
 
@@ -50,7 +50,7 @@ To deploy ForcepointNGFW Custom connector click on the below button.
 This action will compose the Forcepoint image to add to the incident comments.
 
 ##Check if security policy exists in SMC
-*  If a security policy exists in the SMC firewall then check for the presence of IP addresses. 
+*  If a security policy exists in the SMC firewall then check for the presence of IP addresses.
 *  If the security policy does not exist then terminate with the error that policy rule not found.
 
 ##For each malicious IP received from the incident
@@ -64,6 +64,3 @@ This action will compose the Forcepoint image to add to the incident comments.
 *  If the security policy does not exist for IP List name then security policy is created for IP List Name.
 
 ##Response from playbook is sent to master playbook to generate incident comments.
-
-
-

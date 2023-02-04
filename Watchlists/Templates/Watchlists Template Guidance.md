@@ -23,7 +23,7 @@ For the content of the CSV that will be generated, the columns and values must b
     "rawContent": "SEARCHKEYVALUE,SampleColumn1,SampleColumn2\r\n
         Samplevalue1,samplevalue2,samplevalue3\r\nsamplevalue4,samplevalue5,samplevalue6\r\n')]
 
-RawContent represents that content of the CSV. The columns used are listed first (SearchKey, SampleColumn, SampleColumn2). Please note that the column that will serve as the SearchKey can be used in any position and does not need to be listed first. Once the columns are listed, "\r\n" needs to be used to signal that a new row needs to be started. This is used throughout the template. 
+RawContent represents that content of the CSV. The columns used are listed first (SearchKey, SampleColumn, SampleColumn2). Please note that the column that will serve as the SearchKey can be used in any position and does not need to be listed first. Once the columns are listed, "\r\n" needs to be used to signal that a new row needs to be started. This is used throughout the template.
 
 When it comes to values that should be under the column, each value should be separated by a comma. The comma is interpreted as the end of that cell. As shown in the example, samplevalue1 is one cell, samplevalue2 is a different cell. When all of the values have been added for the row, \r\n needs to be used in order to start the next row.
 
@@ -35,4 +35,3 @@ An example of how that might look would be:
 This example shows that the columns will be an IP (used as the SearchKey value), an account, and a machine. The rows below the columns will contain those types of values in the CSV file. In this case, the CSV will only have 3 columns and 2 rows of data.
 
 Once the content has been filled out, the template is ready to deploy.
-

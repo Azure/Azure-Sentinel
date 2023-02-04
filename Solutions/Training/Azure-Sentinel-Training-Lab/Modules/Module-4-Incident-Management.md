@@ -19,10 +19,10 @@ As a SOC analyst, the entry point to consume Security incidents (tickets) in Sen
 
 ![Select Microsoft incident creation rule](../Images/m5-incident-filter.gif?raw=true)
 
-3. On the incident page select the *Sign-ins from IPs that attempt sign-ins to disabled accounts* incident. In the right pane you can see the incident preview with the high level information about the incident. 
+3. On the incident page select the *Sign-ins from IPs that attempt sign-ins to disabled accounts* incident. In the right pane you can see the incident preview with the high level information about the incident.
 
 4. As you are the SME SOC analyst that deal and investigate tickets, you need to take ownership on this incident. On the right pane, change the unassigned to *Assign to me* and also change the status from *New* to *Active*.
- 
+
 ![Select Microsoft incident creation rule](../Images/m5-assigen_ticket.gif?raw=true)
 
 5. Another way to consume incidents and also get high level view on the general SOC health is through the *Security efficiency workbook*.
@@ -33,7 +33,7 @@ We have 2 options to open the workbook:
 
 ![Select Microsoft incident creation rule](../Images/m5-SecurityOperationsEfficiency.gif?raw=true)
 
-- Through the incident itself, that will open the same workbook on a different tab, and present the information and lifecycle for the given incident. 
+- Through the incident itself, that will open the same workbook on a different tab, and present the information and lifecycle for the given incident.
 
 ![Select Microsoft incident creation rule](../Images/m5-SecurityOperationsEfficiency_incident.gif?raw=true)
 
@@ -51,7 +51,7 @@ We have 2 options to open the workbook:
 
 5. Navigate to incident full details by pressing **View full details** and execute playbook to bring Geo IP data (user will notice tags being added).
 
-6. Navigate to the **Alerts** tab and press the number of **Events**. This action will redirect you to Raw logs that will present the alert evidence to support the investigation 
+6. Navigate to the **Alerts** tab and press the number of **Events**. This action will redirect you to Raw logs that will present the alert evidence to support the investigation
 
 ![Select Microsoft incident creation rule](../Images/m5-select_events.gif?raw=true)
 
@@ -78,7 +78,7 @@ We have 2 options to open the workbook:
 
 11. As this enrichment information increases your concern, you want to check other traces of this IP in your network. For this investigation you want to use the investigation workbook.
 
-12. In the left navigation press **Workbooks** and select **My Workbooks** 
+12. In the left navigation press **Workbooks** and select **My Workbooks**
 
 ![Select Microsoft incident creation rule](../Images/m5-my-workbooks.gif?raw=true)
 
@@ -128,7 +128,7 @@ M5-close-incident
 
 ![incident2](../Images/incident2.png)
 
-4. Read the description of the incident. As you can see, one of the domain IOCs related to Solorigate attack has been found. In this case, domain **avsvmcloud.com** is involved. 
+4. Read the description of the incident. As you can see, one of the domain IOCs related to Solorigate attack has been found. In this case, domain **avsvmcloud.com** is involved.
 
 5. Optionally, you can click on *View full details* to drill down to inspect the raw events that triggered this alert. For that, click on *Link to LA* as shown in the screenshot:
 

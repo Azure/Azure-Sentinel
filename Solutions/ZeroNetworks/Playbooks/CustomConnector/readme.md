@@ -30,11 +30,11 @@ General info about this product and the core values of this integration. <br>
 
 <a name="deployment"></a>
 
-## Deployment instructions 
+## Deployment instructions
 Prior using this custom connector, it should be deployed in the Resource Group where the playbooks that will include it are located.
 <br>
 
-### Connector 
+### Connector
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
     * Connector name: Please enter the custom connector(ex:Cisco ASA connector)

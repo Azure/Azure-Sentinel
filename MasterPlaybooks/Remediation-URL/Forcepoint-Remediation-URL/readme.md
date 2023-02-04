@@ -16,7 +16,7 @@
 
 To deploy ForcepointNGFW Custom connector click on the below button.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json)  [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json)  [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json)
 
 
  ## Deployment Instructions
@@ -30,7 +30,7 @@ To deploy ForcepointNGFW Custom connector click on the below button.
 | ------------- | ------------- |
 | **Playbook Name** | Enter the Playbook Name here without spaces. (e.g. BlockIP-Forcepoint ) |
 | **Forcepoint SMC Connector name**|Enter the name of your Forcepoint SMC Connector without spaces.|
-| **Forcepoint SMC API Key**  | Enter the SMC API Key. | 
+| **Forcepoint SMC API Key**  | Enter the SMC API Key. |
 | **Forcepoint SMC Version Number** | Enter the version number of SMC. (e.g. 6.9) |
 | **URL List Name**|Enter URLs list name.|
 
@@ -55,6 +55,3 @@ This action will compose the Forcepoint image to add to the incident comments.
 *  If the security policy does not exist for URL List name then security policy is created for URL List Name.
 
 ## Response from playbook is sent to master playbook to generate incident comments.
-
-
-

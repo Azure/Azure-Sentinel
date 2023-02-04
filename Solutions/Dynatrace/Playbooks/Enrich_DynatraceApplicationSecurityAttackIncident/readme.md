@@ -4,13 +4,13 @@ author: Dynatrace
 This playbook uses the Dynatrace REST APIs to automatically enrich incidents created by Microsoft Sentinel. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/support/help/how-to-use-dynatrace/application-security) enabled. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
 
 
-** Prerequisites ** 
+** Prerequisites **
 - Follow [these instructions](https://www.dynatrace.com/support/help/get-started/access-tokens#create-api-token) to generate a Dynatrace access token, the token should have Read attacks (attacks.read) scope.
 - [Important step]Store the Dynatrace Access Token as a [secret in Azure Key vault](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal) and provide the key vault name during playbook deployment, by convention the secret name should be 'DynatraceAccessToken'.
 
 ** Post Install Notes:**
 
-The Logic App uses a Managed System Identity (MSI) to update the Microsoft Sentinel Incident. 
+The Logic App uses a Managed System Identity (MSI) to update the Microsoft Sentinel Incident.
 
 Assign RBAC 'Microsoft Sentinel Responder' role to the Logic App at the Resource Group level of the Log Analytics Workspace.
 

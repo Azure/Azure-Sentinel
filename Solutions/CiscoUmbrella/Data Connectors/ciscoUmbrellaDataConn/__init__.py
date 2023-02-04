@@ -33,7 +33,7 @@ aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
@@ -325,7 +325,7 @@ class UmbrellaClient:
                     try:
                         event['DLP Status'] = row[26]
                     except IndexError:
-                        pass                     
+                        pass
                     try:
                         event['Certificate Errors'] = row[27]
                     except IndexError:
@@ -337,7 +337,7 @@ class UmbrellaClient:
                     try:
                         event['Ruleset ID'] = row[29]
                     except IndexError:
-                        pass                                                         
+                        pass
                     try:
                         event['Rule ID'] = row[30]
                     except IndexError:
@@ -345,7 +345,7 @@ class UmbrellaClient:
                     try:
                         event['Destination List IDs'] = row[31]
                     except IndexError:
-                        pass                                         
+                        pass
 
                     int_fields = [
                         'requestSize',

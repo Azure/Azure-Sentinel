@@ -16,11 +16,11 @@
 <a name="playbooks">
 
 # Playbook Templates
-This package includes:  
+This package includes:
 
-* DNS Sniff Event Playbook   
-This topic describes a sample Logic App/Playbook, "DNS Sniff Event Playbook".  
-Analytic Rule (DNS Sniff Event Monitor) checks host properties and generates incidents containing number of times the events happened for any endpoint within the time interval. Based on this information, the Logic App/Playbook will set the Description field of the incident with the following information:   
+* DNS Sniff Event Playbook
+This topic describes a sample Logic App/Playbook, "DNS Sniff Event Playbook".
+Analytic Rule (DNS Sniff Event Monitor) checks host properties and generates incidents containing number of times the events happened for any endpoint within the time interval. Based on this information, the Logic App/Playbook will set the Description field of the incident with the following information:
 
 <table>
 <tr> <td>action_group </td> <td>Indicates the category of action. Valid values are: <em> manage, notify, remediate, and restrict</em>.</td></tr>
@@ -28,15 +28,15 @@ Analytic Rule (DNS Sniff Event Monitor) checks host properties and generates inc
 <tr> <td>em_ip</td> <td>Indicates the IP address of the Enterprise Manager to which the endpoint belongs.</td></tr>
 <tr> <td>info</td> <td> Indicates additional information</td></tr>
 </table>
-The em_ip and info are optional.  
+The em_ip and info are optional.
 
-Note that the eyeExtend for Microsoft Sentinel module polls the incidents information periodically and examines the Description field of each incident. Based on the information set in the Description field, the Continuum Platform applies the requested action set by Microsoft Sentinel playbook to the endpoints.  
-The following is a sample description field of an incident set by the playbook:  
-<em>action\_group="restrict";endpoint\_ip=["10.16.141.130"];em_ip=["10.16.147.96"];info=block network access</em>    
-   
-   
-Following table lists valid info values for each action group:   
-<table>  
+Note that the eyeExtend for Microsoft Sentinel module polls the incidents information periodically and examines the Description field of each incident. Based on the information set in the Description field, the Continuum Platform applies the requested action set by Microsoft Sentinel playbook to the endpoints.
+The following is a sample description field of an incident set by the playbook:
+<em>action\_group="restrict";endpoint\_ip=["10.16.141.130"];em_ip=["10.16.147.96"];info=block network access</em>
+
+
+Following table lists valid info values for each action group:
+<table>
 <tr> <td><b>action_group</b></td> <td><b>Valid info value</b></td>
 </tr>
 <tr> <td>restrict</td> <td>block network access <br> quarantine <br> limit network access
@@ -48,11 +48,10 @@ Following table lists valid info values for each action group:
 <tr> <td>notify</td> <td> Unauthorized activity <br> Unauthorized app detected</td>
 </tr>
 </table>
-    
-Use the Microsoft Apps Designer to view or edit the playbook as needed to fulfil security requirements. The code is prepared by using the visual editor, which can be easily viewed and modified.  
+
+Use the Microsoft Apps Designer to view or edit the playbook as needed to fulfil security requirements. The code is prepared by using the visual editor, which can be easily viewed and modified.
 
 You can choose to deploy the playbook:
-   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FForescoutHostPropertyMonitor%2FPlaybooks%2FForescout-DNSSniffEventPlaybook.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FForescoutHostPropertyMonitor%2FPlaybooks%2FForescout-DNSSniffEventPlaybook.json)
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FForescoutHostPropertyMonitor%2FPlaybooks%2FForescout-DNSSniffEventPlaybook.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FForescoutHostPropertyMonitor%2FPlaybooks%2FForescout-DNSSniffEventPlaybook.json)

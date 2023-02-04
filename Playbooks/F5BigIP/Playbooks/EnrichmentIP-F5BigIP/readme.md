@@ -27,13 +27,13 @@
 
  Deploy the base playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json)
 
 
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
- [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)  
+ [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)   [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/EnrichmentIP-F5BigIP/azuredeploy.json)
 
  2. Fill in the required parameters for deploying the playbook.
 
@@ -44,9 +44,9 @@
 | **IP Address List Name** | Enter IP Address list name |
 
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with IP addresses.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook steps explained
@@ -73,8 +73,7 @@
   - If IP address is not part of IP address list, then incident comment is created saying IP address is not added to IP address list.
   - Incident comment from all cases are combined.
 
-  ## Incident comment 
+  ## Incident comment
 ![F5 BIG-IP](./Images/IncidentCommentLight.png)
 
 ![F5 BIG-IP](./Images/IncidentCommentDark.png)
-

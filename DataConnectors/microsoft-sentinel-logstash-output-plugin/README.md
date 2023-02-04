@@ -1,9 +1,9 @@
-# Microsoft Sentinel output plugin for Logstash 
+# Microsoft Sentinel output plugin for Logstash
 
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.0.0  
+Plugin version: v1.0.0
 Released on: 2022-11-14
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
@@ -19,8 +19,8 @@ This plugin is currently in development and is free to use. We welcome contribut
 
 ## 1. Install the plugin
 
-Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API. 
-Install the microsoft-sentinel-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
+Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API.
+Install the microsoft-sentinel-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - Logstash 7 Between 7.0 and 7.17.6
@@ -41,7 +41,7 @@ output {
 }
 ```
 Note: make sure that the path exists before creating the sample file.
-2) Start Logstash. The plugin will write up to 10 records to a sample file named "sampleFile<epoch seconds>.json" in the configured path  
+2) Start Logstash. The plugin will write up to 10 records to a sample file named "sampleFile<epoch seconds>.json" in the configured path
 (for example: "c:\temp\sampleFile1648453501.json")
 
 
@@ -90,7 +90,7 @@ To configure Microsoft Sentinel Logstash plugin you first need to create the DCR
 
 ## 4. Configure Logstash configuration file
 
-Use the tutorial from the previous section to retrieve the following attributes: 
+Use the tutorial from the previous section to retrieve the following attributes:
 - **client_app_Id** - String, The 'Application (client) ID' value created in step #3 of the "Configure Application" section of the tutorial you used in the previous step.
 - **client_app_secret** -String, The value of the client secret created in step #5 of the "Configure Application" section of the tutorial you used in the previous step.
 - **tenant_id** - String, Your subscription's tenant id. You can find in the following path: Home -> Azure Active Directory -> Overview Under 'Basic Information'.
@@ -116,10 +116,10 @@ output {
 }
 
 ```
-### Optional configuration 
+### Optional configuration
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
-- **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
-- **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
+- **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics.
+- **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed.
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
 
 Security notice: We recommend not to implicitly state client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, and dcr_immutable_id in your Logstash configuration for security reasons.
@@ -201,7 +201,7 @@ output {
 
 Now you are able to run logstash with the example configuration and send mock data using the 'logger' command.
 
-For example: 
+For example:
 ```
 logger -p local4.warn --rfc3164 --tcp -t CEF "0|Microsoft|Device|cef-test|example|data|1|here is some more data for the example" -P 514 -d -n 127.0.0.1
 ```

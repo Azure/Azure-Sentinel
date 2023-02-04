@@ -15,7 +15,7 @@ This playbook is used to send indicators to Microsoft Security Graph API from al
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBIndicatorProcessor.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 1. "GIBTIA_APT_Threats" Playbook<br>
 a. Collection: apt/threat<br>
@@ -35,7 +35,7 @@ Group-IB continuously monitors activities undertaken by hacker groups, investiga
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_Threats.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 2. "GIBTIA_APT_ThreatActor" Playbook<br>
 a. Collection: apt/threat_actor<br>
@@ -49,7 +49,7 @@ This collection contains APT groups’ info, with detailed descriptions.
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_APT_ThreatActor.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>    
+</a>
 
 3. "GIBTIA_Attacks_ddos" Playbook<br>
 a. Collection: attacks/ddos<br>
@@ -79,7 +79,7 @@ The “Deface” collection contains information about online resources that hav
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_deface.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 5. "GIBTIA_Attacks_phishing" Playbook<br>
 a. Collection: attacks/phishing<br>
@@ -96,7 +96,7 @@ The “Attacks Phishing" collection provides information about various phishing 
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 6. "GIBTIA_Attacks_phishing_kit" Playbook<br>
 a. Collection: attacks/phishing_kit<br>
@@ -111,7 +111,7 @@ The “Atacks Phishing Kits” collection contains information about the archive
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Attacks_phishing_kit" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 7. "GIBTIA_BP_phishing" Playbook<br>
 a. Collection: bp/phishing<br>
@@ -128,7 +128,7 @@ The "BP Phishing" collection provides events related to clients company.
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_BP_phishing.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 8. "GIBTIA_BP_phishing_kit" Playbook<br>
 a. Collection: bp/phishing_kit<br>
@@ -143,7 +143,7 @@ The "BP Phishing Kit" collection provides phishing kits related to clients compa
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_BP_phishing_kit.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 9. "GIBTIA_Compromised_account" Playbook<br>
 a. Collection: compromised/account<br>
@@ -160,7 +160,7 @@ This collection contains credentials collected from various phishing resources, 
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_account.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 10. "GIBTIA_Compromised_card" Playbook<br>
 a. Collection: compromised/card<br>
@@ -177,7 +177,7 @@ This collection contains information about compromised bank cards. This includes
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_card.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 11. "GIBTIA_Compromised_imei" Playbook<br>
 a. Collection: compromised/imei<br>
@@ -194,7 +194,7 @@ The section contains data on infected mobile devices, which is obtained by analy
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Compromised_imei.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 12. "GIBTIA_Compromised_mule" Playbook<br>
 a. Collection: compromised/mule<br>
@@ -226,7 +226,7 @@ Group-IB continuously monitors activities undertaken by hacker groups, investiga
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_HI_Threat.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 14. "GIBTIA_HI_ThreatActor" Playbook <br>
 a. Collection: hi/threat_actor <br>
@@ -240,7 +240,7 @@ This collection contains non-APT groups’  and Individual hackers info, with de
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_HI_Threat_Actor.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a> 
+</a>
 
 15. "GIBTIA_Malware_cnc" Playbook <br>
 a. Collection: malware/cnc <br>
@@ -250,7 +250,7 @@ GIB Malware CNC Domain(domain) <br>
 GIB Malware CNC URL(url) <br>
 GIB Malware CNC IP(IPv4) <br>
 d. Description: <br>
-The "Malware" collection contains Malwares C2 detected by group IB. 
+The "Malware" collection contains Malwares C2 detected by group IB.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Malware_cnc.json" target="_blank">
 <img src="https://aka.ms/deploytoazurebutton""/>
@@ -289,7 +289,7 @@ Open-source repositories such as GitHub contain codes that anyone can search for
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_GitLeak.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 18. "GIBTIA_OSI_PublicLeak" Playbook <br>
 a. Collection: osi/public_leak <br>
@@ -303,7 +303,7 @@ The “Public leaks” collection contains the leaked clinets data collected on 
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_PublicLeak.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 19. "GIBTIA_OSI_Vulnerability" Playbook <br>
 a. Collection: osi/vulnerability <br>
@@ -317,7 +317,7 @@ The “Vulnerabilities” collection displays information about vulnerabilities 
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_OSI_Vulnerability.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 20. "GIBTIA_Suspicious_ip_open_proxy" Playbook <br>
 a. Collection: suspicious_ip/open_proxy <br>
@@ -332,7 +332,7 @@ The “Open proxy” collection proviedes information about lists of proxy serve
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_open_proxy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 21. "GIBTIA_Suspicious_ip_socks_proxy" Playbook <br>
 a. Collection: suspicious_ip/socks_proxy <br>
@@ -347,7 +347,7 @@ The “Socks proxy” collection providess information about addresses where mal
 </a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_socks_proxy.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 22. "GIBTIA_Suspicious_ip_tor_node" Playbook <br>
 a. Collection: suspicious_ip/tor_node <br>
@@ -362,7 +362,7 @@ The “Tor Node” collection displays information about Tor exit nodes, which a
 </a>
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGroup-IB%2FPlaybooks%2Fazuredeploy-GIBTIA_Suspicious_ip_tor_node.json" target="_blank">
 <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
-</a>  
+</a>
 
 ## Deployment Steps
 1. Deploy GIBIndicatorsProcessor playbook first
@@ -386,7 +386,7 @@ Note:
 2. Create +New Registration
 3. Give it a name.  Click Register.
 4. Click API Permissions Blade.
-5. Click Add a Permission.  
+5. Click Add a Permission.
 6. Click Microsoft Graph.
 7. Click Appplication Permissions
 8. Check permissions for ThreatIndicators (ThreatIndicators.ReadWrite.OwnedBy).  Click Add permissions.

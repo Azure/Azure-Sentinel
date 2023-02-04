@@ -55,7 +55,7 @@ async def transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime):
     for c in consumers:
         c.cancel()
     await sentinel_connector.flushall()
-    
+
 
 async def consume(sentinel_connector, queue):
     while True:

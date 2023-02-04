@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) AuditEvent parsers 
+# Advanced Security Information Model (ASIM) AuditEvent parsers
 
 This template deploys all ASIM AuditEvent parsers.
 

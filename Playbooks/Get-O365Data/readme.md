@@ -1,7 +1,7 @@
 # Ingest Office 365 Management Activity API Data
 Author: Pete Bryan
 
-This playbook ingests Audit.General events from the Office 365 Management Activity API (https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-reference) and writes them to a custom log table called O365API_CL. 
+This playbook ingests Audit.General events from the Office 365 Management Activity API (https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-reference) and writes them to a custom log table called O365API_CL.
 
 There are a number of pre-configuration steps required before deploying the Logic App.
 
@@ -13,7 +13,7 @@ In order to collected Audit events from an Office 365 subscription you first nee
 2. Create +New Registration
 3. Give it a name.  Click Register.
 4. Click API Permissions Blade.
-5. Click Add a Permission.  
+5. Click Add a Permission.
 6. Click Office 365 Management APIs.
 7. Click Appplication Permissions
 8. Check all permissions for each category.  Click Add permissions.
@@ -38,9 +38,9 @@ $TenantGUID = "<AAD tenantguid>"
 $resource = "https://manage.office.com"
 $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID;client_secret=$ClientSecret}
 $oauth = Invoke-RestMethod -Method Post -Uri $loginURL/$tenantdomain/oauth2/token?api-version=1.0 -Body $body
-$headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"} 
+$headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"}
 $publisher = New-Guid
-Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher" 
+Invoke-WebRequest -Method Post -Headers $headerParams -Uri "https://manage.office.com/api/v1.0/$tenantGuid/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$Publisher"
 ```
 
 ## Deploy the Logic App template

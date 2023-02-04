@@ -17,7 +17,7 @@ namespace Teams.CustomConnector.Serverless
     public static class EgressTeamsLogs
     {
         private static List<AuditDetailedReport> auditDetailedReports;
-    
+
         /// <summary>
         /// Runs the specified my timer.
         /// </summary>
@@ -26,16 +26,16 @@ namespace Teams.CustomConnector.Serverless
             [FunctionName("EgressTeamsLogs")]
         public static void Run([TimerTrigger("0 */10 * * * *")]TimerInfo myTimer, ILogger log)
         {
-           
+
             log.LogInformation(Constants.RequestProcessingStarted);
-           
+
             StorageHandler.StorageHandler storageHandler = new StorageHandler.StorageHandler(log);
             OperationDetails LastOperationDetails = null;
 
             try
             {
                 log.LogInformation(Constants.RequestLastExecutionTime);
-                
+
                 //Fetch the last execution time and status
                 LastOperationDetails = storageHandler.GetLastOperationDetailsFromLogsAsync(Environment.GetEnvironmentVariable(Constants.LogFileName)).Result;
 
@@ -49,7 +49,7 @@ namespace Teams.CustomConnector.Serverless
                     try
                     {
                         //Fetch the info form configuration
-                        //Start set to current time - connectioninterval 
+                        //Start set to current time - connectioninterval
                         LastOperationDetails.LastRunEndTime = DateTime.Parse(Environment.GetEnvironmentVariable(Constants.AuditLogExtractionStartDate));
                         LastOperationDetails.LastRunStartTime = LastOperationDetails.LastRunEndTime?.AddMinutes(-Convert.ToInt32(Environment.GetEnvironmentVariable(Constants.ConnectionIntervalInMinutes)));
 
@@ -72,7 +72,7 @@ namespace Teams.CustomConnector.Serverless
                 log.LogWarning($"Daterange set:  start time : { LastOperationDetails.LastRunStartTime} , endtime { LastOperationDetails.LastRunEndTime}");
                 Teams.CustomConnector.Processor.Processor processor = new Processor.Processor(log);
 
-                //fetch the details. 
+                //fetch the details.
                 auditDetailedReports = processor.Process(LastOperationDetails.LastRunStartTime?.ToString("G", CultureInfo.InvariantCulture), LastOperationDetails.LastRunEndTime?.ToString("G", CultureInfo.InvariantCulture)).Result;
 
                 log.LogInformation($"Total {auditDetailedReports.Count} of audit logs found");
@@ -122,11 +122,11 @@ namespace Teams.CustomConnector.Serverless
             else
                 LastOperationDetails.TotalFailCountSinceLastSuccessfulRun = 0;
 
-            //update the last run details. 
+            //update the last run details.
             LastOperationDetails.TotalAuditRecordsProcessed = auditDetailedReports.Count;
             LastOperationDetails.TotalRecordsProcessedInLifeTime += LastOperationDetails.TotalAuditRecordsProcessed;
             var opdetails = JsonConvert.SerializeObject(LastOperationDetails);
-         
+
             Task.Run(() =>
             storageHandler.UploadDataToContainerAsync(OperationType.Log,
                                                         Environment.GetEnvironmentVariable(Constants.LogFileName),

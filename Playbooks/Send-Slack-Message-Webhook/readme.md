@@ -9,7 +9,7 @@ The playbook includes functionality to:
 4. White List Entities
 <br/><br/>
 ## Pre-requisites:
-Slack application with: 
+Slack application with:
 1. Webhook installed
 1.1 How to install webhook - https://api.slack.com/messaging/webhooks
 2. Interactivity Enbaled

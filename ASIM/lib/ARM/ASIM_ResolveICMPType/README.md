@@ -2,7 +2,7 @@
 
 ARM template for deploying the Log Analytics KQL function An ASIM function to set the NetworkIcmpType field
 
-This ASIM tabular function is intended for use in ASIM Network related parsers and sets the NetworkIcmpCode and NetworkIcmpType fields based on a numerical protocol number provided as a parameter. For example, for the 8 as an input, the function sets NetworkIcmpCode to 8, and NetworkIcmpType to "Echo" . The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.  
+This ASIM tabular function is intended for use in ASIM Network related parsers and sets the NetworkIcmpCode and NetworkIcmpType fields based on a numerical protocol number provided as a parameter. For example, for the 8 as an input, the function sets NetworkIcmpCode to 8, and NetworkIcmpType to "Echo" . The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

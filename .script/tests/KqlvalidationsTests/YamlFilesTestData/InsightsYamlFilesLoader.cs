@@ -7,7 +7,7 @@ namespace Kqlvalidations.Tests
     {
         protected override List<string> GetDirectoryPaths()
         {
-           return  new List<string> { Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "Insights")}; 
+           return  new List<string> { Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "Insights")};
         }
     }
 }

@@ -38,12 +38,12 @@ All playbook templates leverage the Zscaler API. To use the Zscaler capabilities
 
 ## Authentication
 
-The playbooks are using the Zscaler authentication process. The output of that process is a JSessionID which can be used to do other API actions. Refer this link for the authentication process: [Authenticate and create an API session](https://help.zscaler.com/zia/api-getting-started#CreateSession) To support the authentication process a [authentication playbook](../authentication/readme.md) is added. The authentication playbook can be used as linked ARM template or, if deployed, as embedded playbook in other playbooks. 
+The playbooks are using the Zscaler authentication process. The output of that process is a JSessionID which can be used to do other API actions. Refer this link for the authentication process: [Authenticate and create an API session](https://help.zscaler.com/zia/api-getting-started#CreateSession) To support the authentication process a [authentication playbook](../authentication/readme.md) is added. The authentication playbook can be used as linked ARM template or, if deployed, as embedded playbook in other playbooks.
 
 
 <a name="deployment"></a>
 
-## Deployment 
+## Deployment
 
 This package includes:
 
@@ -57,12 +57,12 @@ You can choose to deploy all the playbooks in once using the buttons below. You 
 </a>
 
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZscaler%2Fazuredeploy.json" target="_blank">
-   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>    
+   <img src="https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png"/>
 </a>
 
 <a name="postdeployment"></a>
 
-## Post-Deployment instructions 
+## Post-Deployment instructions
 
 ### a. Authorize connections
 Once the deployment is completed, you will need to authorize each connection. There are connection for Azure KeyVault and Azure Sentinel. For each connection complete the following steps:

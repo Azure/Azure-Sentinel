@@ -14,7 +14,7 @@
 
 ## Overview
 This playbook uses the DomainTools Iris Investigate API. Given a domain or set of domains associated with an incident, return Whois, mailserver, DNS, SSL and related indicators from Iris Investigate, highlighting fields where fewer than 200-400 domains share an attribute. This is useful in order to clue investigators where there could be additional indicators of interest available via the Iris Investigate UI or API. See the related "DomainTools Iris Investigate Guided Pivots Playbook" to automatically query for those indicators within to the Sentinel platform.
- 
+
 Learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request a Api key.
 
 When a new Azure Sentinel Incident is created, and this playbook is triggered, it performs these actions:
@@ -55,7 +55,7 @@ Authentication methods this connector supports:
 <a name="postdeployment">
 
 ### Post-Deployment instructions
-#### a. Authorize connections: 
+#### a. Authorize connections:
 Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode.
 - Open "For each Host" Action.

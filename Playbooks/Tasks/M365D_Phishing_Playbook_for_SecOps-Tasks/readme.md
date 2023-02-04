@@ -1,7 +1,7 @@
 # M365D_Phishing_Playbook_for_SecOps-Tasks
 author: Benji Kovacevic
 
-This playbook add Incident Tasks based on Microsoft 365 Defender Phishing Playbook for SecOps. This playbook will walk the analyst through four stages of responding to a phishing incident: 
+This playbook add Incident Tasks based on Microsoft 365 Defender Phishing Playbook for SecOps. This playbook will walk the analyst through four stages of responding to a phishing incident:
 containment, investigation, remediation and prevention. The step-by-step instructions will help you take the required remedial action to protect information and minimize further risks.
 
 # Quick Deployment

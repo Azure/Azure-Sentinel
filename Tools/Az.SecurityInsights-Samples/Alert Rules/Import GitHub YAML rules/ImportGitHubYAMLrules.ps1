@@ -62,7 +62,7 @@ if ($AzAccountsModule -eq $null) {
     Import-Module -Name Az.Accounts -Force
 }
 
-$subIdContext = (Get-AzContext).Subscription.Id 
+$subIdContext = (Get-AzContext).Subscription.Id
 if ($subIdContext -ne $subscriptionId) {
     $setSub = Set-AzContext -SubscriptionName $subscriptionId -ErrorAction SilentlyContinue
     if ($setSub -eq $Null) {
@@ -127,7 +127,7 @@ foreach ($myNewRule in $myNewRules) {
     #Since rules need to be created in the ISO 8601 duration format, we need to do conversion
     #Taking the last character, which represent the day, hr or minute unit
     $QueryFrequencyUnit = $myRuleObject.QueryFrequency.Substring($myRuleObject.QueryFrequency.Length - 1, 1)
-    
+
     if ($QueryFrequencyUnit.EndsWith("d")){
         $QueryFrequencyValue = $myRuleObject.QueryFrequency.TrimEnd($QueryFrequencyUnit)
         #converting to minutes
@@ -146,7 +146,7 @@ foreach ($myNewRule in $myNewRules) {
         $QueryFrequencyValue = $myRuleObject.QueryFrequency.TrimEnd($QueryFrequencyUnit)
     }
     #creating the ISO 8601 ticks value
-    $QueryFrequencyTicks = New-TimeSpan -Minutes $QueryFrequencyValue 
+    $QueryFrequencyTicks = New-TimeSpan -Minutes $QueryFrequencyValue
     Write-Host ("Query Frequency: " + $QueryFrequencyTicks + "For rule: " + $myRuleObject.name)
     $QueryFrequencyTicks
 
@@ -171,7 +171,7 @@ foreach ($myNewRule in $myNewRules) {
         $queryPeriodUnitValue = $myRuleObject.queryPeriod.TrimEnd($queryPeriodUnit)
     }
     #creating the ISO 8601 ticks value
-    $QueryPeriodTicks = New-TimeSpan -Minutes $queryPeriodUnitValue 
+    $QueryPeriodTicks = New-TimeSpan -Minutes $queryPeriodUnitValue
     Write-Host ("Query Period: " + $QueryPeriodTicks + "For rule: " + $myRuleObject.name)
 
     New-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName `

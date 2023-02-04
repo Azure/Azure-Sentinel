@@ -10,7 +10,7 @@ this playbook.<br>
 2. Enter template parameters. Use the IronVue user credentials for IronAPI.
 
 ## Playbook Execution
-1. The Playbook execution begins with an API call to IronDefense 
+1. The Playbook execution begins with an API call to IronDefense
    Alert.
-2. This workflow validates for 8 IronAPI endpoints inorder to verify that the 
+2. This workflow validates for 8 IronAPI endpoints inorder to verify that the
    API is stable.

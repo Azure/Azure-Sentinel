@@ -204,7 +204,7 @@ Apply the following additional policies if you are ingesting GuardDuty findings.
 
 Apply the following additional policies if you are ingesting CloudTrail logs.
 
-### KMS policy (optional) 
+### KMS policy (optional)
 - Allows CloudTrail to encrypt the logs it sends to S3.
 
    | Placeholders     | Value to enter |

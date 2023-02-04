@@ -2,40 +2,40 @@
 
 Author: Accelerynt
 
-For any technical questions, please contact info@accelerynt.com  
+For any technical questions, please contact info@accelerynt.com
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Compromised-Machine-Tagging%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Compromised-Machine-Tagging%2Fazuredeploy.json)       
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Compromised-Machine-Tagging%2Fazuredeploy.json)
 
 This playbook is intended to be run from a Microsoft Sentinel incident. It will match hosts from the incident with devices in Microsoft 365 Defender. It will tag these machines as "compromised", or another tag of your choosing.
-                                                                                                                                     
+
 ![MachineTagging_Demo](Images/MachineTagging_Demo.png)
 
 #
-### Deployment                                                                                                         
-                                                                                                        
+### Deployment
+
 To configure and deploy this playbook:
- 
+
 Open your browser and ensure you are logged into your Microsoft Sentinel workspace. In a separate tab, open the link to our playbook on the Accelerynt Security GitHub Repository:
 
 https://github.com/Accelerynt-Security/AS-Compromised-Machine-Tagging
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Compromised-Machine-Tagging%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Compromised-Machine-Tagging%2Fazuredeploy.json)                                             
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Compromised-Machine-Tagging%2Fazuredeploy.json)
 
 Click the “**Deploy to Azure**” button at the bottom and it will bring you to the custom deployment template.
 
 In the **Project Details** section:
 
-* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.  
+* Select the “**Subscription**” and “**Resource Group**” from the dropdown boxes you would like the playbook deployed to.
 
-In the **Instance Details** section:   
+In the **Instance Details** section:
 
-* **Playbook Name**: This can be left as "**AS-Compromised-Machine-Tagging**" or you may change it.  
+* **Playbook Name**: This can be left as "**AS-Compromised-Machine-Tagging**" or you may change it.
 
 * **Machine Tag Name**: This can be left as "**Compromised**" or you may change it.
 
-Towards the bottom, click on “**Review + create**”. 
+Towards the bottom, click on “**Review + create**”.
 
 ![MachineTagging_Deploy_1](Images/MachineTagging_Deploy_1.png)
 
@@ -52,17 +52,17 @@ Click on the “**Edit**” button. This will bring us into the Logic Apps Desig
 
 ![MachineTagging_Deploy_4](Images/MachineTagging_Deploy_4.png)
 
-The first and seconds steps labeled "**Connections**" use a shared azuresentinel connection created during the deployment of this playbook. Before the playbook can be run, this connection will either need to be authorized, or an existing authorized connection may be alternatively selected for each.  
+The first and seconds steps labeled "**Connections**" use a shared azuresentinel connection created during the deployment of this playbook. Before the playbook can be run, this connection will either need to be authorized, or an existing authorized connection may be alternatively selected for each.
 
 ![MachineTagging_Deploy_5](Images/MachineTagging_Deploy_5.png)
 
 To validate the azuresentinel connection created for this playbook, expand either of the "**Connections**" steps and click the exclamation point icon next to the name matching the playbook.
-                                                                                                
+
 ![MachineTagging_Deploy_6](Images/MachineTagging_Deploy_6.png)
 
-When prompted, sign in to validate the connection.                                                                                                
-                                                                                                
-![MachineTagging_Deploy_7](Images/MachineTagging_Deploy_7.png)                                                                                                                                                                                                                                                   
+When prompted, sign in to validate the connection.
+
+![MachineTagging_Deploy_7](Images/MachineTagging_Deploy_7.png)
 Since the first two steps share the same connection, there is no need to repeat the process here. Simply refresh the page to ensure the first two steps now have valid connections.
 
 This process will need to be repeated for the two wdatp connections, responsible for communicating with Microsoft Defender. Expand the step labeled "**Condition - Check for Hosts**"
@@ -74,7 +74,7 @@ Repeat the same process above for the connection used in the indicated steps.
 ![MachineTagging_Deploy_9](Images/MachineTagging_Deploy_9.png)
 
 #
-### Running the Playbook 
+### Running the Playbook
 
 To run this playbook from a Microsoft Sentinel incident, navigate to Microsoft Sentinel:
 

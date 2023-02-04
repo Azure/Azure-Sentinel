@@ -1,7 +1,7 @@
 # CybersixgillAlertStatusUpdate
 Author: Loginsoft
 
-This playbook will update status of Actionable alerts in Cybersixgill Portal. When incident is updated in Microsoft Sentinel, playbook will run and update status Actionable alerts from Cybersixgill Portal 
+This playbook will update status of Actionable alerts in Cybersixgill Portal. When incident is updated in Microsoft Sentinel, playbook will run and update status Actionable alerts from Cybersixgill Portal
 
 # Prerequisites
 
@@ -30,7 +30,7 @@ Client ID and Client Secret can be obtained from [Cybersixgill Developer Portal]
     * Client ID key name: Key name for Cybersixgill Client ID stored api secret.
     * Client Secret key name: Key name for Cybersixgill Client Secret the stored api secret.
 
-### Post-Deployment 
+### Post-Deployment
 #### a. Authorize connections (Perform this action if needed)
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource

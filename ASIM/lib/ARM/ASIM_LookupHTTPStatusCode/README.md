@@ -2,7 +2,7 @@
 
 ARM template for deploying the Log Analytics KQL function An ASIM function to returns the HTTP Status code name based on a numerical response code
 
-This ASIM function returns the HTTP Status code name associated with the response code numerical value provided as a parameter. For example, for the Status code 200, the function returns OK.  
+This ASIM function returns the HTTP Status code name associated with the response code numerical value provided as a parameter. For example, for the Status code 200, the function returns OK.
 
 
 The Advanced SIEM Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

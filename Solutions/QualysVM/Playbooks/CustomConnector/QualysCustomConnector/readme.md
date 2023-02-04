@@ -6,7 +6,7 @@ This custom connector connects to Qualys API endpoint to execute actions support
 
 * Basic Authentication (Username and Password based)
 
-### Prerequisites to deploy Custom Connector 
+### Prerequisites to deploy Custom Connector
 - Qualys API Endpoint Url. API endpoint url according to Qualys subscription can be found here [Platform Identification](https://www.qualys.com/platform-identification/).
 
 
@@ -32,9 +32,9 @@ This custom connector connects to Qualys API endpoint to execute actions support
 1. To deploy Custom Connector, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
     - Connector Name: Enter the custom connector name (e.g. QualysCustomConnector)
-    - Service Endpoint: Enter the Qualys API endpoint url (e.g. https://qualysapi.qualys.com). Make sure to prefix with https://.  
+    - Service Endpoint: Enter the Qualys API endpoint url (e.g. https://qualysapi.qualys.com). Make sure to prefix with https://.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FCustomConnector%2FQualysCustomConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FCustomConnector%2FQualysCustomConnector%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FCustomConnector%2FQualysCustomConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FCustomConnector%2FQualysCustomConnector%2Fazuredeploy.json)
 
 #  References
  - [Qualys API Quick Reference](https://www.qualys.com/docs/qualys-api-quick-reference.pdf)

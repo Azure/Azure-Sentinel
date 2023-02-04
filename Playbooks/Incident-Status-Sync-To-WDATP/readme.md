@@ -22,7 +22,7 @@ In this scenario when an incident status changes for example when an incident ge
 This playbook represents an example of how to keep incident status in sync between sentinel and MDATP.
 
 
-The goal is to find a common matching criteria between the two entities. 
+The goal is to find a common matching criteria between the two entities.
 
 If we look at shown example of one incident in sentinel
 
@@ -88,4 +88,3 @@ Note: attribute "provider Alert ID" was retreived and the MDATP connector was us
 ![Picture10](./Graphics/10.gif)
 
 As shown above it was able to pull the alert ID ed637431102114129586_160070831 that is equal to the VendorOriginID in order to query for it in MDATP and close the alert.
-

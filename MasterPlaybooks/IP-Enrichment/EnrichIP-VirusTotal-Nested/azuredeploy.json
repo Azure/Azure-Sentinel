@@ -2,21 +2,25 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-            "title": "EnrichIP-VirusTotal-Nested",
-            "description": "This playbook will take each IP entity and query VirusTotal for IP Address Report (https://developers.virustotal.com/v3.0/reference#ip-info). It will write the results to Log Analytics and add a comment to the incident.",
-            "prerequisites": [
-                "Register to Virus Total community for an API key."
-            ],
-            "lastUpdateTime": "2022-08-29T10:43:00Z",
-            "entities": ["IP"],
-            "tags": ["Enrichment"],
-            "support": {
-                "tier": "microsoft"
-            },
-            "author": {
-                "name": "Microsoft"
-            }
+        "title": "EnrichIP-VirusTotal-Nested",
+        "description": "This playbook will take each IP entity and query VirusTotal for IP Address Report (https://developers.virustotal.com/v3.0/reference#ip-info). It will write the results to Log Analytics and add a comment to the incident.",
+        "prerequisites": [
+            "Register to Virus Total community for an API key."
+        ],
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": [
+            "IP"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
+        "support": {
+            "tier": "microsoft"
         },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "EnrichIP-VirusTotal-Nested",
@@ -89,152 +93,152 @@
             "properties": {
                 "state": "Enabled",
                 "definition": {
-            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-            "contentVersion": "1.0.0.0",
-            "parameters": {
-                "$connections": {
-                    "defaultValue": {},
-                    "type": "Object"
-                }
-            },
-            "triggers": {
-                "manual": {
-                    "type": "Request",
-                    "kind": "Http",
-                    "inputs": {
-                        "method": "POST",
-                        "schema": {
-                            "properties": {
-                                "IPs": {
-                                    "items": {
-                                        "properties": {
-                                            "Address": {
-                                                "type": "string"
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "IPs": {
+                                            "items": {
+                                                "properties": {
+                                                    "Address": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "Address"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['IPs']",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Append_to_string_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Consolidated comment",
+                                                "value": "Virus Total IP Report found for @{items('For_each')?['Address']}\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely harmless\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\""
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_an_IP_report": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable_2": {
+                                                "runAfter": {},
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "Consolidated comment",
+                                                    "value": "Virus Total IP Report found for @{items('For_each')?['Address']}\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely malicous\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"\n"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greaterOrEquals": [
+                                                    "@body('Get_an_IP_report')?['data']?['attributes']?['reputation']",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_an_IP_report": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['virustotal']['connectionId']"
                                             }
                                         },
-                                        "required": [
-                                            "Address"
-                                        ],
-                                        "type": "object"
-                                    },
-                                    "type": "array"
-                                }
-                            },
-                            "type": "object"
-                        }
-                    }
-                }
-            },
-            "actions": {
-                "For_each": {
-                    "foreach": "@triggerBody()?['IPs']",
-                    "actions": {
-                        "Condition": {
-                            "actions": {
-                                "Append_to_string_variable": {
-                                    "runAfter": {},
-                                    "type": "AppendToStringVariable",
-                                    "inputs": {
-                                        "name": "Consolidated comment",
-                                        "value": "Virus Total IP Report found for @{items('For_each')?['Address']}\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely harmless\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\""
+                                        "method": "get",
+                                        "path": "/api/v3/ip_addresses/@{encodeURIComponent(items('For_each')?['Address'])}"
                                     }
                                 }
                             },
                             "runAfter": {
-                                "Get_an_IP_report": [
+                                "Initialize_variable": [
                                     "Succeeded"
                                 ]
                             },
-                            "else": {
-                                "actions": {
-                                    "Append_to_string_variable_2": {
-                                        "runAfter": {},
-                                        "type": "AppendToStringVariable",
-                                        "inputs": {
-                                            "name": "Consolidated comment",
-                                            "value": "Virus Total IP Report found for @{items('For_each')?['Address']}\nReputation is: @{body('Get_an_IP_report')?['data']?['attributes']?['reputation']} which indicates likely malicous\nQuery: VTIPReport_CL | where id_s == \"@{items('For_each')?['Address']}\"\n"
-                                        }
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "greaterOrEquals": [
-                                            "@body('Get_an_IP_report')?['data']?['attributes']?['reputation']",
-                                            0
-                                        ]
-                                    }
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Initialize_variable_IPs": [
+                                    "Succeeded"
                                 ]
                             },
-                            "type": "If"
-                        },
-                        "Get_an_IP_report": {
-                            "runAfter": {},
-                            "type": "ApiConnection",
+                            "type": "InitializeVariable",
                             "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['virustotal']['connectionId']"
+                                "variables": [
+                                    {
+                                        "name": "Consolidated comment",
+                                        "type": "string"
                                     }
-                                },
-                                "method": "get",
-                                "path": "/api/v3/ip_addresses/@{encodeURIComponent(items('For_each')?['Address'])}"
+                                ]
+                            }
+                        },
+                        "Initialize_variable_IPs": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IPs",
+                                        "type": "array",
+                                        "value": "@triggerBody()?['IPs']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "@variables('Consolidated comment')",
+                                "statusCode": 200
                             }
                         }
                     },
-                    "runAfter": {
-                        "Initialize_variable": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "Foreach"
+                    "outputs": {}
                 },
-                "Initialize_variable": {
-                    "runAfter": {
-                        "Initialize_variable_IPs": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "InitializeVariable",
-                    "inputs": {
-                        "variables": [
-                            {
-                                "name": "Consolidated comment",
-                                "type": "string"
-                            }
-                        ]
-                    }
-                },
-                "Initialize_variable_IPs": {
-                    "runAfter": {},
-                    "type": "InitializeVariable",
-                    "inputs": {
-                        "variables": [
-                            {
-                                "name": "IPs",
-                                "type": "array",
-                                "value": "@triggerBody()?['IPs']"
-                            }
-                        ]
-                    }
-                },
-                "Response": {
-                    "runAfter": {
-                        "For_each": [
-                            "Succeeded"
-                        ]
-                    },
-                    "type": "Response",
-                    "kind": "Http",
-                    "inputs": {
-                        "body": "@variables('Consolidated comment')",
-                        "statusCode": 200
-                    }
-                }
-            },
-            "outputs": {}
-        },
                 "parameters": {
                     "$connections": {
                         "value": {

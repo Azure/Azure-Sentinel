@@ -22,13 +22,13 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser=(disabled:bool=false){
-     let AzureActivityOperationLookup = datatable (op:string, EventType:string) 
+     let AzureActivityOperationLookup = datatable (op:string, EventType:string)
     [
       'ACTION', 'Execute',
       'WRITE', 'Set',
       'DELETE', 'Delete'
     ];
-    let AzureActivityStatusLookup = datatable (ActivityStatusValue:string, ActivitySubstatusValue:string, EventResult:string, EventResultDetails:string) 
+    let AzureActivityStatusLookup = datatable (ActivityStatusValue:string, ActivitySubstatusValue:string, EventResult:string, EventResultDetails:string)
     [
         "Accept","Accepted","Success","",
         "Accept","Created","Success","",
@@ -74,11 +74,11 @@ ParserQuery: |
         "Failed","Unauthorized","Failure","Unauthorized",
         "Cancel","","Failure","Cancelled"
     ];
-    AzureActivity 
+    AzureActivity
     | where not(disabled)
     | where CategoryValue == "Administrative"
     | project-away HTTPRequest, Level, SourceSystem, EventSubmissionTimestamp, TenantId, OperationId, Hierarchy, Category, ResourceId, ResourceProvider, Resource
-    | project-rename 
+    | project-rename
         Operation = OperationNameValue,
         SrcIpAddr = CallerIpAddress,
         EventOriginalUid = EventDataId,
@@ -86,7 +86,7 @@ ParserQuery: |
         EventOriginalType = CategoryValue
     | extend
         EventCount = int(1),
-        EventStartTime = TimeGenerated, 
+        EventStartTime = TimeGenerated,
         EventEndTime= TimeGenerated,
         EventProduct = 'Azure',
         EventVendor = 'Microsoft',
@@ -99,10 +99,10 @@ ParserQuery: |
     // Calculate EventResult, EventResultDetails, and EventResultOriginalDetails
     | extend
         EventOriginalResultDetails = strcat (
-            ActivityStatusValue, 
+            ActivityStatusValue,
             iff (ActivitySubstatusValue !="", strcat(' [', ActivitySubstatusValue, ']'), "")
         )
-    | extend 
+    | extend
         ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex "\\d+", "", ActivitySubstatusValue)
     | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue
     | extend EventResult = iff(EventResult == "", "Other", EventResult)
@@ -110,11 +110,11 @@ ParserQuery: |
     | project-away ActivityStatus*, ActivitySubstatus*
     // --
     // Calculate Actor
-    | extend 
+    | extend
         Caller = iff(Caller == "Microsoft.RecoveryServices", "", Caller)
-    | extend 
+    | extend
         ActorUsernameType = iff (Caller has "@", "UPN", "")
-    | extend 
+    | extend
         ActorUsername = iff (ActorUsernameType == "UPN", Caller, ""),
         ActorUserId = iff (ActorUsernameType != "UPN", Caller, "")
     | extend
@@ -122,11 +122,11 @@ ParserQuery: |
     | project-away Caller
     // --
     // Calculate Object
-    | extend 
-        entity = tostring(Properties_d.entity), 
+    | extend
+        entity = tostring(Properties_d.entity),
         resource = tostring(Properties_d.resource),
         entity_name = tostring(Properties_d.["Entity Name"])
-    | extend Object = case ( 
+    | extend Object = case (
             entity != "", entity,
             strcat ("/subscriptions/", SubscriptionId, "/resourceGroups/", ResourceGroup, "/providers/", ResourceProviderValue, "/",resource, iff (entity_name != "", strcat("/", entity_name), ""))
         )
@@ -139,7 +139,7 @@ ParserQuery: |
     | project-away op
     // Aliases
     | extend AdditionalFields = pack_dictionary("Authorization", Authorization_d, "Claims", Claims_d, "Error", Properties_d.statusMessage)
-    | extend 
+    | extend
         IpAddr = SrcIpAddr,
         User = ActorUsername,
         ActorUserAadId = ActorUserId,

@@ -157,7 +157,7 @@ function Get-AuthToken{
     $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID;client_secret=$ClientSecret}
     $oauth = Invoke-RestMethod -Method Post -Uri $loginURL/$tenantdomain/oauth2/token?api-version=1.0 -Body $body
     $headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"}
-    return $headerParams 
+    return $headerParams
 }
 
 function Get-O365Data{
@@ -209,11 +209,11 @@ function Get-O365Data{
                                 #$writeResult
                             }
                         }
-                        
+
                     }
                 }
             }
-            
+
             #Handles Pagination
             $nextPageResult = Invoke-WebRequest -Method GET -Headers $headerParams -Uri $listAvailableContentUri
             If(($nextPageResult.Headers.NextPageUrl) -ne $null){

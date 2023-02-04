@@ -16,13 +16,13 @@
 **Email sent to pwned user:**
 
 ![HaveIBeenPwned-Email](./Images/Email.png)
-### Prerequisites 
+### Prerequisites
 
 1. HaveIBeenPwned Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription and under the same resource group. Capture the name for the connector.
 2. Generate an API key. [Refer this link on how to generate the API Key](https://haveibeenpwned.com/API/Key).
 3. Users must have access to Microsoft Teams and they should be a part of a Teams channel and also "Power Automate" app should be installed in the Microsoft Teams channel.
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will lead you to the wizard for deploying an ARM Template.
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex: HaveIBeenPwned_ResponseOnTeams)
@@ -32,8 +32,8 @@
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FHaveIBeenPwned%2FPlaybooks%2FHaveIBeenPwned_ResponseOnTeams%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FHaveIBeenPwned%2FPlaybooks%2FHaveIBeenPwned_ResponseOnTeams%2Fazuredeploy.json)
-    
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 After deploying the playbook ,open the designer view of the playbook, in the "Post an Adaptive Card to a Teams channel and wait for a response" action, select the team and channel name from the dropdown to post the adaptive card.
 ####a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.

@@ -11,8 +11,8 @@ logger = logging.getLogger("state_serializer")
 
 class State:
     def __init__(self, connection_string, share_name):
-        """ 
-            initializes the parameters required to create file and upload and download it from fileshare 
+        """
+            initializes the parameters required to create file and upload and download it from fileshare
         """
 
         self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
@@ -20,8 +20,8 @@ class State:
         self.file_event_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=constant.FILE_LAST_EVENT_NUMBER)
 
     def post(self, marker_text: str):
-        """ 
-            posts the new time to azure file share file, 
+        """
+            posts the new time to azure file share file,
             from which it will poll next time
         """
         try:
@@ -31,18 +31,18 @@ class State:
             self.file_cli.upload_file(marker_text)
 
     def get(self):
-        """ 
-        gets the last polled time from azure file share 
         """
-        
+        gets the last polled time from azure file share
+        """
+
         try:
             return self.file_cli.download_file().readall().decode()
         except ResourceNotFoundError:
             return None
 
     def post_event(self, marker_text: int):
-        """ 
-            posts the new time to azure file share file, 
+        """
+            posts the new time to azure file share file,
             from which it will poll next time
         """
         logger.info(str(marker_text) + " event number stored now")
@@ -53,17 +53,17 @@ class State:
             self.file_event_cli.upload_file(str(marker_text))
 
     def get_event(self):
-        """ 
-        gets the last polled time from azure file share 
         """
-        
+        gets the last polled time from azure file share
+        """
+
         try:
             return self.file_event_cli.download_file().readall().decode()
         except ResourceNotFoundError:
             return None
 
     def get_last_polled_time(self, historical_days):
-        """ 
+        """
             gets the last updated time,
             for historical poll takes user input value or default value of 10 days
         """

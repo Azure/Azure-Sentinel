@@ -26,8 +26,8 @@ $AppRole1 = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $Permis
 New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
 -ResourceId $GraphServicePrincipal.ObjectId -Id $AppRole1.Id
 ```
-2. Add playbook as an action to the automation rule 
-- Trigger = When incident is updated;  
+2. Add playbook as an action to the automation rule
+- Trigger = When incident is updated;
 - Condition = Incident provider > Equal > Microsoft 365 Defender, and
 - Comments > Added<br>
 

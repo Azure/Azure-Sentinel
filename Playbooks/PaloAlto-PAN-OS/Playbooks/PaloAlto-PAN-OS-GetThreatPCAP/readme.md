@@ -2,7 +2,7 @@
 
  ## Summary
 
-This playbook allows us to get a threat PCAP for a given PCAP ID. 
+This playbook allows us to get a threat PCAP for a given PCAP ID.
 
 When a new Sentinel incident is created, this playbook gets triggered and performs below actions:
 
@@ -16,13 +16,13 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
 
 
 
-### Prerequisites 
+### Prerequisites
 1. PaloAlto connector needs to be deployed prior to the deployment of this playbook under the same subscription. Relevant instructions can be found in the connector doc page.
 2. Generate an API key.[Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
-3. This playbook only works for Palo Alto incidents with a threat PCAP where the PCAP ID is not null or zero. 
+3. This playbook only works for Palo Alto incidents with a threat PCAP where the PCAP ID is not null or zero.
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 
@@ -37,9 +37,9 @@ When a new Sentinel incident is created, this playbook gets triggered and perfor
     * LogAnalyticsResourceGroup: The Log Analytics resource group for logging for the Playbook.
     * LogAnalyticsResourceName: The Log Analytics resource for logging for the Playbook.
 
-    
 
-### Post-Deployment instructions 
+
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Azure Sentinel connection resource
@@ -64,7 +64,7 @@ Azure Sentinel incident is created. The playbook receives the incident as the in
 
 Get the logs from the incident.
 
-### For Each 
+### For Each
 
 Iterates on each result and performs the following:
 
@@ -85,6 +85,4 @@ Creates a blob in aV2 blob storage account, denoted by Storage Account Name, in 
 Creates Incident for the alert
 
 ###### Add Comment to Incident (V3)
-Adds a comment containing a link to the pcap in the blob storage to the incident 
-
- 
+Adds a comment containing a link to the pcap in the blob storage to the incident

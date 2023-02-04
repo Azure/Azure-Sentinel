@@ -1,12 +1,12 @@
-<#  
-    Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel   
+<#
+    Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel
     Language:       PowerShell
     Version:        1.0
     Last Modified:  5/30/2020
     Comment:        Inital Release
 
-    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
-                    Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the <PROVIDER NAME APPLIANCE NAME> API and format the data received into JSON format.  
+    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the
+                    Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the <PROVIDER NAME APPLIANCE NAME> API and format the data received into JSON format.
 
 #>
 
@@ -20,16 +20,16 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
 }
 
-# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <PROVIDER NAME APPLIANCE NAME> API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
-$username = $env:apiUserName 
+# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, <PROVIDER NAME APPLIANCE NAME> API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information
+$username = $env:apiUserName
 $password = $env:apiPassword
 $uri = $env:uri
 
 # The following variables are required by the Log Analytics Data Collector API functions below
-$CustomerId = $env:workspaceId 
-$SharedKey = $env:workspaceKey 
-$TimeStampField = "DateValue"  
-$LogType = $env:tableName     
+$CustomerId = $env:workspaceId
+$SharedKey = $env:workspaceKey
+$TimeStampField = "DateValue"
+$LogType = $env:tableName
 $logAnalyticsUri = $env:logAnalyticsUri
 
 if ([string]::IsNullOrEmpty($logAnalyticsUri))
@@ -64,7 +64,7 @@ if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-z
 <# Used this block to transform the data recieved from the <PROVIDER NAME APPLIANCE NAME> API into JSON format, which is acceptable format for the Log Anlaytics Data Collector API
 
     For example:
-    $json = $response | ConvertTo-Json -Compress -Depth 3 
+    $json = $response | ConvertTo-Json -Compress -Depth 3
 
 #>
 
@@ -82,7 +82,7 @@ Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     $calculatedHash = $sha256.ComputeHash($bytesToHash)
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
     $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
-    
+
     # Dispose SHA256 from heap before return.
     $sha256.Dispose()
 
@@ -105,7 +105,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    
+
     $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 
     $headers = @{
@@ -142,7 +142,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
     else {
         Write-Output "No records were found."
     }
-                  
+
 #>
 
 # Write an information log with the current time.

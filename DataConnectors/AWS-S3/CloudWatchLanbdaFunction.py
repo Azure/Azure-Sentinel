@@ -36,30 +36,28 @@ def lambda_handler(event, context):
             startTime=unix_start_time,
             endTime=unix_end_time,
         )
-        
+
         # Convert events to json object
         json_string = json.dumps(response)
         json_object = json.loads(json_string)
-        
+
         df = pd.DataFrame(json_object['events'])
         if df.empty:
             print('No events for specified time')
             return None
-        
+
         # Convert unix time to zulu time for example from 1671086934783 to 2022-12-15T06:48:54.783Z
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%f').str[:-3]+'Z'
-        
+
         # Remove unnecessary column
         fileToS3 = df.drop(columns=["ingestionTime"])
 
         # Export data to temporary file in the right format, which will be deleted as soon as the session ends
         fileToS3.to_csv( f'/tmp/{OUTPUT_FILE_NAME}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
-        
+
         # Upload data to desired folder in bucket
         s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{OUTPUT_FILE_NAME}.gz', f'{BUCKET_PREFIX}{OUTPUT_FILE_NAME}.gz')
 
     except Exception as e:
         print("    Error exporting %s: %s" % (LOG_GROUP_NAME, getattr(e, 'message', repr(e))))
-
-

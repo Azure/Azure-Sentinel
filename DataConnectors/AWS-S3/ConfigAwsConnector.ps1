@@ -5,7 +5,7 @@
 	SOFTWARE.
 
 .SYNOPSIS
-    This script is used to start the configuration process for all supported AWS S3 logs sources. 
+    This script is used to start the configuration process for all supported AWS S3 logs sources.
 
     Log sources currently supported are: VPC flows, CloudTrail, GuardDuty
 
@@ -36,8 +36,8 @@ param (
 . ".\Utils\AwsSentinelTag.ps1"
 
 # Verify that the AWS CLI is available
-if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue)) 
-{ 
+if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue))
+{
 
     Write-Error "The AWS CLI is not available in the path"
     Write-Output "`nPlease install the latest AWS CLI from https://aws.amazon.com/cli/"
@@ -47,7 +47,7 @@ if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue))
 
 # Setup basic logging
 New-Item -ItemType Directory -Force -Path $LogPath | Out-Null
-$TimeStamp = Get-Date -Format MMddHHmm 
+$TimeStamp = Get-Date -Format MMddHHmm
 $LogFileName = '{0}-{1}.csv' -f "AwsS3", $TimeStamp
 $LogFileName = Join-Path $LogPath $LogFileName
 

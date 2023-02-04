@@ -21,4 +21,3 @@
 4. Click on the corresponding button to modify the retention for the selected table.
 
 ### Note: Archive retention is calculated by using archiveRetention = totalRetentionInDays - retentionInDays.
-   

@@ -2,7 +2,7 @@
 author: Lior Tamir
 
 This playbook uses Azure Identity Protection features in order to responde to risky users.
-Attach this playbook to alert creation rules which expects to have entities of type Account attached to. 
+Attach this playbook to alert creation rules which expects to have entities of type Account attached to.
 When a new Azure Sentinel alert is created, the playbook iterates over the identities involved in the alert.
 For each identity, playbook will send to the SOC email address (which is configured when deploying) an informative mail including the Risk history of this user, given by Azure AD Identity Protection.
 Than it offers an option to confirm this user as compromised, dismiss it from being a risky user or ignore, by one button click.

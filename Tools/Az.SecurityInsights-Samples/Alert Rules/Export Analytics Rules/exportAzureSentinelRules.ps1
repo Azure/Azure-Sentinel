@@ -45,7 +45,7 @@ if ($AzSecurityInsightsModule -eq $null) {
 }
 
 #Check the Azure subscription context
-$subIdContext = (Get-AzContext).Subscription.Id 
+$subIdContext = (Get-AzContext).Subscription.Id
 if ($subIdContext -ne $subscriptionId) {
     $setSub = Set-AzContext -SubscriptionName $subscriptionId -ErrorAction SilentlyContinue
     if ($setSub -eq $Null) {
@@ -64,7 +64,7 @@ if (!(Test-Path -Path $ruleExportPath))
 
 # Export Scheduled Rules
 try {
-    $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "Scheduled"} 
+    $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "Scheduled"}
     Write-Host ("Exporting " + $rules.count + " Scheduled rules...") -ForegroundColor Yellow
     $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "\" + "Scheduled.json") -Force
 }
@@ -77,7 +77,7 @@ catch {
 
 # Export Fusion Rules
 try {
-    $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "Fusion"} 
+    $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "Fusion"}
     Write-Host ("Exporting " + $rules.count + " Fusion rules...") -ForegroundColor Yellow
     $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "\" + "Fusion.json") -Force
 }
@@ -89,7 +89,7 @@ catch {
 
 # Export MicrosoftSecurityIncidentCreation Rules
 try {
-    $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "MicrosoftSecurityIncidentCreation"} 
+    $rules = Get-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName | Where-Object {$_.Kind -eq "MicrosoftSecurityIncidentCreation"}
     Write-Host ("Exporting " + $rules.count + " MicrosoftSecurityIncidentCreation rules...") -ForegroundColor Yellow
     $rules | ConvertTo-Json -Depth 15 | Out-File ($ruleExportPath + "\" + "MicrosoftSecurityIncidentCreation.json") -Force
 }

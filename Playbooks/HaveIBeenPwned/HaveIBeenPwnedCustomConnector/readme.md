@@ -22,7 +22,7 @@ This custom connector connects to HaveIBeenPwned service end point and gets the 
 | **Get all pastes for an account** | Retrieves list of all pastes for an account|
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will lead you to the wizard for deploying an ARM Template.
 2. Fill in the required parameters:
     * Custom Connector Name : Enter the Custom connector name (e.g. HaveIBeenPwned_connector)
@@ -34,6 +34,3 @@ This custom connector connects to HaveIBeenPwned service end point and gets the 
 ## Usage Examples
 * Get all breaches for an account.
 * Get all breached sites in the system.
-
-
-

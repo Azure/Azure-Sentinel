@@ -228,7 +228,7 @@ function CarbonBlackAPI()
         $logType = $logType -replace """",""
         $LogTypeArr = $logType -split ','
     }
-    
+
 
     if(-not([string]::IsNullOrWhiteSpace($apiId)) -and -not([string]::IsNullOrWhiteSpace($apiSecretKey)) -and -not([string]::IsNullOrWhiteSpace($hostName)))
     {
@@ -321,7 +321,7 @@ function CarbonBlackAPI()
     }
     else{
         Write-Warning "'Alert' was not selected as a LogType, therefore alert logs will not be ingested to the workspace."
-    } 
+    }
 }
 
 # Create the function to create the authorization signature

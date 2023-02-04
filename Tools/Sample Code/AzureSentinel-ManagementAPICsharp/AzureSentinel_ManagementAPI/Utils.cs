@@ -20,7 +20,7 @@ namespace AzureSentinel_ManagementAPI
         public static TEnum SelectKind<TEnum>()
         {
             string[] kinds = System.Enum.GetNames(typeof(TEnum));
-            
+
             for (int i = 0; i < kinds.Length; i++)
             {
                 Console.WriteLine($"  {(i + 1).ToString()}. {kinds[i]}");
@@ -29,7 +29,7 @@ namespace AzureSentinel_ManagementAPI
             var len = kinds.Length;
             var isValid = false;
             var index = -1;
-            
+
             while (!isValid)
             {
                 Console.WriteLine($"Please type in a number between 1 and {len.ToString()}");
@@ -51,7 +51,7 @@ namespace AzureSentinel_ManagementAPI
         {
             Console.WriteLine(promptText);
             var input = Console.ReadLine();
-            
+
             if (input.Trim() == string.Empty)
             {
                 input = defaultValue;
@@ -70,14 +70,14 @@ namespace AzureSentinel_ManagementAPI
             var isValid = false;
             var index = -1;
             int len = configs.Length;
-            
+
             if (len == 1)
                 return 0;
 
             while (!isValid)
             {
                 Console.WriteLine($"Please select instance, Please type in a number between 1 and {len.ToString()}:");
-                
+
                 for(int i = 0; i < len; i++)
                 {
                     Console.WriteLine($"{i + 1}. {configs[i].InstanceName}");
@@ -98,12 +98,12 @@ namespace AzureSentinel_ManagementAPI
         public static int SelectInstanceOrApplyAll(AzureSentinelApiConfiguration[] configs)
         {
             int len = configs.Length;
-            
+
             if (len == 1)
                 return 0;
 
             Console.WriteLine($"Please select an instance, Please type in a number between 1 and {len.ToString()}, Otherwise it would apply to all:");
-            
+
             for (int i = 0; i < len; i++)
             {
                 Console.WriteLine($"{i + 1}. {configs[i].InstanceName}");

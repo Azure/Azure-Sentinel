@@ -30,10 +30,9 @@ $s3RequiredPolicy = Get-RoleS3Policy -RoleArn $roleArn -BucketName $bucketName
 Update-S3Policy -RequiredPolicy $s3RequiredPolicy -CustomMessage $customMessage
 
 $logsPath = Read-ValidatedHost -Prompt "Please enter S3 objects full path"
-$eventNotificationPrefix = Enable-S3EventNotification -DefaultEventNotificationPrefix $logsPath -IsCustomLog $true 
- 
+$eventNotificationPrefix = Enable-S3EventNotification -DefaultEventNotificationPrefix $logsPath -IsCustomLog $true
+
 # Output information needed to configure Sentinel data connector
 Write-RequiredConnectorDefinitionInfo
 
 Write-Log -Message "please make sure that logs are being exported to the S3 bucket $bucketName into $logsPath" -LogFileName $LogFileName -LinePadding 2
-

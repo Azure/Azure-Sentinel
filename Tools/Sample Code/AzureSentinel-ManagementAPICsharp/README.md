@@ -6,7 +6,7 @@ This repo contains a C# .NET Core 3.1 console application to demonstrate how you
 
 The application uses OAuth 2.0 client credentials flow on Microsoft Identity Platform for authentication. Essentially, the flow permits the application to use its own credentials, instead of impersonating a user, to authenticate when calling the Azure Sentinel API. Please refer to [OAuth 2.0 client credentials flow](https://docs.microsoft.com/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow) for more details on the authentication mechanism.
 
-What can you use this solution for? 
+What can you use this solution for?
 1. For starters, it serves as a quickstart to help you set up a custom application to call the Azure Sentinel REST API to automate your management tasks on Azure Sentinel. Some examples include importing and exporting analytic rules, disable and enable an analytic rules, updating multiple incidents at once across workspaces, and many other use cases. The app can handle multiple Azure Sentinel workspaces cross-tenant at once, so if you manage multiple workspaces for multiple clients as a MSSP, this can be a solution.
 2. Additionally, the solution can be combined and integrated with other tools within your organization to achieve a more comprehensive security solution.
 
@@ -18,7 +18,7 @@ Please refer to the documentation and specs below for more details on Azure Sent
 
 This sample provides examples of the following Sentinel API operation groups.
 
-| Entity | Operation | API version | 
+| Entity | Operation | API version |
 | -----------|-----------|--------|
 | Alert Rule | Get, Create, Update, Delete | Stable |
 | Alert Rule Templates | Get | Stable |
@@ -62,7 +62,7 @@ Follow these steps to register a new application:
 5. Under **Certificates & secrets**, choose **New client secret** and add a quick description. A new secret will be displayed in the **Value** column. Copy this password. You will need it later to complete the configuration process and it will not be shown again.
 
 ### _Permissions_
- Adhering to the principle of least privilege, always grant the lowest possible permissions required to your API. 
+ Adhering to the principle of least privilege, always grant the lowest possible permissions required to your API.
 
 1.  Azure Sentinel permissions
     1. To access your Azure Sentinel workspace, your app needs **Sentinel Contributor / Azure Sentinel Responder / Azure Sentinel Reader**” permissions. If you have multiple Azure Sentinel workspaces, repeat these steps for each of the workspaces.
@@ -80,21 +80,21 @@ Follow these steps to register a new application:
         3. Under **Role** search box, search for and select one of the roles above.
         4. Under **Select** search box, search for your app name and select it.
         5. Select **Save** to finish the role assignment.
-        
+
         ![Logic Apps permission](./Images/LogicApp-permission.png)
 
 3. If you have Azure Sentinel workspaces in multiple tenants, then follow these additional steps to grant other tenants access to your app.
     1. Provide your Administrator your **Application Id** that you get in the previous steps. Your organization’s Admin (or other user authorized to grant consent for organizational resources) is required to grant consent to the application.
-    
+
     2. As the tenant Admin for your organization, open a browser window and craft the following URL in the address bar. Make sure to replace APPLICATION_ID with the **application Id** of your app, then select **Accept**.
     ```https://login.microsoftonline.com/common/adminconsent?client_id=APPLICATION_ID```
 
     3. After logging in, the tenant Admin will be presented with a dialog like the following (depending on which permissions the application is requesting):
-    
+
         ![Scope consent dialog](./Images/admin-consent.png)
 
     4. When the tenant Admin agrees to this dialog, he/she is granting consent for all users of their organization to use this application. If a message like the following screenshot appears, then ignore it. That is expected for a daemon app without a Redirect URI.
-        
+
         ![After admin consent dialog](./Images/After-consent.png)
 
 ### _Azure Key Vault_
@@ -158,7 +158,7 @@ The API currently has some limitations, and here are a few things to note regard
 1. Data Connectors: For CREATE data connector request to enable a data connection in Azure Sentinel, the API currently supports **User-Delegated** mode of authentication only, which requires a user sign-in. This solution is using **Application-Only** authentication, as the app is a daemon service running in the background without a user sign-in, so it isn't currently working if you enable a data connector via this solution.
 
 2. Incidents: To close an incident (option 26 or 27 in the option menu), these following fields must be filled with values. Go to **Templates** folder, open **IncidentPayload.json** file, and make the modification accordingly.
-        
+
         "classification": "",
         "classificationComment": "",
         "classificationReason": ""

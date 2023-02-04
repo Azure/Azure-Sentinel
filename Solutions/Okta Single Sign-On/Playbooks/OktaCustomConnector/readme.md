@@ -29,7 +29,7 @@ This custom connector connects to Okta service end point and perform defined aut
 | **List enrolled Factors** | Enumerates all of the enrolled Factors for the specified User|
 | **Reset Factor** | Unenrolls an existing Factor for the specified user, allowing the user to enroll a new Factor |
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 2. Fill in the required paramteres:
     * Custom Connector Name : Enter the Custom connector name (ex:contoso Okta connector)
@@ -42,6 +42,3 @@ This custom connector connects to Okta service end point and perform defined aut
 * Suspend/unsuspend user accounts on Okta through playbook
 * Expire password for user accounts on Okta through playbook
 * Add user to okta groups through playbook
-
-
-

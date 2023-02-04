@@ -21,7 +21,7 @@ log_type = 'Confluence_Audit'
 confluence_uri_audit = "https://" + confluence_homesite_name + ".atlassian.net/wiki/rest/api/audit"
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"

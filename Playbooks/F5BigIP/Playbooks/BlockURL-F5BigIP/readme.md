@@ -8,7 +8,7 @@
  2. For each URL in the list, checks if the URL is present in URL Blocklist Category of F5 BIG-IP firewall.
  3. If URL not present in Blocklist Category, then adds the URL to URL Blocklist Category.
 
- 
+
 ![F5 BIG-IP](./Images/PlaybookDesignerLight.png)
 
 ![F5 BIG-IP](./Images/PlaybookDesignerDark.png)
@@ -26,7 +26,7 @@
 
  Deploy the base playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2Fraw.githubusercontent.com/dharmaAccenture/Azure-Sentinel/F5BigIP/Playbooks/F5BigIP/Playbooks/BasePlaybook-F5BigIP/azuredeploy.json)
 
 
 
@@ -44,9 +44,9 @@
 | **URL Blocklist Category Name** | Enter URL Blocklist Category name to block URL |
 
 
-# Post-Deployment Instructions 
+# Post-Deployment Instructions
 ## Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with URL. 
+- In Azure sentinel analytical rules should be configured to trigger an incident with URL.
 - Configure the automation rules to trigger the playbook.
 
 # Playbook steps explained
@@ -71,8 +71,7 @@
 
 - Update the incident with status close.
 
-## Incident comment 
+## Incident comment
 ![F5 BIG-IP](./Images/IncidentCommentLight.png)
 
 ![F5 BIG-IP](./Images/IncidentCommentDark.png)
-

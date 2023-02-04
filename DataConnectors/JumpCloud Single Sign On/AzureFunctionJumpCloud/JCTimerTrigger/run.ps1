@@ -14,7 +14,7 @@ Write-Host "JumpCloud timer triggered and is running on time! TIME: $currentUTCt
 }
 
 #Retrieve Environment Variables
-$AzureWebJobsStorage =$env:AzureWebJobsStorage 
+$AzureWebJobsStorage =$env:AzureWebJobsStorage
 $JCEventTypes = $env:JumpCloudEventTypes
 $JCQueuename = "jcqueue"
 
@@ -24,7 +24,7 @@ $check2="all directory radius sso systems ldap mdm"
 
 if(( Get-AzstorageQueue -context $JCStorage -Name $JCQueuename -ErrorAction SilentlyContinue ).name ){
     $JCqueue = Get-AzStorageQueue -Name $JCQueuename -Context $JCStorage
-    } 
+    }
 
 else{
     $JCqueue = New-AzStorageQueue -Name $JCQueuename -Context $JCStorage
@@ -35,7 +35,7 @@ $JCEventTypes = $JCEventTypes -replace ",|:| ",";"
 $JCEvents = $JCEventTypes.split(';')
 
 #Trigger via Queue Rest API call to JumpCloud
-$JCEvents | ForEach-Object -Process { 
+$JCEvents | ForEach-Object -Process {
     if($check2 -like '* '+$_+' *'){
         $queueMessage = [Microsoft.Azure.Storage.Queue.CloudQueueMessage]::new($_)
         $JCqueue.CloudQueue.AddMessageAsync($QueueMessage)

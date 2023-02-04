@@ -9,7 +9,7 @@ namespace AzureSentinel_ManagementAPI.Bookmarks.Models
         public string Notes { get; set; }
         public List<string> Labels { get; set; }
         public string QueryResult { get; set; }
-        
+
         public IncidentInfo IncidentInfo { get; set; }
     }
 }

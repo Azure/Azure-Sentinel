@@ -29,7 +29,7 @@ describe("logoValidator", () => {
   it("Should throw an exception as logo file should not have xmlns:herf tag", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/fileWithxmlnsHERF.svg","logoValidationError");
   });
-  
+
   it("Should throw an exception as logo file should have id as guid", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/FileWithInvalidGuidId.svg","logoValidationError");
   });
@@ -44,7 +44,7 @@ describe("logoValidator", () => {
   it("Should throw an exception as logo file should be of less then or equal to 5 kb", async () => {
     await checkInvalid(".script/tests/logoValidatorTest/testFiles/MoreThen5KB.svg","logoValidationError");
   });
-  
+
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {
     let result = await IsValidLogo(filePath);
     expect(result).to.equal(ExitCode.SUCCESS);

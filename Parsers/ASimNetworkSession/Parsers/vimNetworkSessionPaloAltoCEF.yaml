@@ -18,8 +18,8 @@ References:
     Link: https://docs.paloaltonetworks.com/content/dam/techdocs/en_US/pdf/cef/pan-os-90-cef-configuration-guide.pdf
 Description: |
   This ASIM parser supports filtering and normalizing Palo Alto PanOS logs produced by the Microsoft Sentinel Palo Alto Networks connector to the ASIM Network Session normalized schema.
-ParserName: vimNetworkSessionPaloAltoCEF                                  
-EquivalentBuiltInParser: _Im_NetworkSession_PaloAltoCEF                                  
+ParserName: vimNetworkSessionPaloAltoCEF
+EquivalentBuiltInParser: _Im_NetworkSession_PaloAltoCEF
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -55,15 +55,15 @@ ParserQuery: |
     let Actions=datatable(DeviceAction:string,DvcAction:string)
     [ "reset client","Reset Source"
     , "reset server","Reset Destination"
-    , "reset both", "Reset" 
+    , "reset both", "Reset"
     , "allow","Allow"
     , "deny","Deny"
     , "drop", "Drop"
     , "drop ICMP", "Drop ICMP"];
-    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
     let NWParser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
-    CommonSecurityLog 
+    CommonSecurityLog
     | where (isnull(starttime) or TimeGenerated>=starttime)
       and     (isnull(endtime) or TimeGenerated<=endtime)
     | where not(disabled)
@@ -81,13 +81,13 @@ ParserQuery: |
                                   temp_DstMatch, "DstIpAddr",
                                   "No match"
                               )
-      | where ASimMatchingIpAddr != "No match" 
+      | where ASimMatchingIpAddr != "No match"
       | project-away temp_*
     | parse AdditionalExtensions with "PanOSPacketsReceived=" DstPackets:long * "PanOSPacketsSent=" SrcPackets:long *
       // -- Adjustment to support both old and new CSL fields.
-    | extend 
+    | extend
       EventStartTime =  coalesce(
-        todatetime(StartTime), 
+        todatetime(StartTime),
         extract(@'start=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)),
         datetime(null)
       ),
@@ -96,15 +96,15 @@ ParserQuery: |
         extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),
         ""
       )
-    | project-rename 
+    | project-rename
           EventProductVersion=DeviceVersion // Not Documented
-        , Dvc=DeviceName   
+        , Dvc=DeviceName
         , NetworkApplicationProtocol=ApplicationProtocol
-        , SrcZone=DeviceCustomString4 
+        , SrcZone=DeviceCustomString4
         , DstZone=DeviceCustomString5
         , NetworkRuleName=DeviceCustomString1
-        , SrcUsername=SourceUserName 
-        , DstUsername=DestinationUserName 
+        , SrcUsername=SourceUserName
+        , DstUsername=DestinationUserName
         , EventOriginalSeverity=LogSeverity
         , SrcNatIpAddr=SourceTranslatedAddress
         , DstNatIpAddr=DestinationTranslatedAddress
@@ -112,8 +112,8 @@ ParserQuery: |
     | extend
       EventVendor="Palo Alto"
         ,EventProduct="PanOS"
-        , DstBytes=tolong(ReceivedBytes) 
-        , SrcBytes=tolong(SentBytes)      
+        , DstBytes=tolong(ReceivedBytes)
+        , SrcBytes=tolong(SentBytes)
         , NetworkProtocol=toupper(Protocol)
         , NetworkBytes=tolong(FlexNumber1)
         , SrcUsernameType=case(isempty(SrcUsername), "", SrcUsername contains "@", "UPN", "Simple")
@@ -174,4 +174,3 @@ ParserQuery: |
       | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, Process*, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, EventOutcome, FieldDevice*, ExtID, Reason, Activity, Computer, OriginalLogSeverity, PaloAltoFlags, Protocol
     };
     NWParser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
-    

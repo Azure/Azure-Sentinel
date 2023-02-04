@@ -1,6 +1,6 @@
 import datetime
 import logging
-import json 
+import json
 import requests
 import hashlib
 import hmac
@@ -13,7 +13,7 @@ import re
 import azure.functions as func
 
 
-customer_id = os.environ['WorkspaceID'] 
+customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 log_type = 'SalesforceServiceCloud'
 user = os.environ['SalesforceUser']
@@ -28,7 +28,7 @@ days_interval = 1
 url = os.environ['SalesforceTokenUri']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
@@ -186,7 +186,7 @@ def post_data(customer_id, shared_key, body, log_type, chunk_count):
     content_length = len(body)
     signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
     uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
-    
+
     headers = {
         'content-type': content_type,
         'Authorization': signature,

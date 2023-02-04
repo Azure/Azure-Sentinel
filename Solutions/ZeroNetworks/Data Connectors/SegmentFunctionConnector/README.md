@@ -2,26 +2,26 @@
 
 ## Introduction
 
-This folder contains the Azure function time trigger code for Zero Networks Segment-Microsoft Sentinel connector. The connector will run periodically and ingest the Zero Networks Segment Audit data into the Microsoft Sentinel logs custom table `ZNSegmentAudit_CL`. 
+This folder contains the Azure function time trigger code for Zero Networks Segment-Microsoft Sentinel connector. The connector will run periodically and ingest the Zero Networks Segment Audit data into the Microsoft Sentinel logs custom table `ZNSegmentAudit_CL`.
 
 ## Folders
 
-1. `Solutions/ZeroNetworks/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies. 
+1. `Solutions/ZeroNetworks/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies.
 2. `Solutions/ZeroNetworks/SegmentFunctionConnector/` - This contains the Azure function source code.
 
 
 ## Installing for the users
 
-After the solution is published, we can find the connector in the connector gallery of Microsoft Sentinel among other connectors in Data connectors section of Sentinel. 
+After the solution is published, we can find the connector in the connector gallery of Microsoft Sentinel among other connectors in Data connectors section of Sentinel.
 
 i. Go to Microsoft Sentinel -> Data Connectors
 
-ii. Click on the `Zero Networks Segment Audit (Function)` connector, connector page will open. 
+ii. Click on the `Zero Networks Segment Audit (Function)` connector, connector page will open.
 
-iii. Click on the blue `Deploy to Azure` button.   
+iii. Click on the blue `Deploy to Azure` button.
 
 
-It will lead to a custom deployment page where after entering accurate credentials and other information, the resources will get created. 
+It will lead to a custom deployment page where after entering accurate credentials and other information, the resources will get created.
 
 
 The connector should start ingesting the data into the logs in next 10-15 minutes.
@@ -44,6 +44,6 @@ i. Go to Function App and click on the function which you have deployed, identif
 
 ii. Go to Functions -> `ZNSegmentAudit` -> Monitor
 
-iii. By clicking on invocation time, you can see all the logs for that run. 
+iii. By clicking on invocation time, you can see all the logs for that run.
 
 **Note: Furthermore we can check logs in Application Insights of the given function in detail if needed. We can search the logs by operation ID in Transaction search section.**

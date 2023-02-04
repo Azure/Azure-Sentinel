@@ -4,7 +4,7 @@ function Get-RoleArnPolicy
 	.SYNOPSIS
 		Returns a customized Arn policy using the Sentinel Workspace Id
 	.PARAMETER WorkspaceId
-		Specifies the Azure Sentinel workspace id 
+		Specifies the Azure Sentinel workspace id
    #>
 [OutputType([string])]
 [CmdletBinding()]
@@ -13,7 +13,7 @@ param (
 	[ValidateNotNullOrEmpty()]
 	[string]
 	$WorkspaceId
-)  
+)
    $arnRolePolicy = "{
             'Version': '2012-10-17',
             'Statement': [
@@ -55,7 +55,7 @@ function Get-S3AndRuleSQSPolicies
 	   $BucketName,
 	   [ValidateNotNullOrEmpty()][string]
 	   $SqsArn
-   )  
+   )
 
 	$sqsPolicyForS3 = "
     {
@@ -97,7 +97,7 @@ function Get-S3AndRuleSQSPolicies
 }
 
 function Get-SqsEventNotificationConfig
-{ 
+{
    	<#
 	.SYNOPSIS
 		Returns a customized Sqs event notification config policy using the specified event notification name, the Sqs ARN, and notification prefix.
@@ -126,7 +126,7 @@ param (
 	[Parameter()]
 	[bool]
 	$IsCustomLog
-)  
+)
 	$SqsSuffix = ""
 
 	if($true -ne $IsCustomLog)
@@ -182,8 +182,8 @@ param (
 	[Parameter(position=1)]
 	[ValidateNotNullOrEmpty()][string]
 	$BucketName
-)  
-	
+)
+
 	$s3PolicyForArn = "{
 	 'Statement': [{
             'Sid': 'Allow Arn read access S3 bucket',
@@ -194,6 +194,6 @@ param (
             'Action': ['s3:GetObject'],
             'Resource': 'arn:aws:s3:::$BucketName/*'
         }]}"
-			
+
 	return $s3PolicyForArn.Replace("'",'"')
 }

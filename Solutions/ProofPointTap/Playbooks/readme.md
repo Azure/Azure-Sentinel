@@ -38,12 +38,12 @@ You can choose to deploy the whole package: connector + all three playbook templ
 
 
 
-# Proofpoint TAP connector documentation 
+# Proofpoint TAP connector documentation
 
 <a name="authentication">
 
 ## Authentication
-This connector supports Basic authentication. When creating the connection for the custom connector, you will be asked to provide the Service Principal and the Secret which you generated in Proofpoint TAP platform. 
+This connector supports Basic authentication. When creating the connection for the custom connector, you will be asked to provide the Service Principal and the Secret which you generated in Proofpoint TAP platform.
 
 <a name="prerequisites">
 
@@ -58,7 +58,7 @@ To get Proofpoint TAP API credentials follow the instructions:
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters for deploying custom connector and playbooks.
 
@@ -71,7 +71,7 @@ To get Proofpoint TAP API credentials follow the instructions:
 <br>
 <a name="postdeployment">
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, authorize each connection.
 1.	Click the Microsoft Sentinel connection resource
@@ -81,7 +81,7 @@ Once deployment is complete, authorize each connection.
 5.	Click Save
 6.	Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel, analytical rules should be configured to trigger an incident with risky user account. 
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident with risky user account.
 2. Configure the automation rules to trigger the playbooks.
 
 

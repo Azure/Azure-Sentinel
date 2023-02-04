@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) Dns parsers 
+# Advanced Security Information Model (ASIM) Dns parsers
 
 This template deploys all ASIM Dns parsers.
 

@@ -12,7 +12,7 @@ def entity_function(context: df.DurableEntityContext):
     elif operation == "reset":
         current_datetime_str = min_time
     elif operation == "get":
-        
+
         context.set_result(current_datetime_str)
     context.set_state(current_datetime_str)
 

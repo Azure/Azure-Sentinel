@@ -5,12 +5,12 @@
  2. Make the APi call to get the latest threat information/details from cloud console and update the same incidents comments with result.
 
 
-### Prerequisites 
+### Prerequisites
 1. ThreatX-WAFCustomConnector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. API key. To get API Key, login into your ThreatX cloud instance dashboard and navigate to Settings --> API Key --> Add API Key.
 3. [Important Steps] Store the API secret key in Key vault and provide the key name of the stored secret during deployment
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FThreatXPlaybooks%2FThreatX-encrichment%2Fazuredeploy.json)
@@ -22,7 +22,7 @@
     * Keyvault name: Enter the key vault name where secret key is stored.
     * Threatx Key name : Your Key name for the stored api secret.
 
-### Post-Deployment instructions 
+### Post-Deployment instructions
 #### a. Authorize connections (Perform this action if needed)
 Once deployment is complete, you will need to authorize each connection.
 1.	Click the Microsoft Sentinel connection resource
@@ -33,7 +33,7 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for ThreatX Api  Connection (For authorizing the ThreatX API connection, API Key needs to be provided)
 
 #### b. Configurations in Sentinel
-1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address. 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky URL or IP Address.
 2. Configure the automation rules to trigger this playbook , mapping of IP and URL entities is necessary
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role

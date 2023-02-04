@@ -19,21 +19,21 @@ class MESRequest:
         self.api_domain = api_domain
         self.ent_name = ent_name
         self.api_key = api_key
-        
+
         # populate dynamic variables from the Azure Key Vault
         self.az_kv = AzureSecretHandler(vault_uri)
-        
+
         self.access_token = self.az_kv.get_secret("AccessToken")
         self.refresh_token = self.az_kv.get_secret("RefreshToken")
         self.stream_position = self.az_kv.get_secret("StreamPosition")
         self.is_valid = self.az_kv.get_secret("IsValid")
         self.retry_counter = self.az_kv.get_secret("AuthRetryCounter")
-        
+
         if not self.retry_counter:
             self.retry_counter = 1
         else:
             self.retry_counter = int(self.retry_counter)
-            
+
         if not self.is_valid:
             self.is_valid = "YES"
 
@@ -88,7 +88,7 @@ class MESRequest:
                 if 'access_token' in response_content:
                     self.access_token = response_content['access_token']
                     self.refresh_token = response_content['refresh_token']
-                    self.az_kv.set_secret("AccessToken", self.access_token) 
+                    self.az_kv.set_secret("AccessToken", self.access_token)
                     self.az_kv.set_secret("RefreshToken", self.refresh_token)
                     self.az_kv.set_secret("IsValid", "YES")
                     self.az_kv.set_secret("AuthRetryCounter", 1)
@@ -107,10 +107,10 @@ class MESRequest:
                     logging.error("Exiting...")
                     sys.exit(1)
         except requests.exceptions.ProxyError as e:
-            logging.error("Cannot connect to proxy. Remote end closed connection without response")            
+            logging.error("Cannot connect to proxy. Remote end closed connection without response")
         except requests.exceptions.RequestException as e:
             logging.error(e)
-            
+
 
     def get_oauth(self):
         '''
@@ -125,13 +125,13 @@ class MESRequest:
             return self.access_token, self.refresh_token
 
         logging.info("Could not find an access token, getting one now")
-        
+
         try:
             response = requests.post(self.api_domain + "/oauth/token",
                                     data="grant_type=client_credentials",
                                     headers=self.header(self.api_key))
             try:
-                token_json = json.loads(response.text)                
+                token_json = json.loads(response.text)
             except (AttributeError, ValueError) as e:
                 logging.info("Exception when requesting new access token: " + str(e))
                 logging.info("Refreshing access token...")
@@ -147,7 +147,7 @@ class MESRequest:
                 self.az_kv.set_secret("AuthRetryCounter", 1)
                 logging.info("Got authenticated")
                 return self.access_token, self.refresh_token
-            else: 
+            else:
                 if token_json['error'] and token_json['error'] == 'invalid_client':
                     # Set flag to avoid unwanted retries in case of invalid key/client
                     self.retry_counter = int(self.retry_counter) + 1
@@ -158,12 +158,12 @@ class MESRequest:
                 logging.info("Error in oauth")
                 logging.info(str(token_json))
                 return False
-                
+
         except requests.exceptions.ProxyError as e:
-            logging.error("Cannot connect to proxy. Remote end closed connection without response")            
+            logging.error("Cannot connect to proxy. Remote end closed connection without response")
         except requests.exceptions.RequestException as e:
             logging.error(e)
-            
+
     def get_events(self):
         '''
         Method to collect events from Metis API
@@ -171,11 +171,11 @@ class MESRequest:
         - Requests events (retries if error HTTP code)
         - Collect events lists from Metis API, returns full list of events
         '''
-        
+
         events = []
         retry_count = 0
         more_events = True
-        
+
         if self.is_valid == "NO" or int(self.retry_counter) >= 10:
             logging.info("Please check API key, Auth API responds with Invalid Client error after 10 retries")
             return events
@@ -200,14 +200,14 @@ class MESRequest:
                         retry_count = retry_count + 1
                         continue
                 except requests.exceptions.ProxyError as e:
-                    logging.error("Cannot connect to proxy. Remote end closed connection without response")                
+                    logging.error("Cannot connect to proxy. Remote end closed connection without response")
                 except requests.exceptions.RequestException as e:
-                    logging.error(e)                
-                    
+                    logging.error(e)
+
                 cycle_count = cycle_count + 1
                 events = events + response.json()['events']
                 self.stream_position = response.json()['streamPosition']
-                
+
                 #update stream position in Azure Vault
                 self.az_kv.set_secret("StreamPosition", self.stream_position)
 

@@ -1,4 +1,4 @@
-<p align="left">  
+<p align="left">
 <img width="300" height="100" src="./Images/logo.jpg"> </a>
 </p>
 
@@ -11,13 +11,13 @@ Use this playbook to quickly stop or slow down ransomware attacks and critical i
 1. [Playbook workflow](#playbook-workflow)
 2. [Playbook execution](#playbook-execution)
 3. [Access Playbook](#Access_playbook)
-4. [Playbook retry mechanism](#playbook-retry-mechanism) 
+4. [Playbook retry mechanism](#playbook-retry-mechanism)
 
 ## Playbook Workflow
 
 1. Perform the general solution setup. [(see instructions here)](https://github.com/IllusiveNetworks-Labs/Azure-Sentinel/tree/Illusive/Solutions/Illusive%20Active%20Defense)
 2. [Add API permissions to the Azure app](#add-api-permissions)
-3. [Enable Microsoft Defender for Endpoint](#enable-mde) (Only when using MDE for incident response) 
+3. [Enable Microsoft Defender for Endpoint](#enable-mde) (Only when using MDE for incident response)
 4. [Create the Illusive playbook](#create-illusive-playbook)
 5. [Connect the playbook to Azure Sentinel](#API_connection)
 
@@ -25,12 +25,12 @@ Use this playbook to quickly stop or slow down ransomware attacks and critical i
 
 ## Add API permissions to the Azure app
 
-1. From the Azure console, find the Azure app you created to run the Illusive Sentinel Solution. 
+1. From the Azure console, find the Azure app you created to run the Illusive Sentinel Solution.
 2. Go to **API Permissions**.
 3. Click **Add a permission**.
 4. Under **Request API permissions>API’s my organization uses**, search for and select **WindowsDefenderATP**, select select **Delegated permissions** and check the following permissions:
    - Machine.Isolate – to isolate device
-   - Machine.Read – to find agent ID - to collect data from a single machine. 
+   - Machine.Read – to find agent ID - to collect data from a single machine.
    - File.Read.All – for process handling, find and erase/stop suspicious executables
    - Machine.StopAndQuarantine – for process handling, find and erase/stop suspicious executables
 5. Select Application permissions and check the following permissions:
@@ -42,9 +42,9 @@ Use this playbook to quickly stop or slow down ransomware attacks and critical i
 7. Once all the API permissions are added, click **Grant admin consent for Default Directory** and click **Yes**.
 8. Verify admin consent has been granted. This step is important, even if the admin consent status is green. Only a Global Admin can approve admin consent requests.
    1. Go to **Enterprise>Admin Consent requests**.
-   2. Go to **My pending** and verify that this permission is not pending.  
+   2. Go to **My pending** and verify that this permission is not pending.
  The result should look like this:
-   <p align="center">  
+   <p align="center">
       <img src="./Images/azure-app-api-incident-response-permissions-admin-consent-granted.png"> </a>
    </p>
 
@@ -57,25 +57,25 @@ Allow the Illusive Incident Response playbook to stop an attack by triggering an
 **Attention:** If you use CrowdStrike as your incident response tool, you can skip this procedure.
 
  1. From the Azure Search bar, search for the **Subscription** in which MDE is installed.
-     <p align="center">  
+     <p align="center">
         <img src="./Images/Configure_MDE_1(Subscriptions_MDE_1).png"> </a>
      </p>
  2. Click on the existing **Subscription.**
  3. Click **Security** in the Subscription menu.
  4. Ensure Microsoft Defender for Endpoint is **On.**
-     <p align="center">  
+     <p align="center">
         <img src="./Images/Configure_MDE_2(Subscriptions_MDE_2).png"> </a>
      </p>
  5. If MDE is off, click **Security Center.**
-     <p align="center">  
+     <p align="center">
         <img src="./Images/Configure_MDE_OFF_(Subscriptions_MDE_2).png"> </a>
      </p>
  6. Find the Azure Defender card and click **Enable Azure Defender.**
-     <p align="center">  
+     <p align="center">
         <img src="./Images/Configure_MDE_3(Security_Center)_Enable.png"> </a>
      </p>
  7. Select the desired subscription and click **Upgrade.**
-     <p align="center">  
+     <p align="center">
         <img src="./Images/Configure_MDE_3(Security_Center)_Upgrade.png"> </a>
      </p>
 
@@ -92,22 +92,22 @@ Before deploying the custom template, download the **azuredeploy.json** for the 
 - You will not be prompted for missing information when saving the custom deployment configuration. If the playbook is incorrect or incomplete, the incident response playbook will not be able to isolate hosts, and you will get a playbook execution level error message.
 
 1. On Azure home page, filter for **Deploy a custom template.**
-     <p align="center">  
+     <p align="center">
         <img src="./Images/deploy-custom-template-search.png"> </a>
      </p>
 2. Under **Custom Deployment>Select a template,** click **Build your own template in the editor.**
-     <p align="center">  
+     <p align="center">
         <img src="./Images/deploy-custom-template-page.png"> </a>
      </p>
 3. From **Edit template,** click **Load file,** load the **azuredeploy.json** file you downloaded, and click **Save.**
-     <p align="center">  
+     <p align="center">
         <img src="./Images/deploy-custom-template-load-file.png"> </a>
      </p>
-     <p align="center">  
+     <p align="center">
         <img src="./Images/deploy-custom-template-edit-template-incident-response.png"> </a>
      </p>
 4. Under **Custom Deployment>Basics:**
-    - Specify the **Subscription** that contains the dedicated Azure app that will run the Illusive Sentinel solution 
+    - Specify the **Subscription** that contains the dedicated Azure app that will run the Illusive Sentinel solution
     - Specify the **Resource group** that contains the Workspace where you want to install the playbook.
     - Under **Instance details:**
       <table>
@@ -134,7 +134,7 @@ Before deploying the custom template, download the **azuredeploy.json** for the 
        </tr>
        <tr>
         <td>EDR deployed</td>
-        <td>The EDR which is deployed in the organization and can be used for incident mitigation.  <br> 
+        <td>The EDR which is deployed in the organization and can be used for incident mitigation.  <br>
         <b>Note</b> Though it is possible to enter integration information for both CrowdStrike and Microsoft Defender for Endpoint, the Illusive solution requires you to select just one tool for incident response.</td>
        </tr>
        <tr>
@@ -147,15 +147,15 @@ Before deploying the custom template, download the **azuredeploy.json** for the 
         <td>If <b>EDR deployed = MDE,</b> specify MDE authentication parameters</td>
        </tr>
       </table>
-      <p align="center">  
+      <p align="center">
          <img src="./Images/custom-deployment-basics-incident-response.PNG"> </a>
-      </p>      
+      </p>
 5. When finished entering details, click **Review + Create.**
-      <p align="center">  
+      <p align="center">
          <img src="./Images/custom-deployment-review-create.png"> </a>
-      </p>      
-6. On successful validation, click **Create**.  
-This completes the playbook deployment. 
+      </p>
+6. On successful validation, click **Create**.
+This completes the playbook deployment.
       <p align="center">
          <img src="./Images/custom-deployment-is-complete.png"> </a>
       </p>
@@ -164,13 +164,13 @@ This completes the playbook deployment.
 
 ## Connect the playbook to Azure Sentinel
 
-Connect the playbook to Azure Sentinel by configuring the playbook's API connection. 
-     <p align="center">  
+Connect the playbook to Azure Sentinel by configuring the playbook's API connection.
+     <p align="center">
        <img src="./Images/api-connection-setup.png"> </a>
      </p>
 
-1. From **Your custom deployment is complete**, click **Go to all resources**. 
-     - If there is only one installed playbook in the workspace, clicking on **Go to resource group** will take you to the playbook page. 
+1. From **Your custom deployment is complete**, click **Go to all resources**.
+     - If there is only one installed playbook in the workspace, clicking on **Go to resource group** will take you to the playbook page.
      - If there are multiple installed playbooks in the workspace, clicking on **Go to resource group** will take you to the All resources page. The playbook will be available in the list.
 2. Click the deployed playbook and then click **API connections.**
 3. Under API connections, click **azuresentinel**.
@@ -188,24 +188,24 @@ Connect the playbook to Azure Sentinel by configuring the playbook's API connect
 1. This playbook is triggered by a new Sentinel Alert originating from a new Illusive event syslog.
 2. Sentinel uses Illusive API to fetch the incident details and determine whether this is a Ransomware or a Critical severity incident.
 3. If the incident is Ransomware or Critical severity, the playbook determines the response as follows:
-   1. Checks if an incident response has already been executed. 
+   1. Checks if an incident response has already been executed.
    2. If no response has been executed, the playbook tries to stop the triggering process by either killing or deleting it (depending on the integrated EDR). The information about the triggering process is extracted from the Illusive API and the response executed on the triggering process of the most current event.
    3. If an attempt to stop the triggering process has been made in response to a previous event, or if there is presently no option to stop the process, the playbook tries to isolate the host.
    4. **Important**: If an attempt to isolate the host has been made in response to a previous event, the playbook will take no further action on this host for future detected events.
 4. The playbook leverages the response capabilities of Crowdstrike or Microsoft Defender for Endpoint, whichever is configured in the custom playbook deployment.
 
 <a name="Access_playbook">
-  
+
 ## Access and view the playbook
 
-You can view and manage the playbook as well as review the playbook run history. This can be helpful for troubleshooting or for understanding playbook behavior and results. 
+You can view and manage the playbook as well as review the playbook run history. This can be helpful for troubleshooting or for understanding playbook behavior and results.
 
-1. Find the playbook on the Azure Sentinel or All resources page. 
+1. Find the playbook on the Azure Sentinel or All resources page.
 2. Click on the playbook to view the playbook run History.
 3. Select any executed playbook to view the results.
 
 Sample playbook history:
-<p align="center">  
+<p align="center">
    <img src="./Images/playbook-history-incident-response.PNG"> </a>
 </p>
 
@@ -213,7 +213,7 @@ Sample playbook history:
 
 ## Playbook retry mechanism
 
-<p align="center">  
+<p align="center">
    <img src="./Images/playbook-retry-mechanism.png"> </a>
 </p>
 

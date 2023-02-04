@@ -16,7 +16,7 @@ This module assumes that you completed [Module 1](Module-1-Setting-up-the-enviro
 
 For detailed prerequisites and instructions for this connector, you can visit our official doc on this matter [Connect your threat intelligence platform to Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence-tip).
 
-#### Task 1 : Threat Intelligence Platforms (TIP) connector 
+#### Task 1 : Threat Intelligence Platforms (TIP) connector
 
 This connector is currently in public preview and is based on Third-party Threat Intelligence platform (TIP) solutions like PaloAlto MineMeld, ThreatConnect or others.
 
@@ -29,7 +29,7 @@ This connector is currently in public preview and is based on Third-party Threat
 3. Review the connector Prerequisites and notice that to enable this connector, the user needs to be **Global Admin** or **Security Administrator** in the current Azure AD tenant
 
 4. Read the configuration section and notice that as part of this connector onboarding, the user needs to create an Azure AD app registration and grant one of the permissions above
-	
+
 #### Task 2 : Threat intelligence TAXII connector
 
 For detailed prerequisites and instructions for this connector, you can visit our official doc on this matter [Connect Microsoft Sentinel to STIX/TAXII threat intelligence feeds](https://docs.microsoft.com/azure/sentinel/connect-threat-intelligence-taxii)
@@ -47,7 +47,7 @@ The ingested Indicators of Compromise (IOC) coming from any of these TI feeds, i
 
 1. On the left navigation click on **Logs**, this will redirect you to the Log Analytics query interface. On the query interface we can see on the left side the tables with the relevant fields.
 
-2. Microsoft Sentinel built-in tables have a predefined schema, to be able to see the **ThreatIntelligenceIndicator** schema, run the following query: 
+2. Microsoft Sentinel built-in tables have a predefined schema, to be able to see the **ThreatIntelligenceIndicator** schema, run the following query:
 
  ```powershell
  ThreatIntelligenceIndicator
@@ -66,9 +66,9 @@ ThreatIntelligenceIndicator
 To understand if a specific IOC is active, we need to have a closer look at the following columns:
 
 - **ExpirationDateTime [UTC]**
-- **Acitve** 
+- **Acitve**
 
-On our example, we can see that the IOC is an IP that is active with future Expiration date. This means that our matching detection rules (which we will review in the next exercise) will take this IOC into consideration when correlating with data sources. 
+On our example, we can see that the IOC is an IP that is active with future Expiration date. This means that our matching detection rules (which we will review in the next exercise) will take this IOC into consideration when correlating with data sources.
 
 ![Acitve](../Images/TI-active.png)
 
@@ -77,7 +77,7 @@ On our example, we can see that the IOC is an IP that is active with future Expi
 
 After we ingested our TI data into the ThreatIntelligenceIndicator table, our mission is to review how our SOC can leverage and manage the TI menu to allow us to search, tag and manage the lifecycle of IOCs.
 
- 
+
 1. On the Microsoft Sentinel left menu press on the Threat intelligence (Preview)
 This menu is a visual representation of the ThreatIntelligenceIndicator table.
 
@@ -87,14 +87,14 @@ This menu is a visual representation of the ThreatIntelligenceIndicator table.
 2. Select one IOC from the main pane and notice that the right  pane changed accordingly and present the metadata of the selected IOC.
 
 ![Acitve](../Images/m7-Tiblade1.png)
-	
+
 3. On the top area of the main blade, we can filter the list of the IOC's based on a specific parameters. In our case, we only ingested one type of IOC (IP), but the **Type** filter allow us to filter based on different types. If we ingested IOC's from multiple TI data sources, the **source** filter allows us to slice it.
 
 ![Acitve](../Images/m7-ITbladeFilter.png)
 
 
 #### Task 3: add new TI IOC manually in Microsoft Sentinel Threat intelligence menu
-	
+
 Part of the SOC analyst's job is to manually add an IOC into the TI index from time to time. This allows other data sources and detections to correlate and detect interaction with this IOC.
 
 1. On the **Threat intelligence (Preview)** top menu, click on **Add new**, this will open the **New indicator** dialog:
@@ -104,11 +104,11 @@ Part of the SOC analyst's job is to manually add an IOC into the TI index from t
 ![Acitve](../Images/TI2.png)
 
 3. Add **tags** that will help us to add metadata on this IOC. In our example, we want to tag this IOC with its associated incident ID. On the add tag pop-up write **Incident 4326** and press **OK**.
-	 
+
 ![Acitve](../Images/m7-tibladeaddtag.png)
 
 4. On the **Thread types** select **malicious-activity**
-	
+
 5. Add a **Description** and set the **Confidence** level to 80, set up the **Valid from** date to today and the **Valid until** to two weeks from now.
 
 6. Press **Apply**
@@ -124,7 +124,7 @@ ThreatIntelligenceIndicator
 | search "http://phishing.com"
 ```
 
-9. As we want to view the description column, we need to modify the column order for the menu by select the **column** button on the top bar. 
+9. As we want to view the description column, we need to modify the column order for the menu by select the **column** button on the top bar.
 
 ![Acitve](../Images/m7-tibladecolumnorder.png)
 
@@ -178,7 +178,7 @@ Workbooks provide powerful interactive dashboards that give you insights into al
 
 ![TImatching](../Images/TI5.png)
 
-4. Now select the **View saved workbook** button to open the workbook for viewing and editing. 
+4. Now select the **View saved workbook** button to open the workbook for viewing and editing.
 
 5. You will find some pre-built visualizations that show you the indicators imported into Sentinel over time, by type and provider. To modify or add a new chart, select the **Edit** button at the top of the page to enter editing mode for the workbook.
 

@@ -21,7 +21,7 @@ This custom connector connects to ThreatX WAF service end point to runs any Thre
 | **Get Event Log Detail** | Fetch the detailed log of attacks happens at WAF end |
 
 
-### Deployment instructions 
+### Deployment instructions
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FCustomConnector%2FThreatXCustomConnector%2Fazuredeploy.json)

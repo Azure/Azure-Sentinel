@@ -48,4 +48,3 @@ def get_logs(username, password, env_id, start_time, end_time):
         else:
             logging.error(domains_json["message"])
     return logs
-

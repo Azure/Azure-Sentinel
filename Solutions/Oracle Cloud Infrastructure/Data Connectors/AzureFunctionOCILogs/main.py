@@ -14,7 +14,7 @@ logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(l
 
 
 MessageEndpoint = os.environ['MessageEndpoint']
-StreamOcid = os.environ['StreamOcid'] 
+StreamOcid = os.environ['StreamOcid']
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
 LOG_TYPE = 'OCI_Logs'

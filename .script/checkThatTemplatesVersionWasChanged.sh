@@ -20,7 +20,7 @@ for (( i=0; i<${#MAPFILE[@]}; i++ ))
 		fi
 
 	else
-		echo "${MAPFILE[$i]} is not a detection."		
+		echo "${MAPFILE[$i]} is not a detection."
     fi
 done
 

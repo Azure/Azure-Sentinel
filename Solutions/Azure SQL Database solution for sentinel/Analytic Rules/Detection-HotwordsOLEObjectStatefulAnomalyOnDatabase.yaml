@@ -22,7 +22,7 @@ query: |
     let monitoredStatementsThreshold = 1;           // Minimal number of monitored statements in the slice to trigger an anomaly.
     let trainingSlicesThreshold = 5;                // The maximal amount of slices with monitored statements in the training window before anomaly detection is throttled.
     let timeSliceSize = 1h;                         // The size of the single timeSlice for individual aggregation.
-    let detectionWindow = 1h;                       // The size of the recent detection window for detecting anomalies.  
+    let detectionWindow = 1h;                       // The size of the recent detection window for detecting anomalies.
     let trainingWindow = detectionWindow + 14d;     // The size of the training window before the detection window for learning the normal state.
     let hotwords = pack_array('sp_oamethod', 'sp_oacreate', 'sp_oasetproperty'); // List of monitored hot words.
     let processedData = materialize (
@@ -49,7 +49,7 @@ query: |
             , anySuccessfulMonitoredStatement = anyif(Statement, (hasHotword == 1) and (Error == 0))
             , anyInfo = anyif(AdditionalInfo, hasHotword == 1)
             , hotWord = anyif(extract(strcat_array(hotwords, '|'), 0, tolower(Statement)), hasHotword == 1)
-            by Database, ClientIp, ApplicationName, PrincipalName, timeSlice   
+            by Database, ClientIp, ApplicationName, PrincipalName, timeSlice
         | extend WindowType = case( timeSlice >= ago(detectionWindow), 'detection',
                                                (ago(trainingWindow) <= timeSlice and timeSlice < ago(detectionWindow)), 'training', 'other')
         | where WindowType in ('detection', 'training'));
@@ -59,7 +59,7 @@ query: |
         | summarize countSlicesWithHotwords = dcountif(timeSlice, countStatementsWithHotwords >= monitoredStatementsThreshold)
             by Database;
     processedData
-    | where WindowType == 'detection' 
+    | where WindowType == 'detection'
     | join kind = inner (trainingSet) on Database
     | extend IsHotwordAnomalyOnStatement = iff(((countStatementsWithHotwords >= monitoredStatementsThreshold) and (countSlicesWithHotwords <= trainingSlicesThreshold)), true, false)
         , anomalyScore = round(countStatementsWithHotwords/monitoredStatementsThreshold, 0)

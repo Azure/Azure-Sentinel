@@ -12,7 +12,7 @@ import logging
 import re
 from .state_manager import StateManager
 
-customer_id = os.environ['WorkspaceID'] 
+customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 jira_token = os.environ['JiraAccessToken']
 jira_username = os.environ['JiraUsername']
@@ -127,4 +127,3 @@ def main(mytimer: func.TimerRequest)  -> None:
         logging.info('The timer is past due!')
     logging.info('Starting program')
     get_result(generate_date())
-

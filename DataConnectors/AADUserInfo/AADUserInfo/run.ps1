@@ -25,7 +25,7 @@ Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     $calculatedHash = $sha256.ComputeHash($bytesToHash)
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
     $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
-    
+
     # Dispose SHA256 from heap before return.
     $sha256.Dispose()
 
@@ -48,7 +48,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    
+
         # Compatible with previous version
 		if ([string]::IsNullOrEmpty($logAnalyticsUri)){
 			$logAnalyticsUri = "https://" + $CustomerId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"

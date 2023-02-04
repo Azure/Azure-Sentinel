@@ -1,12 +1,12 @@
-<#  
-    Title:          Azure Function App Zero Networks Segment Audit API Ingestion to Azure Sentinel   
+<#
+    Title:          Azure Function App Zero Networks Segment Audit API Ingestion to Azure Sentinel
     Language:       PowerShell
     Version:        1.1
     Last Modified:  10/24/2022
     Comment:        Update product name
 
-    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your Zero Networks Segment Audit API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
-                    Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the Zero Networks Segment Audit API and format the data received into JSON format.  
+    DESCRIPTION:    The following PowerShell Function App code is a generic data connector to pull logs from your Zero Networks Segment Audit API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the
+                    Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the Zero Networks Segment Audit API and format the data received into JSON format.
 
 #>
 
@@ -20,7 +20,7 @@ if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late! $($Timer.ScheduledStatus.Last)"
 }
 
-# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, Zero Networks Segment Audit API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information 
+# Define the application settings (environmental variables) for the Workspace ID, Workspace Key, Zero Networks Segment Audit API Key(s) or Token, URI, and/or Other variables. Reference (https://docs.microsoft.com/azure/azure-functions/functions-reference-powershell#environment-variables)for more information
 $apiToken = $env:apiToken
 $uri = $env:uri
 
@@ -29,7 +29,7 @@ $uri = $env:uri
 $CustomerId = $env:workspaceId
 $SharedKey = $env:workspaceKey
 $TimeStampField = $env:TimeStampField
-$LogType = $env:tableName     
+$LogType = $env:tableName
 $logAnalyticsUri = $env:logAnalyticsUri
 
 if ([string]::IsNullOrEmpty($logAnalyticsUri))
@@ -52,7 +52,7 @@ $headers.Add("Authorization", $apiToken)
 $now =  (Get-Date).ToUniversalTime()
 $nowCursor = ([DateTimeOffset]$now).ToUnixTimeMilliseconds()
 $ago = (Get-Date).AddMinutes(-5).ToUniversalTime()
-$agoCursor = ([DateTimeOffset]$ago).ToUnixTimeMilliseconds() 
+$agoCursor = ([DateTimeOffset]$ago).ToUnixTimeMilliseconds()
 $url = $uri + "?_limit=400&order=desc&from=$agoCursor&to=$nowCursor"
 $response = $null
 
@@ -89,7 +89,7 @@ Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $metho
     $calculatedHash = $sha256.ComputeHash($bytesToHash)
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
     $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash
-    
+
     # Dispose SHA256 from heap before return.
     $sha256.Dispose()
 
@@ -112,7 +112,7 @@ Function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    
+
     $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 
     $headers = @{

@@ -79,4 +79,3 @@ Building a solution:
    ```
 
 The Tanium solution manifest is located within `./Solutions/Tanium/Data/Solution_Tanium.json`
-

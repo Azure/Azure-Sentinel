@@ -17,7 +17,7 @@ Some of the data connectors that will be used in this lab, require some specific
 
 This exercise shows you how to enable the Azure Activity data connector. This connector will bring into your Microsoft Sentinel workspace all the audit events for actions performed in your Azure subscription.
 
-**NOTE**: To do this exercise, your user must have Reader permissions to any subscription which logs you want to stream into Microsoft Sentinel. 
+**NOTE**: To do this exercise, your user must have Reader permissions to any subscription which logs you want to stream into Microsoft Sentinel.
 
 1. Go to you Microsoft Sentinel workspace and select **Data Connectors** under **Configuration** section.
 

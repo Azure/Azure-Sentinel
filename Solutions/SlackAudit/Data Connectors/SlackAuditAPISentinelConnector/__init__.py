@@ -10,7 +10,7 @@ import logging
 import re
 from .state_manager import StateManager
 
-customer_id = os.environ['WorkspaceID'] 
+customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
 slack_api_bearer_token = os.environ['SlackAPIBearerToken']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')

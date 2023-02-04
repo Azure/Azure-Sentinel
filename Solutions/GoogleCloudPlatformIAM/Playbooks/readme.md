@@ -39,7 +39,7 @@ You can choose to deploy the whole package: connector + all three playbook templ
 
 
 
-# Google Cloud Platform IAM connector documentation 
+# Google Cloud Platform IAM connector documentation
 
 <a name="authentication">
 
@@ -57,7 +57,7 @@ To configure the connector follow the instructions:
 
 <a name="deployment">
 
-### Deployment instructions 
+### Deployment instructions
 1. To deploy Custom Connectors and Playbooks, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters for deploying custom connector and playbooks.
 

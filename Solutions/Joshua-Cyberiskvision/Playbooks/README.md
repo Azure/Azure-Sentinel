@@ -17,7 +17,7 @@ Joshua-Import-To-Sentinel.json
     <img src="https://aka.ms/deploytoazurebutton"/>
 </a>
 
-Joshua-Indicators-Processors playbooks performs the following steps: 
+Joshua-Indicators-Processors playbooks performs the following steps:
  - Triggered on a defined schedule
  - Reads the indicators from Joshua Cyberiskvision
  - Transforms the indicators to the appropriate tiIndicator JSON format

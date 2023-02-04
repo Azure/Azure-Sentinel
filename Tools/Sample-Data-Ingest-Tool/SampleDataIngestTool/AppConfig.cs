@@ -10,7 +10,7 @@ namespace SampleDataIngestTool
     {
         public AppConfig()
         {
-           
+
         }
 
         public Dictionary<string, string> GetCredentials()

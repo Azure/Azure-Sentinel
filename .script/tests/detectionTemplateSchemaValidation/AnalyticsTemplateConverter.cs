@@ -17,7 +17,7 @@ namespace DetectionTemplateSchemaValidation.Tests
 
         public AnalyticsTemplateConverter()
         {
-            var types = typeof(AnalyticsTemplateInternalModelBase).Assembly.GetTypes().Where(t => !t.IsAbstract && typeof(AnalyticsTemplateInternalModelBase).IsAssignableFrom(t)).ToList(); 
+            var types = typeof(AnalyticsTemplateInternalModelBase).Assembly.GetTypes().Where(t => !t.IsAbstract && typeof(AnalyticsTemplateInternalModelBase).IsAssignableFrom(t)).ToList();
            foreach(var templateType in types)
             {
                 var templateInstance = Activator.CreateInstance(templateType);

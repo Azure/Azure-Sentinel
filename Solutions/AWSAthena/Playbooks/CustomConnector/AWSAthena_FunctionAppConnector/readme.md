@@ -8,7 +8,7 @@ This Function App Connector is to connect AWS Athena API.
 
 ### Prerequisites For AWS Athena API Function App Connector
 
-* AWS Access Key ID, Secret Access Key and Region are required. 
+* AWS Access Key ID, Secret Access Key and Region are required.
 * Check the [documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) to obtain above credentials.
 * Check these [steps](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#using-regions-availability-zones-describe) to get the Region.
 
@@ -28,7 +28,7 @@ This Function App Connector is to connect AWS Athena API.
 
 1. To deploy Custom Connector, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
-    - AWS Access Key ID 
+    - AWS Access Key ID
     - AWS Secret Access Key
     - AWS Region
 

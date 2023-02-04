@@ -29,7 +29,7 @@ AWS Access Key Id and AWS Secret Access Key are required. Check the [documentati
 
 1. To deploy Custom Connector, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
-    - AWS_AccessKeyId 
+    - AWS_AccessKeyId
     - AWS_SecretAccessKey
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FAWS_IAM_FunctionAppConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAWS_IAM%2FPlaybooks%2FAWS_IAM_FunctionAppConnector%2Fazuredeploy.json)

@@ -54,7 +54,7 @@ if ($AzSecurityInsightsModule -eq $null) {
 }
 
 #Check the Azure subscription context
-$subIdContext = (Get-AzContext).Subscription.Id 
+$subIdContext = (Get-AzContext).Subscription.Id
 if ($subIdContext -ne $subscriptionId) {
     $setSub = Set-AzContext -SubscriptionName $subscriptionId -ErrorAction SilentlyContinue
     if ($setSub -eq $Null) {
@@ -75,14 +75,14 @@ try {
 catch {
     Write-Warning $_.Exception.Message
     Write-Warning "Skipping Scheduled rules...."
-    
+
 }
 
 if ($scheduledRulesExist -eq $true) {
     Write-Host ("Importing Scheduled rules from: " + ($ruleImportPath + "\" + $ScheduleRules)) -ForegroundColor Yellow
 
     foreach ($newScheduledRule in $newScheduledRules) {
- 
+
         $NewRuleObject = @{
             DisplayName = $newScheduledRule.DisplayName
             Query = $newScheduledRule.Query
@@ -96,7 +96,7 @@ if ($scheduledRulesExist -eq $true) {
             Scheduled = $true
             Enabled = $newScheduledRule.Enabled
         }
-    
+
         if ($newScheduledRule.Description -ne "") {
             $NewRuleObject += @{Description = $newScheduledRule.Description}
         }
@@ -134,7 +134,7 @@ catch {
 if ($SecurityIncidentCreationRulesExist -eq $true) {
     Write-Host ("Importing MicrosoftSecurityIncidentCreation rules from: " + ($ruleImportPath + "\" + $SecurityIncidentCreationRules)) -ForegroundColor Yellow
     foreach ($newIncidentCreationRule in $newIncidentCreationRules) {
-     
+
         $NewRuleObject = @{
             DisplayName                       = $newIncidentCreationRule.DisplayName
             ProductFilter                     = $newIncidentCreationRule.ProductFilter
@@ -146,7 +146,7 @@ if ($SecurityIncidentCreationRulesExist -eq $true) {
         if ($DisplayNamesExcludeFilter) { $NewRuleObject.DisplayNamesExcludeFilter = $DisplayNamesExcludeFilter } #Only add value if not null or empty
         if ($SeveritiesFilter) { $NewRuleObject.SeveritiesFilter = $SeveritiesFilter = @() } #Only add value if not null or empty
         if ($AlertRuleTemplateName) { $NewRuleObject.AlertRuleTemplateName = $AlertRuleTemplateName } #Only add value if not null or empty
-    
+
         Write-Host ("Adding rule: " + $newIncidentCreationRule.DisplayName) -ForegroundColor Yellow
         New-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName @NewRuleObject
     }
@@ -163,13 +163,13 @@ try {
 catch {
     Write-Warning $_.Exception.Message
     Write-Warning "Skipping Fusion rules...."
-    
+
 }
 
 if ($FusionRulesExist -eq $true) {
     Write-Host ("Importing Fusion rules from: " + ($ruleImportPath + "/" + $FusionRules)) -ForegroundColor Yellow
     foreach ($newFusionRule in $newFusionRules) {
-     
+
         $NewRuleObject = @{
             alertRuleTemplateName = $newFusionRule.AlertRuleTemplateName
             AlertRuleId           = (New-Guid)
@@ -177,7 +177,7 @@ if ($FusionRulesExist -eq $true) {
             Enabled               = $true
         }
         if ($Description) { $NewRuleObject.Description = $Description } #Only add value if not null or empty
-    
+
         Write-Host ("Adding rule: " + $newFusionRule.DisplayName) -ForegroundColor Yellow
         New-AzSentinelAlertRule -ResourceGroupName $resourceGroupName -WorkspaceName $workspaceName @NewRuleObject
     }

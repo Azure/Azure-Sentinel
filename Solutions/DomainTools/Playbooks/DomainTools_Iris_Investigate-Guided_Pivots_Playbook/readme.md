@@ -14,7 +14,7 @@
 
 ## Overview
 This playbook uses the DomainTools Iris Investigate API. Given a domain, return whois, mailserver, DNS, SSL and related indicators from Iris Investigate, highlighting, and automatically querying for related domains sharing an attribute with the one in the incident. This can be useful for threat hunting and proactive protection against related indicators of interest. See the related "DomainTools Iris Investigate Domain Playbook" if you don't wish to pull these related indicators automatically.
- 
+
 Learn more about the Custom Connector via https://docs.microsoft.com/connectors/domaintoolsirisinves or visit https://www.domaintools.com/integrations to request an API key.
 
 This playbook works as follows:
@@ -64,12 +64,12 @@ Authentication methods this connector supports:
 <a name="postdeployment">
 
 ### Post-Deployment instructions
-#### a. Authorize connections: 
+#### a. Authorize connections:
 Once deployment is complete, you will need to authorize each connection:
 - Open the Logic App in the edit mode.
 - Open "For each Host" Action.
 - Provide connection details for the DomainTools Iris Investigate Custom Connector (A DomainTools API Username and API Key need to be provided).
- 
+
   ![for_each](./graphics/for_each.png)
 
 - Click on "Add New", provide a name for the connection, enter your DomainTools Investigate API Username and API Key.
@@ -79,5 +79,5 @@ Once deployment is complete, you will need to authorize each connection:
 - Save the Logic App. If the Logic App prompts any missing connections, please update the connections similarly.
 - As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.
 #### b. Configurations in Sentinel:
-- In Azure Sentinel, analytical rules should be configured to trigger an incident with risky Domain indicators. 
+- In Azure Sentinel, analytical rules should be configured to trigger an incident with risky Domain indicators.
 - Configure the automation rules to trigger the playbook.

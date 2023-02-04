@@ -11,7 +11,7 @@ using Newtonsoft.Json.Linq;
 namespace AzureSentinel_ManagementAPI.AlertRuleTemplates
 {
     public class AlertRuleTemplatesController
-    {       
+    {
         private readonly AuthenticationService authenticationService;
         private readonly AzureSentinelApiConfiguration[] azureConfigs;
         private bool cliMode;
@@ -31,7 +31,7 @@ namespace AzureSentinel_ManagementAPI.AlertRuleTemplates
         /// </summary>
         /// <returns></returns>
         public async Task GetAlertRuleTemplates(int insId = -1)
-        {            
+        {
             if (insId != -1)
             {
                 await GetAlertRuleTemplatesByInstance(insId);

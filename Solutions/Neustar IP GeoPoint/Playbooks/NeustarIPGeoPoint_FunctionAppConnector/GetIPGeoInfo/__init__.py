@@ -13,12 +13,12 @@ def __validate_url(url: str) -> bool:
         Args:
             url(str) - url
         Returns:
-            True/False(bool) 
+            True/False(bool)
     '''
     if url.startswith("https://"):
         return True
     else:
-        return False 
+        return False
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -35,7 +35,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
              'Invalid Settings. NeustarIPGeoPointEndpointUrl configuration is missing.',
              status_code=500
         )
-    
+
     # Check if url starts with https://
     if not __validate_url(neustar_ip_geopoint_url):
         logging.error(f'Invalid Url. Neustar IP GeoPoint API Url should be prefixed with https://')
@@ -57,7 +57,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             pass
         else:
             ip_address = req_body.get('IPAddress')
-    
+
     if not ip_address:
         logging.error(f'Invalid Request. No IP Address in request.')
         return func.HttpResponse(
@@ -73,7 +73,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     # Costruct url
     url =  neustar_ip_geopoint_url + ip_address + '?apikey=' + neustar_ip_geopoint_apikey + '&sig=' + signature + '&format=json'
-    
+
     # Send request
     response = requests.get(url)
 

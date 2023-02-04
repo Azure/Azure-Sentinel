@@ -35,7 +35,7 @@ namespace AzureSentinel_ManagementAPI.Bookmarks
         /// </summary>
         /// <returns></returns>
         public async Task CreateBookmark(int insId = -1)
-        {            
+        {
             if (insId != -1)
             {
                 await CreateBookmarkByInstance(insId);
@@ -57,7 +57,7 @@ namespace AzureSentinel_ManagementAPI.Bookmarks
         private async Task CreateBookmarkByInstance(int i)
         {
             var bookmarks = Utils.LoadPayload<BookmarkPayload[]>("BookmarkPayload.json", cliMode);
-            
+
             foreach (var payload in bookmarks)
             {
                 try
@@ -100,7 +100,7 @@ namespace AzureSentinel_ManagementAPI.Bookmarks
                     throw new Exception($"Something went wrong on {azureConfigs[i].InstanceName}: \n"
                     + ex.Message);
                 }
-            }         
+            }
         }
 
         /// <summary>
@@ -121,10 +121,10 @@ namespace AzureSentinel_ManagementAPI.Bookmarks
                 var response = await http.SendAsync(request);
 
                 if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
-                
+
                 if (response.StatusCode == HttpStatusCode.NotFound)
                     throw new Exception("Not found, please create a new Bookmark first...");
-                
+
                 var error = await response.Content.ReadAsStringAsync();
                 var formatted = JsonConvert.DeserializeObject(error);
                 throw new WebException("Error calling the API: \n" +
@@ -170,7 +170,7 @@ namespace AzureSentinel_ManagementAPI.Bookmarks
         /// <param name="insId"></param>
         /// <returns></returns>
         public async Task GetBookmarks(int insId = -1)
-        {            
+        {
             if (insId != -1)
             {
                 await GetBookmarksByInstance(insId);
@@ -204,14 +204,14 @@ namespace AzureSentinel_ManagementAPI.Bookmarks
                     string res = await response.Content.ReadAsStringAsync();
                     JObject result = JsonConvert.DeserializeObject<JObject>(res);
                     var values = result["value"] as JArray;
-                    
+
                     if (values == null)
                     {
                         values = new JArray();
                     }
 
                     int callTimes = 1;
-                    
+
                     while (result.ContainsKey("nextLink") && callTimes < 100)
                     {
                         try
@@ -220,19 +220,19 @@ namespace AzureSentinel_ManagementAPI.Bookmarks
                             request = new HttpRequestMessage(HttpMethod.Get, nextLink);
                             await authenticationService.AuthenticateRequest(request, i);
                             var nextResponse = await http.SendAsync(request);
-                            
+
                             if (nextResponse.IsSuccessStatusCode)
                             {
                                 var newRes = await nextResponse.Content.ReadAsStringAsync();
                                 JObject newResult = JsonConvert.DeserializeObject<JObject>(newRes);
                                 result = newResult;
                                 var newValues = result["value"] as JArray;
-                                
+
                                 if (newValues == null)
                                 {
                                     newValues = new JArray();
                                 }
-                                
+
                                 foreach (var v in newValues)
                                 {
                                     values.Add(v);

@@ -30,7 +30,7 @@ Tbl
 | extend SubCategory = AuditEventDataLookup_Func(SubcategoryId)
 | extend AuditPolicyChangesParse = parse_csv(AuditPolicyChanges)
 | extend AuditPolicyChange = trim_end(",", strcat(AuditEventDataLookup_Func(AuditPolicyChangesParse[0]) ,",",AuditEventDataLookup_Func(trim(" ",tostring(AuditPolicyChangesParse[1])))))
-| project TimeGenerated, Computer, Activity, Category, SubCategory, AuditPolicyChange 
+| project TimeGenerated, Computer, Activity, Category, SubCategory, AuditPolicyChange
 "@
 
 
@@ -78,5 +78,3 @@ catch {
     Write-Verbose $_
     Write-Error "Unable to invoke webrequest with error message: $($_.Exception.Message)" -ErrorAction Stop
 }
-
-

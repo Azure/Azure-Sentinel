@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 from os import environ
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    
+
     logging.info(f'Resource Requested: {func.HttpRequest}')
 
     # Get AWS ID and Key
@@ -33,25 +33,25 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             pass
         else:
             query_execution_id = req_body.get('QueryExecutionId')
-            
+
     if query_execution_id:
-        
+
         try:
             logging.info(f'Creating Boto3 Athena Client.')
             athena_client = boto3.client(
                 "athena",
                 region_name=aws_region_name,
-                aws_access_key_id=aws_access_key_id, 
+                aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key
             )
-            
+
             try:
                 # Get the query results for an executed query
                 logging.info(f'Sending Query Request.')
                 response = athena_client.get_query_results(QueryExecutionId=query_execution_id)
                 results = response['ResultSet']['Rows']
-                
-                # Format the result in json 
+
+                # Format the result in json
                 headers = []
                 rows = []
                 is_header_row = True
@@ -66,11 +66,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                         is_header_row = False
                     else:
                         rows.append(tmp_row)
-                
+
                 json_result = []
 
                 for col in rows:
-                    result_col = dict(zip(headers, col))          
+                    result_col = dict(zip(headers, col))
                     json_result.append(result_col)
 
                 # Return the formatted response
@@ -79,7 +79,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                     headers = {"Content-Type": "application/json"},
                     status_code = 200
                 )
-        
+
             except athena_client.exceptions.InternalServerException as ex:
                 logging.error(f"Internal Server Error: {str(ex)}")
                 return func.HttpResponse("Internal Server Error", status_code=404)
@@ -91,7 +91,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         except ClientError as ex:
             logging.error(f"Athena Client Error: {str(ex)}")
             return func.HttpResponse("Athena Client Error", status_code=401)
-        
+
         except Exception as ex:
             logging.error(f"Exception Occured: {str(ex)}")
             return func.HttpResponse("Internal Server Exception", status_code=500)

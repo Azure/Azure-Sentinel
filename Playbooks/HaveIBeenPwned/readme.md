@@ -34,7 +34,7 @@ You can choose to deploy the whole package : connector + all four playbook templ
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FHaveIBeenPwned%2Fazuredeploy.json)
 
 
-# HaveIBeenPwned connector documentation 
+# HaveIBeenPwned connector documentation
 
 <a name="authentication">
 
@@ -50,7 +50,7 @@ Authentication methods this connector supports- [API Key authentication](https:/
 
 <a name="deployment">
 
-# Deployment instructions 
+# Deployment instructions
 1. Deploy the Custom Connector and playbooks by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 2. Fill in the required parameters for deploying custom connector and playbooks
 
@@ -61,13 +61,13 @@ Authentication methods this connector supports- [API Key authentication](https:/
 |**Service Endpoint:** | Enter the HaveIBeenPwned service end point (e.g. https://{haveibeenpwned.com})|
 |**For Playbooks**|
 |**HaveIBeenPwned Enrichment GetAccountBreaches:**|  Enter the playbook name for account breaches (e.g. HaveIBeenPwned Playbook)|
-|**HaveIBeenPwned Enrichment GetSiteBreaches:** | Enter the playbook name for site breaches (e.g. HaveIBeenPwned Playbook)| 
+|**HaveIBeenPwned Enrichment GetSiteBreaches:** | Enter the playbook name for site breaches (e.g. HaveIBeenPwned Playbook)|
 |**HaveIBeenPwned Response On Teams:** |Enter the playbook name for response on teams (e.g. HaveIBeenPwned Playbook)|
 |**HaveIBeenPwned Send Email :** |Enter the playbook name for sending email (e.g. HaveIBeenPwned Playbook)|
 
 <a name="postdeployment">
 
-# Post-Deployment instructions 
+# Post-Deployment instructions
 After deploying response from Teams playbook, we need to select the Teams group and Teams channel from the dropdown in logic app designer.
 ## a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
@@ -79,7 +79,7 @@ Once deployment is complete, you will need to authorize each connection.
 6.	Repeat steps for other connections such as Office 365 connection and HaveIBeenPwned API Connection (For authorizing the HaveIBeenPwned API connection, API Key needs to be provided)
 
 ## b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account or site. 
+1. In Azure sentinel analytical rules should be configured to trigger an incident with risky user account or site.
 2. Configure the automation rules to trigger the playbooks.
 
 
@@ -100,6 +100,3 @@ Playbooks
 
 # Known Issues and Limitations
 * We need to authorize the connections after deploying the playbooks.
-
-
-

@@ -11,7 +11,7 @@ You can deploy the solution by clicking on the buttons below:
 
 ## Getting Started
 1️⃣ [Onboard Microsoft Defender for IoT](https://docs.microsoft.com/azure/defender-for-iot/device-builders/quickstart-onboard-iot-hub)
-2️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard) 
+2️⃣ [Onboard Microsoft Sentinel](https://docs.microsoft.com/azure/sentinel/quickstart-onboard)
 3️⃣ [Enable Microsoft Defender for IoT Connector to Microsoft Sentinel](https://docs.microsoft.com/azure/defender-for-iot/organizations/how-to-configure-with-sentinel)
 4️⃣ View the Workbook: Microsoft Sentinel > Workbooks > My Workbooks > IoT/OT Threat Monitoring with Defender for IoT > View
 5️⃣ View the Analytics Rules: Navigate to Microsoft Sentinel > Analytics > Search "IOT"
@@ -64,6 +64,6 @@ This playbook updates alert statuses in Defender for IoT whenever a related aler
 The playbooks automate the SOC workflow by automatically emailing the incident details to the right IoT/OT device owner (based on Defender for IoT dafinition) and allowing him to respond by email. The incident is automatically updated based on the email response from the device owner.
 ### 6) Triage incidents involving Crown Jewels devices automatically
 SOC and OT engineers can stream their workflows using the playbook, which automatically updates the incident severity based on the devices involved in the incident and their importance.
-### 7) Incident with active CVEs: Auto Workflow 
+### 7) Incident with active CVEs: Auto Workflow
 The playbook automates the SOC workflow by automatically enriching incident comments with the CVEs of the involved devices based on Defender for IoT data.
 An automated triage is performed if the CVE is critical, and the asset owner is automatically notified by email

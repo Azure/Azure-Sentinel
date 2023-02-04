@@ -20,7 +20,7 @@ This custom connector connects to Fortinet service end point and perform automat
 | **Update address group** | This action allows to add/remove an address object of an IP/URL address to an address group|
 | **Add an URL to an address group** | This action allows to add an address object of an URL address to an address group|
 
-### Deployment instructions 
+### Deployment instructions
 - Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 - Fill the required parameters:
     * Service Endpoint: Enter the Fortinet service end point (ex: https://{YourVMIPorTrafficmanagement})
@@ -34,4 +34,3 @@ This custom connector connects to Fortinet service end point and perform automat
 *  Un-block IP and update incident accordingly
 *  Un-block URL and update incident accordingly
 *  Enrich incident with details of address objects and address groups details
-

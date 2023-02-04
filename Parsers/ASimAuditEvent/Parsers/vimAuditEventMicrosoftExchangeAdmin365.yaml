@@ -75,9 +75,9 @@ ParserQuery: |
    "disable", "Disable"
   ];
    let parser=  (
-        starttime:datetime=datetime(null), 
+        starttime:datetime=datetime(null),
         endtime:datetime=datetime(null),
-        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        srcipaddr_has_any_prefix:dynamic=dynamic([]),
         eventresult:string='*',
         actorusername_has_any:dynamic=dynamic([]),
         eventtype_in:dynamic=dynamic([]),
@@ -89,10 +89,10 @@ ParserQuery: |
     OfficeActivity
     | where not(disabled)
     | where
-        (isnull(starttime) or TimeGenerated >= starttime) 
+        (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
     | where RecordType  in ('ExchangeAdmin')
-    | where 
+    | where
         (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(ClientIP,srcipaddr_has_any_prefix))
         and (array_length(actorusername_has_any) == 0 or UserId has_any (actorusername_has_any))
         and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
@@ -105,25 +105,25 @@ ParserQuery: |
     | extend EventResult = iff(ResultStatus == "True", "Success", "Failure")
     // --
     // -- Calculate and filter operation and event type
-    | extend 
+    | extend
         SplitOp = split (Operation,"-")
     | extend
         op=tostring(SplitOp[0])
     | lookup eventtypes on op
     | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
-    | project-away op    
+    | project-away op
     // --
     // Calculate and post-filter source IP address and port
-    | extend 
+    | extend
         SplitIpAddr = extract_all(@'^\[?(.*?)\]?:(\d+)$', ClientIP)[0]
-    | extend 
+    | extend
         SrcIpAddr = iff (SplitIpAddr[1] == "", ClientIP, SplitIpAddr[0]),
         SrcPortNumber = toint(iff (SplitIpAddr[1] == "", "", SplitIpAddr[1]))
     | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr,srcipaddr_has_any_prefix))
     // --
     /// Calculate and post filter actor and acting app
     | parse UserId with ActorUsername " (" ActingAppName ")"
-    | extend 
+    | extend
         ActorUsernameType = iff (ActorUsername == "", "UPN", "Windows"),
         ActorUsername = iff (ActorUsername == "", UserId, ActorUsername),
         ActingAppType = iff (ActingAppName == "", "", "Process")
@@ -132,9 +132,9 @@ ParserQuery: |
     // Calculate Object
     | extend
         SplitObject = extract_all(@'^(.*?)[\\/](.*)$', OfficeObjectId)[0]
-    | extend 
+    | extend
         Object = case (
-            SplitObject[0] == OrganizationName, SplitObject[1], 
+            SplitObject[0] == OrganizationName, SplitObject[1],
             OfficeObjectId == "", SplitOp[1],
             OfficeObjectId
         )
@@ -142,10 +142,10 @@ ParserQuery: |
     // --
     | project-rename
         SrcDescription = OriginatingServer,
-        NewValue = Parameters 
+        NewValue = Parameters
     | project-away SplitObject, UserKey, SplitIpAddr, ClientIP, UserId
     | project-rename
-        HttpUserAgent = UserAgent, 
+        HttpUserAgent = UserAgent,
         ActorOriginalUserType = UserType,
         ActorScopeId = OrganizationId,
         ActorScope = OrganizationName,
@@ -153,7 +153,7 @@ ParserQuery: |
     | lookup usertypes on ActorOriginalUserType
     | extend
         EventCount = int(1),
-        EventStartTime = TimeGenerated, 
+        EventStartTime = TimeGenerated,
         EventEndTime= TimeGenerated,
         EventProduct = 'Exchange 365',
         EventVendor = 'Microsoft',
@@ -161,12 +161,12 @@ ParserQuery: |
         EventSchema = 'AuditEvent',
         TargetAppName = 'Exchange 365',
         TargetAppType = 'SaaS application'
-    | project-away 
+    | project-away
         ResultStatus
     | extend
         EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
     // Aliases
-    | extend 
+    | extend
         User=ActorUsername,
         IpAddr = SrcIpAddr,
         Value = NewValue,

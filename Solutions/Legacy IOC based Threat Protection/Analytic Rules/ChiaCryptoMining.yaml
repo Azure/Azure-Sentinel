@@ -1,10 +1,10 @@
 id: 595a10c9-91be-4abb-bbc7-ae9c57848bef
 name: Chia_Crypto_Mining - Domain, Process, Hash and IP IOCs - June 2021
-description: | 
+description: |
   'Identifies a match across various data feeds for domains, process, hashes and IP IOC related to Chia cryptocurrency farming/plotting activity.'
 severity: Low
-status: Available 
-requiredDataConnectors: 
+status: Available
+requiredDataConnectors:
   - connectorId: DNS
     dataTypes:
       - DnsEvents
@@ -15,20 +15,20 @@ requiredDataConnectors:
     dataTypes:
       - CommonSecurityLog
   - connectorId: CiscoASA
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: PaloAltoNetworks
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: Fortinet
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: CheckPoint
-    dataTypes: 
+    dataTypes:
       - CommonSecurityLog
   - connectorId: CEF
-    dataTypes: 
-      - CommonSecurityLog               
+    dataTypes:
+      - CommonSecurityLog
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceNetworkEvents
@@ -41,24 +41,24 @@ requiredDataConnectors:
     dataTypes:
       - OfficeActivity
   - connectorId: AzureFirewall
-    dataTypes: 
+    dataTypes:
       - AzureDiagnostics
       - AZFWApplicationRule
       - AZFWDnsQuery
   - connectorId: WindowsFirewall
     dataTypes:
-      - WindowsFirewall      
-queryFrequency: 6h 
-queryPeriod: 6h 
-triggerOperator: gt 
-triggerThreshold: 0 
-tactics: 
+      - WindowsFirewall
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
   - Impact
 relevantTechniques:
   - T1496
 tags:
-  - Chia 
-query:  |  
+  - Chia
+query:  |
   let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ChiaCryptoIOC.csv"] with (format="csv", ignoreFirstRecord=True);
   let process = (iocs | where Type =~ "process" | project IoC);
   let sha256Hashes = (iocs | where Type =~ "sha256" | project IoC);
@@ -68,14 +68,14 @@ query:  |
   (union isfuzzy=true
   (CommonSecurityLog
   | where SourceIP in (IPList) or DestinationIP in (IPList) or DestinationHostName has_any (domains) or RequestURL has_any (domains) or Message has_any (IPList)
-  | parse Message with * '(' DNSName ')' * 
+  | parse Message with * '(' DNSName ')' *
   | project TimeGenerated, SourceIP, DestinationIP, Message, SourceUserID, RequestURL, DNSName, Type
   | extend MessageIP = extract(IPRegex, 0, Message), RequestIP = extract(IPRegex, 0, RequestURL)
   | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message", RequestURL has_any (domains), "RequestUrl", "NoMatch"),  AlertDetail = 'Chia crypto IOC detected'
   | extend timestamp = TimeGenerated, IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "NoMatch"), Account = SourceUserID
   ),
   (DnsEvents
-  | where IPAddresses in (IPList) or Name in~ (domains)  
+  | where IPAddresses in (IPList) or Name in~ (domains)
   | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
   | extend DestinationIPAddress = IPAddresses, DNSName = Name, Computer
   | extend timestamp = TimeGenerated, IPEntity = DestinationIPAddress
@@ -84,7 +84,7 @@ query:  |
   | where SourceIp in (IPList) or DestinationIp in (IPList) or RemoteDnsCanonicalNames has_any (domains)
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, RemoteDnsQuestions, DNSName,BytesSent, BytesReceived, RemoteCountry, Type
-  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
+  | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None")
   | extend timestamp = TimeGenerated, IPEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "NoMatch"), File = ProcessName
   ),
   (Event
@@ -95,12 +95,12 @@ query:  |
   | extend SourceIP = tostring(EventDetail.[9].["#text"]), DestinationIP = tostring(EventDetail.[14].["#text"]), Image = tostring(EventDetail.[4].["#text"])
   | where SourceIP in (IPList) or DestinationIP in (IPList) or Image has_any (process)
   | project TimeGenerated, SourceIP, DestinationIP, Image, Account = UserName, Computer, Type
-  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None") 
+  | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
   | extend timestamp = TimeGenerated, File = tostring(split(Image, '\\', -1)[-1]), IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
   | extend FilePath = replace_string(Image, File, '')
-  ),  
+  ),
   (OfficeActivity
-  | where ClientIP in (IPList) 
+  | where ClientIP in (IPList)
   | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
   | extend timestamp = TimeGenerated, IPEntity = ClientIP, Account = UserId
   ),
@@ -110,7 +110,7 @@ query:  |
   | extend timestamp = TimeGenerated, IPEntity = RemoteIP
   ),
   (WindowsFirewall
-  | where SourceIP in (IPList) or DestinationIP in (IPList) 
+  | where SourceIP in (IPList) or DestinationIP in (IPList)
   | project TimeGenerated, Computer, CommunicationDirection, SourceIP, DestinationIP, SourcePort, DestinationPort, Type
   | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
   | extend timestamp = TimeGenerated, Computer, IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
@@ -123,13 +123,13 @@ query:  |
   | where Request_Name has_any (domains)  or ClientIP in (IPList)
   | extend timestamp = TimeGenerated, DNSName = Request_Name, IPEntity = ClientIP
   ),
-  (AzureDiagnostics 
+  (AzureDiagnostics
   | where ResourceType == "AZUREFIREWALLS"
   | where Category == "AzureFirewallApplicationRule"
   | project TimeGenerated,Resource, msg_s, Type
   | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
   | where isnotempty(DestinationHost)
-  | where DestinationHost has_any (domains)  
+  | where DestinationHost has_any (domains)
   | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPEntity = SourceHost
   ),
   (AZFWApplicationRule
@@ -150,7 +150,7 @@ query:  |
   | where Source == "Microsoft-Windows-Sysmon"
   | extend EvData = parse_xml(EventData)
   | extend EventDetail = EvData.DataItem.EventData.Data
-  | where EventDetail has_any (sha256Hashes) 
+  | where EventDetail has_any (sha256Hashes)
   | parse EventDetail with * 'SHA256=' SHA256 '",' *
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256
   | extend Type = strcat(Type, ": ", Source), Account = UserName, FileHash = SHA256, Image = tostring(EventDetail.[4].["#text"])

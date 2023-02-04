@@ -34,7 +34,7 @@ sentinel_log_type = os.environ.get('LogAnalyticsCustomLogName')
 fresh_event_timestamp = os.environ.get('FreshEventTimeStamp')
 logAnalyticsUri = os.environ.get('LAURI')
 
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
@@ -59,33 +59,33 @@ def main(mytimer: func.TimerRequest) -> None:
         token = token_meta.token
     except ClientAuthenticationError as error:
         logging.info ("Authenticating to Azure AD: %s" % error)
-    
+
     sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
     securityHubSession = SecurityHubClient(aws_role_arn, aws_role_session_name, aws_region_name, token)
     securityhub_filters_dict = {}
     logging.info ('SecurityHubFilters : {0}'.format(aws_securityhub_filters))
     if aws_securityhub_filters:
-        securityhub_filters = aws_securityhub_filters.replace("\'", "\"") 
+        securityhub_filters = aws_securityhub_filters.replace("\'", "\"")
         securityhub_filters_dict = eval(securityhub_filters)
-        
+
     results = securityHubSession.getFindings(securityhub_filters_dict)
     fresh_events_after_this_time = securityHubSession.freshEventTimestampGenerator(int(fresh_event_timestamp))
     fresh_events = True
     first_call = True
     failed_sent_events_number = 0
     successfull_sent_events_number = 0
-    
+
     while ((first_call or 'NextToken' in results) and fresh_events):
-        # Loop through all findings (100 per page) returned by Security Hub API call		
+        # Loop through all findings (100 per page) returned by Security Hub API call
 		# Break out of the loop when we have looked back across the last hour of events (based on the finding's LastObservedAt timestamp)
         first_call = False
-        
+
         for finding in results['Findings']:
             finding_timestamp = securityHubSession.findingTimestampGenerator(finding['LastObservedAt'])
-                        
+
             if (finding_timestamp > fresh_events_after_this_time):
                 logging.info ('SecurityHub Finding:{0}'.format(json.dumps(finding)))
-                payload = {}                
+                payload = {}
                 payload.update({'SchemaVersion':finding['SchemaVersion']})
                 payload.update({'Id':finding['Id']})
                 payload.update({'ProductArn':finding['ProductArn']})
@@ -96,26 +96,26 @@ def main(mytimer: func.TimerRequest) -> None:
                 payload.update({'LastObservedAt':finding['LastObservedAt']})
                 payload.update({'UpdatedAt':finding['UpdatedAt']})
                 payload.update({'Severity':json.dumps(finding['Severity'], sort_keys=True)})
-                payload.update({'Title':finding['Title']})                        
+                payload.update({'Title':finding['Title']})
                 payload.update({'ProductFields':json.dumps(finding['ProductFields'], sort_keys=True)})
                 payload.update({'ProductArn':finding['ProductArn']})
-                payload.update({'CreatedAt':finding['CreatedAt']})            
-                payload.update({'Resources':finding['Resources']})            
-                payload.update({'WorkflowState':finding['WorkflowState']})                
+                payload.update({'CreatedAt':finding['CreatedAt']})
+                payload.update({'Resources':finding['Resources']})
+                payload.update({'WorkflowState':finding['WorkflowState']})
                 payload.update({'RecordState':finding['RecordState']})
-                
+
                 with sentinel:
                     sentinel.send(payload)
-                    
+
                 failed_sent_events_number = sentinel.failed_sent_events_number
-                successfull_sent_events_number = sentinel.successfull_sent_events_number              
+                successfull_sent_events_number = sentinel.successfull_sent_events_number
             else:
                 fresh_events = False
                 break
-            
+
         if (fresh_events and 'NextToken' in results):
             results = securityHubSession.getFindingsWithToken(results['NextToken'], securityhub_filters_dict)
-    
+
     if failed_sent_events_number:
         logging.error('{} events have not been sent'.format(failed_sent_events_number))
 
@@ -136,7 +136,7 @@ class SecurityHubClient:
 
         # create an STS client object that represents a live connection to the STS service
         sts_client = boto3.client('sts')
-	
+
         # call assume_role method using input + client
         try:
             assumed_role_object=sts_client.assume_role_with_web_identity(
@@ -144,7 +144,7 @@ class SecurityHubClient:
                 RoleSessionName=self.role_session_name,
                 WebIdentityToken=self.web_identity_token
                 )
-            logging.info ("Successfully assumed role with web identity.")            
+            logging.info ("Successfully assumed role with web identity.")
         except botocore.exceptions.ClientError as error:
             logging.info ("Assuming role with web identity failed: %s" % error)
 
@@ -178,7 +178,7 @@ class SecurityHubClient:
             Filters=filters,
             MaxResults=100,
             SortCriteria=[{"Field": "LastObservedAt", "SortOrder": "desc"}])
-        
+
     # Gets 100 findings from securityhub using the NextToken from a previous request
     def getFindingsWithToken(self, token, filters={}):
         return self.securityhub.get_findings(
@@ -244,7 +244,7 @@ class AzureSentinelConnector:
     def _build_signature(self, customer_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
         string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")  
+        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
         encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
         authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
@@ -269,7 +269,7 @@ class AzureSentinelConnector:
         }
 
         response = requests.post(uri, data=body, headers=headers)
-        if (response.status_code >= 200 and response.status_code <= 299):            
+        if (response.status_code >= 200 and response.status_code <= 299):
             self.successfull_sent_events_number += events_number
             self.failedToSend = False
         else:

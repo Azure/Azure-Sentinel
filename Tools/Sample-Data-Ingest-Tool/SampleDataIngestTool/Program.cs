@@ -32,7 +32,7 @@ namespace SampleDataIngestTool
                 var path = new SampleDataPath();
                 var dirPath = path.GetDirPath();
 
-                // Loop through files 
+                // Loop through files
                 foreach (var file in files)
                 {
                     var fileName = file.Replace(dirPath, "");
@@ -73,7 +73,7 @@ namespace SampleDataIngestTool
                 var path = new SampleDataPath();
                 var filePath = path.GetDirPath();
                 string[] files = System.IO.Directory.GetFiles(filePath, "*.json*", SearchOption.AllDirectories);
-                
+
                 return files;
             }
             catch (Exception excep)
@@ -171,7 +171,7 @@ namespace SampleDataIngestTool
                 string result = responseContent.ReadAsStringAsync().Result;
 
                 var fileName = logName + "_CL.json";
-                
+
                 if (response.Result.StatusCode.ToString().Contains("OK"))
                 {
                     Console.WriteLine("{0} is successfully pushed", fileName);
