@@ -154,7 +154,7 @@ namespace Helios2Sentinel
 #if DEBUG
             [TimerTrigger("*/30 * * * * *")] TimerInfo myTimer,
 #else
-            [TimerTrigger("* */5 * * * *")]TimerInfo myTimer,
+            [TimerTrigger("0 */5 * * * *")]TimerInfo myTimer,
 #endif
             [Queue("cohesity-incidents"), StorageAccount("AzureWebJobsStorage")] ICollector<string> outputQueueItem,
             ILogger log)
