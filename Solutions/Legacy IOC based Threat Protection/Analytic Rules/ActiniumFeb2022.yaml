@@ -2,7 +2,8 @@ id: 825991eb-ea39-4590-9de2-ee97ef42eb93
 name: ACTINIUM Actor IOCs - Feb 2022
 description: | 
   'Identifies a match across various data feeds for domains, hashes and commands related to an actor tracked by Microsoft as Actinium.'
-severity: High 
+severity: High
+status: Available
 requiredDataConnectors: 
   - connectorId: DNS
     dataTypes:
@@ -38,6 +39,8 @@ requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
       - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWDnsQuery
 queryFrequency: 6h 
 queryPeriod: 6h 
 triggerOperator: gt 
@@ -114,6 +117,24 @@ query:  |
   | where DestinationHost has_any (domains)  
   | extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost
   ),
+  (AzureDiagnostics
+  | where ResourceType == "AZUREFIREWALLS"
+  | where Category == "AzureFirewallDnsProxy"
+  | project TimeGenerated,Resource, msg_s, Type
+  | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
+  | where  Request_Name  has_any (domains)
+  | extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP
+  ),
+  (AZFWApplicationRule
+  | where isnotempty(Fqdn)
+  | where Fqdn has_any (domains)  
+  | extend timestamp = TimeGenerated, DNSName = Fqdn, IPCustomEntity = SourceIp
+  ),
+  (AZFWDnsQuery
+  | where isnotempty(QueryName)
+  | where QueryName has_any (domains)
+  | extend timestamp = TimeGenerated, DNSName = QueryName, IPCustomEntity = SourceIp
+  ),
   (DeviceNetworkEvents 
   | where isnotempty(RemoteUrl) 
   | where RemoteUrl  in~ (domains)  
@@ -144,5 +165,5 @@ entityMappings:
     fieldMappings:
       - identifier: ProcessId
         columnName: ProcessCustomEntity
-version: 1.0.2
+version: 1.1.1
 kind: Scheduled
