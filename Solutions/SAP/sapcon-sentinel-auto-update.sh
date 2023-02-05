@@ -76,13 +76,16 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 		
 		# Populate settings.json	
 		if [ -f "$settingsjson" ]; then
+			sudo chmod --reference "$0" "$settingsjson"
+			sudo chown --reference "$0" "$settingsjson"
+			sudo sync "$settingsjson"
 			if [ ! -s "$settingsjson" ]; then
 				echo $UPDATEPOLICY> "$settingsjson"
 			else
 				echo "$(jq '.auto_update = true' "$settingsjson")" > "$settingsjson"
 			fi	
 		else
-			echo $UPDATEPOLICY> "$settingsjson"
+			sudo echo $UPDATEPOLICY> "$settingsjson"
 		fi
 
 	done \
@@ -93,7 +96,7 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 	sudo chmod --reference "$0" "/tmp/$AUTOUPDATESCRIPT"
 	sudo chown --reference "$0" "/tmp/$AUTOUPDATESCRIPT"
 	sudo sync "/tmp/$AUTOUPDATESCRIPT"
-	mkdir -p /opt/sapcon/
+	sudo mkdir -p /opt/sapcon/
 	sudo mv "/tmp/$AUTOUPDATESCRIPT" "/opt/sapcon/$AUTOUPDATESCRIPT"
 	sudo chmod +x "/opt/sapcon/$AUTOUPDATESCRIPT"
 
