@@ -75,14 +75,18 @@ def main():
     file_events = 0
     t0 = time.time()
     print('Total number of files is {}'.format(len(coreEvents)))
-    for event in coreEvents:
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type,
-                                          queue_size=10000, bulks_number=10)
-        with sentinel:
-            sentinel.send(event)
-        file_events += 1
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
+    try:
+        for event in coreEvents:
+            sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type,
+                                              queue_size=10000, bulks_number=10)
+            with sentinel:
+                sentinel.send(event)
+            file_events += 1
+            failed_sent_events_number += sentinel.failed_sent_events_number
+            successfull_sent_events_number += sentinel.successfull_sent_events_number
+    except BaseException:
+        print(BaseException)
+
 
     if failed_sent_events_number:
         print('{} AWS S3 files have not been sent'.format(failed_sent_events_number))
