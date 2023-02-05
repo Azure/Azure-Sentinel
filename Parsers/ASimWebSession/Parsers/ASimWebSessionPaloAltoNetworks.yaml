@@ -26,16 +26,16 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser=(disabled:bool=false){
-      let EventLookup=datatable(DeviceAction:string,EventResult:string,HttpStatusCode:string)
+      let EventLookup=datatable(DeviceAction:string, DvcAction:string,EventResult:string,HttpStatusCode:string)
       [
-          "alert", "Success","200"
-          , "allow", "Success","200"
-          , "continue", "Success","200"
-          , "override", "Success","200"
-          , "block-continue", "Partial","200"
-          , "block-url", "Failure","503"
-          , "block-override", "Failure","302"
-          , "override-lockout", "Failure","503"
+          "alert", "Allow", "Success","200"
+          , "allow", "Allow", "Success", "200"
+          , "continue", "Allow", "Success", "200"
+          , "override", "Allow", "Success", "200"
+          , "block-continue", "Allow", "Partial", "200"
+          , "block-url", "Deny", "Failure", "503"
+          , "block-override", "Deny", "Failure", "302"
+          , "override-lockout", "Deny", "Failure","503"
       ];
       let SeverityLookup=datatable(LogSeverity:string,EventSeverity:string)
       [   1, "Informational" 
@@ -50,20 +50,30 @@ ParserQuery: |
           and Activity == "THREAT"
           and DeviceEventClassID == "url"
       | parse AdditionalExtensions with URL ";PanOSActionFlags=" *
+      | parse-kv AdditionalExtensions as (PanOSXForwarderfor:string, PanXFFIP:string, PanOSReferer:string, PanOSRuleUUID:string, PanSrcHostname:string, PanSrcMac:string, PanSrcDeviceCat:string, PanSrcDAG:string, PanOSSrcUUID:string, PanSrcDeviceProf:string, PanSrcDeviceModel:string, PanSrcDeviceVendor:string, PanSrcDeviceOS:string, PanSrcDeviceOSv:string, PanDstHostname:string, PanDstMac:string, PanDstDeviceCat:string, PanDstDAG:string, PanOSDstUUID:string, PanDstDeviceProf:string, PanDstDeviceModel:string, PanDstDeviceVendor:string, PanDstDeviceOS:string, PanDstDeviceOSv:string) with (pair_delimiter=';', kv_delimiter='=')
       | extend 
           Url                         = coalesce(RequestURL,URL)
+          , HttpRequestXff            = coalesce(PanOSXForwarderfor, PanXFFIP)
+      | project-rename
+          HttpReferrer                = PanOSReferer
+          , DstMacAddr                = PanDstMac
+          , SrcMacAddr                = PanSrcMac
+          , DstHostname               = PanDstHostname
+          , SrcHostname               = PanSrcHostname
       | lookup EventLookup on DeviceAction
       | lookup SeverityLookup on LogSeverity
-      | project Url, EventResult, HttpStatusCode, Computer, DeviceCustomString4, DeviceCustomString2, DeviceAction, _ItemId, LogSeverity,DeviceVendor, DeviceVersion, DeviceInboundInterface, DestinationIP, DestinationPort, SourceIP, SourcePort,SourceUserName,DestinationUserName, RequestMethod, RequestContext, ThreatConfidence, Protocol, DeviceCustomNumber1, TimeGenerated, DeviceCustomString1
       | project-rename 
-          Dvc                         = Computer
-          , DvcZone                   = DeviceCustomString4
+          DvcHostname                 = Computer
+          , DvcId                     = DeviceExternalID
+          , SrcZone                   = DeviceCustomString4
+          , DstZone                   = DeviceCustomString5
           , UrlCategory               = DeviceCustomString2
-          , EventResultDetails        = DeviceAction
+          , DvcOriginalAction         = DeviceAction
           , EventUid                  = _ItemId
           , EventOriginalSeverity     = LogSeverity
           , EventProductVersion       = DeviceVersion
-          , DvcInterface              = DeviceInboundInterface
+          , DvcInboundInterface       = DeviceInboundInterface
+          , DvcOutboundInterface      = DeviceOutboundInterface
           , DstIpAddr                 = DestinationIP
           , DstPortNumber             = DestinationPort
           , SrcIpAddr                 = SourceIP
@@ -71,8 +81,15 @@ ParserQuery: |
           , SrcUsername               = SourceUserName
           , DstUsername               = DestinationUserName
           , NetworkRuleName           = DeviceCustomString1
-      | extend 
-          EventType                   = "HTTPsession"
+          , ThreatOriginalConfidence  = ThreatConfidence
+          , DstNatIpAddr              = DestinationTranslatedAddress
+          , DstNatPortNumber          = DestinationTranslatedPort
+          , SrcNatIpAddr              = SourceTranslatedAddress
+          , SrcNatPortNumber          = SourceTranslatedPort
+      | extend
+          Dvc                         = DvcHostname
+          , DvcIdType                 = "Other"
+          , EventType                 = "HTTPsession"
           , EventSchema               = "WebSession"
           , EventSchemaVersion        = "0.2.5"
           , EventProduct              = "Palo Alto"
@@ -80,20 +97,40 @@ ParserQuery: |
           , EventStartTime            = TimeGenerated
           , EventEndTime              = TimeGenerated
           , HttpRequestMethod         = toupper(RequestMethod)
+          , EventResultDetails        = "NA"
           , HttpContentFormat         = RequestContext
-          , Dst                       = DstIpAddr
+          , DstFQDN                   = iif(Url contains ":", split(tostring(split(trim('"',Url),"/")[0]),":")[0],tostring(split(trim('"',Url),"/")[0]))
+          , DstDomainType             = "FQDN"
           , Src                       = SrcIpAddr
+          , SrcUsernameType           = "Windows"
+          , DstUsernameType           = "Windows"
           , NetworkProtocolVersion    = case(
               DstIpAddr contains "."  , "IPv4"
               , DstIpAddr contains ":", "IPv6"
               , "")
+          , NetworkDirection          = case(
+              FlexString2 == "client-to-server", "Outbound"
+              , FlexString2 == "server-to-client", "Inbound"
+              , "")
           , IpAddr                    = SrcIpAddr
-          , ThreatConfidence          = toint(ThreatConfidence)
           , NetworkProtocol           = toupper(Protocol)
-          , NetworkSessionId          = tostring(DeviceCustomNumber1)
           , User                      = SrcUsername
           , Rule                      = NetworkRuleName
+          , NetworkSessionId          = tostring(DeviceCustomNumber1)
+          , DvcInterface              = DvcInboundInterface
+          , Hostname                  = DstHostname
       | extend 
           SessionId                 = NetworkSessionId
+          , ThreatField               = case(
+            isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Outbound", "SrcIpAddr"
+            , isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Inbound", "DstIpAddr"
+            , "")
+          , Dst                       = DstFQDN
+      | extend 
+          ThreatIpAddr                = case(
+            ThreatField == "SrcIpAddr", SrcIpAddr
+          , ThreatField == "DstIpAddr", DstIpAddr
+          , "")
+      | project DeviceVendor, Dst, DstDomainType, DstFQDN, DstHostname, DstIpAddr, DstMacAddr, DstNatIpAddr, DstNatPortNumber, DstPortNumber, DstUsername, DstUsernameType, DstZone, Dvc, DvcAction, DvcHostname, DvcId, DvcIdType, DvcInboundInterface, DvcInterface, DvcOriginalAction, DvcOutboundInterface, EventCount, EventEndTime, EventOriginalSeverity, EventProduct, EventProductVersion, EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventType, EventUid, EventVendor, Hostname, HttpContentFormat, HttpRequestMethod, HttpRequestXff, HttpStatusCode, IpAddr, NetworkDirection, NetworkProtocol, NetworkProtocolVersion, NetworkRuleName, NetworkSessionId, Protocol, RequestContext, RequestMethod, Rule, SessionId, Src, SrcHostname, SrcIpAddr, SrcMacAddr, SrcNatIpAddr, SrcNatPortNumber, SrcPortNumber, SrcUsername, SrcUsernameType, SrcZone, ThreatField, ThreatIpAddr, ThreatOriginalConfidence, TimeGenerated, Type, Url, UrlCategory, User
   };
   parser (disabled)
