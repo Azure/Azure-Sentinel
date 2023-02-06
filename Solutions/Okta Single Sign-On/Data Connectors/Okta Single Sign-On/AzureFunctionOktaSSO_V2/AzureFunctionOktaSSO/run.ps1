@@ -119,6 +119,7 @@ do {
         $exitDoUntil = $true
     }
     if($uri -ne $uriself){
+        Write-Host "Response data is : $($response)"
         $responseObj = (ConvertFrom-Json $response.content)
         Write-Host "Response content is : $($response.content)"
         $responseCount = $responseObj.count
