@@ -120,12 +120,13 @@ do {
     }
     if($uri -ne $uriself){
         $responseObj = (ConvertFrom-Json $response.content)
+        Write-Host "Response content is : $($response.content)"
         $responseCount = $responseObj.count
         $TotalRecordCount= $TotalRecordCount + $responseCount
         
         #ACN_CD_OktaIssue925
         $domain = [regex]::matches($uri, 'https:\/\/([\w\.\-]+)\/').captures.groups[1].value
-        $responseObj = $response | ConvertFrom-Json
+        $responseObj = $response.content | ConvertFrom-Json
         $responseObj | Add-Member -MemberType NoteProperty -Name "domain" -Value $domain
         $json = $responseObj | ConvertTo-Json -Depth 5
          
