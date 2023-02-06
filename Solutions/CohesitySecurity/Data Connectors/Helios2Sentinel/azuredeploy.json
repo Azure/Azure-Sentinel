@@ -48,7 +48,30 @@
         "QueueName": "cohesity-incidents",
         "BlobName": "cohesity-extra-parameters"
     },
-    "resources": [{
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2015-05-01",
+            "name": "[variables('ProducerFunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('ProducerFunctionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2015-05-01",
+            "name": "[variables('ConsumerFunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('ConsumerFunctionName')]"
+            }
+        },
+        {
             "type": "Microsoft.Web/serverfarms",
             "apiVersion": "2022-03-01",
             "name": "[variables('hostingPlanName')]",
@@ -62,7 +85,8 @@
             "properties": {
                 "computeMode": "Dynamic"
             }
-        }, {
+        },
+        {
             "type": "Microsoft.KeyVault/vaults",
             "apiVersion": "2016-10-01",
             "name": "[variables('ProducerFunctionName')]",
@@ -76,7 +100,8 @@
                     "name": "Standard"
                 },
                 "tenantId": "[subscription().tenantId]",
-                "accessPolicies": [{
+                "accessPolicies": [
+                    {
                         "tenantId": "[subscription().tenantId]",
                         "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('ProducerFunctionName')),'2019-08-01', 'full').identity.principalId]",
                         "permissions": {
@@ -236,21 +261,28 @@
                 "alwaysOn": true,
                 "reserved": true
             },
-            "resources": [{
-                "type": "config",
-                "apiVersion": "2018-11-01",
-                "name": "appsettings",
-                "dependsOn": [
-                    "[concat('Microsoft.Web/sites/', variables('ProducerFunctionName'))]"
-                ],
-                "properties": {
-                    "CohesityQueueName": "[variables('QueueName')]",
-                    "keyVaultName": "[variables('ProducerFunctionName')]",
-                    "Workspace": "[parameters('Workspace')]",
-                    "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ProducerFunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ProducerFunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                    "startDaysAgo": "-30"
+            "resources": [
+                {
+                    "type": "config",
+                    "apiVersion": "2018-11-01",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('ProducerFunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('ProducerFunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('ProducerFunctionName')), '2015-05-01').ConnectionString]",
+                        "CohesityQueueName": "[variables('QueueName')]",
+                        "keyVaultName": "[variables('ProducerFunctionName')]",
+                        "Workspace": "[parameters('Workspace')]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ProducerFunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ProducerFunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "startDaysAgo": "-30",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/cohesity/Azure-Sentinel/raw/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/Package/IncidentProducer/CohesityIncidentProducer-1.0.0.zip"
+                    }
                 }
-            }]
+            ]
         },
         {
             "type": "Microsoft.Web/sites",
@@ -272,23 +304,30 @@
                 "alwaysOn": true,
                 "reserved": true
             },
-            "resources": [{
-                "type": "config",
-                "apiVersion": "2018-11-01",
-                "name": "appsettings",
-                "dependsOn": [
-                    "[concat('Microsoft.Web/sites/', variables('ConsumerFunctionName'))]"
-                ],
-                "properties": {
-                    "CohesityQueueName": "[variables('QueueName')]",
-                    "keyVaultName": "[variables('ProducerFunctionName')]",
-                    "resourceGroup": "[resourceGroup().Name]",
-                    "subscription": "[subscription().subscriptionId]",
-                    "TenantId": "[subscription().tenantId]",
-                    "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ProducerFunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ProducerFunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                    "Workspace": "[parameters('Workspace')]"
+            "resources": [
+                {
+                    "type": "config",
+                    "apiVersion": "2018-11-01",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('ConsumerFunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('ConsumerFunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('ConsumerFunctionName')), '2015-05-01').ConnectionString]",
+                        "CohesityQueueName": "[variables('QueueName')]",
+                        "keyVaultName": "[variables('ProducerFunctionName')]",
+                        "resourceGroup": "[resourceGroup().Name]",
+                        "subscription": "[subscription().subscriptionId]",
+                        "TenantId": "[subscription().tenantId]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ProducerFunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ProducerFunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "Workspace": "[parameters('Workspace')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/cohesity/Azure-Sentinel/raw/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/Package/IncidentConsumer/CohesityIncidentConsumer-1.0.0.zip"
+                    }
                 }
-            }]
+            ]
         },
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
