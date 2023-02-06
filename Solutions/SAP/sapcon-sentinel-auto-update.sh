@@ -85,7 +85,7 @@ THIS SCRIPT WILL USE ROOT ACCESS TO:
 				echo "$(jq '.auto_update = true' "$settingsjson")" > "$settingsjson"
 			fi	
 		else
-			sudo echo $UPDATEPOLICY> "$settingsjson"
+			echo $UPDATEPOLICY> "$settingsjson"
 		fi
 
 	done \
@@ -140,11 +140,11 @@ function update_agents() {
 		fi
 
 		if [ ! "$SKIPIMAGEPULL" ]; then
-			CLOUD=$(docker inspect "$contname" --format '{{.Config.Labels.Cloud}}')
+			CLOUD=$(docker inspect "$contname" --format '{{index .Config.Labels "Cloud"}}')
 
 			dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
 
-			if [ "$CLOUD" == 'public' ]; then
+			if [ "$CLOUD" == 'public' ] || [ -z $CLOUD]; then
 				tagver=':latest'
 			elif [ "$CLOUD" == 'fairfax' ]; then
 				tagver=':ffx-latest'
@@ -153,9 +153,8 @@ function update_agents() {
 				tagver=':mc-latest'
 				az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 			else
-				tagver=':latest'
-				# log_update "Skipping container $contname as its Cloud label is not supported: $CLOUD"
-				# continue
+				log_update "Skipping container $contname as its Cloud label is not supported: $CLOUD"
+				continue
 			fi
 
 			log_update 'Starting Docker image Pull'
