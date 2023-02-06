@@ -144,7 +144,7 @@ function update_agents() {
 
 			dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
 
-			if [ "$CLOUD" == 'public' ] || [ -z $CLOUD]; then
+			if [ "$CLOUD" == 'public' ] || [ -z $CLOUD ]; then
 				tagver=':latest'
 			elif [ "$CLOUD" == 'fairfax' ]; then
 				tagver=':ffx-latest'
