@@ -79,7 +79,7 @@ def main(mytimer: func.TimerRequest) -> None:
     for event in coreEvents:
         sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
-            sentinel.send(event)
+            sentinel.send(event.decode("utf-8"))
         file_events += 1 
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
