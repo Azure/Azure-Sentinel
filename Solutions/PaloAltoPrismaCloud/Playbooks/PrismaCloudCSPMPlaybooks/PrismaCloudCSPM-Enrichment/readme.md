@@ -3,7 +3,7 @@
  When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
  1. Fetches the list of assets from incident entites .
  2. Make the APi call to get the latest Compliance security posture/details from cloud console and update the same incidents comments with result.
- 3. Note : Asset column for which the security posture to be enriched should be mapped with hostname entity while creating analyics rule. 
+ 3. Note : Asset column for which the security posture to be enriched should be mapped with hostname entity while creating analytics rule. 
 
 
 ### Prerequisites 
@@ -14,8 +14,8 @@
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FThreatXPlaybooks%2FThreatX-encrichment%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2F%2FThreatXPlaybooks%2FThreatX-encrichment%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FPrismaCloudCSPMPlaybooks%2FPrismaCloudCSPM-Enrichment%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2F%2FPrismaCloudCSPMPlaybooks%2FPrismaCloudCSPM-Enrichment%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (Ex: PrismaCloudCSPM-Enrichment).
