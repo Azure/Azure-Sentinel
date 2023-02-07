@@ -1,4 +1,4 @@
-# ThreatX Logic Apps Custom connector
+# Prisma Cloud CSPM Logic Apps Custom connector
 
 This custom connector connects to Prisma Cloud CSPM services end point to runs any Prisma cloud supported API get/post calls and gives response back in json format.
 ### Authentication methods this connector supports
@@ -9,7 +9,7 @@ This custom connector connects to Prisma Cloud CSPM services end point to runs a
 1. API URL is needed which you can get that from [here](https://prisma.pan.dev/api/cloud/api-urls) or your paloalto vendor will help you to get the same.
 
 
-## Actions supported by ThreatX Cloud custom connector
+## Actions supported by Prisma Cloud CSPM custom connector
 
 | Component | Description |
 | --------- | -------------- |
@@ -30,8 +30,8 @@ This custom connector connects to Prisma Cloud CSPM services end point to runs a
 ### Deployment instructions 
 1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FCustomConnector%2FThreatXCustomConnector%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FCustomConnector%2FThreatXCustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FCustomConnector%2FPrismaCloudCSPMCustomConnector%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FCustomConnector%2FPrismaCloudCSPMCustomConnector%2Fazuredeploy.json)
 
 ## Usage Examples
 * Get Compliance posture of your asset and add to Sentinel incident comment through playbook
