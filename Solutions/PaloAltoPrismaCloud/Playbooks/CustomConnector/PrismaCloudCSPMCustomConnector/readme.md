@@ -28,7 +28,7 @@ This custom connector connects to Prisma Cloud CSPM services end point to runs a
 
 
 ### Deployment instructions 
-1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deplyoing an ARM Template wizard.
+1. Deploy the Custom Connector by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FCustomConnector%2FPrismaCloudCSPMCustomConnector%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FCustomConnector%2FPrismaCloudCSPMCustomConnector%2Fazuredeploy.json)
