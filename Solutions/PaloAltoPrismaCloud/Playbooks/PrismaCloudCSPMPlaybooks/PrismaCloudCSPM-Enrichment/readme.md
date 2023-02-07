@@ -1,7 +1,7 @@
 # PrismaCloudCSPM-Enrichment Info Playbook
  ## Summary
  When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
- 1. Fetches the list of assets from incident entites .
+ 1. Fetches the list of assets from incident entities.
  2. Make the APi call to get the latest Compliance security posture/details from cloud console and update the same incidents comments with result.
  3. Note : Asset column for which the security posture to be enriched should be mapped with hostname entity while creating analytics rule. 
 
@@ -21,7 +21,7 @@
     * Playbook Name: Enter the playbook name here (Ex: PrismaCloudCSPM-Enrichment).
     * Custom Connector Name: Enter the Prisma cloud custom connector name here (Ex: PrismaCloudCSPMCustomConnector).
     * Keyvault name: Enter the key vault name where secret key is stored.
-    * Prisma Secret Name : Your Key name for the stored api secret.
+    * Prisma Secret Name : Your Key name for the stored API secret.
 	* Prisma User ID : Enter the prisma user id.
 
 ### Post-Deployment instructions 
