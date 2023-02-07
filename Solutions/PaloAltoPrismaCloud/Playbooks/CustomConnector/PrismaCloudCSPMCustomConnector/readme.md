@@ -6,7 +6,7 @@ This custom connector connects to Prisma Cloud CSPM services end point to runs a
 *  Token generation via api secret key and user id 
 
 ### Prerequisites for deploying Custom Connector
-1. API URL is needed which you can get that from [here](https://prisma.pan.dev/api/cloud/api-urls) or your paloalto vendor will help you to get the same.
+1. API URL is needed which you can get that from [here](https://prisma.pan.dev/api/cloud/api-urls) or your Palo Alto vendor will help you to get the same.
 
 
 ## Actions supported by Prisma Cloud CSPM custom connector
