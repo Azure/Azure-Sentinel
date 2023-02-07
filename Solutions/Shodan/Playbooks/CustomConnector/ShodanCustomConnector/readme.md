@@ -16,7 +16,7 @@ This custom connector connects to Shodan endpoint to execute actions supported b
     - Connector Name: Enter the custom connector name (Default: ShodanCustomConnector)
     - Service Endpoint: Enter the Shodan API endpoint (Default: https://api.shodan.io)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FCustomConnector%2FQualysCustomConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FCustomConnector%2FQualysCustomConnector%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FShodan%2FPlaybooks%2FCustomConnector%2FShodanCustomConnector%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FShodan%2FPlaybooks%2FCustomConnector%2FShodanCustomConnector%2Fazuredeploy.json) 
 
 
 ## Actions supported by Shodan Logic App Connector
