@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for Palo Alto Networks URL Filtering
   Version: '0.1'
-  LastUpdated: Jan 25 2023
+  LastUpdated: Feb 07 2023
 Product:
   Name: Palo Alto Networks
 Normalization:
@@ -36,6 +36,12 @@ ParserQuery: |
           , "block-url", "Deny", "Failure", "503"
           , "block-override", "Deny", "Failure", "302"
           , "override-lockout", "Deny", "Failure","503"
+          , "reset client", "Reset Source", "Failure", "503"
+          , "reset server", "Reset Destination", "Failure", "503"
+          , "reset both", "Reset", "Failure", "503"
+          , "deny", "Deny", "Failure", "503"
+          , "drop", "Drop", "Failure", "503"
+          , "drop ICMP", "Drop ICMP", "Failure", "503"
       ];
       let SeverityLookup=datatable(LogSeverity:string,EventSeverity:string)
       [   1, "Informational" 
@@ -49,21 +55,19 @@ ParserQuery: |
           and DeviceProduct == "PAN-OS"
           and Activity == "THREAT"
           and DeviceEventClassID == "url"
-      | parse AdditionalExtensions with URL ";PanOSActionFlags=" *
       | parse-kv AdditionalExtensions as (PanOSXForwarderfor:string, PanXFFIP:string, PanOSReferer:string, PanOSRuleUUID:string, PanSrcHostname:string, PanSrcMac:string, PanSrcDeviceCat:string, PanSrcDAG:string, PanOSSrcUUID:string, PanSrcDeviceProf:string, PanSrcDeviceModel:string, PanSrcDeviceVendor:string, PanSrcDeviceOS:string, PanSrcDeviceOSv:string, PanDstHostname:string, PanDstMac:string, PanDstDeviceCat:string, PanDstDAG:string, PanOSDstUUID:string, PanDstDeviceProf:string, PanDstDeviceModel:string, PanDstDeviceVendor:string, PanDstDeviceOS:string, PanDstDeviceOSv:string) with (pair_delimiter=';', kv_delimiter='=')
       | extend 
-          Url                         = coalesce(RequestURL,URL)
-          , HttpRequestXff            = coalesce(PanOSXForwarderfor, PanXFFIP)
-      | project-rename
-          HttpReferrer                = PanOSReferer
-          , DstMacAddr                = PanDstMac
-          , SrcMacAddr                = PanSrcMac
-          , DstHostname               = PanDstHostname
-          , SrcHostname               = PanSrcHostname
+          HttpRequestXff            = coalesce(PanOSXForwarderfor, PanXFFIP)
       | lookup EventLookup on DeviceAction
       | lookup SeverityLookup on LogSeverity
       | project-rename 
           DvcHostname                 = Computer
+          , HttpReferrer                = PanOSReferer
+          , DstMacAddr                = PanDstMac
+          , SrcMacAddr                = PanSrcMac
+          , DstHostname               = PanDstHostname
+          , SrcHostname               = PanSrcHostname
+          , Url                       = RequestURL
           , DvcId                     = DeviceExternalID
           , SrcZone                   = DeviceCustomString4
           , DstZone                   = DeviceCustomString5
