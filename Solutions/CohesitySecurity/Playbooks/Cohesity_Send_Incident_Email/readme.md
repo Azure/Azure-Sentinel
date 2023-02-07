@@ -1,4 +1,4 @@
-# Cohesity Send Incident Email
+# Cohesity Incident Email Playbook
 ## Summary
 This playbook sends an email to the recipient with the incident details..
 
