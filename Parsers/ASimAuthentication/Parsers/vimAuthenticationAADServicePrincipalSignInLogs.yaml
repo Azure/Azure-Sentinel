@@ -29,7 +29,6 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let disabled=false;
     let AADResultTypes = (T:(ResultType:string)) {
         let AADResultTypesLookup = datatable (ResultType:string, EventResultDetails:string, EventType:string, EventResult:string, EventOriginalResultDetails:string, EventSeverity:string)
         [
@@ -68,7 +67,14 @@ ParserQuery: |
             "530032","Logon violates policy"    ,"Logon"    ,"Failure"  ,"530032 - BlockedByConditionalAccessOnSecurityPolicy", "Low",
             "50061" ,""                         ,"Logoff"   ,"Failure"  ,"50061 - SignoutInvalidRequest", "Low",
             "50068" ,""                         ,"Logoff"   ,"Failure"  ,"50068 - SignoutInitiatorNotParticipant", "Low",
-            "50078" ,"Logon violates policy"    ,"Logon"    ,"Failure"  ,"50078 - UserStrongAuthExpired", "Low"
+            "50078" ,"Logon violates policy"    ,"Logon"    ,"Failure"  ,"50078 - UserStrongAuthExpired", "Low",
+            "7000222", "Session expired"        ,"Logon"    ,"Failure"  ,"7000222 - The provided client secret keys are expired", "Low",
+            "70021", "No such user"             ,"Logon"    ,"Failure"  ,"70021 - No matching federated identity record found for presented assertion", "Low",
+            "500341", "User disabled"           ,"Logon"    ,"Failure"  ,"500341 - The user account has been deleted from the directory", "Low",
+            "1002016", "Logon violates policy"  ,"Logon"    ,"Failure"  ,"1002016 - You are using TLS version 1.0, 1.1 and/or 3DES cipher", "Low",
+            "7000215", "Incorrect password"     ,"Logon"    ,"Failure"  ,"7000215 - Invalid client secret is provided", "Low",
+            "90033",   "Transient error"       ,"Logon"    ,"Failure"  ,"90033 - A transient error has occurred", "Informational",
+            "90024",   "Transient error"       ,"Logon"    ,"Failure"  ,"90024 - RequestBudgetExceededError - A transient error has occurred", "Informational"
         ];
         T 
         | lookup AADResultTypesLookup on ResultType
@@ -78,68 +84,69 @@ ParserQuery: |
             , EventOriginalResultDetails  = iff(isempty(EventOriginalResultDetails), EventType, EventOriginalResultDetails)
             , EventSeverity               = iff(isempty(EventSeverity), "Low", EventSeverity)
     };
-  let parser = (
-        starttime:datetime=datetime(null)
-        , endtime:datetime=datetime(null)
-        , targetusername_has:string="*"
-        , disabled:bool=false
-    ) {
-    AADServicePrincipalSignInLogs
-    | where 
-      (isnull(starttime)           or TimeGenerated >= starttime) 
-      and (isnull(endtime)         or TimeGenerated <= endtime)
-      and (targetusername_has=='*' or (ServicePrincipalName has targetusername_has))
-      and not(disabled)
-    | invoke AADResultTypes()
-    | project-rename
-          ActingAppId               = AppId
-        , TargetAppId               = ResourceIdentity 
-        , TargetAppName             = ResourceDisplayName
-        , TargetUsername            = ServicePrincipalName
-        , TargetUserId              = ServicePrincipalId
-        , EventOriginalUid          = Id
-        , TargetSessionId           = CorrelationId
-        , SrcIpAddr                 = IPAddress
-        , EventUid                  = _ItemId
-        , EventProductVersion       = OperationVersion
-    | extend 
-          EventVendor                = 'Microsoft'
-        , EventProduct               = 'AAD'
-        , EventSchema                = 'Authentication'
-        , EventSchemaVersion         = '0.1.3'
-        , Dvc                        = 'Microsft/AAD'
-        , LogonMethod                = "Service Principal"
-        , TargetAppType              = "Resource"
-        , EventCount                 = int(1)
-        , TargetUserType             = 'ServicePrincipal'
-        , TargetUsernameType         = 'Simple'
-        , TargetUserIdType           = 'AADID'
-    | extend
-          LocationDetails = todynamic(LocationDetails)
-    | extend
-        SrcGeoCity                   = tostring(LocationDetails.city)
-        , SrcGeoCountry              = Location
-        , SrcGeoLatitude             = toreal(LocationDetails.geoCoordinates.latitude)
-        , SrcGeoLongitude            = toreal(LocationDetails.geoCoordinates.longitude)
-        , SrcGeoRegion               = tostring(LocationDetails.state)
-     | project-away OperationName, Category, Result*, ServicePrincipal*,SourceSystem, DurationMs, Resource*, Location*, UniqueTokenIdentifier, FederatedCredentialId, Conditional*, Authentication*, Identity, Level, TenantId
-    // 
-    // -- Aliases
-    | extend 
-        User                         = TargetUsername
-        , LogonTarget                = TargetAppName
-        , EventStartTime             = TimeGenerated
-        , EventEndTime               = TimeGenerated
-        , Application                = TargetAppName
-        , Dst                        = TargetAppName
-        , Src                        = SrcIpAddr
-        , IpAddr                     = SrcIpAddr
-        , TargetSimpleUsername       = TargetUsername
-        , TargetUserAadId            = TargetUserId
-  };
-  parser (
-        starttime          = statttime
-      , endtime            = endtime
-      , targetusername_has = targetusername_has
-      , disabled           = disabled
-  )
+    let parser = (
+          starttime:datetime=datetime(null)
+          , endtime:datetime=datetime(null)
+          , targetusername_has:string="*"
+          , disabled:bool=false
+      ) {
+      AADServicePrincipalSignInLogs
+      | where 
+        (isnull(starttime)           or TimeGenerated >= starttime) 
+        and (isnull(endtime)         or TimeGenerated <= endtime)
+        and (targetusername_has=='*' or (ServicePrincipalName has targetusername_has))
+        and not(disabled)
+      | invoke AADResultTypes()
+      | project-rename
+            ActingAppId               = AppId
+          , TargetAppId               = ResourceIdentity 
+          , TargetAppName             = ResourceDisplayName
+          , TargetUsername            = ServicePrincipalName
+          , TargetUserId              = ServicePrincipalId
+          , EventOriginalUid          = Id
+          , TargetSessionId           = CorrelationId
+          , SrcIpAddr                 = IPAddress
+          , EventUid                  = _ItemId
+          , EventProductVersion       = OperationVersion
+      | extend 
+            EventVendor                = 'Microsoft'
+          , EventProduct               = 'AAD'
+          , EventSchema                = 'Authentication'
+          , EventSchemaVersion         = '0.1.3'
+          , Dvc                        = 'Microsft/AAD'
+          , LogonMethod                = "Service Principal"
+          , TargetAppType              = "Resource"
+          , EventCount                 = int(1)
+          , TargetUserType             = 'ServicePrincipal'
+          , TargetUsernameType         = 'Simple'
+          , TargetUserIdType           = 'AADID'
+      | extend
+            LocationDetails = todynamic(LocationDetails)
+      | extend
+          SrcGeoCity                   = tostring(LocationDetails.city)
+          , SrcGeoCountry              = Location
+          , SrcGeoLatitude             = toreal(LocationDetails.geoCoordinates.latitude)
+          , SrcGeoLongitude            = toreal(LocationDetails.geoCoordinates.longitude)
+          , SrcGeoRegion               = tostring(LocationDetails.state)
+      | project-away OperationName, Category, Result*, ServicePrincipal*,SourceSystem, DurationMs, Resource*, Location*, UniqueTokenIdentifier, FederatedCredentialId, Conditional*, Authentication*, Identity, Level, TenantId
+      // 
+      // -- Aliases
+      | extend 
+          User                         = TargetUsername
+          , LogonTarget                = TargetAppName
+          , EventStartTime             = TimeGenerated
+          , EventEndTime               = TimeGenerated
+          , Application                = TargetAppName
+          , Dst                        = TargetAppName
+          , Src                        = SrcIpAddr
+          , IpAddr                     = SrcIpAddr
+          , TargetSimpleUsername       = TargetUsername
+          , TargetUserAadId            = TargetUserId
+    };
+    parser  
+    (
+          starttime          = statttime
+        , endtime            = endtime
+        , targetusername_has = targetusername_has
+        , disabled           = disabled
+    )
