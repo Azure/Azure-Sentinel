@@ -10,7 +10,7 @@ You can integrate Cohesity Data Cloud with Microsoft Sentinel to provide securit
 ## Package Building and Validation Instructions
 __Disclaimer:__ You can skip these steps and use one of the pre-built packages from [this directory](https://github.com/cohesity/Azure-Sentinel/tree/CohesitySecurity.internal/Solutions/CohesitySecurity/Package). These steps are required only if you want to rebuild the package.
 1. Follow this [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/README.md) to set up the build prerequisites.
-2. Edit [cohesity.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/cohesity.json) to add the required values. . __Note:__ The dummy values are provided to protect Personal Identifiable Information (PII) information.
+2. Edit [cohesity.json](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/cohesity.json) to add the required values. __Note:__ The dummy values are provided to protect Personal Identifiable Information (PII) information.
 3. Run [build.ps1](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/build.ps1) to build the package.
 4. Follow [readme.md](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/README.md) for post-build manual validation.
 
