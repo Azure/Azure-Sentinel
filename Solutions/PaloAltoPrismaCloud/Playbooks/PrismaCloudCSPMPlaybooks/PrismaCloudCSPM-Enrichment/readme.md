@@ -32,7 +32,7 @@ Once deployment is complete, you will need to authorize each connection.
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for playbooks other Api Connection.
+6.	Repeat steps for playbooks other API Connection.
 
 #### b. Configurations in Sentinel
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky asset. 
@@ -41,7 +41,7 @@ Once deployment is complete, you will need to authorize each connection.
 #### c. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource
 2. Click on Identity Blade
-3. Choose Systen assigned tab
+3. Choose System assigned tab
 4. Click on Azure role assignments
 5. Click on Add role assignments
 6. Select Scope - Resource group
@@ -54,7 +54,7 @@ Once deployment is complete, you will need to authorize each connection.
 1. Select the Keyvault resource where you have stored the secret
 2. Click on Access policies Blade
 3. Click on Create
-4. Under Secret permissions columun , Select Get , List from "Secret Management Operations"
+4. Under Secret permissions column , Select Get , List from "Secret Management Operations"
 5. Click next to go to Principal tab and choose your deployed playbook name
 6. Click Next leave application tab as it is .
 7. Click Review and create
