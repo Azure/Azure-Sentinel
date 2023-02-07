@@ -7,9 +7,9 @@
 
 
 ### Prerequisites 
-"1. PrismaCloudCSPM Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
-"2. API Key and User ID . To get this, login into your Prisma cloud instance dashboard and navigate to Settings --> Access Control --> Access Keys --> Add",
-"3. [Important step]Store the API secret key in Key vault then provide the keyvault name and key name of the stored secret during deployment"
+ 1. PrismaCloudCSPM Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
+ 2. API Key and User ID . To get this, login into your Prisma cloud instance dashboard and navigate to Settings --> Access Control --> Access Keys --> Add
+ 3. [Important step]Store the API secret key in Key vault then provide the keyvault name and key name of the stored secret during deployment
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
