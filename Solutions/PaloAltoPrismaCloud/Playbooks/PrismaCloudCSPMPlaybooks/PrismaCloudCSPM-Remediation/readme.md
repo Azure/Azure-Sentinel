@@ -7,10 +7,10 @@
 
 
 ### Prerequisites 
-"1. PrismaCloudCSPM Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
-"2. API Key and User ID . To get this, login into your Prisma cloud instance dashboard and navigate to Settings --> Access Control --> Access Keys --> Add",
-"3. TeamsID and channelID of your tenant is needed for posting messages on Microsoft teams",
-"4. [Important step]Store the API secret key in Key vault then provide the keyvault name and key name of the stored secret during deployment"
+ 1. PrismaCloudCSPM Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
+ 2. API Key and User ID . To get this, login into your Prisma cloud instance dashboard and navigate to Settings --> Access Control --> Access Keys --> Add
+ 3. TeamsID and channelID of your tenant is needed for posting messages on Microsoft teams",
+ 4. [Important step]Store the API secret key in Key vault then provide the keyvault name and key name of the stored secret during deployment
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
@@ -35,7 +35,7 @@ Once deployment is complete, you will need to authorize each connection.
 3.	Click Authorize
 4.	Sign in
 5.	Click Save
-6.	Repeat steps for playbooks other Api Connection.
+6.	Repeat steps for playbooks other API Connection.
 
 #### b. Configurations in Sentinel
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky asset. 
@@ -44,7 +44,7 @@ Once deployment is complete, you will need to authorize each connection.
 #### c. Assign Playbook Microsoft Sentinel Responder Role
 1. Select the Playbook (Logic App) resource
 2. Click on Identity Blade
-3. Choose Systen assigned tab
+3. Choose System assigned tab
 4. Click on Azure role assignments
 5. Click on Add role assignments
 6. Select Scope - Resource group
@@ -57,7 +57,7 @@ Once deployment is complete, you will need to authorize each connection.
 1. Select the Keyvault resource where you have stored the secret
 2. Click on Access policies Blade
 3. Click on Create
-4. Under Secret permissions columun , Select Get , List from "Secret Management Operations"
+4. Under Secret permissions column , Select Get , List from "Secret Management Operations"
 5. Click next to go to Principal tab and choose your deployed playbook name
 6. Click Next leave application tab as it is .
 7. Click Review and create
