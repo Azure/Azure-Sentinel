@@ -448,7 +448,7 @@ if [ "$os" == "ubuntu" ]; then
 	sudo apt-get update >/dev/null
 	install_package "jq" "apt install -y -qq"
 	install_package "unzip" "apt install -y -qq"
-	install_package "docker.io" "apt install -y -qq"
+	# install_package "docker.io" "apt install -y -qq"
 	echo "Installing docker"
 	if [ "$MODE" != "cfgf" ]; then
 		echo "Installing Azure CLI"
