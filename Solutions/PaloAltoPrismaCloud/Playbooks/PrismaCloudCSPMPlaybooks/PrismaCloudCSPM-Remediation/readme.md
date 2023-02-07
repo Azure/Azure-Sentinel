@@ -1,9 +1,9 @@
-# PrismaCloudCSPM-Enrichment Info Playbook
+# PrismaCloudCSPM-Remediation Info Playbook
  ## Summary
  When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions
- 1. Fetches the list of assets from incident entites .
- 2. Make the APi call to get the latest alert lists of provided assets from cloud console and then post the message on teams channel and wait for the user input and then act accordingly later update the same incidents comments with remediation result.
- 3. Note : Asset column for which the remediation needs to be done, should be mapped with hostname entity while creating analyics rule. 
+ 1. Fetches the list of assets from incident entities .
+ 2. Make the API call to get the latest alert lists of provided assets from cloud console and then post the message on teams channel and wait for the user input and then act accordingly later update the same incidents comments with remediation result.
+ 3. Note : Asset column for which the remediation needs to be done, should be mapped with hostname entity while creating analytics rule. 
 
 
 ### Prerequisites 
@@ -15,14 +15,14 @@
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2FThreatXPlaybooks%2FThreatX-encrichment%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FThreatXCloud%2FPlaybooks%2F%2FThreatXPlaybooks%2FThreatX-encrichment%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FPrismaCloudCSPMPlaybooks%2FPrismaCloudCSPM-Remediation%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FPrismaCloudCSPMPlaybooks%2FPrismaCloudCSPM-Remediation%2Fazuredeploy.json)
 
 2. Fill in the required paramteres:
     * Playbook Name: Enter the playbook name here (Ex: PrismaCloudCSPM-Enrichment).
     * Custom Connector Name: Enter the Prisma cloud custom connector name here (Ex: PrismaCloudCSPMCustomConnector).
     * Keyvault name: Enter the key vault name where secret key is stored.
-    * Prisma Secret Name : Your Key name for the stored api secret.
+    * Prisma Secret Name : Your Key name for the stored API secret.
 	* Prisma User ID : Enter the prisma user id.
 	* TeamsID : Enter value for TeamsID
 	* ChannelID : Enter value for Teams ChannelID
