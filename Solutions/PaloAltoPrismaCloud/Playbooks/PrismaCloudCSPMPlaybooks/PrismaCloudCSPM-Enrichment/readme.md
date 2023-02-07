@@ -17,7 +17,7 @@
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2FPrismaCloudCSPMPlaybooks%2FPrismaCloudCSPM-Enrichment%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FPaloAltoPrismaCloud%2FPlaybooks%2F%2FPrismaCloudCSPMPlaybooks%2FPrismaCloudCSPM-Enrichment%2Fazuredeploy.json)
 
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here (Ex: PrismaCloudCSPM-Enrichment).
     * Custom Connector Name: Enter the Prisma cloud custom connector name here (Ex: PrismaCloudCSPMCustomConnector).
     * Keyvault name: Enter the key vault name where secret key is stored.
