@@ -8,6 +8,7 @@ using YamlDotNet.Serialization;
 using Microsoft.Azure.Sentinel.KustoServices.Implementation;
 using Kqlvalidations.Tests.FunctionSchemasLoaders;
 using System;
+using Newtonsoft.Json;
 
 namespace Kqlvalidations.Tests
 {
@@ -25,6 +26,42 @@ namespace Kqlvalidations.Tests
                .WithCustomFunctionSchemasLoader(new ParsersCustomJsonDirectoryFunctionsLoader(Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions")))
                .WithCustomFunctionSchemasLoader(new CommonFunctionsLoader())
                .Build();
+        }
+
+
+        [Theory]
+        [ClassData(typeof(DataConnectorFilesTestData))]
+        public void Validate_DataConnectors_HaveValidKql(string fileName, string encodedFilePath)
+        {
+            var dataConnector = ReadAndDeserializeDataConnectorJson(encodedFilePath);
+            var id = (string)dataConnector.Id;
+            //we ignore known issues
+            if (ShouldSkipTemplateValidation(id))
+            {
+                return;
+            }
+            foreach (var connectivityCriteria in dataConnector.ConnectivityCriterias)
+            {
+                foreach (var queryStr in connectivityCriteria.Value)
+                {
+                    ValidateKql(id, queryStr);
+                }
+            }
+
+            foreach (var sampleQuery in dataConnector.SampleQueries)
+            {
+                ValidateKql(id, sampleQuery.Query);
+            }
+
+            foreach (var graphQuery in dataConnector.GraphQueries)
+            {
+                ValidateKql(id, graphQuery.BaseQuery);
+            }
+
+            foreach (var datatype in dataConnector.DataTypes)
+            {
+                ValidateKql(id, datatype.LastDataReceivedQuery);
+            }
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -274,6 +311,13 @@ namespace Kqlvalidations.Tests
             string type = (string)dictionary["Type"];
             string defaultValue = ((string)dictionary.GetValueOrDefault("Default")) ?? TypesDatabase.TypeToDefaultValueMapping.GetValueOrDefault(type);
             return $"let {name}= {(type == "string" ? $"'{defaultValue}'" : defaultValue)};";
+        }
+
+        private DataConnectorSchema ReadAndDeserializeDataConnectorJson(string encodedFilePath)
+        {
+            var jsonString = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
+            DataConnectorSchema dataConnectorObject = JsonConvert.DeserializeObject<DataConnectorSchema>(jsonString);
+            return dataConnectorObject;
         }
     }
 
