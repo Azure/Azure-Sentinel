@@ -5,18 +5,20 @@ import subprocess
 import sys
 
 
-def get_function_name_by_prefix(funNamePrefix):
+def get_function_names_by_prefix(funNamePrefix):
     query = "[?contains(name,'" + funNamePrefix + "')]"
     result = subprocess.run(['az', 'functionapp', 'list', '--query', query], stdout=subprocess.PIPE)
-    jsObj = json.loads(result.stdout)
-    vid = jsObj[0]["id"]
-    function_name = vid.split("/")[-1]
-    return function_name
+    jsObjs = json.loads(result.stdout)
+    return [jsobj["id"].split("/")[-1] for jsobj in jsObjs]
 
 
-def remove_function_name_by_prefix(funNamePrefix, resourceGroup):
-    function_name = get_function_name_by_prefix(funNamePrefix)
-    subprocess.run(['az', 'functionapp', 'delete', '--name', function_name, '--resource-group', resourceGroup])
+def remove_functions_by_prefix(funNamePrefix, resourceGroup):
+    functions = get_function_names_by_prefix(funNamePrefix)
+    for function in functions:
+        print("function to remove --> %s" % function)
+        subprocess.run(['az', 'functionapp', 'delete', '--name', function, '--resource-group', resourceGroup])
+    functions = get_function_names_by_prefix(funNamePrefix)
+    print("functions after removing --> %s" % functions)
 
 
-remove_function_name_by_prefix(sys.argv[1], sys.argv[2])
+remove_functions_by_prefix(sys.argv[1], sys.argv[2])
