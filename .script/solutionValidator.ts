@@ -78,7 +78,7 @@ function isPotentialMainTemplate(filePath: string) {
 }
 
 let fileTypeSuffixes = ["json"];
-let filePathFolderPrefixes = ["Package"];
+let filePathFolderPrefixes = ["Solutions","Package"];
 let fileKinds = ["Added", "Modified"];
 let CheckOptions = {
     onCheckFile: (filePath: string) => {
