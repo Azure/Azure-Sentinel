@@ -42,33 +42,36 @@ const validVerticals = [
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-    if (isPotentialMainTemplate(filePath)) {
-        let categories = jsonFile.categories;
+    if (isPotentialMainTemplate(filePath) && jsonFile.hasOwnProperty("metadata")) {
+        if (jsonFile.metadata.hasOwnProperty("categories")) {
+            let categories = jsonFile.metadata.categories;
 
-        if (categories.hasOwnProperty("domains")) {
-            let domains = categories.domains;
-            for (const domain of domains) {
-                if (!validDomains.includes(domain)) {
-                    throw new MainTemplateValidationError(`Invald Domain ${domain} provided`);
+            if (categories.hasOwnProperty("domains")) {
+                let domains = categories.domains;
+                for (const domain of domains) {
+                    if (!validDomains.includes(domain)) {
+                        throw new MainTemplateValidationError(`Invald Domain ${domain} provided`);
+                    }
                 }
             }
-        }
 
-        if (categories.hasOwnProperty("verticals")) {
-            let verticals = categories.verticals;
-            for (const vertical of verticals) {
-                if (!validVerticals.includes(vertical)) {
-                    throw new MainTemplateValidationError(`Invald Vertical ${vertical} provided`);
+            if (categories.hasOwnProperty("verticals")) {
+                let verticals = categories.verticals;
+                for (const vertical of verticals) {
+                    if (!validVerticals.includes(vertical)) {
+                        throw new MainTemplateValidationError(`Invald Vertical ${vertical} provided`);
+                    }
                 }
             }
         }
     }
-    else {
-        console.warn(`Could not identify json file as a Main Template. Skipping File path: ${filePath}`);
+        else {
+            console.warn(`Could not identify json file as a Main Template. Skipping File path: ${filePath}`);
+        }
+
+        return ExitCode.SUCCESS;
     }
 
-    return ExitCode.SUCCESS;
-}
 
 function isPotentialMainTemplate(filePath: string) {
     if (filePath.endsWith("mainTemplate.json")) {
