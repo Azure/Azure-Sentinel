@@ -42,7 +42,7 @@ const validVerticals = [
 export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
 
-    if (isPotentialMainTemplate(filePath) && jsonFile.hasOwnProperty("categories")) {
+    if (isPotentialMainTemplate(filePath)) {
         let categories = jsonFile.categories;
 
         if (categories.hasOwnProperty("domains")) {
