@@ -82,7 +82,9 @@ In Sentinel goto Automation and create [Automation rule]. Give the new rule a na
 
 This will trigger Recorded Future playbook to run when any incident is created. Recorded future will then enrich the incident if it contains entities of type IP, Domain, Url and FileHash. 
 
-### Collective Insights and the Intelligence Cloud
-See trends and track incidents over time with Recorded Future Intelligence Cloud. This feature stores enrichments from correlations in the Intelligence Cloud for additional intelligence and analytical insights. Its possible to out-out by changing the parameter IntelligenceCloud default value from true to false in the logic app designer. 
+### Recorded Future Intelligence Cloud Settings
+The Recoded Future Intelligence Cloud aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats.
+Anonymized data is collected for analytical purposes to identify trends and insights with the Intelligence Cloud. 
+[Click here to learn more](https://support.recordedfuture.commc/en-us/articles/11633413141779)
 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png)
