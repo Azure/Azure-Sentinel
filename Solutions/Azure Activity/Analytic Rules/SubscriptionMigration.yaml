@@ -1,0 +1,62 @@
+id: 48c026d8-7f36-4a95-9568-6f1420d66e37
+kind: scheduled
+name: Subscription moved to another tenant
+description: |
+  Detects when a subscription is moved to another tenant. This may indicate a subscription hijacking event.
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryPeriod: 10m
+queryFrequency: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1496
+query: |
+  let eventCapture = "moved from tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) to tenant ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})";
+  AzureActivity
+  | where OperationNameValue == "Microsoft.Subscription/updateTenant/action"
+  | extend EventCapture = extract_all(eventCapture, tostring(Properties_d.message))
+  | extend SourceTenant = iff(isnotempty(EventCapture), EventCapture[0][0], "")
+  | extend DestinationTenant = iff(isnotempty(EventCapture), EventCapture[0][1], "")
+  | extend UserParts = split(Caller, "@")
+  | extend UserName = iff(array_length(UserParts)==2, UserParts[0], Caller)
+  | extend UserUPNSuffix = iff(array_length(UserParts)==2, UserParts[1], "")
+  | extend Summary=Properties_d.message
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings: 
+      - identifier: ResourceId,
+        columnName: SubscriptionId                 
+  - entityType: Account
+    fieldMappings: 
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UserUPNSuffix
+customDetails:
+  DestinationTenant: DestinationTenant,
+  SourceTenant: SourceTenant,
+  SubscriptionId: SubscriptionId
+alertDetailsOverride:
+  alertDescriptionFormat: |
+    The user {{Caller}} migrated a subscription:
+    {{Summary}}
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+    groupByEntities:
+      - Account
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    reopenClosedIncident: false
+version: 1.0.0
