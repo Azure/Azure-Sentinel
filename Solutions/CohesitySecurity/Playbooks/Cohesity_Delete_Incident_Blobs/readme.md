@@ -4,7 +4,7 @@ This playbook deletes the blobs on Azure storage created by an incident that is 
 
 ## Deployment instructions
 1. Click on the "Deploy to Azure" button to deploy the playbook. This step directs you to deploy an ARM Template wizard.
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Delete_Incident_Blobs%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Delete_Incident_Blobs%2Fazuredeploy.json)
 2. Fill in the required parameters:
 * __Playbook Name:__ Enter the playbook name here.
 
