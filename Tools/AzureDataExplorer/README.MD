@@ -123,4 +123,4 @@ The high-level architecture should look like the following:
 
 10. A log file is generated at the end of the script named:  ```ADXMigration_<<TimeStamp>>.csv```. The log includes every script action and should be used to identify performance or configuration issues and to gain insights to perform root cause analysis in the case of failures.  
 
-**Note**:If your requirement is only to create targetted tables on Azure Data Explorer (ADX) without creating Data Export rules on Log Analytics, EventHubs and Data Connection rules on Azure Data Explorer, then simply run this script to create tables **Create-LA-Tables-ADX.ps1**
+**Note**:If your requirement is only to create targetted tables on Azure Data Explorer (ADX) without creating Data Export rules on Log Analytics, EventHubs and Data Connection rules on Azure Data Explorer, then simply run this script to create tables [**Create-LA-Tables-ADX.ps1**](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/AzureDataExplorer/CreateTables_ADX)
