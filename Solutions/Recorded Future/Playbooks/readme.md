@@ -84,3 +84,5 @@ This will trigger Recorded Future playbook to run when any incident is created. 
 
 ### Collective Insights and the Intelligence Cloud
 See trends and track incidents over time with Recorded Future Intelligence Cloud. This feature stores enrichments from correlations in the Intelligence Cloud for additional intelligence and analytical insights. Its possible to out-out by changing the parameter IntelligenceCloud default value from true to false in the logic app designer. 
+
+![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png)
