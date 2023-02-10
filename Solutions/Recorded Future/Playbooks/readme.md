@@ -61,7 +61,7 @@ This playbook leverages the Recorded Future API to automate the ingestion of Rec
 
 ## Response (Enrichment) - IP, Domain, Hash, URL
 
-This playbook leverages the Recorded Future API to automatically enrich the IP, Domain, Url and Hash indicators, found in incidents, with the following Recorded Future context: Risk Score, Risk Rules, research links, technical links and Link to Intelligence Card. The enrichment content will be posted as a comment in the Microsoft Sentinel incident. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/microsoft). 
+This playbook leverages the Recorded Future API to automatically enrich the IP, Domain, Url and Hash indicators, found in incidents. Incidents will be enriched with the following Recorded Future context: Risk Score, Risk Rules, research links, technical links, previous detections and Link to Intelligence Card. The enrichment content will be posted as a comment in the Microsoft Sentinel incident. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/microsoft). 
 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash%2FRecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash.json)
@@ -72,7 +72,7 @@ This playbook leverages the Recorded Future API to automatically enrich the IP, 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/LogicAppDark.png)
 
 ### Configuration of Enrichment playbook
-After the enrichment playbook is installed and connections are configured. Create an automation rule to automate the enrichment process. The enrichment playbook will add recorded future intelligence to known entities in the incident as incident comment. 
+After the enrichment playbook is installed and connections are configured. Create an automation rule to automate the enrichment process. This will automate the enrichment of Recorded Future intelligence to known entities in all incidents. 
 
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRuleMenu.png)<br/>
 
@@ -81,3 +81,6 @@ In Sentinel goto Automation and create [Automation rule]. Give the new rule a na
 ![](./RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png)<br/>
 
 This will trigger Recorded Future playbook to run when any incident is created. Recorded future will then enrich the incident if it contains entities of type IP, Domain, Url and FileHash. 
+
+### Collective Insights and the Intelligence Cloud
+See trends and track incidents over time with Recorded Future Intelligence Cloud. This feature stores enrichments from correlations in the Intelligence Cloud for additional intelligence and analytical insights. Its possible to out-out by changing the parameter IntelligenceCloud default value from true to false in the logic app designer. 
