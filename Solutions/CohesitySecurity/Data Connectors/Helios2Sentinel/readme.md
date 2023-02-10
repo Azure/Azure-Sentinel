@@ -11,4 +11,4 @@ Before deployment, please make sure that all prerequisites are done correctly.
 ## Deployment
 Click on the "Deploy to Azure" button to deploy the Azure functions. This step directs you to deploy an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FData%2520Connectors%2FHelios2Sentinel%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-Cohesity-azuredeploy)

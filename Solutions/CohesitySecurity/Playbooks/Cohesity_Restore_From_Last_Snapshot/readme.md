@@ -1,10 +1,10 @@
 # Restore From Last Cohesity Snapshot Playbook
 ## Summary
-This playbook restores the latest good Data Hawk (Helios) snapshot. It’s recommended for running by Backup Admins _only_ after they make sure that the existing data is compromised, and rollback to the previous snapshot, even at the expense of data loss, is _really required_. __Please beware__: It's operable only if you have installed the [Function Apps](https://github.com/cohesity/Azure-Sentinel/blob/CohesitySecurity.internal/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) and received some incidents that need an action on affected data.
+This playbook restores the latest good Data Hawk (Helios) snapshot. It’s recommended for running by Backup Admins _only_ after they make sure that the existing data is compromised, and rollback to the previous snapshot, even at the expense of data loss, is _really required_. __Please beware__: It's operable only if you have installed the [Function Apps](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/readme.md) and received some incidents that need an action on affected data.
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcohesity%2FAzure-Sentinel%2FCohesitySecurity.internal%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Restore_From_Last_Snapshot%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCohesitySecurity%2FPlaybooks%2FCohesity_Restore_From_Last_Snapshot%2Fazuredeploy.json)
 2. Fill in the required parameters:
 * __Playbook Name:__ Enter the playbook name here.
 
